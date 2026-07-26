@@ -51,7 +51,10 @@ async function renderHome() {
           <span class="report-row-date">${r.date || '(no date)'}</span>
           <span class="report-row-sub">${escapeHtml(r.activity || 'No activity noted')}</span>
         </div>
-        <span class="report-row-no">#${r.reportNo}</span>
+        <div class="report-row-actions">
+          <button type="button" class="btn-copy-report" data-copy="${r.id}" title="Copy this report to start a new one">Copy</button>
+          <span class="report-row-no">#${r.reportNo}</span>
+        </div>
       </div>`
     )
     .join('');
@@ -59,6 +62,16 @@ async function renderHome() {
     row.addEventListener('click', async () => {
       const report = reports.find((r) => r.id === row.dataset.id);
       showEditor(report);
+    });
+  });
+  list.querySelectorAll('.btn-copy-report').forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const source = reports.find((r) => r.id === btn.dataset.copy);
+      const nextNo = await getNextReportNo();
+      const copy = copyReport(source, nextNo);
+      await saveReport(copy);
+      showEditor(copy);
     });
   });
 }

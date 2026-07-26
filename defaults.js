@@ -80,3 +80,20 @@ function makeBlankReport(nextReportNo, previous) {
     updatedAt: Date.now(),
   };
 }
+
+// Duplicates a past report as the starting point for a new one. Everything
+// carries over EXCEPT what's inherently specific to that one day: the
+// report number, date, photos, and the actual signature images (typed
+// signer names still carry over -- just not the drawn signature itself).
+function copyReport(source, nextReportNo) {
+  const copy = JSON.parse(JSON.stringify(source));
+  copy.id = crypto.randomUUID();
+  copy.reportNo = nextReportNo;
+  copy.date = todayIso();
+  copy.photos = [null, null, null, null, null, null];
+  copy.repSignatureImage = null;
+  copy.peSignatureImage = null;
+  copy.createdAt = Date.now();
+  copy.updatedAt = Date.now();
+  return copy;
+}

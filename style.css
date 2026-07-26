@@ -267,7 +267,17 @@ textarea { resize: vertical; }
 .report-row .report-row-main { display: flex; flex-direction: column; }
 .report-row .report-row-date { font-weight: 600; }
 .report-row .report-row-sub { font-size: 0.8rem; color: #777; }
+.report-row .report-row-actions { display: flex; align-items: center; gap: 0.5rem; }
 .report-row .report-row-no { font-size: 0.8rem; color: #fff; background: var(--brand-light); padding: 0.2rem 0.6rem; border-radius: 12px; }
+.report-row .btn-copy-report {
+  font-size: 0.78rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: #eef1f4;
+  color: #333;
+  cursor: pointer;
+}
 
 .empty-state { text-align: center; color: #888; padding: 3rem 1rem; }
 
@@ -299,4 +309,5 @@ textarea { resize: vertical; }
   .btn-secondary { background: #2c333a; color: #eee; }
   .empty-state { color: #999; }
   .total-hours-row { background: #1f2e3a; }
+  .report-row .btn-copy-report { background: #2c333a; color: #eee; }
 }
