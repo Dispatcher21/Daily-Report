@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>PR#439 Daily Report</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1c3d5a">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="app-header">
+  <button id="btn-back" class="icon-btn" hidden>&larr;</button>
+  <h1 id="header-title">Daily Reports</h1>
+  <span></span>
+</header>
+
+<main id="app">
+
+  <!-- HOME VIEW -->
+  <section id="home-view">
+    <div id="report-list" class="report-list"></div>
+    <button id="btn-new-report" class="fab">+ New Report</button>
+  </section>
+
+  <!-- EDITOR VIEW -->
+  <section id="editor-view" hidden>
+
+    <details open class="card">
+      <summary>Report Info</summary>
+      <div class="field-grid">
+        <label>Report No. <input type="number" id="f-reportNo"></label>
+        <label>Date <input type="date" id="f-date"></label>
+        <label>Hours <input type="number" step="0.25" id="f-hours"></label>
+        <label>Activity <input type="text" id="f-activity"></label>
+      </div>
+      <label>Notes <textarea id="f-notes" rows="2"></textarea></label>
+      <div class="field-grid">
+        <label>Representative <input type="text" id="f-representative"></label>
+        <label>PE Name <input type="text" id="f-peName"></label>
+      </div>
+      <details class="subcard">
+        <summary>Project details (rarely changes)</summary>
+        <div class="field-grid">
+          <label>Project No. <input type="text" id="f-projectNo"></label>
+          <label>Contract Co. <input type="text" id="f-contractCo"></label>
+          <label>Project Location <input type="text" id="f-projectLocation"></label>
+          <label>NTP Date <input type="date" id="f-ntpDate"></label>
+        </div>
+        <label>Project Name <input type="text" id="f-projectName"></label>
+      </details>
+    </details>
+
+    <details class="card">
+      <summary>Contractors Force &amp; Equipment</summary>
+      <div id="contractor-tabs" class="tab-row"></div>
+      <div id="contractor-panel"></div>
+      <p class="hint">15 personnel/equipment rows are fixed by the template &mdash; you can rename any row, and quantities are per contractor tab.</p>
+    </details>
+
+    <details class="card">
+      <summary>Work Summary</summary>
+      <label>Traffic Control (short note) <input type="text" id="f-trafficControlNote"></label>
+      <label>Summary of Work Performed <textarea id="f-workSummary" rows="6"></textarea></label>
+    </details>
+
+    <details class="card">
+      <summary>Pay Items</summary>
+      <div id="pay-items"></div>
+    </details>
+
+    <details class="card">
+      <summary>Controlling Item</summary>
+      <label>Controlling Item <input type="text" id="f-controllingItem"></label>
+      <label>Comments on Time Charged <textarea id="f-commentsOnTime" rows="2"></textarea></label>
+      <div class="field-grid">
+        <label>Time From <input type="text" id="f-controllingItemTimeFrom" placeholder="7:00 AM"></label>
+        <label>Time To <input type="text" id="f-controllingItemTimeTo" placeholder="3:30 PM"></label>
+      </div>
+      <label>Working Conditions <input type="text" id="f-workingConditions"></label>
+    </details>
+
+    <details class="card">
+      <summary>Traffic Control Status</summary>
+      <div class="radio-row">
+        <label><input type="radio" name="f-trafficControlSelect" value="IN_PLACE"> In Place</label>
+        <label><input type="radio" name="f-trafficControlSelect" value="ATTENTION_REQUIRED"> Attention Required</label>
+      </div>
+    </details>
+
+    <details class="card">
+      <summary>Sign-off</summary>
+      <div class="field-grid">
+        <label>Work Begin <input type="text" id="f-workBegin" placeholder="7:00 AM"></label>
+        <label>Work End <input type="text" id="f-workEnd" placeholder="3:30 PM"></label>
+      </div>
+
+      <div class="sig-block">
+        <label>Representative Name <input type="text" id="f-repSignatureName"></label>
+        <span class="sig-label">Signature</span>
+        <canvas id="sig-rep" class="sig-pad" width="600" height="150"></canvas>
+        <button type="button" class="btn-secondary" data-clear-sig="rep">Clear Signature</button>
+      </div>
+
+      <div class="sig-block">
+        <label>Project Engineer Name <input type="text" id="f-peSignatureName"></label>
+        <span class="sig-label">Signature</span>
+        <canvas id="sig-pe" class="sig-pad" width="600" height="150"></canvas>
+        <button type="button" class="btn-secondary" data-clear-sig="pe">Clear Signature</button>
+      </div>
+    </details>
+
+    <details class="card">
+      <summary>Weather</summary>
+      <label>Description <input type="text" id="f-weatherDesc" placeholder="Sunny, dry"></label>
+      <div class="field-grid">
+        <label>High &deg;F <input type="number" id="f-tempHigh"></label>
+        <label>Low &deg;F <input type="number" id="f-tempLow"></label>
+      </div>
+    </details>
+
+    <details open class="card">
+      <summary>Photos (max 6)</summary>
+      <div id="photo-grid" class="photo-grid"></div>
+    </details>
+
+    <div class="export-bar">
+      <button id="btn-export" class="btn-primary">Generate &amp; Download Report</button>
+      <button id="btn-delete-report" class="btn-danger">Delete This Report</button>
+    </div>
+
+  </section>
+
+</main>
+
+<script src="lib/exceljs.min.js"></script>
+<script src="defaults.js"></script>
+<script src="storage.js"></script>
+<script src="excel-export.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
