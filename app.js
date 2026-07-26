@@ -4,6 +4,8 @@
 let currentReport = null;
 let activeContractorTab = 0;
 let saveTimer = null;
+let selectMode = false;
+let selectedIds = new Set();
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
@@ -17,6 +19,10 @@ function scheduleSave() {
 // ---------- View switching ----------
 
 function showHome() {
+  selectMode = false;
+  selectedIds.clear();
+  $('#btn-select-mode').textContent = 'Select';
+  $('#btn-select-mode').hidden = false;
   $('#home-view').hidden = false;
   $('#editor-view').hidden = true;
   $('#btn-back').hidden = true;
@@ -27,6 +33,7 @@ function showHome() {
 function showEditor(report) {
   currentReport = report;
   activeContractorTab = 0;
+  $('#btn-select-mode').hidden = true;
   $('#home-view').hidden = true;
   $('#editor-view').hidden = false;
   $('#btn-back').hidden = false;
@@ -39,41 +46,71 @@ function showEditor(report) {
 async function renderHome() {
   const reports = await getAllReports();
   const list = $('#report-list');
+  const selectAllRow = $('#select-all-row');
+  const downloadBtn = $('#btn-download-selected');
+  const newReportBtn = $('#btn-new-report');
+
+  selectAllRow.hidden = !selectMode;
+  downloadBtn.hidden = !selectMode;
+  newReportBtn.hidden = selectMode;
+
   if (reports.length === 0) {
     list.innerHTML = '<div class="empty-state">No reports yet. Tap "+ New Report" to start today\'s.</div>';
+    downloadBtn.hidden = true;
+    selectAllRow.hidden = true;
     return;
   }
+
   list.innerHTML = reports
     .map(
       (r) => `
-      <div class="report-row" data-id="${r.id}">
+      <div class="report-row${selectMode ? ' selectable' : ''}" data-id="${r.id}">
+        ${selectMode ? `<input type="checkbox" class="report-row-check" ${selectedIds.has(r.id) ? 'checked' : ''}>` : ''}
         <div class="report-row-main">
           <span class="report-row-date">${r.date || '(no date)'}</span>
           <span class="report-row-sub">${escapeHtml(r.activity || 'No activity noted')}</span>
         </div>
         <div class="report-row-actions">
-          <button type="button" class="btn-copy-report" data-copy="${r.id}" title="Copy this report to start a new one">Copy</button>
+          ${selectMode ? '' : `<button type="button" class="btn-copy-report" data-copy="${r.id}" title="Copy this report to start a new one">Copy</button>`}
           <span class="report-row-no">#${r.reportNo}</span>
         </div>
       </div>`
     )
     .join('');
+
   list.querySelectorAll('.report-row').forEach((row) => {
-    row.addEventListener('click', async () => {
-      const report = reports.find((r) => r.id === row.dataset.id);
-      showEditor(report);
+    row.addEventListener('click', () => {
+      if (selectMode) {
+        const id = row.dataset.id;
+        if (selectedIds.has(id)) selectedIds.delete(id);
+        else selectedIds.add(id);
+        renderHome();
+      } else {
+        const report = reports.find((r) => r.id === row.dataset.id);
+        showEditor(report);
+      }
     });
   });
-  list.querySelectorAll('.btn-copy-report').forEach((btn) => {
-    btn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      const source = reports.find((r) => r.id === btn.dataset.copy);
-      const nextNo = await getNextReportNo();
-      const copy = copyReport(source, nextNo);
-      await saveReport(copy);
-      showEditor(copy);
+
+  if (!selectMode) {
+    list.querySelectorAll('.btn-copy-report').forEach((btn) => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const source = reports.find((r) => r.id === btn.dataset.copy);
+        const nextNo = await getNextReportNo();
+        const copy = copyReport(source, nextNo);
+        await saveReport(copy);
+        showEditor(copy);
+      });
     });
-  });
+  }
+
+  if (selectMode) {
+    $('#select-count-label').textContent = selectedIds.size > 0 ? `${selectedIds.size} selected` : '';
+    $('#btn-select-all').textContent = selectedIds.size === reports.length ? 'Deselect all' : 'Select all';
+    downloadBtn.textContent = selectedIds.size > 0 ? `Download Selected (${selectedIds.size})` : 'Download Selected';
+    downloadBtn.disabled = selectedIds.size === 0;
+  }
 }
 
 function escapeHtml(str) {
@@ -93,6 +130,49 @@ $('#btn-new-report').addEventListener('click', async () => {
 $('#btn-back').addEventListener('click', () => {
   currentReport = null;
   showHome();
+});
+
+$('#btn-select-mode').addEventListener('click', () => {
+  selectMode = !selectMode;
+  selectedIds.clear();
+  $('#btn-select-mode').textContent = selectMode ? 'Cancel' : 'Select';
+  renderHome();
+});
+
+$('#btn-select-all').addEventListener('click', async () => {
+  const reports = await getAllReports();
+  if (selectedIds.size === reports.length) {
+    selectedIds.clear();
+  } else {
+    reports.forEach((r) => selectedIds.add(r.id));
+  }
+  renderHome();
+});
+
+$('#btn-download-selected').addEventListener('click', async () => {
+  if (selectedIds.size === 0) return;
+  const btn = $('#btn-download-selected');
+  const original = btn.textContent;
+  btn.textContent = 'Generating...';
+  btn.disabled = true;
+  try {
+    const all = await getAllReports();
+    const selected = all.filter((r) => selectedIds.has(r.id));
+    if (selected.length === 1) {
+      await downloadFilledReport(selected[0]);
+    } else {
+      await downloadReportsAsZip(selected);
+    }
+    selectMode = false;
+    selectedIds.clear();
+    $('#btn-select-mode').textContent = 'Select';
+    renderHome();
+  } catch (err) {
+    console.error(err);
+    alert('Could not generate the reports: ' + err.message);
+    btn.textContent = original;
+    btn.disabled = selectedIds.size === 0;
+  }
 });
 
 // ---------- Editor view ----------

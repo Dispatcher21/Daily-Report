@@ -13,15 +13,20 @@
 <header class="app-header">
   <button id="btn-back" class="icon-btn" hidden>&larr;</button>
   <h1 id="header-title">Daily Reports</h1>
-  <span></span>
+  <button id="btn-select-mode" class="text-btn">Select</button>
 </header>
 
 <main id="app">
 
   <!-- HOME VIEW -->
   <section id="home-view">
+    <div id="select-all-row" class="select-all-row" hidden>
+      <button type="button" id="btn-select-all" class="text-btn">Select all</button>
+      <span id="select-count-label"></span>
+    </div>
     <div id="report-list" class="report-list"></div>
     <button id="btn-new-report" class="fab">+ New Report</button>
+    <button id="btn-download-selected" class="fab" hidden disabled>Download Selected</button>
   </section>
 
   <!-- EDITOR VIEW -->

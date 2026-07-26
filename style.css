@@ -33,6 +33,16 @@ body {
 .icon-btn {
   background: none; border: none; color: #fff; font-size: 1.4rem; padding: 0.25rem 0.5rem; cursor: pointer;
 }
+.text-btn {
+  background: none;
+  border: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 0.25rem 0.4rem;
+  cursor: pointer;
+}
+.app-header .text-btn { color: #fff; }
+.select-all-row .text-btn { color: var(--brand); padding-left: 0; }
 
 main { max-width: 720px; margin: 0 auto; padding: 1rem; }
 
@@ -253,6 +263,15 @@ textarea { resize: vertical; }
   position: absolute; bottom: 4px; left: 6px; font-size: 0.7rem; color: #999;
 }
 
+.select-all-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 0.2rem 0.6rem;
+  font-size: 0.85rem;
+  color: #777;
+}
+
 .report-list { display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 5rem; }
 .report-row {
   background: var(--card-bg);
@@ -263,6 +282,14 @@ textarea { resize: vertical; }
   justify-content: space-between;
   align-items: center;
   cursor: pointer;
+  gap: 0.7rem;
+}
+.report-row.selectable { border-color: var(--brand-light); }
+.report-row-check {
+  width: 1.2rem;
+  height: 1.2rem;
+  flex-shrink: 0;
+  pointer-events: none;
 }
 .report-row .report-row-main { display: flex; flex-direction: column; }
 .report-row .report-row-date { font-weight: 600; }
@@ -295,6 +322,11 @@ textarea { resize: vertical; }
   box-shadow: 0 4px 10px rgba(0,0,0,0.25);
   cursor: pointer;
   z-index: 20;
+}
+.fab:disabled {
+  background: #9aa4ad;
+  box-shadow: none;
+  cursor: not-allowed;
 }
 
 @media (prefers-color-scheme: dark) {

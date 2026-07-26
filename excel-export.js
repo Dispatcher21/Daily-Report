@@ -374,18 +374,44 @@ async function generateReportWorkbookBuffer(report) {
   return fflate.zipSync(files, { level: 6 });
 }
 
-async function downloadFilledReport(report) {
-  const zipped = await generateReportWorkbookBuffer(report);
-  const blob = new Blob([zipped], {
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  });
+function reportFilename(report) {
+  const projectNo = report.projectNo || 'PR';
+  return `PR${projectNo}_DailyReport_${report.date || 'undated'}.xlsx`;
+}
+
+function triggerDownload(bytes, filename, mimeType) {
+  const blob = new Blob([bytes], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  const projectNo = report.projectNo || 'PR';
   a.href = url;
-  a.download = `PR${projectNo}_DailyReport_${report.date || 'undated'}.xlsx`;
+  a.download = filename;
   document.body.appendChild(a);
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
+async function downloadFilledReport(report) {
+  const zipped = await generateReportWorkbookBuffer(report);
+  triggerDownload(zipped, reportFilename(report), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+}
+
+// Bundles several filled reports into a single .zip so the browser only has
+// to deliver one download -- triggering N separate downloads in a row gets
+// silently blocked by mobile browsers after the first one or two.
+async function downloadReportsAsZip(reports) {
+  const files = {};
+  const usedNames = new Set();
+  for (const report of reports) {
+    const buf = await generateReportWorkbookBuffer(report);
+    let name = reportFilename(report);
+    if (usedNames.has(name)) {
+      name = name.replace(/\.xlsx$/, `_Report${report.reportNo}.xlsx`);
+    }
+    usedNames.add(name);
+    files[name] = buf;
+  }
+  const zipped = fflate.zipSync(files, { level: 6 });
+  const stamp = reports[0] && reports[0].projectNo ? `PR${reports[0].projectNo}_` : '';
+  triggerDownload(zipped, `${stamp}DailyReports_${reports.length}files.zip`, 'application/zip');
 }
