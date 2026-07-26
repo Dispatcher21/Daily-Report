@@ -32,9 +32,20 @@
       <div class="field-grid">
         <label>Report No. <input type="number" id="f-reportNo"></label>
         <label>Date <input type="date" id="f-date"></label>
-        <label>Hours <input type="number" step="0.25" id="f-hours"></label>
-        <label>Activity <input type="text" id="f-activity"></label>
       </div>
+
+      <div class="time-worked-block">
+        <span class="sig-label">Time Worked</span>
+        <div id="time-entries"></div>
+        <button type="button" class="btn-secondary" id="btn-add-time-entry">+ Add Time Segment (e.g. after lunch)</button>
+        <div class="total-hours-row">
+          <span>Total Hours</span>
+          <span id="total-hours-value" class="total-hours-value">0.00</span>
+        </div>
+        <label class="hours-override">Hours (auto-filled, editable) <input type="number" step="0.25" id="f-hours"></label>
+      </div>
+
+      <label>Activity <input type="text" id="f-activity"></label>
       <label>Notes <textarea id="f-notes" rows="2"></textarea></label>
       <div class="field-grid">
         <label>Representative <input type="text" id="f-representative"></label>

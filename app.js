@@ -135,6 +135,10 @@ function renderEditor() {
     });
   });
 
+  if (!Array.isArray(r.timeEntries) || r.timeEntries.length === 0) {
+    r.timeEntries = [{ start: '', end: '' }];
+  }
+  renderTimeEntries();
   renderContractorTabs();
   renderPayItems();
   renderPhotoGrid();
@@ -164,6 +168,79 @@ function renderEditor() {
     showHome();
   };
 }
+
+// ---------- Time worked / hours calculator ----------
+
+// Minutes since midnight for a "HH:MM" <input type="time"> value, or null if unset/invalid.
+function timeToMinutes(hhmm) {
+  if (!hhmm) return null;
+  const [h, m] = hhmm.split(':').map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return null;
+  return h * 60 + m;
+}
+
+function entryHours(entry) {
+  const start = timeToMinutes(entry.start);
+  const end = timeToMinutes(entry.end);
+  if (start === null || end === null || end <= start) return null;
+  return (end - start) / 60;
+}
+
+function totalHours(timeEntries) {
+  return timeEntries.reduce((sum, e) => sum + (entryHours(e) || 0), 0);
+}
+
+function renderTimeEntries() {
+  const container = $('#time-entries');
+  container.innerHTML = currentReport.timeEntries
+    .map((entry, i) => {
+      const h = entryHours(entry);
+      const subtotal = entry.start && entry.end ? (h === null ? 'invalid' : `${h.toFixed(2)} hrs`) : '';
+      return `
+        <div class="time-entry-row" data-idx="${i}">
+          <input type="time" class="te-start" data-idx="${i}" data-f="start" value="${entry.start || ''}">
+          <span class="te-to">to</span>
+          <input type="time" class="te-end" data-idx="${i}" data-f="end" value="${entry.end || ''}">
+          <span class="te-subtotal">${subtotal}</span>
+          <button type="button" class="te-remove" data-idx="${i}" ${currentReport.timeEntries.length <= 1 ? 'hidden' : ''}>&times;</button>
+        </div>`;
+    })
+    .join('');
+
+  container.querySelectorAll('input[type="time"]').forEach((el) => {
+    el.addEventListener('input', () => {
+      currentReport.timeEntries[Number(el.dataset.idx)][el.dataset.f] = el.value;
+      onTimeEntriesChanged();
+    });
+  });
+  container.querySelectorAll('.te-remove').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      currentReport.timeEntries.splice(Number(btn.dataset.idx), 1);
+      onTimeEntriesChanged();
+    });
+  });
+
+  updateTotalHoursDisplay();
+}
+
+function onTimeEntriesChanged() {
+  renderTimeEntries();
+  const total = totalHours(currentReport.timeEntries);
+  currentReport.hours = total > 0 ? Number(total.toFixed(2)) : currentReport.hours;
+  $('#f-hours').value = currentReport.hours;
+  scheduleSave();
+}
+
+function updateTotalHoursDisplay() {
+  const total = totalHours(currentReport.timeEntries);
+  $('#total-hours-value').textContent = total.toFixed(2);
+}
+
+$('#btn-add-time-entry').addEventListener('click', () => {
+  currentReport.timeEntries.push({ start: '', end: '' });
+  renderTimeEntries();
+  scheduleSave();
+});
 
 // ---------- Contractors / equipment matrix ----------
 

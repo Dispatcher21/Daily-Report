@@ -36,6 +36,7 @@ function makeBlankReport(nextReportNo, previous) {
     reportNo: nextReportNo,
     date: todayIso(),
     hours: previous ? previous.hours : '',
+    timeEntries: [{ start: '', end: '' }],
     activity: '',
     notes: '',
     peName: previous ? previous.peName : 'Elizabeth Guiza',

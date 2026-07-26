@@ -85,6 +85,57 @@ input, textarea, select {
 }
 textarea { resize: vertical; }
 
+.time-worked-block {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem 0.7rem;
+  margin-bottom: 0.75rem;
+}
+
+.time-entry-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto auto;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+}
+.time-entry-row span.te-to { font-size: 0.8rem; color: #888; }
+.time-entry-row .te-subtotal {
+  font-size: 0.78rem;
+  color: #666;
+  white-space: nowrap;
+  min-width: 3.4rem;
+  text-align: right;
+}
+.time-entry-row .te-remove {
+  background: none;
+  border: none;
+  color: var(--danger);
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 0 0.2rem;
+}
+
+.total-hours-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  background: #eef4f9;
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  margin: 0.5rem 0 0.4rem;
+  font-weight: 600;
+}
+.total-hours-value {
+  font-size: 1.4rem;
+  color: var(--brand);
+}
+
+.hours-override {
+  margin-bottom: 0 !important;
+}
+.hours-override input { max-width: 8rem; }
+
 .field-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -247,4 +298,5 @@ textarea { resize: vertical; }
   .sig-pad { background: #f2f2f2; }
   .btn-secondary { background: #2c333a; color: #eee; }
   .empty-state { color: #999; }
+  .total-hours-row { background: #1f2e3a; }
 }
