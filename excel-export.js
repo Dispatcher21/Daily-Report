@@ -1,8 +1,26 @@
 // Fills the PR#439 Daily Work Report template with a report's data and
 // triggers a download. The template file itself is only ever read, never
 // saved over -- every export starts from the pristine bytes on disk.
+//
+// IMPORTANT: this does NOT use ExcelJS to load+modify+resave the workbook.
+// A full load/save round trip through ExcelJS (or any library that rebuilds
+// the workbook from its own object model) silently drops parts it doesn't
+// understand -- verified against this exact template: printer settings
+// (which drives Excel's Page Layout pagination/zoom), calcChain.xml,
+// docProps/custom.xml, and three customXml parts all vanish on a save with
+// ZERO edits made. That's what caused the "template is resizing" bug.
+// Instead we treat the .xlsx as a zip (via fflate), and only ever touch the
+// exact <c> cell elements we're filling in and append new drawing/media
+// parts for photos -- every other byte of every other part is carried over
+// completely untouched.
 
 const TEMPLATE_URL = 'template/PR439-Daily-Work-Report-TEMPLATE.xlsx';
+
+const SHEET1_PATH = 'xl/worksheets/sheet1.xml'; // Daily Work Report
+const SHEET2_PATH = 'xl/worksheets/sheet2.xml'; // Daily_Photo_Log
+const SHEET1_RELS_PATH = 'xl/worksheets/_rels/sheet1.xml.rels';
+const SHEET2_RELS_PATH = 'xl/worksheets/_rels/sheet2.xml.rels';
+const CONTENT_TYPES_PATH = '[Content_Types].xml';
 
 const CONTRACTOR_COLS = ['C', 'D', 'E', 'F', 'G', 'H'];
 const EQUIPMENT_FIRST_ROW = 12; // row 12..26, 15 rows total
@@ -22,11 +40,8 @@ const PHOTO_RANGES = [
 const PHOTO_BOX_ASPECT = 400 / 303;
 const SIGNATURE_BOX_ASPECT = 242 / 20;
 
-function toDateOnly(isoDateStr) {
-  if (!isoDateStr) return null;
-  const [y, m, d] = isoDateStr.split('-').map(Number);
-  return new Date(y, m - 1, d);
-}
+const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder();
 
 function numOrNull(v) {
   if (v === '' || v === null || v === undefined) return null;
@@ -34,10 +49,152 @@ function numOrNull(v) {
   return Number.isNaN(n) ? null : n;
 }
 
-// Draws a source image blob onto a canvas of the given aspect ratio using
-// contain-fit (letterboxed on a white background), so ExcelJS's
-// stretch-to-fill anchor never distorts the picture.
-async function fitBlobToAspect(blob, aspect, targetWidth = 800) {
+function excelDateSerial(isoDateStr) {
+  if (!isoDateStr) return null;
+  const [y, m, d] = isoDateStr.split('-').map(Number);
+  if (!y || !m || !d) return null;
+  const utcDate = Date.UTC(y, m - 1, d);
+  const epoch = Date.UTC(1899, 11, 30); // Excel's date epoch (accounts for the 1900 leap-year bug)
+  return Math.round((utcDate - epoch) / 86400000);
+}
+
+function xmlEscapeText(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+// Replaces a single <c r="CELLREF" .../> (or ...>...</c>) element in a
+// worksheet XML string, preserving its existing style ("s") attribute and
+// discarding whatever value/type it had. Leaves every other byte untouched.
+function setCellValue(xml, cellRef, kind, value) {
+  const re = new RegExp(`<c r="${cellRef}"([^>]*?)(/>|>[\\s\\S]*?</c>)`);
+  const match = xml.match(re);
+  if (!match) {
+    console.warn('excel-export: cell not found in template, skipping:', cellRef);
+    return xml;
+  }
+  const styleMatch = match[1].match(/\ss="\d+"/);
+  const styleAttr = styleMatch ? styleMatch[0] : '';
+
+  let replacement;
+  if (value === null || value === undefined || value === '') {
+    replacement = `<c r="${cellRef}"${styleAttr}/>`;
+  } else if (kind === 'number') {
+    replacement = `<c r="${cellRef}"${styleAttr}><v>${value}</v></c>`;
+  } else if (kind === 'date') {
+    const serial = excelDateSerial(value);
+    replacement = serial === null ? `<c r="${cellRef}"${styleAttr}/>` : `<c r="${cellRef}"${styleAttr}><v>${serial}</v></c>`;
+  } else {
+    const escaped = xmlEscapeText(value);
+    replacement = `<c r="${cellRef}"${styleAttr} t="inlineStr"><is><t xml:space="preserve">${escaped}</t></is></c>`;
+  }
+  return xml.replace(re, replacement);
+}
+
+// The quantity grid (C12:H26) has no header row available to label which
+// column belongs to which contractor -- each of those columns is actually
+// part of one merged cell spanning rows 5-11 (C5:C11 already holds
+// "Contract Co.", D5:D11 holds project location, etc), so there's no free
+// cell to put a per-column header in. Instead the column->contractor
+// mapping is recorded as a legend line prepended to Notes.
+function buildNotesWithContractorLegend(report) {
+  const parts = [];
+  (report.contractors || []).forEach((c, i) => {
+    const name = (c.name || '').trim();
+    if (name && i < CONTRACTOR_COLS.length) parts.push(`${CONTRACTOR_COLS[i]}: ${name}`);
+  });
+  const notes = report.notes || '';
+  if (parts.length === 0) return notes;
+  const legend = `Contractor columns - ${parts.join(' | ')}`;
+  return notes ? `${legend}\n${notes}` : legend;
+}
+
+function fillSheet1Xml(xml, report) {
+  xml = setCellValue(xml, 'Q3', 'number', numOrNull(report.reportNo));
+  xml = setCellValue(xml, 'Q5', 'date', report.date);
+  xml = setCellValue(xml, 'K6', 'number', numOrNull(report.hours));
+  xml = setCellValue(xml, 'K7', 'text', report.activity || '');
+  xml = setCellValue(xml, 'K8', 'text', buildNotesWithContractorLegend(report));
+  xml = setCellValue(xml, 'B9', 'text', report.peName || '');
+  xml = setCellValue(xml, 'B5', 'text', report.projectNo || '');
+  xml = setCellValue(xml, 'C5', 'text', report.contractCo || '');
+  xml = setCellValue(xml, 'D5', 'text', report.projectLocation || '');
+  xml = setCellValue(xml, 'B7', 'text', report.projectName || '');
+  xml = setCellValue(xml, 'K5', 'text', report.representative || '');
+  xml = setCellValue(xml, 'Q7', 'date', report.ntpDate);
+
+  (report.equipmentRows || []).forEach((row, i) => {
+    const r = EQUIPMENT_FIRST_ROW + i;
+    xml = setCellValue(xml, 'A' + r, 'text', row.label || '');
+    CONTRACTOR_COLS.forEach((col, ci) => {
+      xml = setCellValue(xml, col + r, 'number', numOrNull(row.qty ? row.qty[ci] : null));
+    });
+  });
+
+  xml = setCellValue(xml, 'K12', 'text', report.trafficControlNote || '');
+  xml = setCellValue(xml, 'I14', 'text', report.workSummary || '');
+
+  (report.payItems || []).forEach((item, i) => {
+    const r = PAY_ITEM_FIRST_ROW + i;
+    xml = setCellValue(xml, 'I' + r, 'text', item.itemNumber || '');
+    xml = setCellValue(xml, 'K' + r, 'text', item.description || '');
+    xml = setCellValue(xml, 'P' + r, 'number', numOrNull(item.qty));
+    xml = setCellValue(xml, 'Q' + r, 'text', item.unit || '');
+  });
+
+  xml = setCellValue(xml, 'B34', 'text', report.controllingItem || '');
+  xml = setCellValue(xml, 'K34', 'text', report.commentsOnTime || '');
+  xml = setCellValue(xml, 'C35', 'text', report.controllingItemTimeFrom || '');
+  xml = setCellValue(xml, 'F35', 'text', report.controllingItemTimeTo || '');
+  xml = setCellValue(xml, 'C36', 'text', report.workingConditions || '');
+
+  xml = setCellValue(xml, 'I37', 'text', report.trafficControlSelect === 'IN_PLACE' ? 'X' : null);
+  xml = setCellValue(xml, 'K37', 'text', report.trafficControlSelect === 'ATTENTION_REQUIRED' ? 'X' : null);
+
+  xml = setCellValue(xml, 'D38', 'text', report.workBegin || '');
+  xml = setCellValue(xml, 'G38', 'text', report.workEnd || '');
+  xml = setCellValue(xml, 'I39', 'text', report.repSignatureName || '');
+  xml = setCellValue(xml, 'I41', 'text', report.peSignatureName || '');
+
+  xml = setCellValue(xml, 'F40', 'text', report.weatherDesc || '');
+  xml = setCellValue(xml, 'D41', 'number', numOrNull(report.tempHigh));
+  xml = setCellValue(xml, 'F41', 'number', numOrNull(report.tempLow));
+
+  return xml;
+}
+
+function fillSheet2Xml(xml, report) {
+  return setCellValue(xml, 'C7', 'text', report.peName || '');
+}
+
+// ---------- Image embedding (raw drawing/media parts) ----------
+
+function colLetterToIndex(letters) {
+  let idx = 0;
+  for (let i = 0; i < letters.length; i++) idx = idx * 26 + (letters.charCodeAt(i) - 64);
+  return idx - 1; // 0-based
+}
+
+function parseCellRef(ref) {
+  const m = ref.match(/^([A-Z]+)(\d+)$/);
+  return { col: colLetterToIndex(m[1]), row: Number(m[2]) - 1 };
+}
+
+// A "A10:F25" style range -> a twoCellAnchor from/to pair (to is exclusive,
+// i.e. one past the last included column/row).
+function rangeToAnchor(rangeStr) {
+  const [startRef, endRef] = rangeStr.split(':');
+  const start = parseCellRef(startRef);
+  const end = parseCellRef(endRef);
+  return {
+    from: { col: start.col, row: start.row },
+    to: { col: end.col + 1, row: end.row + 1 },
+  };
+}
+
+async function fitBlobToAspectPng(blob, aspect, targetWidth = 800) {
   const targetHeight = Math.round(targetWidth / aspect);
   const bitmap = await createImageBitmap(blob, { imageOrientation: 'from-image' }).catch(() =>
     createImageBitmapFallback(blob)
@@ -64,7 +221,7 @@ async function fitBlobToAspect(blob, aspect, targetWidth = 800) {
   ctx.drawImage(bitmap, dx, dy, drawW, drawH);
 
   const outBlob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
-  return outBlob.arrayBuffer();
+  return new Uint8Array(await outBlob.arrayBuffer());
 }
 
 function createImageBitmapFallback(blob) {
@@ -80,122 +237,146 @@ function createImageBitmapFallback(blob) {
   });
 }
 
-// The quantity grid (C12:H26) has no header row available to label which
-// column belongs to which contractor (see note in generateReportWorkbookBuffer),
-// so that mapping is recorded as a legend line prepended to Notes instead.
-function buildNotesWithContractorLegend(report) {
-  const parts = [];
-  (report.contractors || []).forEach((c, i) => {
-    const name = (c.name || '').trim();
-    if (name && i < CONTRACTOR_COLS.length) parts.push(`${CONTRACTOR_COLS[i]}: ${name}`);
-  });
-  const notes = report.notes || '';
-  if (parts.length === 0) return notes;
-  const legend = `Contractor columns - ${parts.join(' | ')}`;
-  return notes ? `${legend}\n${notes}` : legend;
+function buildDrawingXml(pictures) {
+  const anchors = pictures
+    .map(
+      ({ anchor, relId, idx }) => `<xdr:twoCellAnchor editAs="oneCell"><xdr:from><xdr:col>${anchor.from.col}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${anchor.from.row}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:to><xdr:col>${anchor.to.col}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${anchor.to.row}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="${idx}" name="Picture ${idx}"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:embed="${relId}"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:twoCellAnchor>`
+    )
+    .join('');
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">${anchors}</xdr:wsDr>`;
 }
 
-async function addFittedImage(workbook, worksheet, blob, rangeStr, aspect) {
-  if (!blob) return;
-  const buffer = await fitBlobToAspect(blob, aspect);
-  const imageId = workbook.addImage({ buffer, extension: 'png' });
-  worksheet.addImage(imageId, rangeStr);
+function buildDrawingRelsXml(pictures) {
+  const rels = pictures
+    .map(({ relId, mediaName }) => `<Relationship Id="${relId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/${mediaName}"/>`)
+    .join('');
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${rels}</Relationships>`;
+}
+
+// Appends a new relationship to an existing sheetN.xml.rels, using the next
+// free rIdN (existing rels -- e.g. the printer settings link -- are kept).
+function addRelationship(relsXml, type, target) {
+  const existingIds = [...relsXml.matchAll(/Id="rId(\d+)"/g)].map((m) => Number(m[1]));
+  const nextId = 'rId' + (existingIds.length ? Math.max(...existingIds) + 1 : 1);
+  const newRel = `<Relationship Id="${nextId}" Type="${type}" Target="${target}"/>`;
+  return { xml: relsXml.replace('</Relationships>', newRel + '</Relationships>'), relId: nextId };
+}
+
+function addContentTypeOverride(contentTypesXml, partName, contentType) {
+  if (contentTypesXml.includes(`PartName="${partName}"`)) return contentTypesXml;
+  const override = `<Override PartName="${partName}" ContentType="${contentType}"/>`;
+  return contentTypesXml.replace('</Types>', override + '</Types>');
+}
+
+function addDefaultExtensionIfMissing(contentTypesXml, extension, contentType) {
+  if (contentTypesXml.includes(`Extension="${extension}"`)) return contentTypesXml;
+  const def = `<Default Extension="${extension}" ContentType="${contentType}"/>`;
+  return contentTypesXml.replace('</Types>', def + '</Types>');
+}
+
+// Adds a <drawing r:id="..."/> reference to a worksheet XML, right before
+// </worksheet> (the only valid position left in these two sheets' schema
+// order -- <drawing> comes after <headerFooter>, and neither sheet has any
+// of the handful of elements that are schema-valid after it).
+function attachDrawingToSheet(sheetXml, relId) {
+  return sheetXml.replace('</worksheet>', `<drawing r:id="${relId}"/></worksheet>`);
+}
+
+async function embedImagesForSheet(files, sheetPath, sheetRelsPath, drawingPath, drawingRelsPath, images, mediaCounterRef) {
+  const validImages = [];
+  for (const img of images) {
+    if (img.blob) validImages.push(img);
+  }
+  if (validImages.length === 0) return;
+
+  const pictures = [];
+  for (let i = 0; i < validImages.length; i++) {
+    const { blob, aspect, rangeStr } = validImages[i];
+    const png = await fitBlobToAspectPng(blob, aspect);
+    const mediaName = `image${mediaCounterRef.n++}.png`;
+    files['xl/media/' + mediaName] = png;
+    pictures.push({
+      anchor: rangeToAnchor(rangeStr),
+      relId: 'rId' + (i + 1),
+      mediaName,
+      idx: i + 1,
+    });
+  }
+
+  files[drawingPath] = textEncoder.encode(buildDrawingXml(pictures));
+  files[drawingRelsPath] = textEncoder.encode(buildDrawingRelsXml(pictures));
+
+  let sheetRelsXml = files[sheetRelsPath]
+    ? textDecoder.decode(files[sheetRelsPath])
+    : '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>';
+  const drawingRelTarget = '../drawings/' + drawingPath.split('/').pop();
+  const { xml: newRelsXml, relId: drawingRelId } = addRelationship(
+    sheetRelsXml,
+    'http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing',
+    drawingRelTarget
+  );
+  files[sheetRelsPath] = textEncoder.encode(newRelsXml);
+
+  let sheetXml = textDecoder.decode(files[sheetPath]);
+  files[sheetPath] = textEncoder.encode(attachDrawingToSheet(sheetXml, drawingRelId));
+
+  let contentTypesXml = textDecoder.decode(files[CONTENT_TYPES_PATH]);
+  contentTypesXml = addDefaultExtensionIfMissing(contentTypesXml, 'png', 'image/png');
+  contentTypesXml = addContentTypeOverride(
+    contentTypesXml,
+    '/' + drawingPath,
+    'application/vnd.openxmlformats-officedocument.drawing+xml'
+  );
+  files[CONTENT_TYPES_PATH] = textEncoder.encode(contentTypesXml);
 }
 
 async function generateReportWorkbookBuffer(report) {
   const resp = await fetch(TEMPLATE_URL);
   if (!resp.ok) throw new Error('Could not load template file: ' + resp.status);
-  const templateBuffer = await resp.arrayBuffer();
+  const templateBuffer = new Uint8Array(await resp.arrayBuffer());
 
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.load(templateBuffer);
+  const files = fflate.unzipSync(templateBuffer);
 
-  const ws = workbook.getWorksheet('Daily Work Report');
-  const photoWs = workbook.getWorksheet('Daily_Photo_Log');
-  if (!ws || !photoWs) throw new Error('Template is missing an expected sheet');
+  let sheet1Xml = textDecoder.decode(files[SHEET1_PATH]);
+  sheet1Xml = fillSheet1Xml(sheet1Xml, report);
+  files[SHEET1_PATH] = textEncoder.encode(sheet1Xml);
 
-  // --- Header / meta fields ---
-  ws.getCell('Q3').value = numOrNull(report.reportNo);
-  ws.getCell('Q5').value = toDateOnly(report.date);
-  ws.getCell('K6').value = numOrNull(report.hours);
-  ws.getCell('K7').value = report.activity || '';
-  ws.getCell('K8').value = buildNotesWithContractorLegend(report);
-  ws.getCell('B9').value = report.peName || '';
-  ws.getCell('B5').value = report.projectNo || '';
-  ws.getCell('C5').value = report.contractCo || '';
-  ws.getCell('D5').value = report.projectLocation || '';
-  ws.getCell('B7').value = report.projectName || '';
-  ws.getCell('K5').value = report.representative || '';
-  ws.getCell('Q7').value = toDateOnly(report.ntpDate);
+  let sheet2Xml = textDecoder.decode(files[SHEET2_PATH]);
+  sheet2Xml = fillSheet2Xml(sheet2Xml, report);
+  files[SHEET2_PATH] = textEncoder.encode(sheet2Xml);
 
-  // NOTE: columns C-H at row 11 are NOT a free header row -- each of those
-  // columns is actually one merged cell spanning rows 5-11 (C5:C11 already
-  // holds "Contract Co.", D5:D11 holds project location, etc). The template
-  // has no reserved cell for per-column contractor names, so instead of
-  // clobbering those fields we record the column->contractor mapping as a
-  // legend prepended to Notes (see buildNotesWithContractorLegend below).
+  const mediaCounterRef = { n: 1 };
 
-  // --- Force & Equipment matrix (rows 12-26) ---
-  (report.equipmentRows || []).forEach((row, i) => {
-    const r = EQUIPMENT_FIRST_ROW + i;
-    ws.getCell('A' + r).value = row.label || '';
-    CONTRACTOR_COLS.forEach((col, ci) => {
-      ws.getCell(col + r).value = numOrNull(row.qty ? row.qty[ci] : null);
-    });
-  });
-
-  // --- Work summary ---
-  ws.getCell('K12').value = report.trafficControlNote || '';
-  ws.getCell('I14').value = report.workSummary || '';
-
-  // --- Pay items (rows 28-33) ---
-  (report.payItems || []).forEach((item, i) => {
-    const r = PAY_ITEM_FIRST_ROW + i;
-    ws.getCell('I' + r).value = item.itemNumber || '';
-    ws.getCell('K' + r).value = item.description || '';
-    ws.getCell('P' + r).value = numOrNull(item.qty);
-    ws.getCell('Q' + r).value = item.unit || '';
-  });
-
-  // --- Controlling item / comments ---
-  ws.getCell('B34').value = report.controllingItem || '';
-  ws.getCell('K34').value = report.commentsOnTime || '';
-  ws.getCell('C35').value = report.controllingItemTimeFrom || '';
-  ws.getCell('F35').value = report.controllingItemTimeTo || '';
-  ws.getCell('C36').value = report.workingConditions || '';
-
-  // --- Traffic control select-one ---
-  ws.getCell('I37').value = report.trafficControlSelect === 'IN_PLACE' ? 'X' : null;
-  ws.getCell('K37').value = report.trafficControlSelect === 'ATTENTION_REQUIRED' ? 'X' : null;
-
-  // --- Sign-off ---
-  ws.getCell('D38').value = report.workBegin || '';
-  ws.getCell('G38').value = report.workEnd || '';
-  ws.getCell('I39').value = report.repSignatureName || '';
-  ws.getCell('I41').value = report.peSignatureName || '';
-
-  // --- Weather ---
-  ws.getCell('F40').value = report.weatherDesc || '';
-  ws.getCell('D41').value = numOrNull(report.tempHigh);
-  ws.getCell('F41').value = numOrNull(report.tempLow);
-
-  // --- Photo log sheet ---
-  photoWs.getCell('C7').value = report.peName || '';
-
-  await addFittedImage(workbook, ws, report.repSignatureImage, 'M39:O39', SIGNATURE_BOX_ASPECT);
-  await addFittedImage(workbook, ws, report.peSignatureImage, 'M41:O41', SIGNATURE_BOX_ASPECT);
+  await embedImagesForSheet(
+    files,
+    SHEET1_PATH,
+    SHEET1_RELS_PATH,
+    'xl/drawings/drawing1.xml',
+    'xl/drawings/_rels/drawing1.xml.rels',
+    [
+      { blob: report.repSignatureImage, aspect: SIGNATURE_BOX_ASPECT, rangeStr: 'M39:O39' },
+      { blob: report.peSignatureImage, aspect: SIGNATURE_BOX_ASPECT, rangeStr: 'M41:O41' },
+    ],
+    mediaCounterRef
+  );
 
   const photos = report.photos || [];
-  for (let i = 0; i < PHOTO_RANGES.length; i++) {
-    await addFittedImage(workbook, photoWs, photos[i], PHOTO_RANGES[i], PHOTO_BOX_ASPECT);
-  }
+  await embedImagesForSheet(
+    files,
+    SHEET2_PATH,
+    SHEET2_RELS_PATH,
+    'xl/drawings/drawing2.xml',
+    'xl/drawings/_rels/drawing2.xml.rels',
+    PHOTO_RANGES.map((rangeStr, i) => ({ blob: photos[i], aspect: PHOTO_BOX_ASPECT, rangeStr })),
+    mediaCounterRef
+  );
 
-  return workbook.xlsx.writeBuffer();
+  return fflate.zipSync(files, { level: 6 });
 }
 
 async function downloadFilledReport(report) {
-  const buffer = await generateReportWorkbookBuffer(report);
-  const blob = new Blob([buffer], {
+  const zipped = await generateReportWorkbookBuffer(report);
+  const blob = new Blob([zipped], {
     type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   });
   const url = URL.createObjectURL(blob);
