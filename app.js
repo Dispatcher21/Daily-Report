@@ -175,6 +175,60 @@ $('#btn-download-selected').addEventListener('click', async () => {
   }
 });
 
+// ---------- Backup / restore ----------
+
+$('#btn-export-backup').addEventListener('click', async () => {
+  const btn = $('#btn-export-backup');
+  const original = btn.textContent;
+  btn.textContent = 'Exporting...';
+  btn.disabled = true;
+  try {
+    const backup = await exportAllReportsBackup();
+    const json = JSON.stringify(backup);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    a.href = url;
+    a.download = `DailyReportApp_Backup_${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  } catch (err) {
+    console.error(err);
+    alert('Could not export data: ' + err.message);
+  } finally {
+    btn.textContent = original;
+    btn.disabled = false;
+  }
+});
+
+$('#btn-import-backup').addEventListener('click', () => {
+  $('#import-file-input').click();
+});
+
+$('#import-file-input').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  e.target.value = ''; // allow re-selecting the same file later
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const backup = JSON.parse(text);
+    if (backup.kind !== 'daily-report-app-backup') {
+      alert("That doesn't look like a Daily Report backup file.");
+      return;
+    }
+    const result = await importReportsBackup(backup);
+    alert(`Import complete: ${result.added} new, ${result.updated} updated, ${result.skipped} already up to date.`);
+    renderHome();
+  } catch (err) {
+    console.error(err);
+    alert('Could not import that file: ' + err.message);
+  }
+});
+
 // ---------- Editor view ----------
 
 function bindText(id, field) {

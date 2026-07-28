@@ -20,6 +20,12 @@
 
   <!-- HOME VIEW -->
   <section id="home-view">
+    <div class="home-toolbar">
+      <button type="button" id="btn-export-backup" class="text-btn-outline">Export All Data</button>
+      <button type="button" id="btn-import-backup" class="text-btn-outline">Import Data</button>
+      <input type="file" id="import-file-input" accept="application/json,.json" hidden>
+    </div>
+    <p class="hint home-toolbar-hint">Export saves everything (including photos) to one file you can move to another device yourself — email, OneDrive, USB, etc. Import merges that file back in.</p>
     <div id="select-all-row" class="select-all-row" hidden>
       <button type="button" id="btn-select-all" class="text-btn">Select all</button>
       <span id="select-count-label"></span>

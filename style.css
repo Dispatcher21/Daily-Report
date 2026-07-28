@@ -154,6 +154,20 @@ textarea { resize: vertical; }
 
 .hint { font-size: 0.78rem; color: #777; margin: 0.25rem 0 0; }
 
+.home-toolbar { display: flex; gap: 0.5rem; margin-bottom: 0.4rem; }
+.home-toolbar-hint { margin-bottom: 0.8rem; }
+.text-btn-outline {
+  flex: 1;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid var(--brand-light);
+  background: none;
+  color: var(--brand);
+  cursor: pointer;
+}
+
 .tab-row {
   display: flex;
   gap: 0.4rem;
@@ -342,4 +356,5 @@ textarea { resize: vertical; }
   .empty-state { color: #999; }
   .total-hours-row { background: #1f2e3a; }
   .report-row .btn-copy-report { background: #2c333a; color: #eee; }
+  .text-btn-outline { border-color: #3a5a78; color: #7fb2e0; }
 }
