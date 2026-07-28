@@ -153,8 +153,11 @@ function fillSheet1Xml(xml, report) {
   xml = setCellValue(xml, 'I37', 'text', report.trafficControlSelect === 'IN_PLACE' ? 'X' : null);
   xml = setCellValue(xml, 'K37', 'text', report.trafficControlSelect === 'ATTENTION_REQUIRED' ? 'X' : null);
 
-  xml = setCellValue(xml, 'D38', 'text', report.workBegin || '');
-  xml = setCellValue(xml, 'G38', 'text', report.workEnd || '');
+  // WORK BEGIN:/WORK END: (C38/F38) are just the labels -- the actual value
+  // goes in the merged box directly below, same label-above/value-below
+  // pattern as REPRESENTATIVE/PROJECT ENGINEER right next to them.
+  xml = setCellValue(xml, 'C39', 'text', report.workBegin || '');
+  xml = setCellValue(xml, 'F39', 'text', report.workEnd || '');
   xml = setCellValue(xml, 'I39', 'text', report.repSignatureName || '');
   xml = setCellValue(xml, 'I41', 'text', report.peSignatureName || '');
 
