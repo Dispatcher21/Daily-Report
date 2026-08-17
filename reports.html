@@ -61,7 +61,8 @@
   <div id="bulk-bar" class="step" hidden style="position:sticky;bottom:0.5rem;">
     <div class="step-body">
       <div class="export-bar" style="margin-top:0;">
-        <button type="button" class="btn-primary" id="btn-download-selected">Download Selected</button>
+        <button type="button" class="btn-primary" id="btn-download-selected">Download Selected (Excel)</button>
+        <button type="button" class="btn-secondary" id="btn-print-selected">Print / PDF Selected</button>
         <button type="button" class="btn-secondary" id="btn-mass-edit-selected">Mass Edit Selected</button>
       </div>
     </div>
@@ -251,6 +252,12 @@ $('#btn-download-selected').addEventListener('click', async () => {
     btn.textContent = original;
     btn.disabled = false;
   }
+});
+
+$('#btn-print-selected').addEventListener('click', () => {
+  if (selectedIds.size === 0) return;
+  const ids = Array.from(selectedIds).join(',');
+  location.href = `print-view.html?project=${project.id}&report=${ids}`;
 });
 
 // ---------- Mass edit ----------

@@ -164,7 +164,8 @@
   </div>
 
   <div class="export-bar">
-    <button id="btn-export" class="btn-primary">Generate &amp; Download Report</button>
+    <button id="btn-export" class="btn-primary">Generate &amp; Download Report (Excel)</button>
+    <button id="btn-export-pdf" class="btn-secondary">Export as PDF</button>
     <button id="btn-delete-report" class="btn-danger">Delete This Report</button>
   </div>
 
@@ -288,6 +289,10 @@ function renderEditor() {
       btn.textContent = original;
       btn.disabled = false;
     }
+  };
+
+  $('#btn-export-pdf').onclick = () => {
+    location.href = `print-view.html?project=${project.id}&report=${report.id}`;
   };
 
   $('#btn-delete-report').onclick = async () => {

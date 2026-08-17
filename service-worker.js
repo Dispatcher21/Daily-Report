@@ -1,13 +1,15 @@
 // Caches the app shell + template so it keeps working with no signal in
 // the field. Bump CACHE_NAME whenever any of these files change so the new
 // version actually gets picked up.
-const CACHE_NAME = 'daily-report-app-v10';
+const CACHE_NAME = 'daily-report-app-v11';
 const ASSETS = [
   './',
   './index.html',
   './project.html',
   './reports.html',
   './report-editor.html',
+  './print-view.html',
+  './print-layout.json',
   './style.css',
   './common.js',
   './defaults.js',
