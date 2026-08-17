@@ -292,7 +292,7 @@ function renderEditor() {
   };
 
   $('#btn-export-pdf').onclick = () => {
-    location.href = `print-view.html?project=${project.id}&report=${report.id}`;
+    location.href = `download.html?project=${project.id}&report=${report.id}`;
   };
 
   $('#btn-delete-report').onclick = async () => {

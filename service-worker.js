@@ -1,7 +1,7 @@
 // Caches the app shell + template so it keeps working with no signal in
 // the field. Bump CACHE_NAME whenever any of these files change so the new
 // version actually gets picked up.
-const CACHE_NAME = 'daily-report-app-v11';
+const CACHE_NAME = 'daily-report-app-v12';
 const ASSETS = [
   './',
   './index.html',
@@ -9,7 +9,9 @@ const ASSETS = [
   './reports.html',
   './report-editor.html',
   './print-view.html',
+  './download.html',
   './print-layout.json',
+  './render-report.js',
   './style.css',
   './common.js',
   './defaults.js',
@@ -18,6 +20,8 @@ const ASSETS = [
   './project-file.js',
   './lib/fflate.min.js',
   './lib/xlsx.min.js',
+  './lib/jspdf.umd.min.js',
+  './lib/html2canvas.min.js',
   './template/PR439-Daily-Work-Report-TEMPLATE.xlsx',
   './manifest.json',
   './icon.svg',

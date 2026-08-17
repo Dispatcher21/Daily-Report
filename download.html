@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Download Report</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1c3d5a">
+<link rel="stylesheet" href="style.css">
+<style>
+  #pdf-preview-wrap {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: #525659;
+    height: 70vh;
+    min-height: 380px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #pdf-frame { width: 100%; height: 100%; border: 0; display: block; }
+  #pdf-status { text-align: center; padding: 2.5rem 1rem; color: #dfe3e6; font-size: 0.9rem; }
+
+  /* Off-screen sandbox: laid out normally (not display:none) so
+     html2canvas can capture real geometry, just never visible. */
+  #render-sandbox { position: fixed; top: 0; left: -20000px; z-index: -1; }
+  #render-sandbox .print-grid { display: grid; position: relative; }
+  #render-sandbox .print-cell {
+    display: flex; overflow: hidden; padding: 1pt 3pt; box-sizing: border-box;
+    white-space: nowrap; line-height: 1.15; font-family: Arial, sans-serif;
+  }
+  #render-sandbox .print-cell img { width: 100%; height: 100%; object-fit: contain; background: #fff; }
+  #render-sandbox .sheet-page { background: #fff; padding: 18pt; width: fit-content; }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div>
+    <h1>Download Report</h1>
+    <div class="app-sub" id="project-name-sub"></div>
+  </div>
+  <span></span>
+</header>
+<div class="back-bar">
+  <a href="#" id="bb-back-link">&larr; Reports</a>
+  <span class="bb-sep">//</span>
+  <span class="bb-cur">Download</span>
+</div>
+
+<main>
+  <div class="step">
+    <div class="step-header"><span class="step-num">PREVIEW</span><h2 id="preview-title">Preparing your report&hellip;</h2></div>
+    <div class="step-body">
+      <div id="pdf-preview-wrap">
+        <div id="pdf-status">Rendering PDF preview&hellip;</div>
+        <iframe id="pdf-frame" title="PDF preview" hidden></iframe>
+      </div>
+      <div class="export-bar">
+        <button type="button" class="btn-primary" id="btn-download-pdf" disabled>Download PDF</button>
+        <button type="button" class="btn-secondary" id="btn-download-excel" disabled>Download Excel</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div id="render-sandbox"></div>
+
+<script src="lib/fflate.min.js"></script>
+<script src="lib/html2canvas.min.js"></script>
+<script src="lib/jspdf.umd.min.js"></script>
+<script src="common.js"></script>
+<script src="defaults.js"></script>
+<script src="storage.js"></script>
+<script src="excel-export.js"></script>
+<script src="render-report.js"></script>
+<script>
+const { jsPDF } = window.jspdf;
+
+function pdfFilename(reports) {
+  const projectNo = (reports[0] && reports[0].projectNo) || 'PR';
+  if (reports.length === 1) {
+    return `PR${projectNo}_DailyReport_${reports[0].date || 'undated'}.pdf`;
+  }
+  return `PR${projectNo}_DailyReports_${reports.length}files.pdf`;
+}
+
+// Renders each report's two sheet-pages into `sandbox` one at a time,
+// rasterizes each at 2x with html2canvas, and assembles a real multi-page
+// PDF (one page per sheet) sized in pt to exactly match the rendered box --
+// no distortion, no reliance on the print dialog.
+async function buildPdfBlob(sandbox, layout, reports) {
+  const captures = [];
+  for (const report of reports) {
+    const pages = renderReportPages(sandbox, layout, report);
+    await waitForImages(sandbox);
+    // A rAF-based settle wait can hang indefinitely if the tab is backgrounded
+    // (rAF is throttled/suspended when not visible) -- setTimeout still fires.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    for (const pageEl of pages) {
+      const canvas = await html2canvas(pageEl, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
+      captures.push({
+        dataUrl: canvas.toDataURL('image/jpeg', 0.92),
+        wPt: pageEl.offsetWidth * 0.75,
+        hPt: pageEl.offsetHeight * 0.75,
+      });
+      $$('img', pageEl).forEach((img) => {
+        if (img.src.startsWith('blob:')) URL.revokeObjectURL(img.src);
+      });
+      pageEl.remove();
+    }
+  }
+
+  const first = captures[0];
+  const doc = new jsPDF({
+    unit: 'pt',
+    format: [first.wPt, first.hPt],
+    orientation: first.wPt >= first.hPt ? 'landscape' : 'portrait',
+  });
+  captures.forEach((cap, i) => {
+    if (i > 0) doc.addPage([cap.wPt, cap.hPt], cap.wPt >= cap.hPt ? 'landscape' : 'portrait');
+    doc.addImage(cap.dataUrl, 'JPEG', 0, 0, cap.wPt, cap.hPt);
+  });
+  return doc.output('blob');
+}
+
+(async () => {
+  const projectId = queryParam('project');
+  const reportIdsParam = queryParam('report') || '';
+  const reportIds = reportIdsParam.split(',').filter(Boolean);
+
+  const project = projectId ? await getProject(projectId) : null;
+  if (!project || reportIds.length === 0) {
+    $('#pdf-status').textContent = 'Nothing to download.';
+    return;
+  }
+  document.title = `Download — ${project.name}`;
+  $('#project-name-sub').textContent = project.name;
+  $('#bb-back-link').href = `reports.html?project=${project.id}`;
+
+  const reports = [];
+  for (const id of reportIds) {
+    const r = await getReport(id);
+    if (r) reports.push(r);
+  }
+  if (reports.length === 0) {
+    $('#pdf-status').textContent = 'Nothing to download.';
+    return;
+  }
+
+  $('#preview-title').textContent = reports.length === 1
+    ? `Report #${reports[0].reportNo} — ${reports[0].date || ''}`
+    : `${reports.length} reports selected`;
+
+  const btnExcel = $('#btn-download-excel');
+  btnExcel.textContent = reports.length === 1 ? 'Download Excel' : `Download Excel (${reports.length} files, .zip)`;
+  btnExcel.disabled = false;
+  btnExcel.addEventListener('click', async () => {
+    const original = btnExcel.textContent;
+    btnExcel.textContent = 'Generating...';
+    btnExcel.disabled = true;
+    try {
+      if (reports.length === 1) {
+        await downloadFilledReport(reports[0], project.templateBlob);
+      } else {
+        await downloadReportsAsZip(reports, project.templateBlob);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Could not generate the Excel file: ' + err.message);
+    } finally {
+      btnExcel.textContent = original;
+      btnExcel.disabled = false;
+    }
+  });
+
+  const layout = await loadPrintLayout();
+  const sandbox = $('#render-sandbox');
+
+  let pdfBlob;
+  try {
+    pdfBlob = await buildPdfBlob(sandbox, layout, reports);
+  } catch (err) {
+    console.error(err);
+    $('#pdf-status').textContent = 'Could not generate the PDF preview: ' + err.message;
+    return;
+  }
+
+  const pdfUrl = URL.createObjectURL(pdfBlob);
+  const frame = $('#pdf-frame');
+  frame.src = pdfUrl;
+  frame.hidden = false;
+  $('#pdf-status').hidden = true;
+
+  const btnPdf = $('#btn-download-pdf');
+  btnPdf.disabled = false;
+  btnPdf.addEventListener('click', () => triggerDownload(pdfBlob, pdfFilename(reports)));
+})();
+</script>
+</body>
+</html>

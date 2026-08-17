@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "daily-report-app",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8123", "--directory", "C:\\Users\\jsona\\OneDrive\\Documents\\Claude\\DailyReportApp"],
+      "port": 8123
+    }
+  ]
+}
