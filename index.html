@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>PR#439 Daily Report</title>
+<title>Daily Work Reports</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c3d5a">
 <link rel="stylesheet" href="style.css">
@@ -11,155 +11,238 @@
 <body>
 
 <header class="app-header">
-  <button id="btn-back" class="icon-btn" hidden>&larr;</button>
-  <h1 id="header-title">Daily Reports</h1>
-  <button id="btn-select-mode" class="text-btn">Select</button>
+  <div>
+    <h1>Daily Work Reports</h1>
+    <div class="app-sub">Field inspection reporting &mdash; fully on-device</div>
+  </div>
+  <span></span>
 </header>
 
-<main id="app">
+<main>
+  <div class="eyebrow">Your Projects</div>
+  <div id="hub-grid" class="hub-grid"></div>
 
-  <!-- HOME VIEW -->
-  <section id="home-view">
-    <div class="home-toolbar">
-      <button type="button" id="btn-export-backup" class="text-btn-outline">Export All Data</button>
-      <button type="button" id="btn-import-backup" class="text-btn-outline">Import Data</button>
-      <input type="file" id="import-file-input" accept="application/json,.json" hidden>
+  <!-- ADD PROJECT PANEL (revealed in place, no separate page) -->
+  <div id="add-project-panel" class="step" hidden>
+    <div class="step-header">
+      <span class="step-num">NEW PROJECT</span>
+      <h2>Add a Project</h2>
     </div>
-    <p class="hint home-toolbar-hint">Export saves everything (including photos) to one file you can move to another device yourself — email, OneDrive, USB, etc. Import merges that file back in.</p>
-    <div id="select-all-row" class="select-all-row" hidden>
-      <button type="button" id="btn-select-all" class="text-btn">Select all</button>
-      <span id="select-count-label"></span>
-    </div>
-    <div id="report-list" class="report-list"></div>
-    <button id="btn-new-report" class="fab">+ New Report</button>
-    <button id="btn-download-selected" class="fab" hidden disabled>Download Selected</button>
-  </section>
-
-  <!-- EDITOR VIEW -->
-  <section id="editor-view" hidden>
-
-    <details open class="card">
-      <summary>Report Info</summary>
-      <div class="field-grid">
-        <label>Report No. <input type="number" id="f-reportNo"></label>
-        <label>Date <input type="date" id="f-date"></label>
+    <div class="step-body">
+      <div style="display:flex;align-items:center;gap:1rem;margin-bottom:0.75rem;flex-wrap:wrap;">
+        <span class="hint" style="margin:0;">Upload an Excel file with this project's info and pay items.</span>
+        <button type="button" class="text-btn" id="btn-download-project-template" style="color:var(--brand);text-decoration:underline;padding:0;">&#8681; Download Template</button>
       </div>
 
-      <div class="time-worked-block">
-        <span class="sig-label">Time Worked</span>
-        <div id="time-entries"></div>
-        <button type="button" class="btn-secondary" id="btn-add-time-entry">+ Add Time Segment (e.g. after lunch)</button>
-        <div class="total-hours-row">
-          <span>Total Hours</span>
-          <span id="total-hours-value" class="total-hours-value">0.00</span>
+      <div class="uz" id="uz-project-data">
+        <input type="file" id="f-project-data" accept=".xlsx,.xls">
+        <span class="uz-icon">&#128202;</span>
+        <span class="uz-lbl">Upload Project Data (Excel)</span>
+        <span class="uz-hint">PROJECT INFO + PAY ITEMS sheets</span>
+        <span class="uz-fname" id="fn-project-data"></span>
+      </div>
+
+      <div id="parsed-preview"></div>
+
+      <div id="step-template-upload" hidden style="margin-top:1rem;">
+        <p class="hint">Optionally upload this project's blank report template (the actual Daily Work Report .xlsx). Leave blank to reuse the default PR#439 template layout.</p>
+        <div class="uz" id="uz-project-template">
+          <input type="file" id="f-project-template" accept=".xlsx">
+          <span class="uz-icon">&#128196;</span>
+          <span class="uz-lbl">Upload Report Template (optional)</span>
+          <span class="uz-hint">Same layout as the PR#439 template</span>
+          <span class="uz-fname" id="fn-project-template"></span>
         </div>
-        <label class="hours-override">Hours (auto-filled, editable) <input type="number" step="0.25" id="f-hours"></label>
       </div>
 
-      <label>Activity <input type="text" id="f-activity"></label>
-      <label>Notes <textarea id="f-notes" rows="2"></textarea></label>
-      <div class="field-grid">
-        <label>Representative <input type="text" id="f-representative"></label>
-        <label>PE Name <input type="text" id="f-peName"></label>
+      <div class="export-bar">
+        <button type="button" class="btn-primary" id="btn-save-new-project" disabled>Save Project</button>
+        <button type="button" class="btn-secondary" id="btn-cancel-new-project">Cancel</button>
       </div>
-      <details class="subcard">
-        <summary>Project details (rarely changes)</summary>
-        <div class="field-grid">
-          <label>Project No. <input type="text" id="f-projectNo"></label>
-          <label>Contract Co. <input type="text" id="f-contractCo"></label>
-          <label>Project Location <input type="text" id="f-projectLocation"></label>
-          <label>NTP Date <input type="date" id="f-ntpDate"></label>
-        </div>
-        <label>Project Name <input type="text" id="f-projectName"></label>
-      </details>
-    </details>
-
-    <details class="card">
-      <summary>Contractors Force &amp; Equipment</summary>
-      <div id="contractor-tabs" class="tab-row"></div>
-      <div id="contractor-panel"></div>
-      <p class="hint">15 personnel/equipment rows are fixed by the template &mdash; you can rename any row, and quantities are per contractor tab.</p>
-    </details>
-
-    <details class="card">
-      <summary>Work Summary</summary>
-      <label>Traffic Control (short note) <input type="text" id="f-trafficControlNote"></label>
-      <label>Summary of Work Performed <textarea id="f-workSummary" rows="6"></textarea></label>
-    </details>
-
-    <details class="card">
-      <summary>Pay Items</summary>
-      <div id="pay-items"></div>
-    </details>
-
-    <details class="card">
-      <summary>Controlling Item</summary>
-      <label>Controlling Item <input type="text" id="f-controllingItem"></label>
-      <label>Comments on Time Charged <textarea id="f-commentsOnTime" rows="2"></textarea></label>
-      <div class="field-grid">
-        <label>Time From <input type="text" id="f-controllingItemTimeFrom" placeholder="7:00 AM"></label>
-        <label>Time To <input type="text" id="f-controllingItemTimeTo" placeholder="3:30 PM"></label>
-      </div>
-      <label>Working Conditions <input type="text" id="f-workingConditions"></label>
-    </details>
-
-    <details class="card">
-      <summary>Traffic Control Status</summary>
-      <div class="radio-row">
-        <label><input type="radio" name="f-trafficControlSelect" value="IN_PLACE"> In Place</label>
-        <label><input type="radio" name="f-trafficControlSelect" value="ATTENTION_REQUIRED"> Attention Required</label>
-      </div>
-    </details>
-
-    <details class="card">
-      <summary>Sign-off</summary>
-      <div class="field-grid">
-        <label>Work Begin <input type="text" id="f-workBegin" placeholder="7:00 AM"></label>
-        <label>Work End <input type="text" id="f-workEnd" placeholder="3:30 PM"></label>
-      </div>
-
-      <div class="sig-block">
-        <label>Representative Name <input type="text" id="f-repSignatureName"></label>
-        <span class="sig-label">Signature</span>
-        <canvas id="sig-rep" class="sig-pad" width="600" height="150"></canvas>
-        <button type="button" class="btn-secondary" data-clear-sig="rep">Clear Signature</button>
-      </div>
-
-      <div class="sig-block">
-        <label>Project Engineer Name <input type="text" id="f-peSignatureName"></label>
-        <span class="sig-label">Signature</span>
-        <canvas id="sig-pe" class="sig-pad" width="600" height="150"></canvas>
-        <button type="button" class="btn-secondary" data-clear-sig="pe">Clear Signature</button>
-      </div>
-    </details>
-
-    <details class="card">
-      <summary>Weather</summary>
-      <label>Description <input type="text" id="f-weatherDesc" placeholder="Sunny, dry"></label>
-      <div class="field-grid">
-        <label>High &deg;F <input type="number" id="f-tempHigh"></label>
-        <label>Low &deg;F <input type="number" id="f-tempLow"></label>
-      </div>
-    </details>
-
-    <details open class="card">
-      <summary>Photos (max 6)</summary>
-      <div id="photo-grid" class="photo-grid"></div>
-    </details>
-
-    <div class="export-bar">
-      <button id="btn-export" class="btn-primary">Generate &amp; Download Report</button>
-      <button id="btn-delete-report" class="btn-danger">Delete This Report</button>
     </div>
+  </div>
 
-  </section>
-
+  <div class="eyebrow" style="margin-top:2rem;">Backup</div>
+  <div class="home-toolbar">
+    <button type="button" id="btn-export-backup" class="text-btn-outline">Export All Data</button>
+    <button type="button" id="btn-import-backup" class="text-btn-outline">Import Data</button>
+    <input type="file" id="import-file-input" accept="application/json,.json" hidden>
+  </div>
+  <p class="hint home-toolbar-hint">Export saves everything (all projects, reports, and photos) to one file you can move to another device yourself &mdash; email, OneDrive, USB, etc. Import merges that file back in. Nothing is ever transmitted anywhere by this app.</p>
 </main>
 
 <script src="lib/fflate.min.js"></script>
+<script src="lib/xlsx.min.js"></script>
+<script src="common.js"></script>
 <script src="defaults.js"></script>
 <script src="storage.js"></script>
 <script src="excel-export.js"></script>
-<script src="app.js"></script>
+<script src="project-file.js"></script>
+<script>
+let pendingParsed = null;
+let pendingTemplateBlob = null;
+let pendingTemplateFileName = null;
+
+async function renderProjectCards() {
+  const projects = await getAllProjects();
+  const grid = $('#hub-grid');
+  const cards = projects
+    .map(
+      (p) => `
+      <a class="hub-card" href="project.html?id=${p.id}">
+        <span class="hc-icon">&#128193;</span>
+        <div class="hc-title">${escapeHtml(p.name)}</div>
+        <div class="hc-desc">${escapeHtml(p.meta.contractCo || '')}${p.meta.contractCo && p.meta.projectLocation ? ' &mdash; ' : ''}${escapeHtml(p.meta.projectLocation || '')}</div>
+      </a>`
+    )
+    .join('');
+  grid.innerHTML =
+    cards +
+    `<div class="hub-card add-card" id="btn-add-project">+ Add Project</div>`;
+  if (projects.length === 0) {
+    grid.insertAdjacentHTML('afterbegin', '<div class="empty-state" style="grid-column:1/-1;">No projects yet. Tap "+ Add Project" to upload your first project\'s data file.</div>');
+  }
+  $('#btn-add-project').addEventListener('click', showAddProjectPanel);
+}
+
+function showAddProjectPanel() {
+  $('#add-project-panel').hidden = false;
+  $('#add-project-panel').scrollIntoView({ behavior: 'smooth' });
+}
+
+function resetAddProjectPanel() {
+  pendingParsed = null;
+  pendingTemplateBlob = null;
+  pendingTemplateFileName = null;
+  $('#add-project-panel').hidden = true;
+  $('#uz-project-data').classList.remove('has');
+  $('#fn-project-data').textContent = '';
+  $('#parsed-preview').innerHTML = '';
+  $('#step-template-upload').hidden = true;
+  $('#uz-project-template').classList.remove('has');
+  $('#fn-project-template').textContent = '';
+  $('#f-project-data').value = '';
+  $('#f-project-template').value = '';
+  $('#btn-save-new-project').disabled = true;
+}
+
+$('#btn-download-project-template').addEventListener('click', downloadProjectDataTemplate);
+
+$('#f-project-data').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    pendingParsed = await parseProjectDataFile(file);
+    $('#uz-project-data').classList.add('has');
+    $('#fn-project-data').textContent = file.name;
+
+    const m = pendingParsed.meta;
+    $('#parsed-preview').innerHTML = `
+      <div class="uz has" style="text-align:left;cursor:default;">
+        <div style="font-weight:700;font-size:0.85rem;margin-bottom:0.4rem;">Parsed: ${escapeHtml(m.name || m.projectNo || 'project')}</div>
+        <div class="hint" style="margin:0;">Project No: ${escapeHtml(m.projectNo || '(none)')} &middot; Contract Co: ${escapeHtml(m.contractCo || '(none)')}</div>
+        <div class="hint" style="margin:0;">Pay items found: ${pendingParsed.payItemCatalog.length}</div>
+      </div>`;
+    $('#step-template-upload').hidden = false;
+    $('#btn-save-new-project').disabled = false;
+  } catch (err) {
+    console.error(err);
+    alert('Could not read that file: ' + err.message);
+  }
+});
+
+$('#f-project-template').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  pendingTemplateBlob = file;
+  pendingTemplateFileName = file.name;
+  $('#uz-project-template').classList.add('has');
+  $('#fn-project-template').textContent = file.name;
+});
+
+$('#btn-cancel-new-project').addEventListener('click', resetAddProjectPanel);
+
+$('#btn-save-new-project').addEventListener('click', async () => {
+  if (!pendingParsed) return;
+  const btn = $('#btn-save-new-project');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+  try {
+    let templateBlob = pendingTemplateBlob;
+    let templateFileName = pendingTemplateFileName;
+    if (!templateBlob) {
+      const resp = await fetch(DEFAULT_TEMPLATE_URL);
+      templateBlob = await resp.blob();
+      templateFileName = 'PR439-Daily-Work-Report-TEMPLATE.xlsx';
+    }
+    const project = makeProjectFromParsedFile(pendingParsed, templateBlob, templateFileName);
+    await saveProject(project);
+    resetAddProjectPanel();
+    await renderProjectCards();
+  } catch (err) {
+    console.error(err);
+    alert('Could not save the project: ' + err.message);
+  } finally {
+    btn.textContent = 'Save Project';
+    btn.disabled = false;
+  }
+});
+
+// ---------- Backup / restore ----------
+
+$('#btn-export-backup').addEventListener('click', async () => {
+  const btn = $('#btn-export-backup');
+  const original = btn.textContent;
+  btn.textContent = 'Exporting...';
+  btn.disabled = true;
+  try {
+    const backup = await exportAllReportsBackup();
+    const json = JSON.stringify(backup);
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    triggerDownload(
+      new Blob([json], { type: 'application/json' }),
+      `DailyReportApp_Backup_${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.json`
+    );
+  } catch (err) {
+    console.error(err);
+    alert('Could not export data: ' + err.message);
+  } finally {
+    btn.textContent = original;
+    btn.disabled = false;
+  }
+});
+
+$('#btn-import-backup').addEventListener('click', () => $('#import-file-input').click());
+
+$('#import-file-input').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const backup = JSON.parse(text);
+    if (backup.kind !== 'daily-report-app-backup') {
+      alert("That doesn't look like a Daily Report backup file.");
+      return;
+    }
+    const result = await importReportsBackup(backup);
+    alert(
+      `Import complete.\nProjects: ${result.projectsAdded} new, ${result.projectsUpdated} updated, ${result.projectsSkipped} already up to date.\nReports: ${result.added} new, ${result.updated} updated, ${result.skipped} already up to date.`
+    );
+    await renderProjectCards();
+  } catch (err) {
+    console.error(err);
+    alert('Could not import that file: ' + err.message);
+  }
+});
+
+// ---------- Init ----------
+
+(async () => {
+  await adoptOrphanReportsIfAny();
+  await renderProjectCards();
+})();
+</script>
 </body>
 </html>

@@ -1,0 +1,667 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Report Editor</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1c3d5a">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="app-header">
+  <div>
+    <h1 id="editor-title">Report</h1>
+    <div class="app-sub" id="project-name-sub"></div>
+  </div>
+  <span></span>
+</header>
+<div class="back-bar">
+  <a href="#" id="bb-back-link">&larr; Reports</a>
+  <span class="bb-sep">//</span>
+  <span class="bb-cur">Editor</span>
+</div>
+
+<main>
+
+  <div class="step">
+    <div class="step-header"><span class="step-num">STEP 1</span><h2>Report Info</h2></div>
+    <div class="step-body">
+      <div class="field-grid">
+        <label>Report No. <input type="number" id="f-reportNo"></label>
+        <label>Date <input type="date" id="f-date"></label>
+      </div>
+
+      <div class="time-worked-block">
+        <span class="sig-label">Time Worked</span>
+        <div id="time-entries"></div>
+        <button type="button" class="btn-secondary" id="btn-add-time-entry">+ Add Time Segment (e.g. after lunch)</button>
+        <div class="total-hours-row">
+          <span>Total Hours</span>
+          <span id="total-hours-value" class="total-hours-value">0.00</span>
+        </div>
+        <label class="hours-override">Hours (auto-filled, editable) <input type="number" step="0.25" id="f-hours"></label>
+      </div>
+
+      <label>Activity <input type="text" id="f-activity"></label>
+      <label>Notes <textarea id="f-notes" rows="2"></textarea></label>
+      <div class="field-grid">
+        <label>Representative <input type="text" id="f-representative"></label>
+        <label>PE Name <input type="text" id="f-peName"></label>
+      </div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-header"><span class="step-num">STEP 2</span><h2>Contractors Force &amp; Equipment</h2></div>
+    <div class="step-body">
+      <div id="contractor-tabs" class="tab-row"></div>
+      <div id="contractor-panel"></div>
+      <p class="hint">15 personnel/equipment rows are fixed by the template &mdash; you can rename any row, and quantities are per contractor tab.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-header"><span class="step-num">STEP 3</span><h2>Work Summary</h2></div>
+    <div class="step-body">
+      <label>Traffic Control (short note) <input type="text" id="f-trafficControlNote"></label>
+      <label>Summary of Work Performed <textarea id="f-workSummary" rows="6"></textarea></label>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-header">
+      <span class="step-num">STEP 4</span>
+      <h2>Pay Items</h2>
+      <span class="step-tag" id="pay-items-tag">0 / 6</span>
+    </div>
+    <div class="step-body">
+      <label>Search Catalog <input type="text" id="pi-search" placeholder="Search by item # or description..."></label>
+      <div id="pay-catalog-list" class="check-list"></div>
+
+      <div class="add-manual" id="add-manual-section">
+        <div class="add-manual-header" id="toggle-manual-pay-item">
+          <span id="manual-pay-toggle-icon">&#9656;</span>
+          <span>ADD ITEM NOT IN CATALOG</span>
+        </div>
+        <div class="add-manual-fields" id="manual-pay-fields">
+          <label>Item # <input type="text" id="mp-num"></label>
+          <label>Description <input type="text" id="mp-desc"></label>
+          <label>Unit <input type="text" id="mp-unit"></label>
+          <button type="button" class="btn-sm" id="btn-add-manual-pay">+ Add</button>
+        </div>
+      </div>
+
+      <div class="eyebrow" style="margin-top:1rem;">Today's Pay Items</div>
+      <div id="selected-pay-items" class="selected-items"></div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-header"><span class="step-num">STEP 5</span><h2>Controlling Item</h2></div>
+    <div class="step-body">
+      <label>Controlling Item <input type="text" id="f-controllingItem"></label>
+      <label>Comments on Time Charged <textarea id="f-commentsOnTime" rows="2"></textarea></label>
+      <div class="field-grid">
+        <label>Time From <input type="text" id="f-controllingItemTimeFrom" placeholder="7:00 AM"></label>
+        <label>Time To <input type="text" id="f-controllingItemTimeTo" placeholder="3:30 PM"></label>
+      </div>
+      <label>Working Conditions <input type="text" id="f-workingConditions"></label>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-header"><span class="step-num">STEP 6</span><h2>Traffic Control Status</h2></div>
+    <div class="step-body">
+      <div class="radio-row">
+        <label><input type="radio" name="f-trafficControlSelect" value="IN_PLACE"> In Place</label>
+        <label><input type="radio" name="f-trafficControlSelect" value="ATTENTION_REQUIRED"> Attention Required</label>
+      </div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-header"><span class="step-num">STEP 7</span><h2>Sign-off</h2></div>
+    <div class="step-body">
+      <div class="field-grid">
+        <label>Work Begin <input type="text" id="f-workBegin" placeholder="7:00 AM"></label>
+        <label>Work End <input type="text" id="f-workEnd" placeholder="3:30 PM"></label>
+      </div>
+
+      <div class="sig-block">
+        <label>Representative Name <input type="text" id="f-repSignatureName"></label>
+        <span class="sig-label">Signature</span>
+        <canvas id="sig-rep" class="sig-pad" width="600" height="150"></canvas>
+        <button type="button" class="btn-secondary" data-clear-sig="rep">Clear Signature</button>
+      </div>
+
+      <div class="sig-block">
+        <label>Project Engineer Name <input type="text" id="f-peSignatureName"></label>
+        <span class="sig-label">Signature</span>
+        <canvas id="sig-pe" class="sig-pad" width="600" height="150"></canvas>
+        <button type="button" class="btn-secondary" data-clear-sig="pe">Clear Signature</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-header"><span class="step-num">STEP 8</span><h2>Weather</h2></div>
+    <div class="step-body">
+      <label>Description <input type="text" id="f-weatherDesc" placeholder="Sunny, dry"></label>
+      <div class="field-grid">
+        <label>High &deg;F <input type="number" id="f-tempHigh"></label>
+        <label>Low &deg;F <input type="number" id="f-tempLow"></label>
+      </div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-header"><span class="step-num">STEP 9</span><h2>Photos (max 6)</h2></div>
+    <div class="step-body">
+      <div id="photo-grid" class="photo-grid"></div>
+    </div>
+  </div>
+
+  <div class="export-bar">
+    <button id="btn-export" class="btn-primary">Generate &amp; Download Report</button>
+    <button id="btn-delete-report" class="btn-danger">Delete This Report</button>
+  </div>
+
+</main>
+
+<script src="lib/fflate.min.js"></script>
+<script src="common.js"></script>
+<script src="defaults.js"></script>
+<script src="storage.js"></script>
+<script src="excel-export.js"></script>
+<script>
+const projectId = queryParam('project');
+let project = null;
+let report = null;
+let activeContractorTab = 0;
+let saveTimer = null;
+let payItemSearch = '';
+let manualPayOpen = false;
+
+function scheduleSave() {
+  if (!report) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => saveReport(report).catch(console.error), 400);
+}
+
+async function init() {
+  project = projectId ? await getProject(projectId) : null;
+  if (!project) {
+    location.href = 'index.html';
+    return;
+  }
+  $('#project-name-sub').textContent = project.name;
+  $('#bb-back-link').href = `reports.html?project=${project.id}`;
+
+  const reportParam = queryParam('report');
+  if (reportParam === 'new') {
+    const existing = await getReportsForProject(project.id);
+    const nextNo = await getNextReportNo(project.id);
+    report = makeBlankReport(nextNo, project, existing[0]);
+    await saveReport(report);
+    history.replaceState(null, '', `report-editor.html?project=${project.id}&report=${report.id}`);
+  } else {
+    report = await getReport(reportParam);
+    if (!report) {
+      location.href = `reports.html?project=${project.id}`;
+      return;
+    }
+  }
+
+  document.title = `Report #${report.reportNo} — ${project.name}`;
+  $('#editor-title').textContent = `Report #${report.reportNo} - ${report.date || ''}`;
+
+  renderEditor();
+}
+
+function bindText(id, field) {
+  const el = $(id);
+  el.value = report[field] ?? '';
+  el.addEventListener('input', () => {
+    report[field] = el.value;
+    scheduleSave();
+  });
+}
+
+function renderEditor() {
+  bindText('#f-reportNo', 'reportNo');
+  bindText('#f-date', 'date');
+  bindText('#f-hours', 'hours');
+  bindText('#f-activity', 'activity');
+  bindText('#f-notes', 'notes');
+  bindText('#f-representative', 'representative');
+  bindText('#f-peName', 'peName');
+
+  bindText('#f-trafficControlNote', 'trafficControlNote');
+  bindText('#f-workSummary', 'workSummary');
+
+  bindText('#f-controllingItem', 'controllingItem');
+  bindText('#f-commentsOnTime', 'commentsOnTime');
+  bindText('#f-controllingItemTimeFrom', 'controllingItemTimeFrom');
+  bindText('#f-controllingItemTimeTo', 'controllingItemTimeTo');
+  bindText('#f-workingConditions', 'workingConditions');
+
+  bindText('#f-workBegin', 'workBegin');
+  bindText('#f-workEnd', 'workEnd');
+  bindText('#f-repSignatureName', 'repSignatureName');
+  bindText('#f-peSignatureName', 'peSignatureName');
+
+  bindText('#f-weatherDesc', 'weatherDesc');
+  bindText('#f-tempHigh', 'tempHigh');
+  bindText('#f-tempLow', 'tempLow');
+
+  $$('input[name="f-trafficControlSelect"]').forEach((radio) => {
+    radio.checked = radio.value === report.trafficControlSelect;
+    radio.addEventListener('change', () => {
+      report.trafficControlSelect = radio.value;
+      scheduleSave();
+    });
+  });
+
+  if (!Array.isArray(report.timeEntries) || report.timeEntries.length === 0) {
+    report.timeEntries = [{ start: '', end: '' }];
+  }
+  renderTimeEntries();
+  renderContractorTabs();
+  renderPayItemsStep();
+  renderPhotoGrid();
+  setupSignaturePad('#sig-rep', 'repSignatureImage');
+  setupSignaturePad('#sig-pe', 'peSignatureImage');
+
+  $('#btn-export').onclick = async () => {
+    const btn = $('#btn-export');
+    const original = btn.textContent;
+    btn.textContent = 'Generating...';
+    btn.disabled = true;
+    try {
+      await downloadFilledReport(report, project.templateBlob);
+    } catch (err) {
+      console.error(err);
+      alert('Could not generate the report: ' + err.message);
+    } finally {
+      btn.textContent = original;
+      btn.disabled = false;
+    }
+  };
+
+  $('#btn-delete-report').onclick = async () => {
+    if (!confirm('Delete this report? This cannot be undone.')) return;
+    await deleteReport(report.id);
+    location.href = `reports.html?project=${project.id}`;
+  };
+}
+
+// ---------- Time worked / hours calculator ----------
+
+function timeToMinutes(hhmm) {
+  if (!hhmm) return null;
+  const [h, m] = hhmm.split(':').map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return null;
+  return h * 60 + m;
+}
+function entryHours(entry) {
+  const start = timeToMinutes(entry.start);
+  const end = timeToMinutes(entry.end);
+  if (start === null || end === null || end <= start) return null;
+  return (end - start) / 60;
+}
+function totalHours(timeEntries) {
+  return timeEntries.reduce((sum, e) => sum + (entryHours(e) || 0), 0);
+}
+
+function renderTimeEntries() {
+  const container = $('#time-entries');
+  container.innerHTML = report.timeEntries
+    .map((entry, i) => {
+      const h = entryHours(entry);
+      const subtotal = entry.start && entry.end ? (h === null ? 'invalid' : `${h.toFixed(2)} hrs`) : '';
+      return `
+        <div class="time-entry-row" data-idx="${i}">
+          <input type="time" class="te-start" data-idx="${i}" data-f="start" value="${entry.start || ''}">
+          <span class="te-to">to</span>
+          <input type="time" class="te-end" data-idx="${i}" data-f="end" value="${entry.end || ''}">
+          <span class="te-subtotal">${subtotal}</span>
+          <button type="button" class="te-remove" data-idx="${i}" ${report.timeEntries.length <= 1 ? 'hidden' : ''}>&times;</button>
+        </div>`;
+    })
+    .join('');
+
+  $$('input[type="time"]', container).forEach((el) => {
+    el.addEventListener('input', () => {
+      report.timeEntries[Number(el.dataset.idx)][el.dataset.f] = el.value;
+      onTimeEntriesChanged();
+    });
+  });
+  $$('.te-remove', container).forEach((btn) => {
+    btn.addEventListener('click', () => {
+      report.timeEntries.splice(Number(btn.dataset.idx), 1);
+      onTimeEntriesChanged();
+    });
+  });
+
+  updateTotalHoursDisplay();
+}
+
+function onTimeEntriesChanged() {
+  renderTimeEntries();
+  const total = totalHours(report.timeEntries);
+  report.hours = total > 0 ? Number(total.toFixed(2)) : report.hours;
+  $('#f-hours').value = report.hours;
+  scheduleSave();
+}
+
+function updateTotalHoursDisplay() {
+  $('#total-hours-value').textContent = totalHours(report.timeEntries).toFixed(2);
+}
+
+$('#btn-add-time-entry').addEventListener('click', () => {
+  report.timeEntries.push({ start: '', end: '' });
+  renderTimeEntries();
+  scheduleSave();
+});
+
+// ---------- Contractors / equipment matrix ----------
+
+function renderContractorTabs() {
+  const tabRow = $('#contractor-tabs');
+  tabRow.innerHTML = report.contractors
+    .map((c, i) => `<button class="tab-btn${i === activeContractorTab ? ' active' : ''}" data-idx="${i}">${escapeHtml(c.name || 'Contractor ' + (i + 1))}</button>`)
+    .join('');
+  $$('.tab-btn', tabRow).forEach((btn) => {
+    btn.addEventListener('click', () => {
+      activeContractorTab = Number(btn.dataset.idx);
+      renderContractorTabs();
+      renderContractorPanel();
+    });
+  });
+  renderContractorPanel();
+}
+
+function renderContractorPanel() {
+  const panel = $('#contractor-panel');
+  const idx = activeContractorTab;
+  const contractor = report.contractors[idx];
+
+  panel.innerHTML = `
+    <label class="contractor-name-input">Contractor ${idx + 1} Name
+      <input type="text" id="contractor-name-input" value="${escapeHtml(contractor.name || '')}" placeholder="e.g. ABC Trucking">
+    </label>
+    <div id="equip-rows"></div>
+  `;
+
+  $('#contractor-name-input').addEventListener('input', (e) => {
+    contractor.name = e.target.value;
+    scheduleSave();
+    const btn = $(`#contractor-tabs .tab-btn[data-idx="${idx}"]`);
+    if (btn) btn.textContent = e.target.value || 'Contractor ' + (idx + 1);
+  });
+
+  const rowsEl = $('#equip-rows');
+  rowsEl.innerHTML = report.equipmentRows
+    .map(
+      (row, i) => `
+      <div class="equip-row">
+        <input type="text" data-row="${i}" class="equip-label" value="${escapeHtml(row.label)}" placeholder="(row ${i + 1} label)">
+        <input type="number" data-row="${i}" class="equip-qty" value="${row.qty[idx] ?? ''}" min="0">
+      </div>`
+    )
+    .join('');
+
+  $$('.equip-label', rowsEl).forEach((el) => {
+    el.addEventListener('input', () => {
+      report.equipmentRows[Number(el.dataset.row)].label = el.value;
+      scheduleSave();
+    });
+  });
+  $$('.equip-qty', rowsEl).forEach((el) => {
+    el.addEventListener('input', () => {
+      report.equipmentRows[Number(el.dataset.row)].qty[idx] = el.value;
+      scheduleSave();
+    });
+  });
+}
+
+// ---------- Pay items (rich catalog selector) ----------
+
+function payItemFilledCount() {
+  return report.payItems.filter((pi) => pi.itemNumber || pi.description).length;
+}
+
+function renderPayItemsStep() {
+  const catalog = project.payItemCatalog || [];
+  const q = payItemSearch.trim().toLowerCase();
+  const filtered = q
+    ? catalog.filter((item) => `${item.itemNumber} ${item.description}`.toLowerCase().includes(q))
+    : catalog;
+
+  const selectedNumbers = new Set(report.payItems.filter((pi) => pi.itemNumber).map((pi) => pi.itemNumber));
+
+  const list = $('#pay-catalog-list');
+  if (catalog.length === 0) {
+    list.innerHTML = '<div class="empty-list">This project has no pay item catalog. Use "Add item not in catalog" below, or upload a project data file with a PAY ITEMS sheet.</div>';
+  } else if (filtered.length === 0) {
+    list.innerHTML = '<div class="empty-list">No catalog items match your search.</div>';
+  } else {
+    list.innerHTML = filtered
+      .map(
+        (item) => `
+        <div class="check-item ${selectedNumbers.has(item.itemNumber) ? 'selected' : ''}" data-num="${escapeHtml(item.itemNumber)}">
+          <input type="checkbox" ${selectedNumbers.has(item.itemNumber) ? 'checked' : ''}>
+          <div class="ci-main">
+            <div class="ci-num">${escapeHtml(item.itemNumber)}</div>
+            <div class="ci-desc">${escapeHtml(item.description)}</div>
+          </div>
+          <span class="ci-unit">${escapeHtml(item.unit)}</span>
+        </div>`
+      )
+      .join('');
+    $$('.check-item', list).forEach((row) => {
+      row.addEventListener('click', (e) => {
+        e.preventDefault();
+        const num = row.dataset.num;
+        const catalogItem = catalog.find((c) => c.itemNumber === num);
+        togglePayItem(catalogItem);
+      });
+    });
+  }
+
+  renderSelectedPayItems();
+  $('#pay-items-tag').textContent = `${payItemFilledCount()} / 6`;
+}
+
+function togglePayItem(catalogItem) {
+  const items = report.payItems;
+  const existingIdx = items.findIndex((pi) => pi.itemNumber && pi.itemNumber === catalogItem.itemNumber);
+  if (existingIdx !== -1) {
+    items[existingIdx] = { itemNumber: '', description: '', qty: '', unit: '' };
+  } else {
+    const emptyIdx = items.findIndex((pi) => !pi.itemNumber && !pi.description);
+    if (emptyIdx === -1) {
+      alert('Maximum 6 pay items per report (fixed by the template). Remove one first.');
+      return;
+    }
+    items[emptyIdx] = { itemNumber: catalogItem.itemNumber, description: catalogItem.description, qty: '', unit: catalogItem.unit };
+  }
+  scheduleSave();
+  renderPayItemsStep();
+}
+
+function renderSelectedPayItems() {
+  const container = $('#selected-pay-items');
+  const rows = report.payItems.map((item, i) => ({ item, i })).filter((x) => x.item.itemNumber || x.item.description);
+
+  if (rows.length === 0) {
+    container.innerHTML = '<div class="empty-list">No pay items selected yet.</div>';
+    return;
+  }
+
+  container.innerHTML = rows
+    .map(
+      ({ item, i }) => `
+      <div class="selected-item-row">
+        <div class="si-desc"><span class="si-num">${escapeHtml(item.itemNumber)}</span> ${escapeHtml(item.description)}${item.unit ? ` <span style="color:var(--text-dim);">(${escapeHtml(item.unit)})</span>` : ''}</div>
+        <input type="number" class="si-qty" data-idx="${i}" value="${item.qty}" placeholder="Qty">
+        <button type="button" class="si-remove" data-idx="${i}" title="Remove">&times;</button>
+      </div>`
+    )
+    .join('');
+
+  $$('.si-qty', container).forEach((el) => {
+    el.addEventListener('input', () => {
+      report.payItems[Number(el.dataset.idx)].qty = el.value;
+      scheduleSave();
+    });
+  });
+  $$('.si-remove', container).forEach((btn) => {
+    btn.addEventListener('click', () => {
+      report.payItems[Number(btn.dataset.idx)] = { itemNumber: '', description: '', qty: '', unit: '' };
+      scheduleSave();
+      renderPayItemsStep();
+    });
+  });
+}
+
+$('#pi-search').addEventListener('input', (e) => {
+  payItemSearch = e.target.value;
+  renderPayItemsStep();
+});
+
+$('#toggle-manual-pay-item').addEventListener('click', () => {
+  manualPayOpen = !manualPayOpen;
+  $('#manual-pay-fields').classList.toggle('show', manualPayOpen);
+  $('#manual-pay-toggle-icon').textContent = manualPayOpen ? '▾' : '▸';
+});
+
+$('#btn-add-manual-pay').addEventListener('click', () => {
+  const itemNumber = $('#mp-num').value.trim();
+  const description = $('#mp-desc').value.trim();
+  const unit = $('#mp-unit').value.trim();
+  if (!itemNumber && !description) {
+    alert('Enter at least an item number or description.');
+    return;
+  }
+  const emptyIdx = report.payItems.findIndex((pi) => !pi.itemNumber && !pi.description);
+  if (emptyIdx === -1) {
+    alert('Maximum 6 pay items per report (fixed by the template). Remove one first.');
+    return;
+  }
+  report.payItems[emptyIdx] = { itemNumber, description, qty: '', unit };
+  $('#mp-num').value = '';
+  $('#mp-desc').value = '';
+  $('#mp-unit').value = '';
+  scheduleSave();
+  renderPayItemsStep();
+});
+
+// ---------- Photos ----------
+
+function renderPhotoGrid() {
+  const grid = $('#photo-grid');
+  grid.innerHTML = report.photos
+    .map((blob, i) => {
+      if (blob) {
+        const url = URL.createObjectURL(blob);
+        return `
+          <div class="photo-slot" data-idx="${i}">
+            <img src="${url}" alt="Photo ${i + 1}">
+            <button type="button" class="photo-remove" data-remove="${i}">&times;</button>
+            <span class="photo-num">Photo ${i + 1}</span>
+          </div>`;
+      }
+      return `
+        <div class="photo-slot" data-idx="${i}">
+          <span>+ Photo ${i + 1}</span>
+          <input type="file" accept="image/*" data-add="${i}">
+        </div>`;
+    })
+    .join('');
+
+  $$('input[type="file"]', grid).forEach((input) => {
+    input.addEventListener('change', () => {
+      const idx = Number(input.dataset.add);
+      const file = input.files[0];
+      if (file) {
+        report.photos[idx] = file;
+        scheduleSave();
+        renderPhotoGrid();
+      }
+    });
+  });
+  $$('[data-remove]', grid).forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const idx = Number(btn.dataset.remove);
+      report.photos[idx] = null;
+      scheduleSave();
+      renderPhotoGrid();
+    });
+  });
+}
+
+// ---------- Signature pads ----------
+
+function setupSignaturePad(canvasSel, field) {
+  const canvas = $(canvasSel);
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.lineWidth = 2.5;
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = '#1a1a1a';
+
+  const existing = report[field];
+  if (existing) {
+    const img = new Image();
+    img.onload = () => ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    img.src = URL.createObjectURL(existing);
+  }
+
+  let drawing = false;
+  function pos(e) {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
+  }
+
+  canvas.addEventListener('pointerdown', (e) => {
+    drawing = true;
+    const p = pos(e);
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    canvas.setPointerCapture(e.pointerId);
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (!drawing) return;
+    const p = pos(e);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+  });
+  const finish = () => {
+    if (!drawing) return;
+    drawing = false;
+    canvas.toBlob((blob) => {
+      report[field] = blob;
+      scheduleSave();
+    }, 'image/png');
+  };
+  canvas.addEventListener('pointerup', finish);
+  canvas.addEventListener('pointercancel', finish);
+
+  const idKey = canvasSel === '#sig-rep' ? 'rep' : 'pe';
+  $(`[data-clear-sig="${idKey}"]`).onclick = () => {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    report[field] = null;
+    scheduleSave();
+  };
+}
+
+init();
+</script>
+</body>
+</html>

@@ -1,6 +1,10 @@
-// Fills the PR#439 Daily Work Report template with a report's data and
+// Fills a project's Daily Work Report template with a report's data and
 // triggers a download. The template file itself is only ever read, never
-// saved over -- every export starts from the pristine bytes on disk.
+// saved over -- every export starts from the project's pristine template
+// bytes (passed in by the caller -- each project supplies its own, falling
+// back to the bundled default). This module has no opinion on WHERE the
+// template comes from, so the same code works for any project using the
+// same "Daily Work Report" / "Daily_Photo_Log" layout.
 //
 // IMPORTANT: this does NOT use ExcelJS to load+modify+resave the workbook.
 // A full load/save round trip through ExcelJS (or any library that rebuilds
@@ -13,8 +17,6 @@
 // exact <c> cell elements we're filling in and append new drawing/media
 // parts for photos -- every other byte of every other part is carried over
 // completely untouched.
-
-const TEMPLATE_URL = 'template/PR439-Daily-Work-Report-TEMPLATE.xlsx';
 
 const SHEET1_PATH = 'xl/worksheets/sheet1.xml'; // Daily Work Report
 const SHEET2_PATH = 'xl/worksheets/sheet2.xml'; // Daily_Photo_Log
@@ -333,10 +335,13 @@ async function embedImagesForSheet(files, sheetPath, sheetRelsPath, drawingPath,
   files[CONTENT_TYPES_PATH] = textEncoder.encode(contentTypesXml);
 }
 
-async function generateReportWorkbookBuffer(report) {
-  const resp = await fetch(TEMPLATE_URL);
-  if (!resp.ok) throw new Error('Could not load template file: ' + resp.status);
-  const templateBuffer = new Uint8Array(await resp.arrayBuffer());
+// templateBytes: the project's template file, as a Blob, ArrayBuffer, or
+// Uint8Array -- whichever is convenient for the caller.
+async function generateReportWorkbookBuffer(report, templateBytes) {
+  if (!templateBytes) throw new Error('No template file available for this project');
+  const templateBuffer = new Uint8Array(
+    templateBytes instanceof Blob ? await templateBytes.arrayBuffer() : templateBytes
+  );
 
   const files = fflate.unzipSync(templateBuffer);
 
@@ -382,31 +387,25 @@ function reportFilename(report) {
   return `PR${projectNo}_DailyReport_${report.date || 'undated'}.xlsx`;
 }
 
-function triggerDownload(bytes, filename, mimeType) {
-  const blob = new Blob([bytes], { type: mimeType });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 10000);
-}
+// NOTE: triggerDownload(blob, filename) lives in common.js and is shared
+// across every page -- not redefined here to avoid two conflicting global
+// functions of the same name.
 
-async function downloadFilledReport(report) {
-  const zipped = await generateReportWorkbookBuffer(report);
-  triggerDownload(zipped, reportFilename(report), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+async function downloadFilledReport(report, templateBytes) {
+  const zipped = await generateReportWorkbookBuffer(report, templateBytes);
+  const blob = new Blob([zipped], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  triggerDownload(blob, reportFilename(report));
 }
 
 // Bundles several filled reports into a single .zip so the browser only has
 // to deliver one download -- triggering N separate downloads in a row gets
-// silently blocked by mobile browsers after the first one or two.
-async function downloadReportsAsZip(reports) {
+// silently blocked by mobile browsers after the first one or two. All the
+// reports here belong to the same project, so they share one template.
+async function downloadReportsAsZip(reports, templateBytes) {
   const files = {};
   const usedNames = new Set();
   for (const report of reports) {
-    const buf = await generateReportWorkbookBuffer(report);
+    const buf = await generateReportWorkbookBuffer(report, templateBytes);
     let name = reportFilename(report);
     if (usedNames.has(name)) {
       name = name.replace(/\.xlsx$/, `_Report${report.reportNo}.xlsx`);
@@ -416,5 +415,6 @@ async function downloadReportsAsZip(reports) {
   }
   const zipped = fflate.zipSync(files, { level: 6 });
   const stamp = reports[0] && reports[0].projectNo ? `PR${reports[0].projectNo}_` : '';
-  triggerDownload(zipped, `${stamp}DailyReports_${reports.length}files.zip`, 'application/zip');
+  const blob = new Blob([zipped], { type: 'application/zip' });
+  triggerDownload(blob, `${stamp}DailyReports_${reports.length}files.zip`);
 }

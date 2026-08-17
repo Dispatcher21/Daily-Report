@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>View Reports</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1c3d5a">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="app-header">
+  <div>
+    <h1>View Reports</h1>
+    <div class="app-sub" id="project-name-sub"></div>
+  </div>
+  <span></span>
+</header>
+<div class="back-bar">
+  <a href="#" id="bb-back-link">&larr; Project</a>
+  <span class="bb-sep">//</span>
+  <span class="bb-cur">Reports</span>
+</div>
+
+<main>
+  <div class="filter-row">
+    <div class="filter-box">
+      <label>From</label>
+      <input type="date" id="f-date-from">
+    </div>
+    <div class="filter-box">
+      <label>To</label>
+      <input type="date" id="f-date-to">
+    </div>
+    <div class="filter-box" style="flex:2;min-width:160px;">
+      <label>Search Activity/Notes</label>
+      <input type="text" id="f-search" placeholder="Type to filter...">
+    </div>
+    <div class="filter-box" style="min-width:150px;">
+      <label>Sort By</label>
+      <select id="f-sort">
+        <option value="date-desc">Date (Newest)</option>
+        <option value="date-asc">Date (Oldest)</option>
+        <option value="no-desc">Report # (High-Low)</option>
+        <option value="no-asc">Report # (Low-High)</option>
+      </select>
+    </div>
+    <div style="display:flex;align-items:flex-end;">
+      <button type="button" class="btn-sm" id="btn-clear-filters">&times; Clear</button>
+    </div>
+  </div>
+
+  <div class="select-all-row">
+    <button type="button" class="text-btn" id="btn-select-all">Select all</button>
+    <span id="select-count-label"></span>
+  </div>
+
+  <div id="report-list" class="report-list"></div>
+
+  <div id="bulk-bar" class="step" hidden style="position:sticky;bottom:0.5rem;">
+    <div class="step-body">
+      <div class="export-bar" style="margin-top:0;">
+        <button type="button" class="btn-primary" id="btn-download-selected">Download Selected</button>
+        <button type="button" class="btn-secondary" id="btn-mass-edit-selected">Mass Edit Selected</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="mass-edit-panel" class="step" hidden>
+    <div class="step-header">
+      <span class="step-num">MASS EDIT</span>
+      <h2>Apply One Field to Selected Reports</h2>
+    </div>
+    <div class="step-body">
+      <p class="warn">This overwrites the chosen field on every selected report. Cannot be undone (though each report can still be edited individually afterward).</p>
+      <div class="field-grid">
+        <label>Field
+          <select id="me-field">
+            <option value="representative">Representative</option>
+            <option value="peName">PE Name</option>
+            <option value="weatherDesc">Weather Description</option>
+            <option value="trafficControlSelect">Traffic Control Status</option>
+            <option value="workingConditions">Working Conditions</option>
+          </select>
+        </label>
+        <label>New Value <input type="text" id="me-value" placeholder="Value to apply"></label>
+      </div>
+      <div id="me-select-wrap" hidden>
+        <label>New Value
+          <select id="me-value-select">
+            <option value="IN_PLACE">In Place</option>
+            <option value="ATTENTION_REQUIRED">Attention Required</option>
+          </select>
+        </label>
+      </div>
+      <div class="export-bar">
+        <button type="button" class="btn-primary" id="btn-apply-mass-edit">Apply to Selected</button>
+        <button type="button" class="btn-secondary" id="btn-cancel-mass-edit">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <a class="fab" id="fab-new-report" href="#">+ New Report</a>
+</main>
+
+<script src="lib/fflate.min.js"></script>
+<script src="common.js"></script>
+<script src="defaults.js"></script>
+<script src="storage.js"></script>
+<script src="excel-export.js"></script>
+<script>
+const projectId = queryParam('project');
+let project = null;
+let allReports = [];
+let selectedIds = new Set();
+
+async function init() {
+  project = projectId ? await getProject(projectId) : null;
+  if (!project) {
+    location.href = 'index.html';
+    return;
+  }
+  document.title = `View Reports — ${project.name}`;
+  $('#project-name-sub').textContent = project.name;
+  $('#bb-back-link').href = `project.html?id=${project.id}`;
+  $('#fab-new-report').href = `report-editor.html?project=${project.id}&report=new`;
+
+  allReports = await getReportsForProject(project.id);
+  render();
+}
+
+function getFilteredSorted() {
+  const from = $('#f-date-from').value;
+  const to = $('#f-date-to').value;
+  const search = $('#f-search').value.trim().toLowerCase();
+  const sort = $('#f-sort').value;
+
+  let list = allReports.filter((r) => {
+    if (from && r.date < from) return false;
+    if (to && r.date > to) return false;
+    if (search) {
+      const hay = `${r.activity || ''} ${r.notes || ''}`.toLowerCase();
+      if (!hay.includes(search)) return false;
+    }
+    return true;
+  });
+
+  list.sort((a, b) => {
+    if (sort === 'date-asc') return (a.date || '').localeCompare(b.date || '');
+    if (sort === 'date-desc') return (b.date || '').localeCompare(a.date || '');
+    if (sort === 'no-asc') return (Number(a.reportNo) || 0) - (Number(b.reportNo) || 0);
+    if (sort === 'no-desc') return (Number(b.reportNo) || 0) - (Number(a.reportNo) || 0);
+    return 0;
+  });
+
+  return list;
+}
+
+function render() {
+  const list = getFilteredSorted();
+  const container = $('#report-list');
+
+  if (allReports.length === 0) {
+    container.innerHTML = '<div class="empty-state">No reports yet. Tap "+ New Report" to start today\'s.</div>';
+  } else if (list.length === 0) {
+    container.innerHTML = '<div class="empty-state">No reports match the current filters.</div>';
+  } else {
+    container.innerHTML = list
+      .map(
+        (r) => `
+        <div class="report-row" data-id="${r.id}">
+          <input type="checkbox" class="report-row-check" ${selectedIds.has(r.id) ? 'checked' : ''}>
+          <div class="report-row-main" data-open="${r.id}">
+            <span class="report-row-date">${r.date || '(no date)'}</span>
+            <span class="report-row-sub">${escapeHtml(r.activity || 'No activity noted')}</span>
+          </div>
+          <div class="report-row-actions">
+            <a class="btn-sm" href="report-editor.html?project=${project.id}&report=${r.id}">Edit</a>
+            <span class="report-row-no">#${r.reportNo}</span>
+          </div>
+        </div>`
+      )
+      .join('');
+  }
+
+  $$('.report-row-check', container).forEach((cb) => {
+    cb.addEventListener('change', (e) => {
+      const id = e.target.closest('.report-row').dataset.id;
+      if (e.target.checked) selectedIds.add(id);
+      else selectedIds.delete(id);
+      updateBulkBar();
+    });
+  });
+  $$('[data-open]', container).forEach((el) => {
+    el.addEventListener('click', () => {
+      location.href = `report-editor.html?project=${project.id}&report=${el.dataset.open}`;
+    });
+  });
+
+  $('#btn-select-all').textContent = selectedIds.size === list.length && list.length > 0 ? 'Deselect all' : 'Select all';
+  updateBulkBar();
+}
+
+function updateBulkBar() {
+  const n = selectedIds.size;
+  $('#select-count-label').textContent = n > 0 ? `${n} selected` : '';
+  $('#bulk-bar').hidden = n === 0;
+  $('#btn-download-selected').textContent = n === 1 ? 'Download Selected' : `Download Selected (${n})`;
+}
+
+['f-date-from', 'f-date-to', 'f-search', 'f-sort'].forEach((id) => {
+  $('#' + id).addEventListener('input', render);
+});
+
+$('#btn-clear-filters').addEventListener('click', () => {
+  $('#f-date-from').value = '';
+  $('#f-date-to').value = '';
+  $('#f-search').value = '';
+  $('#f-sort').value = 'date-desc';
+  render();
+});
+
+$('#btn-select-all').addEventListener('click', () => {
+  const list = getFilteredSorted();
+  if (selectedIds.size === list.length && list.length > 0) {
+    selectedIds.clear();
+  } else {
+    list.forEach((r) => selectedIds.add(r.id));
+  }
+  render();
+});
+
+$('#btn-download-selected').addEventListener('click', async () => {
+  if (selectedIds.size === 0) return;
+  const btn = $('#btn-download-selected');
+  const original = btn.textContent;
+  btn.textContent = 'Generating...';
+  btn.disabled = true;
+  try {
+    const selected = allReports.filter((r) => selectedIds.has(r.id));
+    if (selected.length === 1) {
+      await downloadFilledReport(selected[0], project.templateBlob);
+    } else {
+      await downloadReportsAsZip(selected, project.templateBlob);
+    }
+  } catch (err) {
+    console.error(err);
+    alert('Could not generate the reports: ' + err.message);
+  } finally {
+    btn.textContent = original;
+    btn.disabled = false;
+  }
+});
+
+// ---------- Mass edit ----------
+
+$('#btn-mass-edit-selected').addEventListener('click', () => {
+  $('#mass-edit-panel').hidden = false;
+  $('#mass-edit-panel').scrollIntoView({ behavior: 'smooth' });
+});
+$('#btn-cancel-mass-edit').addEventListener('click', () => {
+  $('#mass-edit-panel').hidden = true;
+});
+
+$('#me-field').addEventListener('change', () => {
+  const isSelectField = $('#me-field').value === 'trafficControlSelect';
+  $('#me-select-wrap').hidden = !isSelectField;
+  $('#me-value').closest('label').hidden = isSelectField;
+});
+
+$('#btn-apply-mass-edit').addEventListener('click', async () => {
+  const field = $('#me-field').value;
+  const value = field === 'trafficControlSelect' ? $('#me-value-select').value : $('#me-value').value;
+  if (selectedIds.size === 0) return;
+  if (!confirm(`Apply this value to ${selectedIds.size} selected report(s)? This cannot be undone.`)) return;
+
+  const btn = $('#btn-apply-mass-edit');
+  btn.disabled = true;
+  try {
+    const selected = allReports.filter((r) => selectedIds.has(r.id));
+    for (const r of selected) {
+      r[field] = value;
+      await saveReport(r);
+    }
+    $('#mass-edit-panel').hidden = true;
+    allReports = await getReportsForProject(project.id);
+    render();
+    alert(`Updated ${selected.length} report(s).`);
+  } catch (err) {
+    console.error(err);
+    alert('Could not apply the edit: ' + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+init();
+</script>
+</body>
+</html>

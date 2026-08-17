@@ -1,6 +1,6 @@
 {
-  "name": "PR#439 Daily Report",
-  "short_name": "Daily Report",
+  "name": "Daily Work Reports",
+  "short_name": "Daily Reports",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

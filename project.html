@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Project &mdash; Daily Work Reports</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1c3d5a">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="app-header">
+  <a href="index.html" class="home-link">
+    <h1 id="project-title">Loading&hellip;</h1>
+    <div class="app-sub">Project Workspace</div>
+  </a>
+  <span></span>
+</header>
+<div class="back-bar">
+  <a href="index.html">&larr; All Projects</a>
+  <span class="bb-sep">//</span>
+  <span class="bb-cur" id="bb-project-name"></span>
+</div>
+
+<main>
+  <div class="hub-grid">
+    <a class="hub-card" id="card-new-report" href="#">
+      <span class="hc-icon">&#128221;</span>
+      <div class="hc-title">+ New Report</div>
+      <div class="hc-desc">Start today's daily work report</div>
+    </a>
+    <a class="hub-card" id="card-view-reports" href="#">
+      <span class="hc-icon">&#128203;</span>
+      <div class="hc-title">View Reports</div>
+      <div class="hc-desc"><span id="report-count">0</span> saved report(s)</div>
+    </a>
+  </div>
+
+  <div class="eyebrow">Project Settings</div>
+
+  <div class="step">
+    <div class="step-header">
+      <span class="step-num">INFO</span>
+      <h2>Project Details</h2>
+    </div>
+    <div class="step-body" id="project-details-body"></div>
+  </div>
+
+  <div class="step">
+    <div class="step-header">
+      <span class="step-num">DATA FILE</span>
+      <h2>Replace Project Data</h2>
+    </div>
+    <div class="step-body">
+      <p class="hint">Uploading a new file replaces this project's info and pay item catalog. Existing reports are not affected.</p>
+      <div class="uz" id="uz-reupload">
+        <input type="file" id="f-reupload" accept=".xlsx,.xls">
+        <span class="uz-icon">&#128202;</span>
+        <span class="uz-lbl">Upload Replacement Project Data</span>
+        <span class="uz-hint">PROJECT INFO + PAY ITEMS sheets</span>
+        <span class="uz-fname" id="fn-reupload"></span>
+      </div>
+    </div>
+  </div>
+
+  <button type="button" class="btn-danger" id="btn-delete-project">Delete This Project</button>
+</main>
+
+<script src="lib/fflate.min.js"></script>
+<script src="lib/xlsx.min.js"></script>
+<script src="common.js"></script>
+<script src="defaults.js"></script>
+<script src="storage.js"></script>
+<script src="excel-export.js"></script>
+<script src="project-file.js"></script>
+<script>
+let project = null;
+
+async function init() {
+  const id = queryParam('id');
+  project = id ? await getProject(id) : null;
+  if (!project) {
+    location.href = 'index.html';
+    return;
+  }
+
+  document.title = project.name + ' — Daily Work Reports';
+  $('#project-title').textContent = project.name;
+  $('#bb-project-name').textContent = project.name;
+
+  $('#card-new-report').href = `report-editor.html?project=${project.id}&report=new`;
+  $('#card-view-reports').href = `reports.html?project=${project.id}`;
+
+  const reports = await getReportsForProject(project.id);
+  $('#report-count').textContent = reports.length;
+
+  const m = project.meta;
+  $('#project-details-body').innerHTML = `
+    <div class="field-grid">
+      <label>Project No. <input type="text" value="${escapeHtml(m.projectNo)}" disabled></label>
+      <label>Contract Co. <input type="text" value="${escapeHtml(m.contractCo)}" disabled></label>
+      <label>Project Location <input type="text" value="${escapeHtml(m.projectLocation)}" disabled></label>
+      <label>NTP Date <input type="text" value="${escapeHtml(m.ntpDate)}" disabled></label>
+    </div>
+    <label>Project Name <input type="text" value="${escapeHtml(m.projectName)}" disabled></label>
+    <div class="field-grid">
+      <label>Default Representative <input type="text" value="${escapeHtml(m.representative)}" disabled></label>
+      <label>Default PE Name <input type="text" value="${escapeHtml(m.peName)}" disabled></label>
+    </div>
+    <p class="hint">Pay item catalog: ${project.payItemCatalog.length} item(s). Template file: ${escapeHtml(project.templateFileName || 'default')}.</p>
+    <p class="hint">To change these values, upload a replacement data file below.</p>
+  `;
+}
+
+$('#f-reupload').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const parsed = await parseProjectDataFile(file);
+    const updated = makeProjectFromParsedFile(parsed, project.templateBlob, project.templateFileName);
+    updated.id = project.id; // keep the same project, just refresh its data
+    updated.createdAt = project.createdAt;
+    await saveProject(updated);
+    $('#uz-reupload').classList.add('has');
+    $('#fn-reupload').textContent = file.name;
+    await init();
+    alert('Project data updated.');
+  } catch (err) {
+    console.error(err);
+    alert('Could not read that file: ' + err.message);
+  }
+});
+
+$('#btn-delete-project').addEventListener('click', async () => {
+  const reports = await getReportsForProject(project.id);
+  const msg =
+    reports.length > 0
+      ? `Delete "${project.name}" and all ${reports.length} of its reports? This cannot be undone.`
+      : `Delete "${project.name}"? This cannot be undone.`;
+  if (!confirm(msg)) return;
+  await deleteProject(project.id);
+  location.href = 'index.html';
+});
+
+init();
+</script>
+</body>
+</html>
