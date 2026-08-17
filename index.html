@@ -141,7 +141,7 @@ $('#f-project-data').addEventListener('change', async (e) => {
       <div class="uz has" style="text-align:left;cursor:default;">
         <div style="font-weight:700;font-size:0.85rem;margin-bottom:0.4rem;">Parsed: ${escapeHtml(m.name || m.projectNo || 'project')}</div>
         <div class="hint" style="margin:0;">Project No: ${escapeHtml(m.projectNo || '(none)')} &middot; Contract Co: ${escapeHtml(m.contractCo || '(none)')}</div>
-        <div class="hint" style="margin:0;">Pay items found: ${pendingParsed.payItemCatalog.length}</div>
+        <div class="hint" style="margin:0;">Pay items found: ${pendingParsed.payItemCatalog.length} &middot; Contractors: ${pendingParsed.contractors.length} &middot; Equipment labels: ${pendingParsed.equipmentLabels.length}</div>
       </div>`;
     $('#step-template-upload').hidden = false;
     $('#btn-save-new-project').disabled = false;

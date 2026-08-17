@@ -95,7 +95,16 @@ async function init() {
   const reports = await getReportsForProject(project.id);
   $('#report-count').textContent = reports.length;
 
-  const m = project.meta;
+  const m = project.meta || {};
+  const extraDefaultKeys = [
+    'activity', 'notes', 'trafficControlNote', 'workSummary', 'controllingItem',
+    'commentsOnTime', 'controllingItemTimeFrom', 'controllingItemTimeTo', 'workingConditions',
+    'trafficControlSelect', 'workBegin', 'workEnd', 'weatherDesc', 'tempHigh', 'tempLow',
+  ];
+  const extraDefaultsSet = extraDefaultKeys.filter((k) => m[k]).length;
+  const contractorCount = (project.defaultContractors || []).length;
+  const equipmentLabelCount = (project.defaultEquipmentLabels || []).length;
+
   $('#project-details-body').innerHTML = `
     <div class="field-grid">
       <label>Project No. <input type="text" value="${escapeHtml(m.projectNo)}" disabled></label>
@@ -109,6 +118,7 @@ async function init() {
       <label>Default PE Name <input type="text" value="${escapeHtml(m.peName)}" disabled></label>
     </div>
     <p class="hint">Pay item catalog: ${project.payItemCatalog.length} item(s). Template file: ${escapeHtml(project.templateFileName || 'default')}.</p>
+    <p class="hint">Default contractors: ${contractorCount || 'none set'}. Default equipment/personnel labels: ${equipmentLabelCount || 'using standard list'}. Other report field defaults set: ${extraDefaultsSet}.</p>
     <p class="hint">To change these values, upload a replacement data file below.</p>
   `;
 }

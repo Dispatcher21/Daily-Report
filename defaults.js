@@ -30,12 +30,23 @@ function todayIso() {
 }
 
 // `project` supplies the project-level starting values (from its uploaded
-// data file: Project No., Contract Co., Location, Project Name, NTP Date)
-// and `previous` is the most recent report already in that SAME project,
-// used to carry forward day-to-day fields like representative/hours/
-// contractors/equipment labels.
+// data file -- Project No./Contract Co./etc, plus optional "default" values
+// for most other fields) and `previous` is the most recent report already
+// in that SAME project, used to carry forward day-to-day fields like
+// representative/hours/contractors/equipment labels the way it always has.
+//
+// Precedence: fields that already had carry-forward behavior (representative,
+// PE name, hours, contractors, equipment labels) keep preferring the
+// previous report over the project default, so existing behavior doesn't
+// change. Fields newly seedable from the project file (activity, notes,
+// working conditions, etc.) just use the project default every time, since
+// they never carried forward from a previous report before -- there's
+// nothing to regress.
 function makeBlankReport(nextReportNo, project, previous) {
   const meta = (project && project.meta) || {};
+  const projectContractors = (project && project.defaultContractors) || [];
+  const projectEquipmentLabels = (project && project.defaultEquipmentLabels) || [];
+
   return {
     id: crypto.randomUUID(),
     projectId: project ? project.id : null,
@@ -43,8 +54,8 @@ function makeBlankReport(nextReportNo, project, previous) {
     date: todayIso(),
     hours: previous ? previous.hours : '',
     timeEntries: [{ start: '', end: '' }],
-    activity: '',
-    notes: '',
+    activity: meta.activity || '',
+    notes: meta.notes || '',
     peName: previous ? previous.peName : meta.peName || '',
     projectNo: meta.projectNo || '',
     contractCo: meta.contractCo || '',
@@ -54,33 +65,40 @@ function makeBlankReport(nextReportNo, project, previous) {
     ntpDate: meta.ntpDate || '',
     contractors: previous
       ? previous.contractors.map((c) => ({ name: c.name }))
-      : Array.from({ length: CONTRACTOR_COUNT }, () => ({ name: '' })),
+      : Array.from({ length: CONTRACTOR_COUNT }, (_, i) => ({ name: projectContractors[i] || '' })),
+    // Always exactly EQUIPMENT_ROW_COUNT rows -- fixed by the template's
+    // physical row layout. If the project supplies fewer custom labels than
+    // that, the remaining rows are just left blank (not backfilled from the
+    // generic default list, which would silently mix unrelated labels in).
     equipmentRows: previous
       ? previous.equipmentRows.map((r) => ({ label: r.label, qty: ['', '', '', '', '', ''] }))
-      : DEFAULT_EQUIPMENT_LABELS.map((label) => ({ label, qty: ['', '', '', '', '', ''] })),
-    trafficControlNote: '',
-    workSummary: '',
+      : Array.from({ length: EQUIPMENT_ROW_COUNT }, (_, i) => ({
+          label: projectEquipmentLabels.length ? projectEquipmentLabels[i] || '' : DEFAULT_EQUIPMENT_LABELS[i],
+          qty: ['', '', '', '', '', ''],
+        })),
+    trafficControlNote: meta.trafficControlNote || '',
+    workSummary: meta.workSummary || '',
     payItems: Array.from({ length: PAY_ITEM_ROW_COUNT }, () => ({
       itemNumber: '',
       description: '',
       qty: '',
       unit: '',
     })),
-    controllingItem: '',
-    commentsOnTime: '',
-    controllingItemTimeFrom: '',
-    controllingItemTimeTo: '',
-    workingConditions: '',
-    trafficControlSelect: null,
-    workBegin: '',
-    workEnd: '',
+    controllingItem: meta.controllingItem || '',
+    commentsOnTime: meta.commentsOnTime || '',
+    controllingItemTimeFrom: meta.controllingItemTimeFrom || '',
+    controllingItemTimeTo: meta.controllingItemTimeTo || '',
+    workingConditions: meta.workingConditions || '',
+    trafficControlSelect: meta.trafficControlSelect || null,
+    workBegin: meta.workBegin || '',
+    workEnd: meta.workEnd || '',
     repSignatureName: previous ? previous.representative : meta.representative || '',
     repSignatureImage: null,
     peSignatureName: previous ? previous.peName : meta.peName || '',
     peSignatureImage: null,
-    weatherDesc: '',
-    tempHigh: '',
-    tempLow: '',
+    weatherDesc: meta.weatherDesc || '',
+    tempHigh: meta.tempHigh || '',
+    tempLow: meta.tempLow || '',
     photos: [null, null, null, null, null, null],
     createdAt: Date.now(),
     updatedAt: Date.now(),
@@ -122,7 +140,24 @@ function makeProjectFromParsedFile(parsed, templateBlob, templateFileName) {
       ntpDate: meta.ntpDate || '',
       representative: meta.representative || '',
       peName: meta.peName || '',
+      activity: meta.activity || '',
+      notes: meta.notes || '',
+      trafficControlNote: meta.trafficControlNote || '',
+      workSummary: meta.workSummary || '',
+      controllingItem: meta.controllingItem || '',
+      commentsOnTime: meta.commentsOnTime || '',
+      controllingItemTimeFrom: meta.controllingItemTimeFrom || '',
+      controllingItemTimeTo: meta.controllingItemTimeTo || '',
+      workingConditions: meta.workingConditions || '',
+      trafficControlSelect: meta.trafficControlSelect || '',
+      workBegin: meta.workBegin || '',
+      workEnd: meta.workEnd || '',
+      weatherDesc: meta.weatherDesc || '',
+      tempHigh: meta.tempHigh || '',
+      tempLow: meta.tempLow || '',
     },
+    defaultContractors: parsed.contractors || [],
+    defaultEquipmentLabels: parsed.equipmentLabels || [],
     payItemCatalog: parsed.payItemCatalog || [],
     createdAt: Date.now(),
     updatedAt: Date.now(),

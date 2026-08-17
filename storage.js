@@ -137,6 +137,8 @@ async function adoptOrphanReportsIfAny() {
       representative: 'JOHN SONNIER',
       peName: 'Elizabeth Guiza',
     },
+    defaultContractors: [],
+    defaultEquipmentLabels: [],
     payItemCatalog: [],
     createdAt: Date.now(),
     updatedAt: Date.now(),
