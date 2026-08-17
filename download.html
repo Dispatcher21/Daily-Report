@@ -7,6 +7,7 @@
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c3d5a">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="print-sheet.css">
 <style>
   #pdf-preview-wrap {
     border: 1px solid var(--border);
@@ -22,16 +23,9 @@
   #pdf-frame { width: 100%; height: 100%; border: 0; display: block; }
   #pdf-status { text-align: center; padding: 2.5rem 1rem; color: #dfe3e6; font-size: 0.9rem; }
 
-  /* Off-screen sandbox: laid out normally (not display:none) so
-     html2canvas can capture real geometry, just never visible. */
+  /* Off-screen sandbox: laid out normally (not display:none) so html2canvas
+     can measure real geometry, just parked where nobody sees it. */
   #render-sandbox { position: fixed; top: 0; left: -20000px; z-index: -1; }
-  #render-sandbox .print-grid { display: grid; position: relative; }
-  #render-sandbox .print-cell {
-    display: flex; overflow: hidden; padding: 1pt 3pt; box-sizing: border-box;
-    white-space: nowrap; line-height: 1.15; font-family: Arial, sans-serif;
-  }
-  #render-sandbox .print-cell img { width: 100%; height: 100%; object-fit: contain; background: #fff; }
-  #render-sandbox .sheet-page { background: #fff; padding: 18pt; width: fit-content; }
 </style>
 </head>
 <body>
@@ -59,7 +53,6 @@
       </div>
       <div class="export-bar">
         <button type="button" class="btn-primary" id="btn-download-pdf" disabled>Download PDF</button>
-        <button type="button" class="btn-secondary" id="btn-download-excel" disabled>Download Excel</button>
       </div>
     </div>
   </div>
@@ -67,31 +60,37 @@
 
 <div id="render-sandbox"></div>
 
-<script src="lib/fflate.min.js"></script>
 <script src="lib/html2canvas.min.js"></script>
 <script src="lib/jspdf.umd.min.js"></script>
 <script src="common.js"></script>
 <script src="defaults.js"></script>
 <script src="storage.js"></script>
-<script src="excel-export.js"></script>
 <script src="render-report.js"></script>
 <script>
 const { jsPDF } = window.jspdf;
+
+// Rasterize each sheet at roughly this many dots per inch. The DOM renders at
+// 96dpi, so the html2canvas scale needed for a target DPI is TARGET/96 --
+// adjusted for the fact that the sheet gets shrunk onto the page. Anything
+// much below ~250 turns the 8pt label text into unreadable grey mush.
+const TARGET_DPI = 300;
 
 function pdfFilename(reports) {
   const projectNo = (reports[0] && reports[0].projectNo) || 'PR';
   if (reports.length === 1) {
     return `PR${projectNo}_DailyReport_${reports[0].date || 'undated'}.pdf`;
   }
-  return `PR${projectNo}_DailyReports_${reports.length}files.pdf`;
+  return `PR${projectNo}_DailyReports_${reports.length}reports.pdf`;
 }
 
-// Renders each report's two sheet-pages into `sandbox` one at a time,
-// rasterizes each at 2x with html2canvas, and assembles a real multi-page
-// PDF (one page per sheet) sized in pt to exactly match the rendered box --
-// no distortion, no reliance on the print dialog.
-async function buildPdfBlob(sandbox, layout, reports) {
+// Renders each report's sheets into `sandbox` one at a time, rasterizes each
+// at print resolution, and places it on a real US Letter page at the size and
+// orientation the template's own page setup asks for.
+async function buildPdfBlob(sandbox, layout, reports, onProgress) {
   const captures = [];
+  let done = 0;
+  const total = reports.length * 2;
+
   for (const report of reports) {
     const pages = renderReportPages(sandbox, layout, report);
     await waitForImages(sandbox);
@@ -99,29 +98,41 @@ async function buildPdfBlob(sandbox, layout, reports) {
     // (rAF is throttled/suspended when not visible) -- setTimeout still fires.
     await new Promise((resolve) => setTimeout(resolve, 50));
 
-    for (const pageEl of pages) {
-      const canvas = await html2canvas(pageEl, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
-      captures.push({
-        dataUrl: canvas.toDataURL('image/jpeg', 0.92),
-        wPt: pageEl.offsetWidth * 0.75,
-        hPt: pageEl.offsetHeight * 0.75,
+    for (const { el, geom } of pages) {
+      // el is laid out at 1pt = 1/72in but the DOM measures in 96dpi px, so
+      // its on-screen width is contentW * 96/72. Scaling so the FINAL printed
+      // width (geom.drawW points) resolves at TARGET_DPI:
+      const targetPx = (geom.drawW / 72) * TARGET_DPI;
+      const scale = targetPx / el.offsetWidth;
+
+      const canvas = await html2canvas(el, {
+        scale,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        width: el.offsetWidth,
+        height: el.offsetHeight,
       });
-      $$('img', pageEl).forEach((img) => {
+
+      captures.push({ dataUrl: canvas.toDataURL('image/jpeg', 0.94), geom });
+
+      $$('img', el).forEach((img) => {
         if (img.src.startsWith('blob:')) URL.revokeObjectURL(img.src);
       });
-      pageEl.remove();
+      el.remove();
+      done++;
+      if (onProgress) onProgress(done, total);
     }
   }
 
-  const first = captures[0];
   const doc = new jsPDF({
     unit: 'pt',
-    format: [first.wPt, first.hPt],
-    orientation: first.wPt >= first.hPt ? 'landscape' : 'portrait',
+    format: [captures[0].geom.pageW, captures[0].geom.pageH],
+    orientation: captures[0].geom.orientation,
   });
   captures.forEach((cap, i) => {
-    if (i > 0) doc.addPage([cap.wPt, cap.hPt], cap.wPt >= cap.hPt ? 'landscape' : 'portrait');
-    doc.addImage(cap.dataUrl, 'JPEG', 0, 0, cap.wPt, cap.hPt);
+    const g = cap.geom;
+    if (i > 0) doc.addPage([g.pageW, g.pageH], g.orientation);
+    doc.addImage(cap.dataUrl, 'JPEG', g.x, g.y, g.drawW, g.drawH);
   });
   return doc.output('blob');
 }
@@ -154,43 +165,22 @@ async function buildPdfBlob(sandbox, layout, reports) {
     ? `Report #${reports[0].reportNo} — ${reports[0].date || ''}`
     : `${reports.length} reports selected`;
 
-  const btnExcel = $('#btn-download-excel');
-  btnExcel.textContent = reports.length === 1 ? 'Download Excel' : `Download Excel (${reports.length} files, .zip)`;
-  btnExcel.disabled = false;
-  btnExcel.addEventListener('click', async () => {
-    const original = btnExcel.textContent;
-    btnExcel.textContent = 'Generating...';
-    btnExcel.disabled = true;
-    try {
-      if (reports.length === 1) {
-        await downloadFilledReport(reports[0], project.templateBlob);
-      } else {
-        await downloadReportsAsZip(reports, project.templateBlob);
-      }
-    } catch (err) {
-      console.error(err);
-      alert('Could not generate the Excel file: ' + err.message);
-    } finally {
-      btnExcel.textContent = original;
-      btnExcel.disabled = false;
-    }
-  });
-
   const layout = await loadPrintLayout();
   const sandbox = $('#render-sandbox');
 
   let pdfBlob;
   try {
-    pdfBlob = await buildPdfBlob(sandbox, layout, reports);
+    pdfBlob = await buildPdfBlob(sandbox, layout, reports, (done, total) => {
+      $('#pdf-status').textContent = `Rendering page ${done} of ${total}…`;
+    });
   } catch (err) {
     console.error(err);
-    $('#pdf-status').textContent = 'Could not generate the PDF preview: ' + err.message;
+    $('#pdf-status').textContent = 'Could not generate the PDF: ' + err.message;
     return;
   }
 
-  const pdfUrl = URL.createObjectURL(pdfBlob);
   const frame = $('#pdf-frame');
-  frame.src = pdfUrl;
+  frame.src = URL.createObjectURL(pdfBlob);
   frame.hidden = false;
   $('#pdf-status').hidden = true;
 

@@ -147,6 +147,11 @@ def extract_sheet(ws):
                 align_entry['v'] = align.vertical
             if align.wrapText:
                 align_entry['wrap'] = True
+            # Vertical (rotated) text -- the contractor name headers in C5:H5
+            # are textRotation 90, and they have to stay rotated in the PDF or
+            # they overflow their narrow columns.
+            if align.textRotation:
+                align_entry['rot'] = align.textRotation
             if align_entry:
                 entry['align'] = align_entry
 
@@ -163,20 +168,44 @@ def extract_sheet(ws):
     }
 
 
+def page_setup(ws):
+    # The print area is what actually lands on paper -- the sheets both have
+    # stray formatting well past it (max_col 38 vs. print area ending at Q),
+    # and rendering those extra columns is what blew the page proportions out.
+    area = ws.print_area
+    if isinstance(area, (list, tuple)):
+        area = area[0] if area else None
+    m = re.search(r'\$([A-Z]+)\$(\d+):\$([A-Z]+)\$(\d+)', str(area or ''))
+    if m:
+        last_col = column_index_from_string(m.group(3))
+        last_row = int(m.group(4))
+    else:
+        last_col, last_row = ws.max_column, ws.max_row
+
+    pm = ws.page_margins
+    return {
+        'printArea': str(area),
+        'lastCol': last_col,
+        'lastRow': last_row,
+        'orientation': ws.page_setup.orientation or 'portrait',
+        'scale': ws.page_setup.scale or 100,
+        # openpyxl reports margins in inches; points are what the renderer uses.
+        'marginsPt': {
+            'left': round((pm.left or 0) * 72, 2),
+            'right': round((pm.right or 0) * 72, 2),
+            'top': round((pm.top or 0) * 72, 2),
+            'bottom': round((pm.bottom or 0) * 72, 2),
+        },
+    }
+
+
 wb = openpyxl.load_workbook(TEMPLATE)
 ws1 = wb['Daily Work Report']
 ws2 = wb['Daily_Photo_Log']
 
 data = {
-    'dailyWorkReport': {
-        **extract_sheet(ws1),
-        'printArea': str(ws1.print_area),
-        'orientation': ws1.page_setup.orientation,
-        'scale': ws1.page_setup.scale,
-    },
-    'dailyPhotoLog': {
-        **extract_sheet(ws2),
-    },
+    'dailyWorkReport': {**extract_sheet(ws1), **page_setup(ws1)},
+    'dailyPhotoLog': {**extract_sheet(ws2), **page_setup(ws2)},
 }
 
 with open(OUT, 'w', encoding='utf-8') as f:

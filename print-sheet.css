@@ -1,0 +1,45 @@
+/* Geometry for the rendered spreadsheet pages. Shared by download.html (which
+   rasterizes these into a real PDF) and print-view.html (browser print), so
+   the two can't drift apart. Everything is sized in pt because that's what
+   print-layout.json carries straight out of the template. */
+
+.sheet-page {
+  background: #fff;
+  width: fit-content;
+}
+
+.print-grid {
+  display: grid;
+  position: relative;
+}
+
+.print-cell {
+  display: flex;
+  padding: 1pt 3pt;
+  box-sizing: border-box;
+  white-space: nowrap;
+  line-height: 1.15;
+  font-family: Arial, sans-serif;
+  color: #000;
+  /* Excel spills long text into adjacent empty cells rather than clipping it;
+     several of this template's labels ("CONTRACTORS FORCE & EQUIP",
+     "WEATHER (IF RAINING LIST TIME STARTED):") are far wider than the column
+     they sit in and disappear entirely under overflow:hidden. Cells stay
+     transparent so a later neighbour doesn't paint over that spill. */
+  overflow: visible;
+  background: transparent;
+}
+
+.print-cell img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* Vertical column headers (Excel textRotation). Rotating an inner span rather
+   than the cell keeps the cell's own grid box intact. */
+.print-cell .rot-text {
+  display: inline-block;
+  white-space: nowrap;
+  transform-origin: center center;
+}

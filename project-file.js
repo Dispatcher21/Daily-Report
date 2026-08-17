@@ -1,7 +1,7 @@
 // Parses/generates the "project data" Excel file. This is a small, plain
 // data file the user maintains themselves -- completely separate from the
 // actual Daily Work Report *template*, which goes through the byte-
-// preserving engine in excel-export.js instead. Uses SheetJS (global
+// project data file -- not the report template. Uses SheetJS (global
 // `XLSX`, lib/xlsx.min.js) since we're just reading/writing a simple data
 // file here, not preserving an existing file's formatting.
 //

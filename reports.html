@@ -61,8 +61,7 @@
   <div id="bulk-bar" class="step" hidden style="position:sticky;bottom:0.5rem;">
     <div class="step-body">
       <div class="export-bar" style="margin-top:0;">
-        <button type="button" class="btn-primary" id="btn-download-selected">Download Selected (Excel)</button>
-        <button type="button" class="btn-secondary" id="btn-print-selected">Download / PDF Selected</button>
+        <button type="button" class="btn-primary" id="btn-print-selected">Generate Selected</button>
         <button type="button" class="btn-secondary" id="btn-mass-edit-selected">Mass Edit Selected</button>
       </div>
     </div>
@@ -105,11 +104,9 @@
   <a class="fab" id="fab-new-report" href="#">+ New Report</a>
 </main>
 
-<script src="lib/fflate.min.js"></script>
 <script src="common.js"></script>
 <script src="defaults.js"></script>
 <script src="storage.js"></script>
-<script src="excel-export.js"></script>
 <script>
 const projectId = queryParam('project');
 let project = null;
@@ -207,7 +204,7 @@ function updateBulkBar() {
   const n = selectedIds.size;
   $('#select-count-label').textContent = n > 0 ? `${n} selected` : '';
   $('#bulk-bar').hidden = n === 0;
-  $('#btn-download-selected').textContent = n === 1 ? 'Download Selected' : `Download Selected (${n})`;
+  $('#btn-print-selected').textContent = n === 1 ? 'Generate Selected' : `Generate Selected (${n})`;
 }
 
 ['f-date-from', 'f-date-to', 'f-search', 'f-sort'].forEach((id) => {
@@ -230,28 +227,6 @@ $('#btn-select-all').addEventListener('click', () => {
     list.forEach((r) => selectedIds.add(r.id));
   }
   render();
-});
-
-$('#btn-download-selected').addEventListener('click', async () => {
-  if (selectedIds.size === 0) return;
-  const btn = $('#btn-download-selected');
-  const original = btn.textContent;
-  btn.textContent = 'Generating...';
-  btn.disabled = true;
-  try {
-    const selected = allReports.filter((r) => selectedIds.has(r.id));
-    if (selected.length === 1) {
-      await downloadFilledReport(selected[0], project.templateBlob);
-    } else {
-      await downloadReportsAsZip(selected, project.templateBlob);
-    }
-  } catch (err) {
-    console.error(err);
-    alert('Could not generate the reports: ' + err.message);
-  } finally {
-    btn.textContent = original;
-    btn.disabled = false;
-  }
 });
 
 $('#btn-print-selected').addEventListener('click', () => {

@@ -1,17 +1,12 @@
-// Shared report -> DOM rendering, used by both print-view.html (browser
-// print-to-PDF) and download.html (real PDF file via html2canvas+jsPDF).
-// Renders each sheet as a CSS Grid sized in pt from print-layout.json so it
-// matches the actual template's printed layout.
+// Report -> DOM rendering for the PDF export (download.html). Each sheet is
+// drawn as a CSS Grid sized in pt straight from print-layout.json, so it
+// matches what the Excel template actually prints.
 
 // ---------- Grid geometry helpers ----------
 
-// NOTE: prefixed with rr* -- excel-export.js independently defines a
-// same-purpose colLetterToIndex (0-based, same logic, harmless if it
-// silently wins the global) but also CONTRACTOR_COLS/EQUIPMENT_FIRST_ROW/
-// PAY_ITEM_FIRST_ROW as `const`, which throws a hard SyntaxError on
-// redeclaration across <script> tags when both files load on one page
-// (download.html loads both). Every name in this file that has a
-// same-named twin in excel-export.js is renamed here to avoid collisions.
+// NOTE: the rr* prefixes date from when this file shared a page with the old
+// Excel exporter, which declared the same const names and blew up with a
+// redeclaration SyntaxError. Kept as-is so the names stay unambiguous.
 function rrColLetterToIndex(letters) {
   let idx = 0;
   for (let i = 0; i < letters.length; i++) idx = idx * 26 + (letters.charCodeAt(i) - 64);
@@ -45,7 +40,7 @@ function borderCss(side) {
 function applyCellStyle(el, styleData) {
   el.style.fontFamily = 'Arial, sans-serif';
   el.style.fontSize = '10pt';
-  el.style.background = '#fff';
+  el.style.color = '#000';
   if (!styleData) return;
   if (styleData.fill) el.style.background = styleData.fill;
   const b = styleData.border || {};
@@ -62,8 +57,19 @@ function applyCellStyle(el, styleData) {
   el.style.alignItems = a.v === 'center' ? 'center' : a.v === 'bottom' ? 'flex-end' : 'flex-start';
   el.style.justifyContent = a.h === 'center' ? 'center' : a.h === 'right' ? 'flex-end' : 'flex-start';
   el.style.textAlign = a.h || 'left';
+  // Wrapped cells are real boxes (the work-summary block, pay item
+  // descriptions) so they clip; everything else is allowed to spill into
+  // empty neighbours the way Excel renders long labels and values.
   if (a.wrap) {
     el.style.whiteSpace = 'pre-wrap';
+    el.style.overflow = 'hidden';
+  }
+  // Vertical text (the contractor-name headers). The rotation itself is done
+  // on an inner span so it doesn't disturb the cell's own box; the cell just
+  // centres it in the tall merged column.
+  if (a.rot) {
+    el.style.alignItems = 'center';
+    el.style.justifyContent = 'center';
     el.style.overflow = 'visible';
   }
 }
@@ -74,10 +80,22 @@ function applyCellStyle(el, styleData) {
 // report data instead of the template's own (blank) text.
 // coordImages: { COORD: Blob } for photo/signature cells.
 function renderSheetGrid(sheetData, coordValues, coordImages) {
+  // Only the print area lands on paper. Both sheets carry stray formatting
+  // well past it (sheet 1 has cells out to column AL against a print area
+  // ending at Q), and rendering those blew the page proportions out.
+  const lastCol = sheetData.lastCol || sheetData.maxCol;
+  const lastRow = sheetData.lastRow || sheetData.maxRow;
+
   const grid = document.createElement('div');
   grid.className = 'print-grid';
-  grid.style.gridTemplateColumns = sheetData.columns.map((c) => c.widthPt + 'pt').join(' ');
-  grid.style.gridTemplateRows = sheetData.rows.map((r) => r.heightPt + 'pt').join(' ');
+  grid.style.gridTemplateColumns = sheetData.columns
+    .filter((c) => c.col <= lastCol)
+    .map((c) => c.widthPt + 'pt')
+    .join(' ');
+  grid.style.gridTemplateRows = sheetData.rows
+    .filter((r) => r.row <= lastRow)
+    .map((r) => r.heightPt + 'pt')
+    .join(' ');
 
   const mergeSpanByAnchor = {};
   const coveredByMerge = new Set();
@@ -85,17 +103,21 @@ function renderSheetGrid(sheetData, coordValues, coordImages) {
     const [a, b] = m.split(':');
     const pa = parseCoord(a);
     const pb = parseCoord(b);
-    mergeSpanByAnchor[a] = { colSpan: pb.col - pa.col + 1, rowSpan: pb.row - pa.row + 1 };
-    for (let r = pa.row; r <= pb.row; r++) {
-      for (let c = pa.col; c <= pb.col; c++) {
+    if (pa.col > lastCol || pa.row > lastRow) return;
+    // Clamp merges that run past the print area so they don't stretch the grid.
+    const endCol = Math.min(pb.col, lastCol);
+    const endRow = Math.min(pb.row, lastRow);
+    mergeSpanByAnchor[a] = { colSpan: endCol - pa.col + 1, rowSpan: endRow - pa.row + 1 };
+    for (let r = pa.row; r <= endRow; r++) {
+      for (let c = pa.col; c <= endCol; c++) {
         const coord = colIndexToLetter(c - 1) + r;
         if (coord !== a) coveredByMerge.add(coord);
       }
     }
   });
 
-  for (let r = 1; r <= sheetData.maxRow; r++) {
-    for (let c = 1; c <= sheetData.maxCol; c++) {
+  for (let r = 1; r <= lastRow; r++) {
+    for (let c = 1; c <= lastCol; c++) {
       const coord = colIndexToLetter(c - 1) + r;
       if (coveredByMerge.has(coord)) continue;
       const styleData = sheetData.cells[coord];
@@ -119,7 +141,26 @@ function renderSheetGrid(sheetData, coordValues, coordImages) {
           cellEl.style.padding = '0';
         }
       } else {
-        cellEl.textContent = hasOverride ? coordValues[coord] : (styleData && styleData.text) || '';
+        const text = hasOverride ? coordValues[coord] : (styleData && styleData.text) || '';
+        // Values the app supplies always print black. The template carries
+        // leftover red/blue font colours on some input cells from whoever set
+        // it up; a real printed report shows those entries in black.
+        if (hasOverride) cellEl.style.color = '#000';
+        if (RR_NOWRAP_CELLS[coord]) {
+          cellEl.style.whiteSpace = 'nowrap';
+          cellEl.style.overflow = 'visible';
+          cellEl.style.fontSize = RR_NOWRAP_CELLS[coord] + 'pt';
+        }
+        const rot = (styleData && styleData.align && styleData.align.rot) || 0;
+        if (rot && text) {
+          const span = document.createElement('span');
+          span.className = 'rot-text';
+          span.style.transform = `rotate(${-rot}deg)`;
+          span.textContent = text;
+          cellEl.appendChild(span);
+        } else {
+          cellEl.textContent = text;
+        }
       }
 
       grid.appendChild(cellEl);
@@ -128,7 +169,9 @@ function renderSheetGrid(sheetData, coordValues, coordImages) {
   return grid;
 }
 
-// ---------- Report -> cell values (mirrors excel-export.js's coordinates) ----------
+// ---------- Report -> cell values ----------
+// Coordinates below are load-bearing: they were read off the template and
+// checked against a real printed report.
 
 const RR_CONTRACTOR_COLS = ['C', 'D', 'E', 'F', 'G', 'H'];
 const RR_EQUIPMENT_FIRST_ROW = 12;
@@ -145,33 +188,35 @@ function calendarDay(date, ntpDate) {
   const d2 = new Date(ntpDate + 'T00:00:00');
   return Math.round((d1 - d2) / 86400000) + 1;
 }
-function rrBuildNotesWithContractorLegend(report) {
-  const parts = [];
-  (report.contractors || []).forEach((c, i) => {
-    const name = (c.name || '').trim();
-    if (name && i < RR_CONTRACTOR_COLS.length) parts.push(`${RR_CONTRACTOR_COLS[i]}: ${name}`);
-  });
-  const notes = report.notes || '';
-  if (parts.length === 0) return notes;
-  const legend = `Contractor columns - ${parts.join(' | ')}`;
-  return notes ? `${legend}\n${notes}` : legend;
-}
+// Static template labels the app deliberately renames on the printed form.
+const LABEL_OVERRIDES = { I12: 'Short Work Summary' };
+
+// Cells that must stay on one line even though the template marks them
+// wrap-enabled, with the size needed to fit. "Short Work Summary" is wider
+// than the I12:J12 box that used to hold "Traffic Control", and row 12 is only
+// tall enough for one line, so wrapping it just cuts the second line off.
+const RR_NOWRAP_CELLS = { I12: 10 };
 
 function buildSheet1Values(report) {
-  const v = {};
+  const v = Object.assign({}, LABEL_OVERRIDES);
   v['Q3'] = report.reportNo != null ? String(report.reportNo) : '';
   v['Q5'] = fmtDate(report.date);
   v['K6'] = report.hours != null && report.hours !== '' ? String(report.hours) : '';
   v['K7'] = report.activity || '';
-  v['K8'] = rrBuildNotesWithContractorLegend(report);
+  v['K8'] = report.notes || '';
   v['B9'] = report.peName || '';
   v['B5'] = report.projectNo || '';
-  v['C5'] = report.contractCo || '';
-  v['D5'] = report.projectLocation || '';
   v['B7'] = report.projectName || '';
   v['K5'] = report.representative || '';
   v['Q7'] = fmtDate(report.ntpDate);
   v['Q9'] = String(calendarDay(report.date, report.ntpDate));
+
+  // Contractor names head their own quantity column (C..H), printed vertically
+  // in the merged C5:H11 header cells -- the same columns the equipment
+  // quantities below them are keyed to.
+  (report.contractors || []).forEach((c, i) => {
+    if (i < RR_CONTRACTOR_COLS.length) v[RR_CONTRACTOR_COLS[i] + '5'] = (c && c.name) || '';
+  });
 
   (report.equipmentRows || []).forEach((row, i) => {
     const r = RR_EQUIPMENT_FIRST_ROW + i;
@@ -197,14 +242,17 @@ function buildSheet1Values(report) {
   v['K34'] = report.commentsOnTime || '';
   v['C35'] = report.controllingItemTimeFrom || '';
   v['F35'] = report.controllingItemTimeTo || '';
-  v['C36'] = report.workingConditions || '';
+  // Working conditions and weather are written on the line BELOW their long
+  // labels (A36 and A40 hold those labels), starting back at column A --
+  // verified against a printed report.
+  v['A37'] = report.workingConditions || '';
   v['I37'] = report.trafficControlSelect === 'IN_PLACE' ? 'X' : '';
   v['K37'] = report.trafficControlSelect === 'ATTENTION_REQUIRED' ? 'X' : '';
   v['C39'] = report.workBegin || '';
   v['F39'] = report.workEnd || '';
   v['I39'] = report.repSignatureName || '';
   v['I41'] = report.peSignatureName || '';
-  v['F40'] = report.weatherDesc || '';
+  v['A41'] = report.weatherDesc || '';
   v['D41'] = report.tempHigh != null && report.tempHigh !== '' ? String(report.tempHigh) : '';
   v['F41'] = report.tempLow != null && report.tempLow !== '' ? String(report.tempLow) : '';
   return v;
@@ -243,20 +291,80 @@ function loadPrintLayout() {
   return printLayoutPromise;
 }
 
+// US Letter, in points -- what the template's page setup targets.
+const LETTER_SHORT_PT = 612;
+const LETTER_LONG_PT = 792;
+
+// Where one rendered sheet has to land on a real Letter page: the paper size
+// for its orientation, and the scale that fits the print area inside the
+// template's own margins. The template asks for 80% (work report) and 60%
+// (photo log); fitting is computed rather than trusted so the content can
+// never run off the page.
+function pageGeometry(sheetData) {
+  const landscape = sheetData.orientation === 'landscape';
+  const pageW = landscape ? LETTER_LONG_PT : LETTER_SHORT_PT;
+  const pageH = landscape ? LETTER_SHORT_PT : LETTER_LONG_PT;
+
+  const m = sheetData.marginsPt || { left: 0, right: 0, top: 0, bottom: 0 };
+  const availW = pageW - (m.left || 0) - (m.right || 0);
+  const availH = pageH - (m.top || 0) - (m.bottom || 0);
+
+  const lastCol = sheetData.lastCol || sheetData.maxCol;
+  const lastRow = sheetData.lastRow || sheetData.maxRow;
+  const contentW = sheetData.columns.reduce((s, c) => (c.col <= lastCol ? s + c.widthPt : s), 0);
+  const contentH = sheetData.rows.reduce((s, r) => (r.row <= lastRow ? s + r.heightPt : s), 0);
+
+  const scale = Math.min(availW / contentW, availH / contentH);
+  const drawW = contentW * scale;
+  const drawH = contentH * scale;
+
+  return {
+    pageW,
+    pageH,
+    orientation: landscape ? 'landscape' : 'portrait',
+    contentW,
+    contentH,
+    scale,
+    drawW,
+    drawH,
+    // Centred across the printable width, top-aligned like Excel.
+    x: (m.left || 0) + (availW - drawW) / 2,
+    y: m.top || 0,
+  };
+}
+
 // Appends one report's two sheet-pages (each a .sheet-page div) into
-// `container`. Returns the array of page elements just added.
+// `container`. Returns the page elements paired with their page geometry.
 function renderReportPages(container, layout, report) {
-  const page1 = document.createElement('div');
-  page1.className = 'sheet-page';
-  page1.appendChild(renderSheetGrid(layout.dailyWorkReport, buildSheet1Values(report), buildSheet1Images(report)));
-  container.appendChild(page1);
+  const sheets = [
+    [layout.dailyWorkReport, buildSheet1Values(report), buildSheet1Images(report)],
+    [layout.dailyPhotoLog, buildSheet2Values(report), buildSheet2Images(report)],
+  ];
 
-  const page2 = document.createElement('div');
-  page2.className = 'sheet-page';
-  page2.appendChild(renderSheetGrid(layout.dailyPhotoLog, buildSheet2Values(report), buildSheet2Images(report)));
-  container.appendChild(page2);
+  return sheets.map(([sheetData, values, images]) => {
+    const page = document.createElement('div');
+    page.className = 'sheet-page';
+    page.appendChild(renderSheetGrid(sheetData, values, images));
+    container.appendChild(page);
+    fitRotatedText(page); // needs layout, so only after it's in the document
+    return { el: page, geom: pageGeometry(sheetData) };
+  });
+}
 
-  return [page1, page2];
+// Contractor names are typed by the user and can be longer than the vertical
+// header box is tall. Excel would just let them run over the grid; shrink them
+// to fit instead so a long name can't smear across the equipment table.
+function fitRotatedText(scope) {
+  $$('.rot-text', scope).forEach((span) => {
+    const cell = span.parentElement;
+    const avail = cell.clientHeight - 4;
+    if (avail <= 0) return;
+    let size = parseFloat(getComputedStyle(span).fontSize);
+    while (span.scrollWidth > avail && size > 4) {
+      size -= 0.5;
+      span.style.fontSize = size + 'px';
+    }
+  });
 }
 
 // Waits for every <img> under `container` to finish loading/decoding (or

@@ -32,6 +32,9 @@
         <label>Report No. <input type="number" id="f-reportNo"></label>
         <label>Date <input type="date" id="f-date"></label>
       </div>
+      <label>NTP Date <input type="date" id="f-ntpDate">
+        <span class="hint">Notice to Proceed. Calendar Day on the report counts from this date.</span>
+      </label>
 
       <div class="time-worked-block">
         <span class="sig-label">Time Worked</span>
@@ -65,7 +68,7 @@
   <div class="step">
     <div class="step-header"><span class="step-num">STEP 3</span><h2>Work Summary</h2></div>
     <div class="step-body">
-      <label>Traffic Control (short note) <input type="text" id="f-trafficControlNote"></label>
+      <label>Short Work Summary <input type="text" id="f-trafficControlNote"></label>
       <label>Summary of Work Performed <textarea id="f-workSummary" rows="6"></textarea></label>
     </div>
   </div>
@@ -164,18 +167,15 @@
   </div>
 
   <div class="export-bar">
-    <button id="btn-export" class="btn-primary">Generate &amp; Download Report (Excel)</button>
-    <button id="btn-export-pdf" class="btn-secondary">Export as PDF</button>
+    <button id="btn-generate" class="btn-primary">Generate Report</button>
     <button id="btn-delete-report" class="btn-danger">Delete This Report</button>
   </div>
 
 </main>
 
-<script src="lib/fflate.min.js"></script>
 <script src="common.js"></script>
 <script src="defaults.js"></script>
 <script src="storage.js"></script>
-<script src="excel-export.js"></script>
 <script>
 const projectId = queryParam('project');
 let project = null;
@@ -233,6 +233,7 @@ function bindText(id, field) {
 function renderEditor() {
   bindText('#f-reportNo', 'reportNo');
   bindText('#f-date', 'date');
+  bindText('#f-ntpDate', 'ntpDate');
   bindText('#f-hours', 'hours');
   bindText('#f-activity', 'activity');
   bindText('#f-notes', 'notes');
@@ -275,23 +276,7 @@ function renderEditor() {
   setupSignaturePad('#sig-rep', 'repSignatureImage');
   setupSignaturePad('#sig-pe', 'peSignatureImage');
 
-  $('#btn-export').onclick = async () => {
-    const btn = $('#btn-export');
-    const original = btn.textContent;
-    btn.textContent = 'Generating...';
-    btn.disabled = true;
-    try {
-      await downloadFilledReport(report, project.templateBlob);
-    } catch (err) {
-      console.error(err);
-      alert('Could not generate the report: ' + err.message);
-    } finally {
-      btn.textContent = original;
-      btn.disabled = false;
-    }
-  };
-
-  $('#btn-export-pdf').onclick = () => {
+  $('#btn-generate').onclick = () => {
     location.href = `download.html?project=${project.id}&report=${report.id}`;
   };
 
