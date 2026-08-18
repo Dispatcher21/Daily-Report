@@ -214,12 +214,12 @@ function writeProjectWorkbook(wb, filename) {
 function downloadProjectDataTemplate() {
   const wb = buildProjectDataWorkbook({
     meta: {
-      name: 'PR#440 - Downtown Bridge',
-      projectNo: '440',
-      projectName: 'BRIDGE DECK REPAIR',
-      ntpDate: '2026-08-01',
-      representative: 'JOHN SONNIER',
-      peName: 'Elizabeth Guiza',
+      name: 'This Appears on the App Front Page',
+      projectNo: '###',
+      projectName: '',
+      ntpDate: 'YYYY-MM-DD',
+      representative: 'JOHN JACOB JINGLHIMER SMITH',
+      peName: 'NOTTA RE-AL ENJINIR',
     },
     payItemCatalog: [
       { itemNumber: '618-01', description: 'Thermoplastic Pavement Marking 4in', unit: 'LF' },
