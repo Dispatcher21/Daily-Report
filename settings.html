@@ -28,8 +28,6 @@
   #logo-preview-box img { max-width: 100%; max-height: 100%; object-fit: contain; }
   #logo-preview-box .lp-empty { color: #8b96a1; font-size: 0.8rem; }
 
-  .icon-row { display: flex; align-items: center; gap: 0.9rem; margin-top: 0.75rem; }
-  .icon-row img { width: 64px; height: 64px; border-radius: 10px; flex: 0 0 auto; }
   .toggle-row {
     display: flex; align-items: center; justify-content: space-between;
     gap: 1rem; min-height: var(--tap);
@@ -66,6 +64,10 @@
         <button type="button" data-mode="dark">&#9790; Dark</button>
         <button type="button" data-mode="auto">&#9680; Auto</button>
       </div>
+
+      <p class="hint" style="margin:1.1rem 0 0.3rem;">Accent colour &mdash; used for buttons, headers, and highlights throughout the app.</p>
+      <div class="color-swatches" id="accent-swatches"></div>
+      <button type="button" class="text-btn" id="btn-reset-accent" style="padding:0;">Reset to default</button>
     </div>
   </div>
 
@@ -96,24 +98,6 @@
 
       <button type="button" class="btn-danger" id="btn-remove-logo" hidden>Remove Logo</button>
       <div class="success" id="logo-saved" hidden style="margin-top:0.75rem;">Logo saved.</div>
-
-      <div class="sig-block" id="app-icon-block">
-        <div class="toggle-row">
-          <label for="f-app-icon" style="margin:0;flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;">
-            <input type="checkbox" id="f-app-icon">
-            <span>Use my logo as the browser tab icon</span>
-          </label>
-        </div>
-        <div class="icon-row" id="app-icon-preview" hidden>
-          <img id="app-icon-img" alt="App icon preview">
-          <span class="hint" style="margin:0;">Only the browser tab/bookmark icon -- not the icon on your home screen after installing. That one stays the built-in icon for everyone: Android and iOS bake it in from a file this app ships with, so making it your logo would mean publishing your logo in the app's public source instead of keeping it private on your device.</span>
-        </div>
-        <div id="app-icon-color-block" hidden>
-          <span class="hint" style="display:block;margin:0.75rem 0 0.3rem;">Icon background</span>
-          <div class="color-swatches" id="app-icon-color-swatches"></div>
-        </div>
-        <p class="hint" id="app-icon-need-logo">Upload a logo first to enable this.</p>
-      </div>
     </div>
   </div>
 
@@ -194,7 +178,6 @@
 <script src="setup-share.js"></script>
 <script>
 let previewUrl = null;
-let iconUrl = null;
 
 // ---------- Appearance ----------
 
@@ -211,6 +194,54 @@ $$('#theme-picker button').forEach((b) => {
   });
 });
 renderThemePicker();
+
+// A small, readable spread of hues rather than a huge grid -- the custom
+// swatch covers "anything else" for someone who wants an exact match.
+const ACCENT_PRESETS = [
+  { color: appAccent.default, label: 'Blue (default)' },
+  { color: '#2f6b3f', label: 'Green' },
+  { color: '#9c4221', label: 'Orange' },
+  { color: '#7a2e6b', label: 'Purple' },
+  { color: '#9c2b2b', label: 'Red' },
+  { color: '#1f7a72', label: 'Teal' },
+];
+
+function renderAccentSwatches() {
+  const current = appAccent.get() || appAccent.default;
+  const box = $('#accent-swatches');
+  const isPreset = ACCENT_PRESETS.some((p) => p.color === current);
+  box.innerHTML = ACCENT_PRESETS.map(
+    (p) =>
+      `<button type="button" class="swatch" data-color="${p.color}" aria-pressed="${p.color === current}" ` +
+      `title="${escapeHtml(p.label)}" style="background:${p.color}"></button>`
+  ).join('');
+
+  const custom = document.createElement('input');
+  custom.type = 'color';
+  custom.className = 'swatch swatch-custom';
+  custom.id = 'accent-color-custom';
+  custom.title = 'Custom colour';
+  custom.value = isPreset ? appAccent.default : current;
+  custom.setAttribute('aria-pressed', String(!isPreset));
+  box.appendChild(custom);
+}
+
+$('#accent-swatches').addEventListener('click', (e) => {
+  const btn = e.target.closest('.swatch:not(.swatch-custom)');
+  if (!btn) return;
+  appAccent.set(btn.dataset.color);
+  renderAccentSwatches();
+});
+$('#accent-swatches').addEventListener('change', (e) => {
+  if (e.target.id !== 'accent-color-custom') return;
+  appAccent.set(e.target.value);
+  renderAccentSwatches();
+});
+$('#btn-reset-accent').addEventListener('click', () => {
+  appAccent.reset();
+  renderAccentSwatches();
+});
+renderAccentSwatches();
 
 // ---------- Logo ----------
 
@@ -234,87 +265,6 @@ function showLogo(blob) {
     $('#fn-logo').textContent = '';
   }
   $('#no-logo-warning').hidden = !!blob;
-  refreshAppIconSection(blob);
-}
-
-// Presets cover the common cases; the last swatch is a native colour input
-// for anything else, which is where "etc" lives.
-const ICON_COLOR_PRESETS = [
-  { color: '#1c3d5a', label: 'Blue (brand)' },
-  { color: '#ffffff', label: 'White' },
-  { color: '#000000', label: 'Black' },
-  { color: '#c0392b', label: 'Red' },
-  { color: 'transparent', label: 'No background' },
-];
-
-function renderIconColorSwatches(current) {
-  const box = $('#app-icon-color-swatches');
-  const isPreset = ICON_COLOR_PRESETS.some((p) => p.color === current);
-  box.innerHTML = ICON_COLOR_PRESETS.map((p) => {
-    const cls = p.color === 'transparent' ? 'swatch swatch-none' : 'swatch';
-    const style = p.color === 'transparent' ? '' : ` style="background:${p.color}"`;
-    return `<button type="button" class="${cls}" data-color="${p.color}" aria-pressed="${p.color === current}" title="${escapeHtml(p.label)}"${style}></button>`;
-  }).join('');
-
-  const custom = document.createElement('input');
-  custom.type = 'color';
-  custom.className = 'swatch swatch-custom';
-  custom.id = 'app-icon-color-custom';
-  custom.title = 'Custom colour';
-  // Keep the colour wheel showing something sane even when a preset (or
-  // 'transparent', which the input can't represent) is the active choice.
-  custom.value = /^#[0-9a-f]{6}$/i.test(current) ? current : DEFAULT_APP_ICON_COLOR;
-  custom.setAttribute('aria-pressed', String(!isPreset));
-  box.appendChild(custom);
-}
-
-async function applyIconColorChange(color) {
-  await setAppIconColor(color);
-  await refreshAppIconSection(await getReportLogo());
-  if (await getUseLogoAsAppIcon()) applyAppIcon();
-}
-
-// Delegated once on the container -- its children are replaced wholesale by
-// renderIconColorSwatches(), but the container itself never is.
-$('#app-icon-color-swatches').addEventListener('click', (e) => {
-  const btn = e.target.closest('.swatch:not(.swatch-custom)');
-  if (btn) applyIconColorChange(btn.dataset.color);
-});
-$('#app-icon-color-swatches').addEventListener('change', (e) => {
-  if (e.target.id === 'app-icon-color-custom') applyIconColorChange(e.target.value);
-});
-
-async function refreshAppIconSection(logoBlob) {
-  const checkbox = $('#f-app-icon');
-  const hasLogo = !!logoBlob;
-  checkbox.disabled = !hasLogo;
-  $('#app-icon-need-logo').hidden = hasLogo;
-
-  if (!hasLogo) {
-    checkbox.checked = false;
-    $('#app-icon-preview').hidden = true;
-    $('#app-icon-color-block').hidden = true;
-    return;
-  }
-  checkbox.checked = await getUseLogoAsAppIcon();
-  if (checkbox.checked) {
-    const color = await getAppIconColor();
-    renderIconColorSwatches(color);
-    $('#app-icon-color-block').hidden = false;
-    try {
-      const icon = await buildAppIconFromLogo(logoBlob, 192, color);
-      if (iconUrl) URL.revokeObjectURL(iconUrl);
-      iconUrl = URL.createObjectURL(icon);
-      $('#app-icon-img').src = iconUrl;
-      $('#app-icon-preview').hidden = false;
-    } catch (err) {
-      console.error(err);
-      $('#app-icon-preview').hidden = true;
-    }
-  } else {
-    $('#app-icon-preview').hidden = true;
-    $('#app-icon-color-block').hidden = true;
-  }
 }
 
 function flashSaved() {
@@ -337,7 +287,6 @@ $('#f-logo').addEventListener('change', async (e) => {
     $('#fn-logo').textContent = file.name;
     showLogo(file);
     flashSaved();
-    applyAppIcon();
     applyHeaderLogo();
   } catch (err) {
     console.error(err);
@@ -350,23 +299,8 @@ $('#f-logo').addEventListener('change', async (e) => {
 $('#btn-remove-logo').addEventListener('click', async () => {
   if (!confirm('Remove the logo? Reports will print with a blank space where it sits.')) return;
   await clearReportLogo();
-  await setUseLogoAsAppIcon(false);
   showLogo(null);
   applyHeaderLogo();
-});
-
-$('#f-app-icon').addEventListener('change', async (e) => {
-  await setUseLogoAsAppIcon(e.target.checked);
-  await refreshAppIconSection(await getReportLogo());
-  if (e.target.checked) {
-    applyAppIcon();
-  } else {
-    // Put the built-in icon back without needing a reload.
-    document.querySelectorAll('link[rel="icon"]').forEach((l) => {
-      l.href = 'icon.svg';
-      l.type = 'image/svg+xml';
-    });
-  }
 });
 
 // ---------- Backup / restore ----------

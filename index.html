@@ -224,7 +224,6 @@ async function handleIncomingSetup() {
       // A shared setup can be the very first time this device gets a logo --
       // refresh now rather than waiting for the next page load to show it.
       applyHeaderLogo();
-      applyAppIcon();
     }
     const bits = [];
     if (res.added) bits.push(`${res.added} project(s) added`);

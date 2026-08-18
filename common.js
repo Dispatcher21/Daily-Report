@@ -34,10 +34,9 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
   navigator.serviceWorker.register('service-worker.js').catch(console.error);
 }
 
-// Deferred to DOMContentLoaded because applyAppIcon/applyHeaderLogo live in
-// storage.js, which every page loads after this file.
+// Deferred to DOMContentLoaded because applyHeaderLogo lives in storage.js,
+// which every page loads after this file.
 function applyBranding() {
-  if (typeof applyAppIcon === 'function') applyAppIcon();
   if (typeof applyHeaderLogo === 'function') applyHeaderLogo();
 }
 document.addEventListener('DOMContentLoaded', applyBranding);

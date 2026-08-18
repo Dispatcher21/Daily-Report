@@ -228,7 +228,7 @@ body {
   font-weight: 700;
 }
 
-/* App-icon background colour swatches. Each shows its own colour, so they
+/* Colour swatches (accent colour, etc). Each shows its own colour, so they
    can't reuse .segmented's aria-pressed rule (that forces the brand colour
    as the "selected" background, which would erase the swatch it's for). */
 .color-swatches { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin: 0.5rem 0; }
@@ -244,16 +244,6 @@ body {
 .swatch[aria-pressed="true"] {
   border-color: var(--link);
   box-shadow: 0 0 0 2px var(--focus);
-}
-/* Checkerboard stands in for "no background" the way image editors show
-   transparency -- a plain swatch would just look like a blank button. */
-.swatch-none {
-  background-image:
-    linear-gradient(45deg, #b7c0c9 25%, transparent 25%, transparent 75%, #b7c0c9 75%),
-    linear-gradient(45deg, #b7c0c9 25%, transparent 25%, transparent 75%, #b7c0c9 75%);
-  background-size: 12px 12px;
-  background-position: 0 0, 6px 6px;
-  background-color: #eef2f6;
 }
 .swatch-custom {
   -webkit-appearance: none;
