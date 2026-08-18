@@ -158,25 +158,57 @@ body {
 .app-header .app-sub { font-size: 0.72rem; color: var(--on-brand-dim); margin-top: 2px; }
 .app-header a.home-link { color: var(--on-brand); text-decoration: none; display: flex; flex-direction: column; }
 
-.theme-toggle {
+/* Gear in the header -- icon only, but a full 44px tap target. */
+.header-gear {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  min-height: var(--tap);
-  padding: 0.5rem 0.85rem;
-  border-radius: 22px;
+  justify-content: center;
+  width: var(--tap);
+  height: var(--tap);
+  border-radius: 50%;
   border: 1.5px solid rgba(255, 255, 255, 0.4);
   background: rgba(255, 255, 255, 0.12);
   color: var(--on-brand);
-  font: inherit;
-  font-size: 0.85rem;
-  font-weight: 700;
+  font-size: 1.3rem;
+  line-height: 1;
+  text-decoration: none;
   cursor: pointer;
 }
-.theme-toggle:hover { background: rgba(255, 255, 255, 0.22); }
-.theme-toggle .tt-icon { font-size: 1.05rem; line-height: 1; }
-@media (max-width: 420px) { .theme-toggle .tt-label { display: none; } }
+.header-gear:hover { background: rgba(255, 255, 255, 0.22); }
+
+/* Segmented control (theme picker) */
+.segmented {
+  display: flex;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface);
+}
+.segmented button {
+  flex: 1;
+  min-height: var(--tap);
+  padding: 0.6rem 0.5rem;
+  border: none;
+  border-right: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+.segmented button:last-child { border-right: none; }
+.segmented button:hover { background: var(--surface-2); }
+.segmented button[aria-pressed="true"] {
+  background: var(--brand);
+  color: var(--on-brand);
+  font-weight: 700;
+}
 
 .back-bar {
   background: var(--surface-2);

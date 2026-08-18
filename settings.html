@@ -20,12 +20,21 @@
     background: #fff;
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
+    padding: 3px 5px;
     overflow: hidden;
     margin-bottom: 0.6rem;
   }
   #logo-preview-box img { max-width: 100%; max-height: 100%; object-fit: contain; }
-  #logo-preview-box .lp-empty { color: #8b96a1; font-size: 0.8rem; text-align: center; padding: 0 0.5rem; }
+  #logo-preview-box .lp-empty { color: #8b96a1; font-size: 0.8rem; }
+
+  .icon-row { display: flex; align-items: center; gap: 0.9rem; margin-top: 0.75rem; }
+  .icon-row img { width: 64px; height: 64px; border-radius: 10px; flex: 0 0 auto; }
+  .toggle-row {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 1rem; min-height: var(--tap);
+  }
+  .toggle-row input[type="checkbox"] { flex: 0 0 auto; }
 </style>
 </head>
 <body>
@@ -44,6 +53,22 @@
 </div>
 
 <main>
+
+  <div class="step">
+    <div class="step-header">
+      <span class="step-num">DISPLAY</span>
+      <h2>Appearance</h2>
+    </div>
+    <div class="step-body">
+      <p class="hint" style="margin-top:0;">Auto follows your device. Pick Light for bright sun, Dark for night work.</p>
+      <div class="segmented" id="theme-picker">
+        <button type="button" data-mode="light">&#9728; Light</button>
+        <button type="button" data-mode="dark">&#9790; Dark</button>
+        <button type="button" data-mode="auto">&#9680; Auto</button>
+      </div>
+    </div>
+  </div>
+
   <div class="step">
     <div class="step-header">
       <span class="step-num">LOGO</span>
@@ -67,10 +92,38 @@
 
       <button type="button" class="btn-danger" id="btn-remove-logo" hidden>Remove Logo</button>
       <div class="success" id="logo-saved" hidden style="margin-top:0.75rem;">Logo saved.</div>
+
+      <div class="sig-block" id="app-icon-block">
+        <div class="toggle-row">
+          <label for="f-app-icon" style="margin:0;flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;">
+            <input type="checkbox" id="f-app-icon">
+            <span>Use my logo as the app icon</span>
+          </label>
+        </div>
+        <div class="icon-row" id="app-icon-preview" hidden>
+          <img id="app-icon-img" alt="App icon preview">
+          <span class="hint" style="margin:0;">Browser tab and bookmark icon. If the app is already on your home screen, remove and re-add it to update that icon too.</span>
+        </div>
+        <p class="hint" id="app-icon-need-logo">Upload a logo first to enable this.</p>
+      </div>
     </div>
   </div>
 
-  <p class="hint">The logo is stored on this device only. Use <strong>Export All Data</strong> on the home screen to carry it (and everything else) to another device.</p>
+  <div class="step">
+    <div class="step-header">
+      <span class="step-num">BACKUP</span>
+      <h2>Export &amp; Import</h2>
+    </div>
+    <div class="step-body">
+      <p class="hint" style="margin-top:0;">Export saves everything &mdash; all projects, reports, photos and your logo &mdash; to one file you move yourself (email, OneDrive, USB). Import merges it back in and never deletes anything. Nothing is ever transmitted anywhere by this app.</p>
+      <div class="home-toolbar" style="margin-top:0.75rem;">
+        <button type="button" id="btn-export-backup" class="text-btn-outline">Export All Data</button>
+        <button type="button" id="btn-import-backup" class="text-btn-outline">Import Data</button>
+        <input type="file" id="import-file-input" accept="application/json,.json" hidden>
+      </div>
+    </div>
+  </div>
+
 </main>
 
 <script src="common.js"></script>
@@ -78,6 +131,25 @@
 <script src="storage.js"></script>
 <script>
 let previewUrl = null;
+let iconUrl = null;
+
+// ---------- Appearance ----------
+
+function renderThemePicker() {
+  const current = appTheme.get();
+  $$('#theme-picker button').forEach((b) => {
+    b.setAttribute('aria-pressed', String(b.dataset.mode === current));
+  });
+}
+$$('#theme-picker button').forEach((b) => {
+  b.addEventListener('click', () => {
+    appTheme.set(b.dataset.mode);
+    renderThemePicker();
+  });
+});
+renderThemePicker();
+
+// ---------- Logo ----------
 
 function showLogo(blob) {
   const img = $('#logo-img');
@@ -97,6 +169,35 @@ function showLogo(blob) {
     $('#btn-remove-logo').hidden = true;
     $('#uz-logo').classList.remove('has');
     $('#fn-logo').textContent = '';
+  }
+  refreshAppIconSection(blob);
+}
+
+async function refreshAppIconSection(logoBlob) {
+  const checkbox = $('#f-app-icon');
+  const hasLogo = !!logoBlob;
+  checkbox.disabled = !hasLogo;
+  $('#app-icon-need-logo').hidden = hasLogo;
+
+  if (!hasLogo) {
+    checkbox.checked = false;
+    $('#app-icon-preview').hidden = true;
+    return;
+  }
+  checkbox.checked = await getUseLogoAsAppIcon();
+  if (checkbox.checked) {
+    try {
+      const icon = await buildAppIconFromLogo(logoBlob, 192);
+      if (iconUrl) URL.revokeObjectURL(iconUrl);
+      iconUrl = URL.createObjectURL(icon);
+      $('#app-icon-img').src = iconUrl;
+      $('#app-icon-preview').hidden = false;
+    } catch (err) {
+      console.error(err);
+      $('#app-icon-preview').hidden = true;
+    }
+  } else {
+    $('#app-icon-preview').hidden = true;
   }
 }
 
@@ -120,6 +221,7 @@ $('#f-logo').addEventListener('change', async (e) => {
     $('#fn-logo').textContent = file.name;
     showLogo(file);
     flashSaved();
+    applyAppIcon();
   } catch (err) {
     console.error(err);
     alert('Could not save the logo: ' + err.message);
@@ -131,8 +233,75 @@ $('#f-logo').addEventListener('change', async (e) => {
 $('#btn-remove-logo').addEventListener('click', async () => {
   if (!confirm('Remove the logo? Reports will print with a blank space where it sits.')) return;
   await clearReportLogo();
+  await setUseLogoAsAppIcon(false);
   showLogo(null);
 });
+
+$('#f-app-icon').addEventListener('change', async (e) => {
+  await setUseLogoAsAppIcon(e.target.checked);
+  await refreshAppIconSection(await getReportLogo());
+  if (e.target.checked) {
+    applyAppIcon();
+  } else {
+    // Put the built-in icon back without needing a reload.
+    document.querySelectorAll('link[rel="icon"]').forEach((l) => {
+      l.href = 'icon.svg';
+      l.type = 'image/svg+xml';
+    });
+  }
+});
+
+// ---------- Backup / restore ----------
+
+$('#btn-export-backup').addEventListener('click', async () => {
+  const btn = $('#btn-export-backup');
+  const original = btn.textContent;
+  btn.textContent = 'Exporting...';
+  btn.disabled = true;
+  try {
+    const backup = await exportAllReportsBackup();
+    const json = JSON.stringify(backup);
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    triggerDownload(
+      new Blob([json], { type: 'application/json' }),
+      `DailyReportApp_Backup_${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.json`
+    );
+  } catch (err) {
+    console.error(err);
+    alert('Could not export data: ' + err.message);
+  } finally {
+    btn.textContent = original;
+    btn.disabled = false;
+  }
+});
+
+$('#btn-import-backup').addEventListener('click', () => $('#import-file-input').click());
+
+$('#import-file-input').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const backup = JSON.parse(text);
+    if (backup.kind !== 'daily-report-app-backup') {
+      alert("That doesn't look like a Daily Report backup file.");
+      return;
+    }
+    const result = await importReportsBackup(backup);
+    alert(
+      `Import complete.\nProjects: ${result.projectsAdded} new, ${result.projectsUpdated} updated, ${result.projectsSkipped} already up to date.\nReports: ${result.added} new, ${result.updated} updated, ${result.skipped} already up to date.` +
+        (result.logoAdded ? '\nCompany logo restored.' : '')
+    );
+    showLogo(await getReportLogo());
+  } catch (err) {
+    console.error(err);
+    alert('Could not import that file: ' + err.message);
+  }
+});
+
+// ---------- Init ----------
 
 (async () => {
   showLogo(await getReportLogo());

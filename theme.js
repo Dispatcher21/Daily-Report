@@ -4,12 +4,11 @@
 //
 // Three modes: 'auto' follows the device, 'light' and 'dark' are explicit.
 // Field inspectors need a hard override either way: full sun washes out the
-// dark theme, and night shifts make the light one blinding.
+// dark theme, and night shifts make the light one blinding. The picker itself
+// lives on the Settings page; every other page just gets a gear linking to it.
 (function () {
   const KEY = 'daily-report-theme';
   const MODES = ['auto', 'light', 'dark'];
-  const LABELS = { auto: 'Auto', light: 'Light', dark: 'Dark' };
-  const ICONS = { auto: '◐', light: '☀', dark: '☾' };
 
   function read() {
     try {
@@ -21,6 +20,7 @@
   }
 
   let mode = read();
+  const listeners = [];
 
   function apply(m) {
     const root = document.documentElement;
@@ -31,6 +31,7 @@
   apply(mode);
 
   function set(m) {
+    if (MODES.indexOf(m) === -1) return;
     mode = m;
     apply(m);
     try {
@@ -38,37 +39,39 @@
     } catch (e) {
       /* private mode -- theme just won't persist */
     }
-    render();
+    listeners.forEach((fn) => fn(mode));
   }
 
-  let btn = null;
-
-  function render() {
-    if (!btn) return;
-    btn.innerHTML = `<span class="tt-icon">${ICONS[mode]}</span><span class="tt-label">${LABELS[mode]}</span>`;
-    btn.setAttribute('aria-label', `Theme: ${LABELS[mode]}. Tap to change.`);
-    btn.title = `Theme: ${LABELS[mode]} (tap to change)`;
-  }
-
-  function mount() {
+  // Every page except Settings itself gets a gear in the header.
+  function mountGear() {
     const header = document.querySelector('.app-header');
-    if (!header || header.querySelector('.theme-toggle')) return;
-    // The pages keep an empty <span> as the header's right-hand slot.
+    if (!header || header.querySelector('.header-gear')) return;
+    if (/settings\.html$/i.test(location.pathname)) {
+      const slot = header.querySelector(':scope > span:empty');
+      if (slot) slot.remove();
+      return;
+    }
     const slot = header.querySelector(':scope > span:empty');
-    btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'theme-toggle';
-    btn.addEventListener('click', () => set(MODES[(MODES.indexOf(mode) + 1) % MODES.length]));
-    if (slot) slot.replaceWith(btn);
-    else header.appendChild(btn);
-    render();
+    const a = document.createElement('a');
+    a.className = 'header-gear';
+    a.href = 'settings.html';
+    a.setAttribute('aria-label', 'Settings');
+    a.title = 'Settings';
+    a.textContent = '⚙';
+    if (slot) slot.replaceWith(a);
+    else header.appendChild(a);
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', mount);
+    document.addEventListener('DOMContentLoaded', mountGear);
   } else {
-    mount();
+    mountGear();
   }
 
-  window.appTheme = { get: () => mode, set };
+  window.appTheme = {
+    get: () => mode,
+    set,
+    modes: MODES.slice(),
+    onChange: (fn) => listeners.push(fn),
+  };
 })();

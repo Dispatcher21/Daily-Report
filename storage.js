@@ -8,6 +8,7 @@ const PROJECTS_STORE = 'projects';
 const SETTINGS_STORE = 'settings';
 const DEFAULT_TEMPLATE_URL = 'template/daily-work-report-template.xlsx';
 const LOGO_SETTING_KEY = 'reportLogo';
+const APP_ICON_SETTING_KEY = 'useLogoAsAppIcon';
 
 function openDb() {
   return new Promise((resolve, reject) => {
@@ -62,6 +63,77 @@ async function saveReportLogo(blob) {
 
 async function clearReportLogo() {
   await deleteSetting(LOGO_SETTING_KEY);
+}
+
+function getUseLogoAsAppIcon() {
+  return getSetting(APP_ICON_SETTING_KEY).then((v) => !!v);
+}
+
+async function setUseLogoAsAppIcon(on) {
+  await saveSetting(APP_ICON_SETTING_KEY, !!on);
+}
+
+// Paints the logo onto a square brand-coloured tile, the same shape as the
+// built-in icon. A bare logo would be letterboxed by the OS and look lost on
+// a home screen, and wide logos would shrink to nothing as a favicon.
+function buildAppIconFromLogo(logoBlob, size) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(logoBlob);
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const s = size || 192;
+        const canvas = document.createElement('canvas');
+        canvas.width = canvas.height = s;
+        const ctx = canvas.getContext('2d');
+
+        const r = s * 0.146; // matches the built-in icon's corner radius
+        ctx.fillStyle = '#1c3d5a';
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(0, 0, s, s, r);
+        else ctx.rect(0, 0, s, s);
+        ctx.fill();
+
+        // Aspect-preserving fit inside a padded square.
+        const pad = s * 0.14;
+        const box = s - pad * 2;
+        const scale = Math.min(box / img.naturalWidth, box / img.naturalHeight);
+        const w = img.naturalWidth * scale;
+        const h = img.naturalHeight * scale;
+        ctx.drawImage(img, (s - w) / 2, (s - h) / 2, w, h);
+
+        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('icon render failed'))), 'image/png');
+      } catch (err) {
+        reject(err);
+      } finally {
+        URL.revokeObjectURL(url);
+      }
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('could not read that image'));
+    };
+    img.src = url;
+  });
+}
+
+// Swaps the tab/bookmark icon when the user has opted in. The installed
+// home-screen icon comes from manifest.json and is captured at install time,
+// so that one only changes if the app is re-added.
+async function applyAppIcon() {
+  try {
+    if (!(await getUseLogoAsAppIcon())) return;
+    const logo = await getReportLogo();
+    if (!logo) return;
+    const icon = await buildAppIconFromLogo(logo, 192);
+    const href = URL.createObjectURL(icon);
+    document.querySelectorAll('link[rel="icon"]').forEach((l) => {
+      l.href = href;
+      l.type = 'image/png';
+    });
+  } catch (err) {
+    console.error('app icon:', err); // cosmetic only -- never block the page
+  }
 }
 
 async function withStore(storeName, mode, fn) {
@@ -285,7 +357,10 @@ async function exportAllReportsBackup() {
     exportedAt: Date.now(),
     projects: serializedProjects,
     reports: serializedReports,
-    settings: { logo: await blobFieldToEntry(logo) },
+    settings: {
+      logo: await blobFieldToEntry(logo),
+      useLogoAsAppIcon: await getUseLogoAsAppIcon(),
+    },
   };
 }
 
@@ -340,9 +415,10 @@ async function importReportsBackup(backup) {
   // Only adopt the backup's logo if this device doesn't already have one --
   // import never overwrites something already set up locally.
   let logoAdded = false;
-  const incomingLogo = backup && backup.settings && backup.settings.logo;
-  if (incomingLogo && !(await getReportLogo())) {
-    await saveReportLogo(entryToBlobField(incomingLogo));
+  const incomingSettings = (backup && backup.settings) || {};
+  if (incomingSettings.logo && !(await getReportLogo())) {
+    await saveReportLogo(entryToBlobField(incomingSettings.logo));
+    if (incomingSettings.useLogoAsAppIcon) await setUseLogoAsAppIcon(true);
     logoAdded = true;
   }
 

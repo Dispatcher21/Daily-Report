@@ -33,3 +33,9 @@ function queryParam(key) {
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
   navigator.serviceWorker.register('service-worker.js').catch(console.error);
 }
+
+// Deferred to DOMContentLoaded because applyAppIcon lives in storage.js, which
+// every page loads after this file.
+document.addEventListener('DOMContentLoaded', () => {
+  if (typeof applyAppIcon === 'function') applyAppIcon();
+});

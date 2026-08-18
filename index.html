@@ -64,19 +64,6 @@
     </div>
   </div>
 
-  <div class="eyebrow" style="margin-top:2rem;">App</div>
-  <div class="home-toolbar">
-    <a href="settings.html" class="text-btn-outline" style="text-align:center;text-decoration:none;display:flex;align-items:center;justify-content:center;">&#9881; Settings</a>
-  </div>
-  <p class="hint home-toolbar-hint">Set the company logo that prints on every report.</p>
-
-  <div class="eyebrow" style="margin-top:2rem;">Backup</div>
-  <div class="home-toolbar">
-    <button type="button" id="btn-export-backup" class="text-btn-outline">Export All Data</button>
-    <button type="button" id="btn-import-backup" class="text-btn-outline">Import Data</button>
-    <input type="file" id="import-file-input" accept="application/json,.json" hidden>
-  </div>
-  <p class="hint home-toolbar-hint">Export saves everything (all projects, reports, and photos) to one file you can move to another device yourself &mdash; email, OneDrive, USB, etc. Import merges that file back in. Nothing is ever transmitted anywhere by this app.</p>
 </main>
 
 <script src="lib/xlsx.min.js"></script>
@@ -192,55 +179,6 @@ $('#btn-save-new-project').addEventListener('click', async () => {
   } finally {
     btn.textContent = 'Save Project';
     btn.disabled = false;
-  }
-});
-
-// ---------- Backup / restore ----------
-
-$('#btn-export-backup').addEventListener('click', async () => {
-  const btn = $('#btn-export-backup');
-  const original = btn.textContent;
-  btn.textContent = 'Exporting...';
-  btn.disabled = true;
-  try {
-    const backup = await exportAllReportsBackup();
-    const json = JSON.stringify(backup);
-    const d = new Date();
-    const pad = (n) => String(n).padStart(2, '0');
-    triggerDownload(
-      new Blob([json], { type: 'application/json' }),
-      `DailyReportApp_Backup_${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.json`
-    );
-  } catch (err) {
-    console.error(err);
-    alert('Could not export data: ' + err.message);
-  } finally {
-    btn.textContent = original;
-    btn.disabled = false;
-  }
-});
-
-$('#btn-import-backup').addEventListener('click', () => $('#import-file-input').click());
-
-$('#import-file-input').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  e.target.value = '';
-  if (!file) return;
-  try {
-    const text = await file.text();
-    const backup = JSON.parse(text);
-    if (backup.kind !== 'daily-report-app-backup') {
-      alert("That doesn't look like a Daily Report backup file.");
-      return;
-    }
-    const result = await importReportsBackup(backup);
-    alert(
-      `Import complete.\nProjects: ${result.projectsAdded} new, ${result.projectsUpdated} updated, ${result.projectsSkipped} already up to date.\nReports: ${result.added} new, ${result.updated} updated, ${result.skipped} already up to date.`
-    );
-    await renderProjectCards();
-  } catch (err) {
-    console.error(err);
-    alert('Could not import that file: ' + err.message);
   }
 });
 
