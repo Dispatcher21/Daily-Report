@@ -39,3 +39,37 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
 document.addEventListener('DOMContentLoaded', () => {
   if (typeof applyAppIcon === 'function') applyAppIcon();
 });
+
+// ---------- Install-to-home-screen ----------
+//
+// The browser fires beforeinstallprompt early and only once per page load, so
+// it's captured here (on every page) and stashed for the Settings page to use.
+// Calling preventDefault suppresses the browser's own mini-infobar so the
+// prompt appears when the user actually asks for it.
+window.deferredInstallPrompt = null;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  window.deferredInstallPrompt = e;
+  window.dispatchEvent(new CustomEvent('install-availability-changed'));
+});
+
+// Remembered because the tab the user installed *from* keeps running in the
+// browser, where display-mode is still 'browser' -- without this it would go
+// on telling them how to install something they just installed.
+let appWasInstalledThisSession = false;
+
+window.addEventListener('appinstalled', () => {
+  window.deferredInstallPrompt = null;
+  appWasInstalledThisSession = true;
+  window.dispatchEvent(new CustomEvent('install-availability-changed'));
+});
+
+function isAppInstalled() {
+  return (
+    appWasInstalledThisSession ||
+    window.matchMedia('(display-mode: standalone)').matches ||
+    window.matchMedia('(display-mode: fullscreen)').matches ||
+    navigator.standalone === true
+  );
+}

@@ -65,6 +65,7 @@
       <div class="export-bar" style="margin-top:0;">
         <button type="button" class="btn-primary" id="btn-print-selected">Generate Selected</button>
         <button type="button" class="btn-secondary" id="btn-mass-edit-selected">Mass Edit Selected</button>
+        <button type="button" class="btn-danger" id="btn-delete-selected">Delete Selected</button>
       </div>
     </div>
   </div>
@@ -207,6 +208,7 @@ function updateBulkBar() {
   $('#select-count-label').textContent = n > 0 ? `${n} selected` : '';
   $('#bulk-bar').hidden = n === 0;
   $('#btn-print-selected').textContent = n === 1 ? 'Generate Selected' : `Generate Selected (${n})`;
+  $('#btn-delete-selected').textContent = n === 1 ? 'Delete Selected' : `Delete Selected (${n})`;
 }
 
 ['f-date-from', 'f-date-to', 'f-search', 'f-sort'].forEach((id) => {
@@ -235,6 +237,43 @@ $('#btn-print-selected').addEventListener('click', () => {
   if (selectedIds.size === 0) return;
   const ids = Array.from(selectedIds).join(',');
   location.href = `download.html?project=${project.id}&report=${ids}`;
+});
+
+$('#btn-delete-selected').addEventListener('click', async () => {
+  if (selectedIds.size === 0) return;
+  const selected = allReports.filter((r) => selectedIds.has(r.id));
+
+  // Name what's going, so a mis-tap on the wrong row is obvious before it's
+  // too late -- there's no undo and these are a day's work each.
+  const list = selected
+    .slice(0, 5)
+    .map((r) => `  #${r.reportNo}  ${r.date || '(no date)'}`)
+    .join('\n');
+  const more = selected.length > 5 ? `\n  ...and ${selected.length - 5} more` : '';
+  const msg =
+    selected.length === 1
+      ? `Delete this report?\n\n${list}\n\nThis cannot be undone.`
+      : `Delete ${selected.length} reports?\n\n${list}${more}\n\nThis cannot be undone.`;
+  if (!confirm(msg)) return;
+
+  const btn = $('#btn-delete-selected');
+  const original = btn.textContent;
+  btn.textContent = 'Deleting...';
+  btn.disabled = true;
+  try {
+    for (const r of selected) {
+      await deleteReport(r.id);
+    }
+    selectedIds.clear();
+    allReports = await getReportsForProject(project.id);
+    render();
+  } catch (err) {
+    console.error(err);
+    alert('Could not delete: ' + err.message);
+  } finally {
+    btn.textContent = original;
+    btn.disabled = false;
+  }
 });
 
 // ---------- Mass edit ----------

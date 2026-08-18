@@ -49,6 +49,10 @@
   <div class="step">
     <div class="step-header"><span class="step-num">PREVIEW</span><h2 id="preview-title">Preparing your report&hellip;</h2></div>
     <div class="step-body">
+      <div class="warn" id="no-logo-warning" hidden>
+        <strong>No company logo set.</strong> This report will print with a blank space in the top-left.
+        <a href="settings.html" style="color:inherit;font-weight:700;">Add one in Settings</a>.
+      </div>
       <div id="pdf-preview-wrap">
         <div id="pdf-status">Rendering PDF preview&hellip;</div>
         <iframe id="pdf-frame" title="PDF preview" hidden></iframe>
@@ -169,6 +173,7 @@ async function buildPdfBlob(sandbox, layout, reports, logoBlob, onProgress) {
 
   const layout = await loadPrintLayout();
   const logoBlob = await getReportLogo();
+  $('#no-logo-warning').hidden = !!logoBlob;
   const sandbox = $('#render-sandbox');
 
   let pdfBlob;

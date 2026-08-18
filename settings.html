@@ -77,6 +77,10 @@
     <div class="step-body">
       <p class="hint" style="margin-top:0;">Prints in the top-left of every Daily Work Report. It's scaled to fit this box without stretching, so any shape works &mdash; wide logos just sit shorter.</p>
 
+      <div class="warn" id="no-logo-warning" hidden>
+        <strong>No logo uploaded.</strong> Every report you generate will print with a blank space where the company logo belongs.
+      </div>
+
       <div id="logo-preview-box">
         <span class="lp-empty" id="logo-empty">No logo set &mdash; this area prints blank</span>
         <img id="logo-img" alt="Current logo" hidden>
@@ -105,6 +109,24 @@
           <span class="hint" style="margin:0;">Browser tab and bookmark icon. If the app is already on your home screen, remove and re-add it to update that icon too.</span>
         </div>
         <p class="hint" id="app-icon-need-logo">Upload a logo first to enable this.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-header">
+      <span class="step-num">INSTALL</span>
+      <h2>Install as App</h2>
+    </div>
+    <div class="step-body">
+      <p class="hint" style="margin-top:0;">Adds Daily Reports to your home screen so it opens full-screen, without browser bars, and keeps working with no signal.</p>
+
+      <div class="success" id="install-done" hidden style="margin-bottom:0;">Installed &mdash; you're running the app version.</div>
+
+      <button type="button" class="btn-primary" id="btn-install" hidden>Install App</button>
+
+      <div id="install-manual" hidden>
+        <p class="hint" id="install-manual-text"></p>
       </div>
     </div>
   </div>
@@ -170,6 +192,7 @@ function showLogo(blob) {
     $('#uz-logo').classList.remove('has');
     $('#fn-logo').textContent = '';
   }
+  $('#no-logo-warning').hidden = !!blob;
   refreshAppIconSection(blob);
 }
 
@@ -301,9 +324,52 @@ $('#import-file-input').addEventListener('change', async (e) => {
   }
 });
 
+// ---------- Install as app ----------
+
+function renderInstallSection() {
+  const installed = isAppInstalled();
+  const canPrompt = !!window.deferredInstallPrompt;
+
+  $('#install-done').hidden = !installed;
+  $('#btn-install').hidden = installed || !canPrompt;
+  $('#install-manual').hidden = installed || canPrompt;
+
+  if (!installed && !canPrompt) {
+    // iOS Safari never fires beforeinstallprompt, and other browsers withhold
+    // it until their own engagement heuristics are met -- so tell the user how
+    // to do it by hand rather than showing a button that can't work.
+    const ua = navigator.userAgent;
+    const iOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    $('#install-manual-text').innerHTML = iOS
+      ? 'On iPhone or iPad: tap the <strong>Share</strong> button in Safari, then <strong>Add to Home Screen</strong>.'
+      : 'Your browser hasn\'t offered an install prompt yet. Use its menu &mdash; look for <strong>Install app</strong> or <strong>Add to Home screen</strong>. (Some browsers only offer it after you\'ve used the site a couple of times.)';
+  }
+}
+
+$('#btn-install').addEventListener('click', async () => {
+  const evt = window.deferredInstallPrompt;
+  if (!evt) return renderInstallSection();
+  const btn = $('#btn-install');
+  btn.disabled = true;
+  try {
+    evt.prompt();
+    await evt.userChoice;
+  } catch (err) {
+    console.error(err);
+  } finally {
+    // A prompt event can only be used once, whatever the user chose.
+    window.deferredInstallPrompt = null;
+    btn.disabled = false;
+    renderInstallSection();
+  }
+});
+
+window.addEventListener('install-availability-changed', renderInstallSection);
+
 // ---------- Init ----------
 
 (async () => {
+  renderInstallSection();
   showLogo(await getReportLogo());
 })();
 </script>
