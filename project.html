@@ -52,10 +52,11 @@
   <div class="step">
     <div class="step-header">
       <span class="step-num">DATA FILE</span>
-      <h2>Replace Project Data</h2>
+      <h2>Project Data File</h2>
     </div>
     <div class="step-body">
-      <p class="hint">Uploading a new file replaces this project's info and pay item catalog. Existing reports are not affected.</p>
+      <p class="hint">Download this project's current data as an Excel file &mdash; edit it, keep it as a backup, or carry it to another device. Uploading a file replaces this project's info and pay item catalog. Existing reports are not affected.</p>
+      <button type="button" class="btn-secondary" id="btn-download-project-file" style="margin-bottom:0.75rem;">&#8681; Download Project File</button>
       <div class="uz" id="uz-reupload">
         <input type="file" id="f-reupload" accept=".xlsx,.xls">
         <span class="uz-icon">&#128202;</span>
@@ -120,6 +121,16 @@ async function init() {
     <p class="hint">To change these values, upload a replacement data file below.</p>
   `;
 }
+
+$('#btn-download-project-file').addEventListener('click', () => {
+  if (!project) return;
+  try {
+    downloadProjectDataFile(project);
+  } catch (err) {
+    console.error(err);
+    alert('Could not build the project file: ' + err.message);
+  }
+});
 
 $('#f-reupload').addEventListener('change', async (e) => {
   const file = e.target.files[0];

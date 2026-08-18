@@ -122,18 +122,31 @@ function parsePayItemsSheet(ws) {
 }
 
 // Reads a simple single-column list of names/labels (optional header row
-// tolerated but not required -- any non-empty cell in column A counts).
+// tolerated but not required).
+//
+// Position is meaningful in both of these lists -- a contractor's slot picks
+// its quantity column on the report, and an equipment label's slot picks its
+// row -- so a blank line is a deliberately empty slot, NOT a row to skip.
+// Skipping them shifted every later entry up by one.
 function parseSingleColumnList(ws, headerLabel, maxCount) {
   if (!ws) return [];
   const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
-  const values = [];
-  for (const row of rows) {
-    if (!row || row[0] == null) continue;
-    const text = String(row[0]).trim();
-    if (!text || text.toUpperCase() === headerLabel) continue;
-    values.push(text);
-    if (values.length >= maxCount) break;
+
+  let start = 0;
+  for (let i = 0; i < rows.length; i++) {
+    const cell = rows[i] && rows[i][0] != null ? String(rows[i][0]).trim() : '';
+    if (!cell) continue;
+    start = cell.toUpperCase() === headerLabel ? i + 1 : i;
+    break;
   }
+
+  const values = [];
+  for (let i = start; i < rows.length && values.length < maxCount; i++) {
+    const row = rows[i];
+    values.push(row && row[0] != null ? String(row[0]).trim() : '');
+  }
+  // Trailing blanks carry no information, unlike interior ones.
+  while (values.length && values[values.length - 1] === '') values.pop();
   return values;
 }
 
@@ -141,83 +154,97 @@ async function parseProjectDataFile(file) {
   const wb = await readWorkbookFromFile(file);
   const meta = parseProjectInfoSheet(findSheet(wb, PROJECT_INFO_SHEET));
   const payItemCatalog = parsePayItemsSheet(findSheet(wb, PAY_ITEMS_SHEET));
-  const contractors = parseSingleColumnList(findSheet(wb, CONTRACTORS_SHEET), 'CONTRACTOR NAME', 6);
-  const equipmentLabels = parseSingleColumnList(findSheet(wb, EQUIPMENT_ROWS_SHEET), 'LABEL', 15);
+  const contractors = parseSingleColumnList(findSheet(wb, CONTRACTORS_SHEET), 'CONTRACTOR NAME', CONTRACTOR_COUNT);
+  const equipmentLabels = parseSingleColumnList(findSheet(wb, EQUIPMENT_ROWS_SHEET), 'LABEL', EQUIPMENT_ROW_COUNT);
   return { meta, payItemCatalog, contractors, equipmentLabels };
 }
 
-function downloadProjectDataTemplate() {
+// Builds the four-sheet project data workbook. Both the blank example
+// template and the export of a saved project go through here, so the format
+// the app writes can't drift from the format it reads.
+function buildProjectDataWorkbook({ meta, payItemCatalog, contractors, equipmentLabels }) {
   const wb = XLSX.utils.book_new();
 
-  const infoRows = [
-    ['FIELD', 'VALUE'],
-    ['PROJECT DISPLAY NAME', 'PR#440 - Downtown Bridge'],
-    ['PROJECT NO.', '440'],
-    ['PROJECT NAME', 'BRIDGE DECK REPAIR'],
-    ['NTP DATE', '2026-08-01'],
-    ['REPRESENTATIVE', 'JOHN SONNIER'],
-    ['PE NAME', 'Elizabeth Guiza'],
-    ['DEFAULT ACTIVITY', ''],
-    ['DEFAULT NOTES', ''],
-    ['DEFAULT WORK SUMMARY TOP LINE', ''],
-    ['DEFAULT SHORT WORK SUMMARY', ''],
-    ['DEFAULT WORK SUMMARY', ''],
-    ['DEFAULT CONTROLLING ITEM', ''],
-    ['DEFAULT COMMENTS ON TIME CHARGED', ''],
-    ['DEFAULT CONTROLLING ITEM TIME FROM', ''],
-    ['DEFAULT CONTROLLING ITEM TIME TO', ''],
-    ['DEFAULT WORKING CONDITIONS', ''],
-    ['DEFAULT TRAFFIC CONTROL STATUS', ''], // "In Place" or "Attention Required", leave blank for neither
-    ['DEFAULT WORK BEGIN', ''],
-    ['DEFAULT WORK END', ''],
-    ['DEFAULT WEATHER DESCRIPTION', ''],
-    ['DEFAULT TEMP HIGH', ''],
-    ['DEFAULT TEMP LOW', ''],
-  ];
+  const infoRows = [['FIELD', 'VALUE']];
+  PROJECT_INFO_FIELDS.forEach((f) => {
+    let value = meta && meta[f.key] != null ? String(meta[f.key]) : '';
+    // Written back as the natural text the sheet documents, not the internal
+    // constant -- parseProjectInfoSheet normalizes it again on the way in.
+    if (f.key === 'trafficControlSelect') {
+      value = value === 'IN_PLACE' ? 'In Place' : value === 'ATTENTION_REQUIRED' ? 'Attention Required' : '';
+    }
+    infoRows.push([f.label, value]);
+  });
   const infoWs = XLSX.utils.aoa_to_sheet(infoRows);
   infoWs['!cols'] = [{ wch: 34 }, { wch: 32 }];
   XLSX.utils.book_append_sheet(wb, infoWs, PROJECT_INFO_SHEET);
 
-  const itemRows = [
-    ['ITEM NUMBER', 'DESCRIPTION', 'UNIT'],
-    ['618-01', 'Thermoplastic Pavement Marking 4in', 'LF'],
-    ['618-02', 'Thermoplastic Pavement Marking 24in', 'LF'],
-    ['619-01', 'Raised Pavement Markers', 'EA'],
-  ];
+  const itemRows = [['ITEM NUMBER', 'DESCRIPTION', 'UNIT']];
+  (payItemCatalog || []).forEach((it) => {
+    itemRows.push([it.itemNumber || '', it.description || '', it.unit || '']);
+  });
   const itemsWs = XLSX.utils.aoa_to_sheet(itemRows);
   itemsWs['!cols'] = [{ wch: 14 }, { wch: 38 }, { wch: 8 }];
   XLSX.utils.book_append_sheet(wb, itemsWs, PAY_ITEMS_SHEET);
 
-  const contractorRows = [['CONTRACTOR NAME'], ['ABC Trucking'], ['XYZ Barricades'], [''], [''], [''], ['']];
+  const contractorRows = [['CONTRACTOR NAME']];
+  for (let i = 0; i < CONTRACTOR_COUNT; i++) contractorRows.push([(contractors || [])[i] || '']);
   const contractorsWs = XLSX.utils.aoa_to_sheet(contractorRows);
   contractorsWs['!cols'] = [{ wch: 30 }];
   XLSX.utils.book_append_sheet(wb, contractorsWs, CONTRACTORS_SHEET);
 
-  const equipRows = [
-    ['LABEL'],
-    ['Superintendent'],
-    ['Project Manager'],
-    ['Foreman'],
-    ['Operators'],
-    ['Laborers'],
-    ['Police officer'],
-    [''],
-    [''],
-    [''],
-    ['Pickup truck'],
-    ['Manlift'],
-    ['Rough terrain crane'],
-    ['Utility trailer'],
-    ['Patrol unit'],
-    ['Attenuator truck'],
-  ];
+  const equipRows = [['LABEL']];
+  for (let i = 0; i < EQUIPMENT_ROW_COUNT; i++) equipRows.push([(equipmentLabels || [])[i] || '']);
   const equipWs = XLSX.utils.aoa_to_sheet(equipRows);
   equipWs['!cols'] = [{ wch: 26 }];
   XLSX.utils.book_append_sheet(wb, equipWs, EQUIPMENT_ROWS_SHEET);
 
+  return wb;
+}
+
+function writeProjectWorkbook(wb, filename) {
   const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
   triggerDownload(
     new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
-    'ProjectData_Template.xlsx'
+    filename
   );
+}
+
+// Blank starting point, with example values so the expected format is obvious.
+function downloadProjectDataTemplate() {
+  const wb = buildProjectDataWorkbook({
+    meta: {
+      name: 'PR#440 - Downtown Bridge',
+      projectNo: '440',
+      projectName: 'BRIDGE DECK REPAIR',
+      ntpDate: '2026-08-01',
+      representative: 'JOHN SONNIER',
+      peName: 'Elizabeth Guiza',
+    },
+    payItemCatalog: [
+      { itemNumber: '618-01', description: 'Thermoplastic Pavement Marking 4in', unit: 'LF' },
+      { itemNumber: '618-02', description: 'Thermoplastic Pavement Marking 24in', unit: 'LF' },
+      { itemNumber: '619-01', description: 'Raised Pavement Markers', unit: 'EA' },
+    ],
+    contractors: ['ABC Trucking', 'XYZ Barricades'],
+    equipmentLabels: DEFAULT_EQUIPMENT_LABELS,
+  });
+  writeProjectWorkbook(wb, 'ProjectData_Template.xlsx');
+}
+
+// Exports a saved project back out in the same format it was uploaded in, so
+// it can be edited, backed up, or carried to another device and re-uploaded.
+function downloadProjectDataFile(project) {
+  const wb = buildProjectDataWorkbook({
+    // project.name is stored on the project itself, not inside meta.
+    meta: Object.assign({}, project.meta, { name: project.name }),
+    payItemCatalog: project.payItemCatalog,
+    contractors: project.defaultContractors,
+    equipmentLabels: project.defaultEquipmentLabels,
+  });
+  const slug = String(project.name || project.meta.projectNo || 'project')
+    .replace(/[^A-Za-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 60);
+  writeProjectWorkbook(wb, `ProjectData_${slug || 'project'}.xlsx`);
 }
