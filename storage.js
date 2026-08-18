@@ -232,9 +232,6 @@ async function adoptOrphanReportsIfAny() {
   const orphans = all.filter((r) => !r.projectId);
   if (orphans.length === 0) return;
 
-  const resp = await fetch(DEFAULT_TEMPLATE_URL);
-  const templateBlob = await resp.blob();
-
   // Take the project identity from the reports themselves rather than
   // hardcoding one -- they already carry these fields, and whoever's reports
   // these are, they aren't necessarily from the project this app shipped with.
@@ -248,8 +245,6 @@ async function adoptOrphanReportsIfAny() {
   const project = {
     id: crypto.randomUUID(),
     name,
-    templateBlob,
-    templateFileName: 'Built-in template',
     meta: {
       projectNo,
       projectName,
@@ -330,13 +325,15 @@ function deserializeImportedReport(raw) {
 
 async function serializeProjectForExport(project) {
   const copy = { ...project };
-  copy.templateBlob = await blobFieldToEntry(project.templateBlob);
+  delete copy.templateBlob; // retired -- see makeProjectFromParsedFile
   return copy;
 }
 
 function deserializeImportedProject(raw) {
   const project = { ...raw };
-  project.templateBlob = entryToBlobField(raw.templateBlob);
+  // Older backups carry a template copy; drop it rather than decoding it.
+  delete project.templateBlob;
+  delete project.templateFileName;
   return project;
 }
 

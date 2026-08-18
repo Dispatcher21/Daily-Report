@@ -154,15 +154,17 @@ function copyReport(source, nextReportNo) {
 }
 
 // Builds a new project record from a parsed project-data file (see
-// project-file.js) plus the chosen report template bytes.
-function makeProjectFromParsedFile(parsed, templateBlob, templateFileName) {
+// project-file.js).
+//
+// Projects used to carry a copy of the report template .xlsx. Nothing reads it
+// any more -- the PDF is drawn entirely from print-layout.json -- so it's no
+// longer stored, which also keeps it out of backups and shared setups.
+function makeProjectFromParsedFile(parsed) {
   const meta = parsed.meta || {};
   const displayName = meta.name || (meta.projectNo ? `PR#${meta.projectNo} - ${meta.projectName || 'Project'}` : 'New Project');
   return {
     id: crypto.randomUUID(),
     name: displayName,
-    templateBlob,
-    templateFileName,
     meta: {
       projectNo: meta.projectNo || '',
       projectName: meta.projectName || '',

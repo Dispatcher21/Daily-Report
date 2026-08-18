@@ -1,7 +1,7 @@
 // Caches the app shell + template so it keeps working with no signal in
 // the field. Bump CACHE_NAME whenever any of these files change so the new
 // version actually gets picked up.
-const CACHE_NAME = 'daily-report-app-v21';
+const CACHE_NAME = 'daily-report-app-v22';
 const ASSETS = [
   './',
   './index.html',
@@ -12,6 +12,7 @@ const ASSETS = [
   './settings.html',
   './print-layout.json',
   './render-report.js',
+  './setup-share.js',
   './style.css',
   './print-sheet.css',
   './theme.js',
@@ -20,11 +21,13 @@ const ASSETS = [
   './storage.js',
   './project-file.js',
   './lib/xlsx.min.js',
+  './lib/qrcode.min.js',
   './lib/jspdf.umd.min.js',
   './lib/html2canvas.min.js',
   './template/daily-work-report-template.xlsx',
   './manifest.json',
   './icon.svg',
+  './settings-icon.png',
 ];
 
 self.addEventListener('install', (event) => {

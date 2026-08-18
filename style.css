@@ -170,12 +170,19 @@ body {
   border: 1.5px solid rgba(255, 255, 255, 0.4);
   background: rgba(255, 255, 255, 0.12);
   color: var(--on-brand);
-  font-size: 1.3rem;
   line-height: 1;
   text-decoration: none;
   cursor: pointer;
 }
 .header-gear:hover { background: rgba(255, 255, 255, 0.22); }
+/* The source icon is black on transparent; inverting paints it white so it
+   reads on the brand header in either theme. */
+.header-gear img {
+  width: 22px;
+  height: 22px;
+  display: block;
+  filter: invert(1);
+}
 
 /* Segmented control (theme picker) */
 .segmented {

@@ -116,7 +116,7 @@ async function init() {
       <label>Default Representative <input type="text" value="${escapeHtml(m.representative)}" disabled></label>
       <label>Default PE Name <input type="text" value="${escapeHtml(m.peName)}" disabled></label>
     </div>
-    <p class="hint">Pay item catalog: ${project.payItemCatalog.length} item(s). Template file: ${escapeHtml(project.templateFileName || 'default')}.</p>
+    <p class="hint">Pay item catalog: ${project.payItemCatalog.length} item(s).</p>
     <p class="hint">Default contractors: ${contractorCount || 'none set'}. Default equipment/personnel labels: ${equipmentLabelCount || 'using standard list'}. Other report field defaults set: ${extraDefaultsSet}.</p>
     <p class="hint">To change these values, upload a replacement data file below.</p>
   `;
@@ -137,7 +137,7 @@ $('#f-reupload').addEventListener('change', async (e) => {
   if (!file) return;
   try {
     const parsed = await parseProjectDataFile(file);
-    const updated = makeProjectFromParsedFile(parsed, project.templateBlob, project.templateFileName);
+    const updated = makeProjectFromParsedFile(parsed);
     updated.id = project.id; // keep the same project, just refresh its data
     updated.createdAt = project.createdAt;
     await saveProject(updated);

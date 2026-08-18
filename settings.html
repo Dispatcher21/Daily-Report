@@ -133,6 +133,41 @@
 
   <div class="step">
     <div class="step-header">
+      <span class="step-num">SHARE</span>
+      <h2>Share Setup</h2>
+    </div>
+    <div class="step-body">
+      <p class="hint" style="margin-top:0;">Sends your projects and logo to another inspector so they start configured. Your reports and photos are never included.</p>
+
+      <div class="empty-state" id="share-none" hidden style="padding:1.25rem;">Add a project first &mdash; there's nothing to share yet.</div>
+
+      <div id="share-controls" hidden>
+        <button type="button" class="btn-primary" id="btn-share-setup">Share Setup File</button>
+        <p class="hint">Creates a small file they can open on their phone. One tap and they're set up, logo included.</p>
+
+        <div class="sig-block">
+          <label>QR handoff &mdash; project
+            <select id="qr-project"></select>
+            <span class="hint">One project per code. A QR holds about 2,900 characters, so a large pay item catalog won't fit &mdash; use the file for those.</span>
+          </label>
+          <label class="toggle-row" for="qr-omit-catalog" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;">
+            <input type="checkbox" id="qr-omit-catalog">
+            <span>Leave out the pay item catalog (makes the code much easier to scan)</span>
+          </label>
+          <button type="button" class="btn-secondary" id="btn-show-qr">Show Setup QR</button>
+        </div>
+
+        <div id="qr-wrap" hidden style="text-align:center;margin-top:0.75rem;">
+          <div id="qr-box" style="display:inline-block;background:#fff;padding:12px;border-radius:8px;border:1.5px solid var(--border);"></div>
+          <p class="hint" id="qr-note" style="text-align:center;"></p>
+        </div>
+        <div class="warn" id="qr-toobig" hidden></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-header">
       <span class="step-num">BACKUP</span>
       <h2>Export &amp; Import</h2>
     </div>
@@ -148,9 +183,11 @@
 
 </main>
 
+<script src="lib/qrcode.min.js"></script>
 <script src="common.js"></script>
 <script src="defaults.js"></script>
 <script src="storage.js"></script>
+<script src="setup-share.js"></script>
 <script>
 let previewUrl = null;
 let iconUrl = null;
@@ -366,10 +403,135 @@ $('#btn-install').addEventListener('click', async () => {
 
 window.addEventListener('install-availability-changed', renderInstallSection);
 
+// ---------- Share setup ----------
+
+function appBaseUrl() {
+  return location.href.split('#')[0].replace(/[^/]*$/, '') + 'index.html';
+}
+
+async function refreshShareSection() {
+  const projects = await getAllProjects();
+  $('#share-none').hidden = projects.length > 0;
+  $('#share-controls').hidden = projects.length === 0;
+  $('#qr-project').innerHTML = projects
+    .map((p) => `<option value="${p.id}">${escapeHtml(p.name)} (${(p.payItemCatalog || []).length} items)</option>`)
+    .join('');
+}
+
+$('#btn-share-setup').addEventListener('click', async () => {
+  const btn = $('#btn-share-setup');
+  const original = btn.textContent;
+  btn.textContent = 'Preparing...';
+  btn.disabled = true;
+  try {
+    const payload = await buildSetupPayload({ includeLogo: true });
+    const encoded = await encodeSetupPayload(payload);
+    const summaryHtml = (payload.projects || [])
+      .map((p) => `<li>${escapeHtml(p.name)}</li>`)
+      .join('') + (payload.logo ? '<li>Company logo</li>' : '');
+    const html = buildSetupCardHtml(encoded, appBaseUrl(), summaryHtml);
+    const file = new File([html], 'DailyReports-Setup.html', { type: 'text/html' });
+
+    // Native share sheet where it exists (AirDrop, Nearby Share, Teams, mail);
+    // otherwise fall back to a plain download they can attach themselves.
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: 'Daily Reports setup' });
+    } else {
+      triggerDownload(file, file.name);
+    }
+  } catch (err) {
+    if (err && err.name === 'AbortError') return; // user dismissed the sheet
+    console.error(err);
+    alert('Could not build the setup file: ' + err.message);
+  } finally {
+    btn.textContent = original;
+    btn.disabled = false;
+  }
+});
+
+$('#btn-show-qr').addEventListener('click', async () => {
+  const wrap = $('#qr-wrap');
+  if (!wrap.hidden) {
+    wrap.hidden = true;
+    $('#qr-toobig').hidden = true;
+    $('#btn-show-qr').textContent = 'Show Setup QR';
+    return;
+  }
+  try {
+    const project = (await getAllProjects()).find((p) => p.id === $('#qr-project').value);
+    if (!project) return;
+    const omitCatalog = $('#qr-omit-catalog').checked;
+
+    const payload = {
+      v: 1,
+      projects: [{
+        id: project.id,
+        name: project.name,
+        meta: project.meta,
+        payItemCatalog: omitCatalog ? [] : project.payItemCatalog || [],
+        defaultContractors: project.defaultContractors || [],
+        defaultEquipmentLabels: project.defaultEquipmentLabels || [],
+      }],
+    };
+    const url = setupUrlFor(await encodeSetupPayload(payload), appBaseUrl());
+
+    // Prefer the more robust correction level; fall back to the weaker one
+    // only if the data won't otherwise fit.
+    let qr = null;
+    let ecc = null;
+    for (const level of ['M', 'L']) {
+      try {
+        const candidate = qrcode(0, level); // 0 = smallest version that fits
+        candidate.addData(url);
+        candidate.make();
+        qr = candidate;
+        ecc = level;
+        break;
+      } catch (e) { /* too much data at this correction level */ }
+    }
+
+    if (!qr) {
+      const items = (project.payItemCatalog || []).length;
+      $('#qr-toobig').innerHTML =
+        `<strong>Too big for a QR code.</strong> ${escapeHtml(project.name)} needs ${url.length} characters ` +
+        `and a QR code holds about 2,900. Tick "leave out the pay item catalog" above (${items} items is what's ` +
+        `filling it), or use <strong>Share Setup File</strong>, which has no size limit.`;
+      $('#qr-toobig').hidden = false;
+      wrap.hidden = true;
+      return;
+    }
+    $('#qr-toobig').hidden = true;
+
+    const modules = qr.getModuleCount();
+    $('#qr-box').innerHTML = qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
+    const svg = $('#qr-box svg');
+    if (svg) {
+      // Keep roughly 3px per module so a phone camera can resolve it, but stay
+      // inside a phone screen.
+      const px = Math.min(Math.max(modules * 3, 220), 320);
+      svg.style.width = px + 'px';
+      svg.style.height = px + 'px';
+      svg.style.display = 'block';
+    }
+    const dense = modules > 120;
+    $('#qr-note').textContent =
+      `${url.length} characters · ${modules}×${modules} · error correction ${ecc}` +
+      (dense ? ' — dense code, hold the camera close and steady.' : '') +
+      ' Logo is not included in a QR.';
+    wrap.hidden = false;
+    $('#btn-show-qr').textContent = 'Hide Setup QR';
+    wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } catch (err) {
+    console.error(err);
+    alert('Could not build the QR code: ' + err.message);
+  }
+});
+
 // ---------- Init ----------
 
 (async () => {
   renderInstallSection();
+  await refreshShareSection();
   showLogo(await getReportLogo());
 })();
 </script>

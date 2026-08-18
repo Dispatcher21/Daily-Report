@@ -46,17 +46,6 @@
 
       <div id="parsed-preview"></div>
 
-      <div id="step-template-upload" hidden style="margin-top:1rem;">
-        <p class="hint">Optionally upload this project's blank report template (the actual Daily Work Report .xlsx). Leave blank to reuse the built-in template layout.</p>
-        <div class="uz" id="uz-project-template">
-          <input type="file" id="f-project-template" accept=".xlsx">
-          <span class="uz-icon">&#128196;</span>
-          <span class="uz-lbl">Upload Report Template (optional)</span>
-          <span class="uz-hint">Must use the same layout as the built-in template</span>
-          <span class="uz-fname" id="fn-project-template"></span>
-        </div>
-      </div>
-
       <div class="export-bar">
         <button type="button" class="btn-primary" id="btn-save-new-project" disabled>Save Project</button>
         <button type="button" class="btn-secondary" id="btn-cancel-new-project">Cancel</button>
@@ -71,10 +60,9 @@
 <script src="defaults.js"></script>
 <script src="storage.js"></script>
 <script src="project-file.js"></script>
+<script src="setup-share.js"></script>
 <script>
 let pendingParsed = null;
-let pendingTemplateBlob = null;
-let pendingTemplateFileName = null;
 
 async function renderProjectCards() {
   const projects = await getAllProjects();
@@ -105,17 +93,11 @@ function showAddProjectPanel() {
 
 function resetAddProjectPanel() {
   pendingParsed = null;
-  pendingTemplateBlob = null;
-  pendingTemplateFileName = null;
   $('#add-project-panel').hidden = true;
   $('#uz-project-data').classList.remove('has');
   $('#fn-project-data').textContent = '';
   $('#parsed-preview').innerHTML = '';
-  $('#step-template-upload').hidden = true;
-  $('#uz-project-template').classList.remove('has');
-  $('#fn-project-template').textContent = '';
   $('#f-project-data').value = '';
-  $('#f-project-template').value = '';
   $('#btn-save-new-project').disabled = true;
 }
 
@@ -136,21 +118,11 @@ $('#f-project-data').addEventListener('change', async (e) => {
         <div class="hint" style="margin:0;">Project No: ${escapeHtml(m.projectNo || '(none)')} &middot; Project Name: ${escapeHtml(m.projectName || '(none)')}</div>
         <div class="hint" style="margin:0;">Pay items found: ${pendingParsed.payItemCatalog.length} &middot; Contractors: ${pendingParsed.contractors.length} &middot; Equipment labels: ${pendingParsed.equipmentLabels.length}</div>
       </div>`;
-    $('#step-template-upload').hidden = false;
     $('#btn-save-new-project').disabled = false;
   } catch (err) {
     console.error(err);
     alert('Could not read that file: ' + err.message);
   }
-});
-
-$('#f-project-template').addEventListener('change', (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  pendingTemplateBlob = file;
-  pendingTemplateFileName = file.name;
-  $('#uz-project-template').classList.add('has');
-  $('#fn-project-template').textContent = file.name;
 });
 
 $('#btn-cancel-new-project').addEventListener('click', resetAddProjectPanel);
@@ -161,15 +133,7 @@ $('#btn-save-new-project').addEventListener('click', async () => {
   btn.disabled = true;
   btn.textContent = 'Saving...';
   try {
-    let templateBlob = pendingTemplateBlob;
-    let templateFileName = pendingTemplateFileName;
-    if (!templateBlob) {
-      const resp = await fetch(DEFAULT_TEMPLATE_URL);
-      templateBlob = await resp.blob();
-      // Display label only -- the bytes come from DEFAULT_TEMPLATE_URL above.
-      templateFileName = 'Built-in template';
-    }
-    const project = makeProjectFromParsedFile(pendingParsed, templateBlob, templateFileName);
+    const project = makeProjectFromParsedFile(pendingParsed);
     await saveProject(project);
     resetAddProjectPanel();
     await renderProjectCards();
@@ -182,9 +146,53 @@ $('#btn-save-new-project').addEventListener('click', async () => {
   }
 });
 
+// ---------- Incoming shared setup ----------
+//
+// Arrives as #setup=... from a shared setup card or a scanned QR. Always shown
+// and confirmed first: silently gaining projects from a link someone forwarded
+// would be baffling, and the sender may not have meant to include everything.
+async function handleIncomingSetup() {
+  const hash = location.hash || '';
+  const match = hash.match(new RegExp('[#&]' + SETUP_FRAGMENT_KEY + '=([^&]+)'));
+  if (!match) return false;
+
+  // Clear it immediately so a refresh doesn't re-prompt, and so the payload
+  // doesn't linger in the address bar.
+  history.replaceState(null, '', location.pathname + location.search);
+
+  let payload;
+  try {
+    payload = await decodeSetupPayload(match[1]);
+  } catch (err) {
+    console.error(err);
+    alert("That setup link couldn't be read. It may have been truncated in transit.");
+    return false;
+  }
+
+  const summary = describeSetupPayload(payload);
+  if (!confirm(`Add this shared setup?\n\n${summary}\n\nYour own reports and photos are not affected.`)) {
+    return false;
+  }
+
+  try {
+    const res = await applySetupPayload(payload);
+    const bits = [];
+    if (res.added) bits.push(`${res.added} project(s) added`);
+    if (res.updated) bits.push(`${res.updated} updated`);
+    if (res.logoAdded) bits.push('logo set');
+    alert(bits.length ? 'Setup applied: ' + bits.join(', ') + '.' : 'Nothing to add.');
+    return true;
+  } catch (err) {
+    console.error(err);
+    alert('Could not apply that setup: ' + err.message);
+    return false;
+  }
+}
+
 // ---------- Init ----------
 
 (async () => {
+  await handleIncomingSetup();
   await adoptOrphanReportsIfAny();
   await renderProjectCards();
 })();

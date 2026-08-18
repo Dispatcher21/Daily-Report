@@ -57,7 +57,10 @@
     a.href = 'settings.html';
     a.setAttribute('aria-label', 'Settings');
     a.title = 'Settings';
-    a.textContent = '⚙';
+    const img = document.createElement('img');
+    img.src = 'settings-icon.png';
+    img.alt = '';
+    a.appendChild(img);
     if (slot) slot.replaceWith(a);
     else header.appendChild(a);
   }
