@@ -320,6 +320,16 @@ main { max-width: 780px; margin: 0 auto; padding: 1rem; }
   font-size: 0.62rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
   background: var(--brand-dim); color: var(--link); padding: 3px 9px; border-radius: 10px;
 }
+.hub-card .hc-count {
+  display: inline-flex;
+  margin-top: 0.6rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--link);
+  background: var(--brand-dim);
+  padding: 3px 9px;
+  border-radius: 10px;
+}
 .hub-card.add-card {
   border-style: dashed;
   border-width: 2px;

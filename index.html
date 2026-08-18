@@ -65,17 +65,28 @@
 let pendingParsed = null;
 
 async function renderProjectCards() {
-  const projects = await getAllProjects();
+  // One getAllReports() call, not one per project -- it already reads every
+  // report in the store, so calling it per-project would just repeat the same
+  // full read N times.
+  const [projects, reports] = await Promise.all([getAllProjects(), getAllReports()]);
+  const countByProject = new Map();
+  for (const r of reports) {
+    countByProject.set(r.projectId, (countByProject.get(r.projectId) || 0) + 1);
+  }
+
   const grid = $('#hub-grid');
   const cards = projects
-    .map(
-      (p) => `
+    .map((p) => {
+      const n = countByProject.get(p.id) || 0;
+      const countLabel = n === 1 ? '1 report' : `${n} reports`;
+      return `
       <a class="hub-card" href="project.html?id=${p.id}">
         <span class="hc-icon">&#128193;</span>
         <div class="hc-title">${escapeHtml(p.name)}</div>
         <div class="hc-desc">${escapeHtml(p.meta.projectName || '')}</div>
-      </a>`
-    )
+        <div class="hc-count">${countLabel}</div>
+      </a>`;
+    })
     .join('');
   grid.innerHTML =
     cards +
