@@ -158,6 +158,17 @@ body {
 .app-header .app-sub { font-size: 0.72rem; color: var(--on-brand-dim); margin-top: 2px; }
 .app-header a.home-link { color: var(--on-brand); text-decoration: none; display: flex; flex-direction: column; }
 
+/* Company logo, shown in the header only once the app is installed (added to
+   the home screen) -- a browser tab already has its own favicon, so this is
+   reserved for the "feels like a real app" moment. */
+.app-header .header-logo {
+  height: 34px;
+  width: auto;
+  max-width: 92px;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+
 /* Gear in the header -- icon only, but a full 44px tap target. */
 .header-gear {
   flex: 0 0 auto;
@@ -216,6 +227,47 @@ body {
   color: var(--on-brand);
   font-weight: 700;
 }
+
+/* App-icon background colour swatches. Each shows its own colour, so they
+   can't reuse .segmented's aria-pressed rule (that forces the brand colour
+   as the "selected" background, which would erase the swatch it's for). */
+.color-swatches { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin: 0.5rem 0; }
+.swatch {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  padding: 0;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.swatch[aria-pressed="true"] {
+  border-color: var(--link);
+  box-shadow: 0 0 0 2px var(--focus);
+}
+/* Checkerboard stands in for "no background" the way image editors show
+   transparency -- a plain swatch would just look like a blank button. */
+.swatch-none {
+  background-image:
+    linear-gradient(45deg, #b7c0c9 25%, transparent 25%, transparent 75%, #b7c0c9 75%),
+    linear-gradient(45deg, #b7c0c9 25%, transparent 25%, transparent 75%, #b7c0c9 75%);
+  background-size: 12px 12px;
+  background-position: 0 0, 6px 6px;
+  background-color: #eef2f6;
+}
+.swatch-custom {
+  -webkit-appearance: none;
+  appearance: none;
+  background: none;
+  padding: 3px;
+  /* The global input{min-height:var(--tap)} rule would otherwise clamp this
+     to a 40x44 ellipse instead of the circle every other swatch is. */
+  min-height: 0;
+  min-width: 0;
+}
+.swatch-custom::-webkit-color-swatch-wrapper { padding: 0; border-radius: 50%; }
+.swatch-custom::-webkit-color-swatch { border: none; border-radius: 50%; }
+.swatch-custom::-moz-color-swatch { border: none; border-radius: 50%; }
 
 .back-bar {
   background: var(--surface-2);

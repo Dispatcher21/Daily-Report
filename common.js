@@ -34,11 +34,13 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
   navigator.serviceWorker.register('service-worker.js').catch(console.error);
 }
 
-// Deferred to DOMContentLoaded because applyAppIcon lives in storage.js, which
-// every page loads after this file.
-document.addEventListener('DOMContentLoaded', () => {
+// Deferred to DOMContentLoaded because applyAppIcon/applyHeaderLogo live in
+// storage.js, which every page loads after this file.
+function applyBranding() {
   if (typeof applyAppIcon === 'function') applyAppIcon();
-});
+  if (typeof applyHeaderLogo === 'function') applyHeaderLogo();
+}
+document.addEventListener('DOMContentLoaded', applyBranding);
 
 // ---------- Install-to-home-screen ----------
 //
@@ -63,6 +65,7 @@ window.addEventListener('appinstalled', () => {
   window.deferredInstallPrompt = null;
   appWasInstalledThisSession = true;
   window.dispatchEvent(new CustomEvent('install-availability-changed'));
+  applyBranding(); // the header logo only shows once installed -- update now, not on next load
 });
 
 function isAppInstalled() {

@@ -94,6 +94,7 @@ async function buildSetupPayload({ includeLogo }) {
     if (logo) {
       payload.logo = await blobToDataUrl(logo);
       payload.useLogoAsAppIcon = await getUseLogoAsAppIcon();
+      payload.appIconBgColor = await getAppIconColor();
     }
   }
   return payload;
@@ -134,6 +135,7 @@ async function applySetupPayload(payload) {
   if (payload && payload.logo && !(await getReportLogo())) {
     await saveReportLogo(dataUrlToBlob(payload.logo));
     if (payload.useLogoAsAppIcon) await setUseLogoAsAppIcon(true);
+    if (payload.appIconBgColor) await setAppIconColor(payload.appIconBgColor);
     logoAdded = true;
   }
 

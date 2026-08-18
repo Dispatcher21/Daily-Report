@@ -108,6 +108,10 @@
           <img id="app-icon-img" alt="App icon preview">
           <span class="hint" style="margin:0;">Browser tab and bookmark icon. If the app is already on your home screen, remove and re-add it to update that icon too.</span>
         </div>
+        <div id="app-icon-color-block" hidden>
+          <span class="hint" style="display:block;margin:0.75rem 0 0.3rem;">Icon background</span>
+          <div class="color-swatches" id="app-icon-color-swatches"></div>
+        </div>
         <p class="hint" id="app-icon-need-logo">Upload a logo first to enable this.</p>
       </div>
     </div>
@@ -233,6 +237,53 @@ function showLogo(blob) {
   refreshAppIconSection(blob);
 }
 
+// Presets cover the common cases; the last swatch is a native colour input
+// for anything else, which is where "etc" lives.
+const ICON_COLOR_PRESETS = [
+  { color: '#1c3d5a', label: 'Blue (brand)' },
+  { color: '#ffffff', label: 'White' },
+  { color: '#000000', label: 'Black' },
+  { color: '#c0392b', label: 'Red' },
+  { color: 'transparent', label: 'No background' },
+];
+
+function renderIconColorSwatches(current) {
+  const box = $('#app-icon-color-swatches');
+  const isPreset = ICON_COLOR_PRESETS.some((p) => p.color === current);
+  box.innerHTML = ICON_COLOR_PRESETS.map((p) => {
+    const cls = p.color === 'transparent' ? 'swatch swatch-none' : 'swatch';
+    const style = p.color === 'transparent' ? '' : ` style="background:${p.color}"`;
+    return `<button type="button" class="${cls}" data-color="${p.color}" aria-pressed="${p.color === current}" title="${escapeHtml(p.label)}"${style}></button>`;
+  }).join('');
+
+  const custom = document.createElement('input');
+  custom.type = 'color';
+  custom.className = 'swatch swatch-custom';
+  custom.id = 'app-icon-color-custom';
+  custom.title = 'Custom colour';
+  // Keep the colour wheel showing something sane even when a preset (or
+  // 'transparent', which the input can't represent) is the active choice.
+  custom.value = /^#[0-9a-f]{6}$/i.test(current) ? current : DEFAULT_APP_ICON_COLOR;
+  custom.setAttribute('aria-pressed', String(!isPreset));
+  box.appendChild(custom);
+}
+
+async function applyIconColorChange(color) {
+  await setAppIconColor(color);
+  await refreshAppIconSection(await getReportLogo());
+  if (await getUseLogoAsAppIcon()) applyAppIcon();
+}
+
+// Delegated once on the container -- its children are replaced wholesale by
+// renderIconColorSwatches(), but the container itself never is.
+$('#app-icon-color-swatches').addEventListener('click', (e) => {
+  const btn = e.target.closest('.swatch:not(.swatch-custom)');
+  if (btn) applyIconColorChange(btn.dataset.color);
+});
+$('#app-icon-color-swatches').addEventListener('change', (e) => {
+  if (e.target.id === 'app-icon-color-custom') applyIconColorChange(e.target.value);
+});
+
 async function refreshAppIconSection(logoBlob) {
   const checkbox = $('#f-app-icon');
   const hasLogo = !!logoBlob;
@@ -242,12 +293,16 @@ async function refreshAppIconSection(logoBlob) {
   if (!hasLogo) {
     checkbox.checked = false;
     $('#app-icon-preview').hidden = true;
+    $('#app-icon-color-block').hidden = true;
     return;
   }
   checkbox.checked = await getUseLogoAsAppIcon();
   if (checkbox.checked) {
+    const color = await getAppIconColor();
+    renderIconColorSwatches(color);
+    $('#app-icon-color-block').hidden = false;
     try {
-      const icon = await buildAppIconFromLogo(logoBlob, 192);
+      const icon = await buildAppIconFromLogo(logoBlob, 192, color);
       if (iconUrl) URL.revokeObjectURL(iconUrl);
       iconUrl = URL.createObjectURL(icon);
       $('#app-icon-img').src = iconUrl;
@@ -258,6 +313,7 @@ async function refreshAppIconSection(logoBlob) {
     }
   } else {
     $('#app-icon-preview').hidden = true;
+    $('#app-icon-color-block').hidden = true;
   }
 }
 
@@ -282,6 +338,7 @@ $('#f-logo').addEventListener('change', async (e) => {
     showLogo(file);
     flashSaved();
     applyAppIcon();
+    applyHeaderLogo();
   } catch (err) {
     console.error(err);
     alert('Could not save the logo: ' + err.message);
@@ -295,6 +352,7 @@ $('#btn-remove-logo').addEventListener('click', async () => {
   await clearReportLogo();
   await setUseLogoAsAppIcon(false);
   showLogo(null);
+  applyHeaderLogo();
 });
 
 $('#f-app-icon').addEventListener('change', async (e) => {
@@ -355,6 +413,7 @@ $('#import-file-input').addEventListener('change', async (e) => {
         (result.logoAdded ? '\nCompany logo restored.' : '')
     );
     showLogo(await getReportLogo());
+    applyHeaderLogo();
   } catch (err) {
     console.error(err);
     alert('Could not import that file: ' + err.message);

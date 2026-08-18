@@ -9,6 +9,8 @@ const SETTINGS_STORE = 'settings';
 const DEFAULT_TEMPLATE_URL = 'template/daily-work-report-template.xlsx';
 const LOGO_SETTING_KEY = 'reportLogo';
 const APP_ICON_SETTING_KEY = 'useLogoAsAppIcon';
+const APP_ICON_COLOR_SETTING_KEY = 'appIconBgColor';
+const DEFAULT_APP_ICON_COLOR = '#1c3d5a'; // the brand blue the built-in icon already uses
 
 function openDb() {
   return new Promise((resolve, reject) => {
@@ -73,26 +75,39 @@ async function setUseLogoAsAppIcon(on) {
   await saveSetting(APP_ICON_SETTING_KEY, !!on);
 }
 
-// Paints the logo onto a square brand-coloured tile, the same shape as the
-// built-in icon. A bare logo would be letterboxed by the OS and look lost on
-// a home screen, and wide logos would shrink to nothing as a favicon.
-function buildAppIconFromLogo(logoBlob, size) {
+function getAppIconColor() {
+  return getSetting(APP_ICON_COLOR_SETTING_KEY).then((v) => v || DEFAULT_APP_ICON_COLOR);
+}
+
+async function setAppIconColor(color) {
+  await saveSetting(APP_ICON_COLOR_SETTING_KEY, color || DEFAULT_APP_ICON_COLOR);
+}
+
+// Paints the logo onto a square tile, the same shape as the built-in icon. A
+// bare logo would be letterboxed by the OS and look lost on a home screen,
+// and wide logos would shrink to nothing as a favicon. `bgColor` is a hex
+// string, or the literal 'transparent' for no tile at all -- just the logo on
+// whatever background the OS puts behind it.
+function buildAppIconFromLogo(logoBlob, size, bgColor) {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(logoBlob);
     const img = new Image();
     img.onload = () => {
       try {
         const s = size || 192;
+        const color = bgColor || DEFAULT_APP_ICON_COLOR;
         const canvas = document.createElement('canvas');
         canvas.width = canvas.height = s;
         const ctx = canvas.getContext('2d');
 
-        const r = s * 0.146; // matches the built-in icon's corner radius
-        ctx.fillStyle = '#1c3d5a';
-        ctx.beginPath();
-        if (ctx.roundRect) ctx.roundRect(0, 0, s, s, r);
-        else ctx.rect(0, 0, s, s);
-        ctx.fill();
+        if (color !== 'transparent') {
+          const r = s * 0.146; // matches the built-in icon's corner radius
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          if (ctx.roundRect) ctx.roundRect(0, 0, s, s, r);
+          else ctx.rect(0, 0, s, s);
+          ctx.fill();
+        }
 
         // Aspect-preserving fit inside a padded square.
         const pad = s * 0.14;
@@ -125,7 +140,8 @@ async function applyAppIcon() {
     if (!(await getUseLogoAsAppIcon())) return;
     const logo = await getReportLogo();
     if (!logo) return;
-    const icon = await buildAppIconFromLogo(logo, 192);
+    const color = await getAppIconColor();
+    const icon = await buildAppIconFromLogo(logo, 192, color);
     const href = URL.createObjectURL(icon);
     document.querySelectorAll('link[rel="icon"]').forEach((l) => {
       l.href = href;
@@ -133,6 +149,42 @@ async function applyAppIcon() {
     });
   } catch (err) {
     console.error('app icon:', err); // cosmetic only -- never block the page
+  }
+}
+
+// Shows the company logo in the header bar, but only once the app is actually
+// installed (added to the home screen) -- a browser tab already has its own
+// favicon, so this is reserved for the "feels like a real app" moment.
+async function applyHeaderLogo() {
+  try {
+    const header = document.querySelector('.app-header');
+    if (!header) return;
+
+    const installed = typeof isAppInstalled === 'function' && isAppInstalled();
+    const logo = installed ? await getReportLogo() : null;
+
+    let img = header.querySelector('.header-logo');
+    if (!logo) {
+      if (img) {
+        if (img.dataset.url) URL.revokeObjectURL(img.dataset.url);
+        img.remove();
+      }
+      return;
+    }
+
+    if (!img) {
+      img = document.createElement('img');
+      img.className = 'header-logo';
+      img.alt = '';
+      header.insertBefore(img, header.firstChild);
+    }
+    const url = URL.createObjectURL(logo);
+    const prevUrl = img.dataset.url;
+    img.src = url;
+    img.dataset.url = url;
+    if (prevUrl) URL.revokeObjectURL(prevUrl);
+  } catch (err) {
+    console.error('header logo:', err); // cosmetic only -- never block the page
   }
 }
 
@@ -357,6 +409,7 @@ async function exportAllReportsBackup() {
     settings: {
       logo: await blobFieldToEntry(logo),
       useLogoAsAppIcon: await getUseLogoAsAppIcon(),
+      appIconBgColor: await getAppIconColor(),
     },
   };
 }
@@ -416,6 +469,7 @@ async function importReportsBackup(backup) {
   if (incomingSettings.logo && !(await getReportLogo())) {
     await saveReportLogo(entryToBlobField(incomingSettings.logo));
     if (incomingSettings.useLogoAsAppIcon) await setUseLogoAsAppIcon(true);
+    if (incomingSettings.appIconBgColor) await setAppIconColor(incomingSettings.appIconBgColor);
     logoAdded = true;
   }
 
