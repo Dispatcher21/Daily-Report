@@ -199,6 +199,9 @@ async function serializeReportForExport(report) {
     copy.photos.push(await blobFieldToEntry(blob));
   }
   copy.repSignatureImage = await blobFieldToEntry(report.repSignatureImage);
+  // peSignatureImage is retired -- only ever present on reports saved before
+  // the engineer's signature box was removed. Carried through backups so an
+  // older file still round-trips; nothing reads it back onto the report.
   copy.peSignatureImage = await blobFieldToEntry(report.peSignatureImage);
   return copy;
 }
@@ -207,7 +210,9 @@ function deserializeImportedReport(raw) {
   const report = { ...raw };
   report.photos = (raw.photos || []).map(entryToBlobField);
   report.repSignatureImage = entryToBlobField(raw.repSignatureImage);
-  report.peSignatureImage = entryToBlobField(raw.peSignatureImage);
+  // Dropped rather than decoded: the spread above would otherwise leave the
+  // raw base64 wrapper sitting in a field nothing decodes any more.
+  delete report.peSignatureImage;
   return report;
 }
 

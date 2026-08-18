@@ -273,8 +273,9 @@ function buildSheet1Values(report) {
 
 function buildSheet1Images(report) {
   const imgs = {};
+  // Only the representative signs in the app -- this is an inspector's tool.
+  // The engineer's signature line (M41) prints blank for them to sign.
   if (report.repSignatureImage) imgs['M39'] = report.repSignatureImage;
-  if (report.peSignatureImage) imgs['M41'] = report.peSignatureImage;
   return imgs;
 }
 

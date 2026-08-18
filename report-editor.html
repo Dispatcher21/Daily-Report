@@ -146,9 +146,7 @@
 
       <div class="sig-block">
         <label>Project Engineer Name <input type="text" id="f-peSignatureName"></label>
-        <span class="sig-label">Signature</span>
-        <canvas id="sig-pe" class="sig-pad" width="600" height="150"></canvas>
-        <button type="button" class="btn-secondary" data-clear-sig="pe">Clear Signature</button>
+        <p class="hint">The engineer's name prints on the report; their signature line is left blank for them to sign.</p>
       </div>
     </div>
   </div>
@@ -281,7 +279,6 @@ function renderEditor() {
   renderPayItemsStep();
   renderPhotoGrid();
   setupSignaturePad('#sig-rep', 'repSignatureImage');
-  setupSignaturePad('#sig-pe', 'peSignatureImage');
 
   $('#btn-generate').onclick = () => {
     location.href = `download.html?project=${project.id}&report=${report.id}`;

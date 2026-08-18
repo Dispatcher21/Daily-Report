@@ -103,8 +103,9 @@ function makeBlankReport(nextReportNo, project, previous) {
     workEnd: meta.workEnd || '',
     repSignatureName: previous ? previous.representative : meta.representative || '',
     repSignatureImage: null,
+    // No peSignatureImage: the engineer's signature line is left blank on the
+    // printed report for them to sign -- inspectors don't sign for them.
     peSignatureName: previous ? previous.peName : meta.peName || '',
-    peSignatureImage: null,
     weatherDesc: meta.weatherDesc || '',
     tempHigh: meta.tempHigh || '',
     tempLow: meta.tempLow || '',
@@ -129,6 +130,9 @@ function normalizeReport(report) {
     while (row.qty.length < CONTRACTOR_COUNT) row.qty.push('');
   });
   if (report.workSummaryHeader == null) report.workSummaryHeader = '';
+  // Drop any engineer signature captured before that box was removed, so it
+  // can't keep printing on a report the engineer never actually signed.
+  delete report.peSignatureImage;
   return report;
 }
 
@@ -143,7 +147,7 @@ function copyReport(source, nextReportNo) {
   copy.date = todayIso();
   copy.photos = [null, null, null, null, null, null];
   copy.repSignatureImage = null;
-  copy.peSignatureImage = null;
+  delete copy.peSignatureImage; // retired; see makeBlankReport
   copy.createdAt = Date.now();
   copy.updatedAt = Date.now();
   return copy;
