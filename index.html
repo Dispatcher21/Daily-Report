@@ -24,6 +24,23 @@
   <div class="eyebrow">Your Projects</div>
   <div id="hub-grid" class="hub-grid"></div>
 
+  <div class="step">
+    <div class="step-header">
+      <span class="step-num">QUANTITIES</span>
+      <h2>Quantity Sheet</h2>
+    </div>
+    <div class="step-body">
+      <p class="hint" style="margin-top:0;">Builds an Excel breakdown of pay item quantities across a project's reports &mdash; totals, running quantity-to-date, and a day-by-day comparison in one workbook.</p>
+      <div class="empty-state" id="qty-no-projects" hidden style="padding:1.25rem;">Add a project first &mdash; there's nothing to build a quantity sheet from yet.</div>
+      <div id="qty-picker" hidden>
+        <label>Project
+          <select id="qty-project-select"></select>
+        </label>
+        <a class="btn-primary" id="btn-qty-continue" href="#" style="display:block;text-align:center;text-decoration:none;">Choose Days</a>
+      </div>
+    </div>
+  </div>
+
   <!-- ADD PROJECT PANEL (revealed in place, no separate page) -->
   <div id="add-project-panel" class="step" hidden>
     <div class="step-header">
@@ -95,6 +112,20 @@ async function renderProjectCards() {
     grid.insertAdjacentHTML('afterbegin', '<div class="empty-state" style="grid-column:1/-1;">No projects yet. Tap "+ Add Project" to upload your first project\'s data file.</div>');
   }
   $('#btn-add-project').addEventListener('click', showAddProjectPanel);
+
+  $('#qty-no-projects').hidden = projects.length > 0;
+  $('#qty-picker').hidden = projects.length === 0;
+  if (projects.length > 0) {
+    $('#qty-project-select').innerHTML = projects
+      .map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`)
+      .join('');
+    updateQtyContinueLink();
+  }
+}
+
+function updateQtyContinueLink() {
+  const id = $('#qty-project-select').value;
+  $('#btn-qty-continue').href = `quantity-sheet.html?project=${id}`;
 }
 
 function showAddProjectPanel() {
@@ -111,6 +142,8 @@ function resetAddProjectPanel() {
   $('#f-project-data').value = '';
   $('#btn-save-new-project').disabled = true;
 }
+
+$('#qty-project-select').addEventListener('change', updateQtyContinueLink);
 
 $('#btn-download-project-template').addEventListener('click', downloadProjectDataTemplate);
 

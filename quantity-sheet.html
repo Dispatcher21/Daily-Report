@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Quantity Sheet</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1c3d5a">
+<link rel="stylesheet" href="style.css">
+<script src="theme.js"></script>
+</head>
+<body>
+
+<header class="app-header">
+  <div>
+    <h1>Quantity Sheet</h1>
+    <div class="app-sub" id="project-name-sub"></div>
+  </div>
+  <span></span>
+</header>
+<div class="back-bar">
+  <a href="#" id="bb-back-link">&larr; Reports</a>
+  <span class="bb-sep">//</span>
+  <span class="bb-cur">Quantity Sheet</span>
+</div>
+
+<main>
+  <div class="step">
+    <div class="step-header">
+      <span class="step-num">PICK DAYS</span>
+      <h2>Highlight the Days to Include</h2>
+    </div>
+    <div class="step-body">
+      <p class="hint" style="margin-top:0;">Builds one Excel file from the pay items on the reports you check below: a Totals tab, a tab per day showing quantity-to-date, and a By Day tab with one column per day. Days sharing the same date are combined.</p>
+
+      <div class="select-all-row">
+        <button type="button" class="text-btn" id="btn-select-all">Select all</button>
+        <span id="select-count-label"></span>
+      </div>
+
+      <div id="report-list" class="report-list"></div>
+
+      <button type="button" class="btn-primary" id="btn-generate" disabled>Generate Quantity Sheet</button>
+    </div>
+  </div>
+</main>
+
+<script src="lib/xlsx.min.js"></script>
+<script src="common.js"></script>
+<script src="defaults.js"></script>
+<script src="storage.js"></script>
+<script>
+const projectId = queryParam('project');
+const preselected = new Set((queryParam('report') || '').split(',').filter(Boolean));
+let project = null;
+let allReports = [];
+let selectedIds = new Set(preselected);
+
+async function init() {
+  project = projectId ? await getProject(projectId) : null;
+  if (!project) {
+    location.href = 'index.html';
+    return;
+  }
+  document.title = `Quantity Sheet — ${project.name}`;
+  $('#project-name-sub').textContent = project.name;
+  $('#bb-back-link').href = `reports.html?project=${project.id}`;
+
+  allReports = (await getReportsForProject(project.id)).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  // Arriving with ?report= names specific ids -- if any no longer exist, don't
+  // silently keep a stale phantom selection.
+  selectedIds = new Set(Array.from(selectedIds).filter((id) => allReports.some((r) => r.id === id)));
+  render();
+}
+
+function render() {
+  const container = $('#report-list');
+  if (allReports.length === 0) {
+    container.innerHTML = '<div class="empty-state">No reports in this project yet.</div>';
+  } else {
+    container.innerHTML = allReports
+      .map((r) => {
+        const items = (r.payItems || []).filter((it) => it && String(it.itemNumber || '').trim() !== '');
+        const sub = items.length
+          ? `${items.length} pay item${items.length === 1 ? '' : 's'} &mdash; ${escapeHtml(items.map((it) => it.itemNumber).join(', '))}`
+          : 'No pay items listed';
+        return `
+        <div class="report-row" data-id="${r.id}">
+          <input type="checkbox" class="report-row-check" ${selectedIds.has(r.id) ? 'checked' : ''}>
+          <div class="report-row-main" data-open="${r.id}">
+            <span class="report-row-date">${r.date || '(no date)'}</span>
+            <span class="report-row-sub">${sub}</span>
+          </div>
+          <span class="report-row-no">#${r.reportNo}</span>
+        </div>`;
+      })
+      .join('');
+  }
+
+  $$('.report-row-check', container).forEach((cb) => {
+    cb.addEventListener('change', (e) => {
+      const id = e.target.closest('.report-row').dataset.id;
+      if (e.target.checked) selectedIds.add(id);
+      else selectedIds.delete(id);
+      updateControls();
+    });
+  });
+  // Tapping the row (not the checkbox) toggles it too, same as the checkbox --
+  // there's nothing to navigate to here, unlike reports.html's list.
+  $$('[data-open]', container).forEach((el) => {
+    el.addEventListener('click', () => {
+      const cb = el.closest('.report-row').querySelector('.report-row-check');
+      cb.checked = !cb.checked;
+      cb.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  });
+
+  updateControls();
+}
+
+function updateControls() {
+  const n = selectedIds.size;
+  $('#select-count-label').textContent = n > 0 ? `${n} selected` : '';
+  $('#btn-select-all').textContent = n === allReports.length && allReports.length > 0 ? 'Deselect all' : 'Select all';
+  $('#btn-generate').disabled = n === 0;
+  $('#btn-generate').textContent = n > 1 ? `Generate Quantity Sheet (${n})` : 'Generate Quantity Sheet';
+}
+
+$('#btn-select-all').addEventListener('click', () => {
+  if (selectedIds.size === allReports.length && allReports.length > 0) {
+    selectedIds.clear();
+  } else {
+    allReports.forEach((r) => selectedIds.add(r.id));
+  }
+  render();
+});
+
+// ---------- Workbook building ----------
+
+const NO_DATE_KEY = '';
+
+function compareDateKeys(a, b) {
+  if (a === NO_DATE_KEY) return 1; // undated reports sort last
+  if (b === NO_DATE_KEY) return -1;
+  return a.localeCompare(b);
+}
+
+// 'YYYY-MM-DD' -> 'MM-DD-YY', which is short and has none of the characters
+// Excel forbids in a sheet name (: \ / ? * [ ]). Falls back for anything else.
+function sheetNameForDate(iso) {
+  if (iso === NO_DATE_KEY) return 'No Date';
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return String(iso).slice(0, 31).replace(/[:\\/?*[\]]/g, '-') || 'Undated';
+  return `${m[2]}-${m[3]}-${m[1].slice(2)}`;
+}
+
+function displayDate(iso) {
+  if (iso === NO_DATE_KEY) return 'No Date';
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  return m ? `${m[2]}/${m[3]}/${m[1]}` : iso;
+}
+
+const QTY_COLS = [{ wch: 16 }, { wch: 42 }, { wch: 8 }, { wch: 14 }];
+
+// Builds the workbook from the selected reports. Reports sharing a calendar
+// date are merged into one column/tab -- "day" is the unit here, not
+// "report". Sheet order: Totals, then each day chronologically (cumulative
+// quantity as of that day), then a By Day matrix with one column per day.
+function buildQuantitySheetWorkbook(reports) {
+  const byDate = new Map(); // date -> flat array of {itemNumber, description, unit, qty}
+  for (const r of reports) {
+    const date = r.date || NO_DATE_KEY;
+    const items = (r.payItems || []).filter((it) => it && String(it.itemNumber || '').trim() !== '');
+    if (!byDate.has(date)) byDate.set(date, []);
+    byDate.get(date).push(...items);
+  }
+  const dates = Array.from(byDate.keys()).sort(compareDateKeys);
+
+  // Unique pay items, first-seen order (mirrors the order the inspector
+  // entered them rather than an arbitrary re-sort).
+  const itemOrder = [];
+  const itemMeta = new Map();
+  for (const date of dates) {
+    for (const it of byDate.get(date)) {
+      const key = String(it.itemNumber).trim();
+      if (!itemMeta.has(key)) {
+        itemMeta.set(key, { itemNumber: key, description: it.description || '', unit: it.unit || '' });
+        itemOrder.push(key);
+      }
+    }
+  }
+  if (itemOrder.length === 0) return null;
+
+  const perDateQty = new Map(); // date -> Map(itemNumber -> that day's own qty)
+  const cumulative = new Map(); // itemNumber -> running total, updated as we walk the dates
+  itemOrder.forEach((k) => cumulative.set(k, 0));
+  const cumulativeByDate = new Map(); // date -> Map(itemNumber -> cumulative qty as of that date)
+
+  for (const date of dates) {
+    const dayMap = new Map();
+    itemOrder.forEach((k) => dayMap.set(k, 0));
+    for (const it of byDate.get(date)) {
+      const key = String(it.itemNumber).trim();
+      dayMap.set(key, dayMap.get(key) + (Number(it.qty) || 0));
+    }
+    perDateQty.set(date, dayMap);
+    itemOrder.forEach((k) => cumulative.set(k, cumulative.get(k) + dayMap.get(k)));
+    cumulativeByDate.set(date, new Map(cumulative));
+  }
+
+  const wb = XLSX.utils.book_new();
+  const metaRow = (k) => {
+    const m = itemMeta.get(k);
+    return [m.itemNumber, m.description, m.unit];
+  };
+
+  const totalsRows = [['Item Number', 'Description', 'Unit', 'Total Quantity']];
+  itemOrder.forEach((k) => totalsRows.push([...metaRow(k), cumulative.get(k)]));
+  const totalsWs = XLSX.utils.aoa_to_sheet(totalsRows);
+  totalsWs['!cols'] = QTY_COLS;
+  XLSX.utils.book_append_sheet(wb, totalsWs, 'Totals');
+
+  for (const date of dates) {
+    const snap = cumulativeByDate.get(date);
+    const rows = [['Item Number', 'Description', 'Unit', 'Qty to Date']];
+    itemOrder.forEach((k) => rows.push([...metaRow(k), snap.get(k)]));
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = QTY_COLS;
+    XLSX.utils.book_append_sheet(wb, ws, sheetNameForDate(date));
+  }
+
+  const matrixHeader = ['Item Number', 'Description', 'Unit', ...dates.map(displayDate)];
+  const matrixRows = [matrixHeader];
+  itemOrder.forEach((k) => {
+    const row = [...metaRow(k)];
+    dates.forEach((date) => row.push(perDateQty.get(date).get(k)));
+    matrixRows.push(row);
+  });
+  const matrixWs = XLSX.utils.aoa_to_sheet(matrixRows);
+  matrixWs['!cols'] = [{ wch: 16 }, { wch: 42 }, { wch: 8 }, ...dates.map(() => ({ wch: 12 }))];
+  XLSX.utils.book_append_sheet(wb, matrixWs, 'By Day');
+
+  return { wb, dates };
+}
+
+$('#btn-generate').addEventListener('click', () => {
+  const selected = allReports.filter((r) => selectedIds.has(r.id));
+  if (selected.length === 0) return;
+
+  const btn = $('#btn-generate');
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Generating...';
+  try {
+    const result = buildQuantitySheetWorkbook(selected);
+    if (!result) {
+      alert('None of the selected reports have any pay items listed -- nothing to build.');
+      return;
+    }
+    const { wb, dates } = result;
+    const realDates = dates.filter((d) => d !== NO_DATE_KEY);
+    const projectNo = project.meta.projectNo || 'PR';
+    const stamp =
+      realDates.length === 0
+        ? 'undated'
+        : realDates.length === 1
+          ? realDates[0]
+          : `${realDates[0]}_to_${realDates[realDates.length - 1]}`;
+    const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    triggerDownload(
+      new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+      `PR${projectNo}_QuantitySheet_${stamp}.xlsx`
+    );
+  } catch (err) {
+    console.error(err);
+    alert('Could not build the quantity sheet: ' + err.message);
+  } finally {
+    btn.textContent = original;
+    btn.disabled = false;
+  }
+});
+
+init();
+</script>
+</body>
+</html>

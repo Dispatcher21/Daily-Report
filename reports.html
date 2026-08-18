@@ -64,6 +64,7 @@
     <div class="step-body">
       <div class="export-bar" style="margin-top:0;">
         <button type="button" class="btn-primary" id="btn-print-selected">Generate Selected</button>
+        <button type="button" class="btn-secondary" id="btn-qty-sheet-selected">Quantity Sheet Selected</button>
         <button type="button" class="btn-secondary" id="btn-mass-edit-selected">Mass Edit Selected</button>
         <button type="button" class="btn-danger" id="btn-delete-selected">Delete Selected</button>
       </div>
@@ -209,6 +210,7 @@ function updateBulkBar() {
   $('#bulk-bar').hidden = n === 0;
   $('#btn-print-selected').textContent = n === 1 ? 'Generate Selected' : `Generate Selected (${n})`;
   $('#btn-delete-selected').textContent = n === 1 ? 'Delete Selected' : `Delete Selected (${n})`;
+  $('#btn-qty-sheet-selected').textContent = n === 1 ? 'Quantity Sheet Selected' : `Quantity Sheet Selected (${n})`;
 }
 
 ['f-date-from', 'f-date-to', 'f-search', 'f-sort'].forEach((id) => {
@@ -237,6 +239,12 @@ $('#btn-print-selected').addEventListener('click', () => {
   if (selectedIds.size === 0) return;
   const ids = Array.from(selectedIds).join(',');
   location.href = `download.html?project=${project.id}&report=${ids}`;
+});
+
+$('#btn-qty-sheet-selected').addEventListener('click', () => {
+  if (selectedIds.size === 0) return;
+  const ids = Array.from(selectedIds).join(',');
+  location.href = `quantity-sheet.html?project=${project.id}&report=${ids}`;
 });
 
 $('#btn-delete-selected').addEventListener('click', async () => {
