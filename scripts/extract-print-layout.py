@@ -4,7 +4,7 @@ import zipfile
 import openpyxl
 from openpyxl.utils import get_column_letter, column_index_from_string
 
-TEMPLATE = r'C:\Users\jsona\OneDrive\Documents\Claude\DailyReportApp\template\PR439-Daily-Work-Report-TEMPLATE.xlsx'
+TEMPLATE = r'C:\Users\jsona\OneDrive\Documents\Claude\DailyReportApp\template\daily-work-report-template.xlsx'
 OUT = r'C:\Users\jsona\OneDrive\Documents\Claude\DailyReportApp\print-layout.json'
 
 # ---- Resolve theme colors from the workbook's theme XML ----

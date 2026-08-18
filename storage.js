@@ -5,7 +5,7 @@ const DB_NAME = 'daily-report-app';
 const DB_VERSION = 2;
 const REPORTS_STORE = 'reports';
 const PROJECTS_STORE = 'projects';
-const DEFAULT_TEMPLATE_URL = 'template/PR439-Daily-Work-Report-TEMPLATE.xlsx';
+const DEFAULT_TEMPLATE_URL = 'template/daily-work-report-template.xlsx';
 
 function openDb() {
   return new Promise((resolve, reject) => {
@@ -123,17 +123,27 @@ async function adoptOrphanReportsIfAny() {
   const resp = await fetch(DEFAULT_TEMPLATE_URL);
   const templateBlob = await resp.blob();
 
+  // Take the project identity from the reports themselves rather than
+  // hardcoding one -- they already carry these fields, and whoever's reports
+  // these are, they aren't necessarily from the project this app shipped with.
+  const seed = orphans[0] || {};
+  const projectNo = seed.projectNo || '';
+  const projectName = seed.projectName || '';
+  const name = projectNo
+    ? `PR#${projectNo}${projectName ? ' - ' + projectName : ''}`
+    : projectName || 'Imported Reports';
+
   const project = {
     id: crypto.randomUUID(),
-    name: 'PR#439 - Causeway Striping',
+    name,
     templateBlob,
-    templateFileName: 'PR439-Daily-Work-Report-TEMPLATE.xlsx',
+    templateFileName: 'Built-in template',
     meta: {
-      projectNo: '439',
-      projectName: 'PAVEMENT MARKING OF BRIDGE DECK AND ROADWAY',
-      ntpDate: '2026-05-22',
-      representative: 'JOHN SONNIER',
-      peName: 'Elizabeth Guiza',
+      projectNo,
+      projectName,
+      ntpDate: seed.ntpDate || '',
+      representative: seed.representative || '',
+      peName: seed.peName || '',
     },
     defaultContractors: [],
     defaultEquipmentLabels: [],

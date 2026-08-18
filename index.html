@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>Daily Work Reports</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c3d5a">
 <link rel="stylesheet" href="style.css">
@@ -46,12 +47,12 @@
       <div id="parsed-preview"></div>
 
       <div id="step-template-upload" hidden style="margin-top:1rem;">
-        <p class="hint">Optionally upload this project's blank report template (the actual Daily Work Report .xlsx). Leave blank to reuse the default PR#439 template layout.</p>
+        <p class="hint">Optionally upload this project's blank report template (the actual Daily Work Report .xlsx). Leave blank to reuse the built-in template layout.</p>
         <div class="uz" id="uz-project-template">
           <input type="file" id="f-project-template" accept=".xlsx">
           <span class="uz-icon">&#128196;</span>
           <span class="uz-lbl">Upload Report Template (optional)</span>
-          <span class="uz-hint">Same layout as the PR#439 template</span>
+          <span class="uz-hint">Must use the same layout as the built-in template</span>
           <span class="uz-fname" id="fn-project-template"></span>
         </div>
       </div>
@@ -172,7 +173,8 @@ $('#btn-save-new-project').addEventListener('click', async () => {
     if (!templateBlob) {
       const resp = await fetch(DEFAULT_TEMPLATE_URL);
       templateBlob = await resp.blob();
-      templateFileName = 'PR439-Daily-Work-Report-TEMPLATE.xlsx';
+      // Display label only -- the bytes come from DEFAULT_TEMPLATE_URL above.
+      templateFileName = 'Built-in template';
     }
     const project = makeProjectFromParsedFile(pendingParsed, templateBlob, templateFileName);
     await saveProject(project);
