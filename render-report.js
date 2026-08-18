@@ -151,6 +151,7 @@ function renderSheetGrid(sheetData, coordValues, coordImages) {
           cellEl.style.overflow = 'visible';
           cellEl.style.fontSize = RR_NOWRAP_CELLS[coord] + 'pt';
         }
+        if (RR_INDENT_CELLS[coord]) cellEl.style.paddingLeft = RR_INDENT_CELLS[coord] + 'pt';
         const rot = (styleData && styleData.align && styleData.align.rot) || 0;
         if (rot && text) {
           const span = document.createElement('span');
@@ -175,6 +176,7 @@ function renderSheetGrid(sheetData, coordValues, coordImages) {
 
 const RR_CONTRACTOR_COLS = ['C', 'D', 'E', 'F', 'G', 'H'];
 const RR_EQUIPMENT_FIRST_ROW = 12;
+const RR_EQUIPMENT_LAST_ROW = 33; // the force/equipment table is rows 12..33
 const RR_PAY_ITEM_FIRST_ROW = 28;
 
 function fmtDate(iso) {
@@ -196,6 +198,11 @@ const LABEL_OVERRIDES = { I12: 'Short Work Summary' };
 // than the I12:J12 box that used to hold "Traffic Control", and row 12 is only
 // tall enough for one line, so wrapping it just cuts the second line off.
 const RR_NOWRAP_CELLS = { I12: 10 };
+
+// Extra left padding, in points. "WORK SUMMARY: " is wider than the I11:J11 it
+// sits in, so it overflows right up to where its value starts in K11 and the
+// two words collide. A little indent restores the gap the printed form has.
+const RR_INDENT_CELLS = { K11: 10 };
 
 function buildSheet1Values(report) {
   const v = Object.assign({}, LABEL_OVERRIDES);
@@ -220,6 +227,7 @@ function buildSheet1Values(report) {
 
   (report.equipmentRows || []).forEach((row, i) => {
     const r = RR_EQUIPMENT_FIRST_ROW + i;
+    if (r > RR_EQUIPMENT_LAST_ROW) return; // never write past the table
     v['A' + r] = row.label || '';
     RR_CONTRACTOR_COLS.forEach((col, ci) => {
       const q = row.qty ? row.qty[ci] : '';
@@ -227,6 +235,7 @@ function buildSheet1Values(report) {
     });
   });
 
+  v['K11'] = report.workSummaryHeader || '';
   v['K12'] = report.trafficControlNote || '';
   v['I14'] = report.workSummary || '';
 
@@ -238,8 +247,12 @@ function buildSheet1Values(report) {
     v['Q' + r] = item.unit || '';
   });
 
-  v['B34'] = report.controllingItem || '';
-  v['K34'] = report.commentsOnTime || '';
+  // Rows 34-41 alternate label row / value row: the 8pt label sits on one row
+  // and its 12pt value on the row below. Controlling Item and Comments on Time
+  // belong on row 35, not beside their labels on row 34 -- those labels are
+  // long enough to overflow across the columns a value would have landed in.
+  v['A35'] = report.controllingItem || '';
+  v['I35'] = report.commentsOnTime || '';
   v['C35'] = report.controllingItemTimeFrom || '';
   v['F35'] = report.controllingItemTimeTo || '';
   // Working conditions and weather are written on the line BELOW their long

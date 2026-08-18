@@ -1,6 +1,11 @@
 // Shapes for reports and projects. All of these are just starting points --
 // every field stays editable.
 
+// The template's force/equipment table runs rows 12-33: 22 rows, each with a
+// label plus one quantity per contractor column. The first 15 carry the
+// template's own default labels; the rest start blank.
+const EQUIPMENT_ROW_COUNT = 22; // rows 12..33, fixed by the template
+
 const DEFAULT_EQUIPMENT_LABELS = [
   'Superintendent',
   'Project Manager',
@@ -17,9 +22,8 @@ const DEFAULT_EQUIPMENT_LABELS = [
   'Utility trailer',
   'Patrol unit',
   'Attenuator truck',
+  '', '', '', '', '', '', '',
 ];
-
-const EQUIPMENT_ROW_COUNT = DEFAULT_EQUIPMENT_LABELS.length; // 15, fixed by the template
 const CONTRACTOR_COUNT = 6; // fixed by the template
 const PAY_ITEM_ROW_COUNT = 6; // fixed by the template
 
@@ -58,8 +62,6 @@ function makeBlankReport(nextReportNo, project, previous) {
     notes: meta.notes || '',
     peName: previous ? previous.peName : meta.peName || '',
     projectNo: meta.projectNo || '',
-    contractCo: meta.contractCo || '',
-    projectLocation: meta.projectLocation || '',
     projectName: meta.projectName || '',
     representative: previous ? previous.representative : meta.representative || '',
     ntpDate: meta.ntpDate || '',
@@ -70,12 +72,19 @@ function makeBlankReport(nextReportNo, project, previous) {
     // physical row layout. If the project supplies fewer custom labels than
     // that, the remaining rows are just left blank (not backfilled from the
     // generic default list, which would silently mix unrelated labels in).
-    equipmentRows: previous
-      ? previous.equipmentRows.map((r) => ({ label: r.label, qty: ['', '', '', '', '', ''] }))
-      : Array.from({ length: EQUIPMENT_ROW_COUNT }, (_, i) => ({
-          label: projectEquipmentLabels.length ? projectEquipmentLabels[i] || '' : DEFAULT_EQUIPMENT_LABELS[i],
-          qty: ['', '', '', '', '', ''],
-        })),
+    // Carrying forward from an older report pads it out too, since reports
+    // saved before the table grew to 22 rows only hold 15.
+    equipmentRows: Array.from({ length: EQUIPMENT_ROW_COUNT }, (_, i) => ({
+      label: previous
+        ? (previous.equipmentRows[i] || {}).label || ''
+        : projectEquipmentLabels.length
+          ? projectEquipmentLabels[i] || ''
+          : DEFAULT_EQUIPMENT_LABELS[i],
+      qty: ['', '', '', '', '', ''],
+    })),
+    // Three distinct blocks on the printed form, top to bottom: the line
+    // beside "WORK SUMMARY:", the line under it, then the large box.
+    workSummaryHeader: meta.workSummaryHeader || '',
     trafficControlNote: meta.trafficControlNote || '',
     workSummary: meta.workSummary || '',
     payItems: Array.from({ length: PAY_ITEM_ROW_COUNT }, () => ({
@@ -105,6 +114,24 @@ function makeBlankReport(nextReportNo, project, previous) {
   };
 }
 
+// Brings a stored report up to the current shape. Reports saved before the
+// force/equipment table grew from 15 rows to the template's full 22 only hold
+// 15, and older ones predate the work-summary header field entirely.
+function normalizeReport(report) {
+  if (!report) return report;
+  if (!Array.isArray(report.equipmentRows)) report.equipmentRows = [];
+  while (report.equipmentRows.length < EQUIPMENT_ROW_COUNT) {
+    report.equipmentRows.push({ label: '', qty: ['', '', '', '', '', ''] });
+  }
+  report.equipmentRows.length = EQUIPMENT_ROW_COUNT;
+  report.equipmentRows.forEach((row) => {
+    if (!Array.isArray(row.qty)) row.qty = ['', '', '', '', '', ''];
+    while (row.qty.length < CONTRACTOR_COUNT) row.qty.push('');
+  });
+  if (report.workSummaryHeader == null) report.workSummaryHeader = '';
+  return report;
+}
+
 // Duplicates a past report as the starting point for a new one. Everything
 // carries over EXCEPT what's inherently specific to that one day: the
 // report number, date, photos, and the actual signature images (typed
@@ -126,7 +153,7 @@ function copyReport(source, nextReportNo) {
 // project-file.js) plus the chosen report template bytes.
 function makeProjectFromParsedFile(parsed, templateBlob, templateFileName) {
   const meta = parsed.meta || {};
-  const displayName = meta.name || (meta.projectNo ? `PR#${meta.projectNo} - ${meta.projectLocation || 'Project'}` : 'New Project');
+  const displayName = meta.name || (meta.projectNo ? `PR#${meta.projectNo} - ${meta.projectName || 'Project'}` : 'New Project');
   return {
     id: crypto.randomUUID(),
     name: displayName,
@@ -134,14 +161,13 @@ function makeProjectFromParsedFile(parsed, templateBlob, templateFileName) {
     templateFileName,
     meta: {
       projectNo: meta.projectNo || '',
-      contractCo: meta.contractCo || '',
-      projectLocation: meta.projectLocation || '',
       projectName: meta.projectName || '',
       ntpDate: meta.ntpDate || '',
       representative: meta.representative || '',
       peName: meta.peName || '',
       activity: meta.activity || '',
       notes: meta.notes || '',
+      workSummaryHeader: meta.workSummaryHeader || '',
       trafficControlNote: meta.trafficControlNote || '',
       workSummary: meta.workSummary || '',
       controllingItem: meta.controllingItem || '',

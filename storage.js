@@ -130,8 +130,6 @@ async function adoptOrphanReportsIfAny() {
     templateFileName: 'PR439-Daily-Work-Report-TEMPLATE.xlsx',
     meta: {
       projectNo: '439',
-      contractCo: 'HIGHWAY GRAPHICS',
-      projectLocation: 'Causeway PD',
       projectName: 'PAVEMENT MARKING OF BRIDGE DECK AND ROADWAY',
       ntpDate: '2026-05-22',
       representative: 'JOHN SONNIER',

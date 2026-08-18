@@ -69,6 +69,9 @@
   <div class="step">
     <div class="step-header"><span class="step-num">STEP 3</span><h2>Work Summary</h2></div>
     <div class="step-body">
+      <label>Work Summary (top line) <input type="text" id="f-workSummaryHeader">
+        <span class="hint">Prints on the "WORK SUMMARY:" line at the top of the box.</span>
+      </label>
       <label>Short Work Summary <input type="text" id="f-trafficControlNote"></label>
       <label>Summary of Work Performed <textarea id="f-workSummary" rows="6"></textarea></label>
     </div>
@@ -214,6 +217,7 @@ async function init() {
       location.href = `reports.html?project=${project.id}`;
       return;
     }
+    normalizeReport(report);
   }
 
   document.title = `Report #${report.reportNo} — ${project.name}`;
@@ -241,6 +245,7 @@ function renderEditor() {
   bindText('#f-representative', 'representative');
   bindText('#f-peName', 'peName');
 
+  bindText('#f-workSummaryHeader', 'workSummaryHeader');
   bindText('#f-trafficControlNote', 'trafficControlNote');
   bindText('#f-workSummary', 'workSummary');
 
