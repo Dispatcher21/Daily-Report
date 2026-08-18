@@ -87,8 +87,8 @@ function parseProjectInfoSheet(ws) {
   return result;
 }
 
-// Reads an ITEM NUMBER / DESCRIPTION / UNIT table, columns resolved by
-// header label so column order doesn't matter.
+// Reads an ITEM NUMBER / DESCRIPTION / UNIT (/ PER PLANS TOTAL) table,
+// columns resolved by header label so column order doesn't matter.
 function parsePayItemsSheet(ws) {
   if (!ws) return [];
   const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
@@ -107,6 +107,10 @@ function parsePayItemsSheet(ws) {
   const cItem = findCol(['ITEM NUMBER', 'ITEM #', 'ITEM NO', 'ITEM NO.']);
   const cDesc = findCol(['DESCRIPTION']);
   const cUnit = findCol(['UNIT']);
+  // The planned/bid quantity for this item, used by the Quantity Sheet to
+  // show percent complete. Optional -- older project files simply won't
+  // have it, and that's fine (percent complete just stays blank for those).
+  const cPlanned = findCol(['PER PLANS TOTAL', 'PLANNED QUANTITY', 'PLAN QTY']);
 
   const items = [];
   for (let i = headerIdx + 1; i < rows.length; i++) {
@@ -115,8 +119,9 @@ function parsePayItemsSheet(ws) {
     const itemNumber = cItem !== -1 && row[cItem] != null ? String(row[cItem]).trim() : '';
     const description = cDesc !== -1 && row[cDesc] != null ? String(row[cDesc]).trim() : '';
     const unit = cUnit !== -1 && row[cUnit] != null ? String(row[cUnit]).trim() : '';
+    const plannedQty = cPlanned !== -1 && row[cPlanned] != null ? String(row[cPlanned]).trim() : '';
     if (!itemNumber && !description) continue;
-    items.push({ itemNumber, description, unit });
+    items.push({ itemNumber, description, unit, plannedQty });
   }
   return items;
 }
@@ -179,12 +184,12 @@ function buildProjectDataWorkbook({ meta, payItemCatalog, contractors, equipment
   infoWs['!cols'] = [{ wch: 34 }, { wch: 32 }];
   XLSX.utils.book_append_sheet(wb, infoWs, PROJECT_INFO_SHEET);
 
-  const itemRows = [['ITEM NUMBER', 'DESCRIPTION', 'UNIT']];
+  const itemRows = [['ITEM NUMBER', 'DESCRIPTION', 'UNIT', 'PER PLANS TOTAL']];
   (payItemCatalog || []).forEach((it) => {
-    itemRows.push([it.itemNumber || '', it.description || '', it.unit || '']);
+    itemRows.push([it.itemNumber || '', it.description || '', it.unit || '', it.plannedQty || '']);
   });
   const itemsWs = XLSX.utils.aoa_to_sheet(itemRows);
-  itemsWs['!cols'] = [{ wch: 14 }, { wch: 38 }, { wch: 8 }];
+  itemsWs['!cols'] = [{ wch: 14 }, { wch: 38 }, { wch: 8 }, { wch: 16 }];
   XLSX.utils.book_append_sheet(wb, itemsWs, PAY_ITEMS_SHEET);
 
   const contractorRows = [['CONTRACTOR NAME']];
@@ -222,9 +227,9 @@ function downloadProjectDataTemplate() {
       peName: 'NOTTA RE-AL ENJINIR',
     },
     payItemCatalog: [
-      { itemNumber: '618-01', description: 'Thermoplastic Pavement Marking 4in', unit: 'LF' },
-      { itemNumber: '618-02', description: 'Thermoplastic Pavement Marking 24in', unit: 'LF' },
-      { itemNumber: '619-01', description: 'Raised Pavement Markers', unit: 'EA' },
+      { itemNumber: '618-01', description: 'Thermoplastic Pavement Marking 4in', unit: 'LF', plannedQty: '12000' },
+      { itemNumber: '618-02', description: 'Thermoplastic Pavement Marking 24in', unit: 'LF', plannedQty: '3500' },
+      { itemNumber: '619-01', description: 'Raised Pavement Markers', unit: 'EA', plannedQty: '450' },
     ],
     contractors: ['ABC Trucking', 'XYZ Barricades'],
     equipmentLabels: DEFAULT_EQUIPMENT_LABELS,

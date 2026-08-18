@@ -32,7 +32,7 @@
       <h2>Highlight the Days to Include</h2>
     </div>
     <div class="step-body">
-      <p class="hint" style="margin-top:0;">Builds one Excel file from the pay items on the reports you check below: a Totals tab, a tab per day showing quantity-to-date, and a By Day tab with one column per day. Days sharing the same date are combined.</p>
+      <p class="hint" style="margin-top:0;">Builds one Excel file from the pay items on the reports you check below: a Totals tab (with % complete against each item's Per Plans Total, when set) and a By Day tab with one column per day. Days sharing the same date are combined.</p>
 
       <div class="select-all-row">
         <button type="button" class="text-btn" id="btn-select-all">Select all</button>
@@ -146,28 +146,26 @@ function compareDateKeys(a, b) {
   return a.localeCompare(b);
 }
 
-// 'YYYY-MM-DD' -> 'MM-DD-YY', which is short and has none of the characters
-// Excel forbids in a sheet name (: \ / ? * [ ]). Falls back for anything else.
-function sheetNameForDate(iso) {
-  if (iso === NO_DATE_KEY) return 'No Date';
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
-  if (!m) return String(iso).slice(0, 31).replace(/[:\\/?*[\]]/g, '-') || 'Undated';
-  return `${m[2]}-${m[3]}-${m[1].slice(2)}`;
-}
-
 function displayDate(iso) {
   if (iso === NO_DATE_KEY) return 'No Date';
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
   return m ? `${m[2]}/${m[3]}/${m[1]}` : iso;
 }
 
-const QTY_COLS = [{ wch: 16 }, { wch: 42 }, { wch: 8 }, { wch: 14 }];
+// Sets a numeric cell's display format directly, since aoa_to_sheet has no
+// way to know a plain number is meant to render as a percentage.
+function setCellFormat(ws, row, col, fmt) {
+  const addr = XLSX.utils.encode_cell({ r: row, c: col });
+  if (ws[addr]) ws[addr].z = fmt;
+}
 
 // Builds the workbook from the selected reports. Reports sharing a calendar
-// date are merged into one column/tab -- "day" is the unit here, not
-// "report". Sheet order: Totals, then each day chronologically (cumulative
-// quantity as of that day), then a By Day matrix with one column per day.
-function buildQuantitySheetWorkbook(reports) {
+// date are merged rather than kept separate -- "day" is the unit here, not
+// "report". Two sheets only: Totals (each item summed across every selected
+// day, plus percent complete against the project's per-plans quantity where
+// one is on file) and By Day (the same items as rows, one column per day,
+// that day's own non-cumulative quantity).
+function buildQuantitySheetWorkbook(reports, project) {
   const byDate = new Map(); // date -> flat array of {itemNumber, description, unit, qty}
   for (const r of reports) {
     const date = r.date || NO_DATE_KEY;
@@ -193,9 +191,8 @@ function buildQuantitySheetWorkbook(reports) {
   if (itemOrder.length === 0) return null;
 
   const perDateQty = new Map(); // date -> Map(itemNumber -> that day's own qty)
-  const cumulative = new Map(); // itemNumber -> running total, updated as we walk the dates
-  itemOrder.forEach((k) => cumulative.set(k, 0));
-  const cumulativeByDate = new Map(); // date -> Map(itemNumber -> cumulative qty as of that date)
+  const totalQty = new Map(); // itemNumber -> sum across every selected day
+  itemOrder.forEach((k) => totalQty.set(k, 0));
 
   for (const date of dates) {
     const dayMap = new Map();
@@ -205,9 +202,13 @@ function buildQuantitySheetWorkbook(reports) {
       dayMap.set(key, dayMap.get(key) + (Number(it.qty) || 0));
     }
     perDateQty.set(date, dayMap);
-    itemOrder.forEach((k) => cumulative.set(k, cumulative.get(k) + dayMap.get(k)));
-    cumulativeByDate.set(date, new Map(cumulative));
+    itemOrder.forEach((k) => totalQty.set(k, totalQty.get(k) + dayMap.get(k)));
   }
+
+  // The planned/bid quantity per item, from the project's pay item catalog --
+  // not every item necessarily has one on file, so percent complete just
+  // stays blank for those rather than showing a bogus 0%.
+  const catalogByItem = new Map((project.payItemCatalog || []).map((p) => [String(p.itemNumber).trim(), p]));
 
   const wb = XLSX.utils.book_new();
   const metaRow = (k) => {
@@ -215,20 +216,30 @@ function buildQuantitySheetWorkbook(reports) {
     return [m.itemNumber, m.description, m.unit];
   };
 
-  const totalsRows = [['Item Number', 'Description', 'Unit', 'Total Quantity']];
-  itemOrder.forEach((k) => totalsRows.push([...metaRow(k), cumulative.get(k)]));
-  const totalsWs = XLSX.utils.aoa_to_sheet(totalsRows);
-  totalsWs['!cols'] = QTY_COLS;
-  XLSX.utils.book_append_sheet(wb, totalsWs, 'Totals');
+  const totalsRows = [['Item Number', 'Description', 'Unit', 'Total Quantity', 'Per Plans Total', '% Complete']];
+  let sumTotal = 0;
+  let sumPlanned = 0;
+  itemOrder.forEach((k) => {
+    const total = totalQty.get(k);
+    const cat = catalogByItem.get(k);
+    const planned = cat && Number(cat.plannedQty) > 0 ? Number(cat.plannedQty) : null;
+    if (planned) {
+      sumTotal += total;
+      sumPlanned += planned;
+    }
+    totalsRows.push([...metaRow(k), total, planned != null ? planned : '', planned != null ? total / planned : '']);
+  });
+  totalsRows.push([]);
+  totalsRows.push(['', '', '', '', 'Overall % Complete', sumPlanned > 0 ? sumTotal / sumPlanned : '']);
 
-  for (const date of dates) {
-    const snap = cumulativeByDate.get(date);
-    const rows = [['Item Number', 'Description', 'Unit', 'Qty to Date']];
-    itemOrder.forEach((k) => rows.push([...metaRow(k), snap.get(k)]));
-    const ws = XLSX.utils.aoa_to_sheet(rows);
-    ws['!cols'] = QTY_COLS;
-    XLSX.utils.book_append_sheet(wb, ws, sheetNameForDate(date));
-  }
+  const totalsWs = XLSX.utils.aoa_to_sheet(totalsRows);
+  totalsWs['!cols'] = [{ wch: 16 }, { wch: 42 }, { wch: 8 }, { wch: 14 }, { wch: 16 }, { wch: 12 }];
+  // % Complete column (index 5) for every item row, plus the overall summary
+  // row at the very end -- both need the percentage format, not the raw
+  // fraction SheetJS would otherwise render as e.g. "0.42".
+  itemOrder.forEach((k, i) => setCellFormat(totalsWs, i + 1, 5, '0.0%'));
+  setCellFormat(totalsWs, totalsRows.length - 1, 5, '0.0%');
+  XLSX.utils.book_append_sheet(wb, totalsWs, 'Totals');
 
   const matrixHeader = ['Item Number', 'Description', 'Unit', ...dates.map(displayDate)];
   const matrixRows = [matrixHeader];
@@ -253,7 +264,7 @@ $('#btn-generate').addEventListener('click', () => {
   btn.disabled = true;
   btn.textContent = 'Generating...';
   try {
-    const result = buildQuantitySheetWorkbook(selected);
+    const result = buildQuantitySheetWorkbook(selected, project);
     if (!result) {
       alert('None of the selected reports have any pay items listed -- nothing to build.');
       return;
