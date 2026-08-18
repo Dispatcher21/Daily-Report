@@ -170,6 +170,26 @@ function renderSheetGrid(sheetData, coordValues, coordImages) {
   return grid;
 }
 
+// The logo replaces the company name the template used to carry in B3. It's
+// given the whole top-left header block (columns A-B, rows 1-4) rather than
+// that one short cell, and scaled to fit inside it with object-fit: contain,
+// so any aspect ratio works and nothing is ever stretched. Appended last so
+// it paints over the empty A1:Q2 banner it overlaps.
+const RR_LOGO_LAST_COL = 2;
+const RR_LOGO_LAST_ROW = 4;
+
+function appendLogo(grid, logoBlob) {
+  if (!logoBlob) return;
+  const cell = document.createElement('div');
+  cell.className = 'print-cell print-logo';
+  cell.style.gridColumn = `1 / span ${RR_LOGO_LAST_COL}`;
+  cell.style.gridRow = `1 / span ${RR_LOGO_LAST_ROW}`;
+  const img = document.createElement('img');
+  img.src = URL.createObjectURL(logoBlob);
+  cell.appendChild(img);
+  grid.appendChild(cell);
+}
+
 // ---------- Report -> cell values ----------
 // Coordinates below are load-bearing: they were read off the template and
 // checked against a real printed report.
@@ -190,8 +210,10 @@ function calendarDay(date, ntpDate) {
   const d2 = new Date(ntpDate + 'T00:00:00');
   return Math.round((d1 - d2) / 86400000) + 1;
 }
-// Static template labels the app deliberately renames on the printed form.
-const LABEL_OVERRIDES = { I12: 'Short Work Summary' };
+// Static template text the app deliberately replaces on the printed form.
+// B3 is the logo slot -- the template carries the word "LOGO" there as a
+// placeholder, which must never actually print.
+const LABEL_OVERRIDES = { I12: 'Short Work Summary', B3: '' };
 
 // Cells that must stay on one line even though the template marks them
 // wrap-enabled, with the size needed to fit. "Short Work Summary" is wider
@@ -349,16 +371,20 @@ function pageGeometry(sheetData) {
 
 // Appends one report's two sheet-pages (each a .sheet-page div) into
 // `container`. Returns the page elements paired with their page geometry.
-function renderReportPages(container, layout, report) {
+function renderReportPages(container, layout, report, logoBlob) {
   const sheets = [
-    [layout.dailyWorkReport, buildSheet1Values(report), buildSheet1Images(report)],
-    [layout.dailyPhotoLog, buildSheet2Values(report), buildSheet2Images(report)],
+    [layout.dailyWorkReport, buildSheet1Values(report), buildSheet1Images(report), true],
+    [layout.dailyPhotoLog, buildSheet2Values(report), buildSheet2Images(report), false],
   ];
 
-  return sheets.map(([sheetData, values, images]) => {
+  return sheets.map(([sheetData, values, images, withLogo]) => {
     const page = document.createElement('div');
     page.className = 'sheet-page';
-    page.appendChild(renderSheetGrid(sheetData, values, images));
+    const grid = renderSheetGrid(sheetData, values, images);
+    // Logo goes on the work report only, and last so it paints over the
+    // empty full-width banner cell it overlaps.
+    if (withLogo) appendLogo(grid, logoBlob);
+    page.appendChild(grid);
     container.appendChild(page);
     fitRotatedText(page); // needs layout, so only after it's in the document
     return { el: page, geom: pageGeometry(sheetData) };

@@ -2,10 +2,12 @@
 // photo/signature/template blobs) on-device. No library needed.
 
 const DB_NAME = 'daily-report-app';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const REPORTS_STORE = 'reports';
 const PROJECTS_STORE = 'projects';
+const SETTINGS_STORE = 'settings';
 const DEFAULT_TEMPLATE_URL = 'template/daily-work-report-template.xlsx';
+const LOGO_SETTING_KEY = 'reportLogo';
 
 function openDb() {
   return new Promise((resolve, reject) => {
@@ -18,10 +20,48 @@ function openDb() {
       if (!db.objectStoreNames.contains(PROJECTS_STORE)) {
         db.createObjectStore(PROJECTS_STORE, { keyPath: 'id' });
       }
+      if (!db.objectStoreNames.contains(SETTINGS_STORE)) {
+        db.createObjectStore(SETTINGS_STORE, { keyPath: 'key' });
+      }
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
+}
+
+// ---------- App-level settings ----------
+//
+// Things that belong to the whole app rather than one project -- the company
+// logo above all, which is the same on every report the inspector files.
+
+function getSetting(key) {
+  return withStore(SETTINGS_STORE, 'readonly', (store) => {
+    return new Promise((resolve, reject) => {
+      const req = store.get(key);
+      req.onsuccess = () => resolve(req.result ? req.result.value : null);
+      req.onerror = () => reject(req.error);
+    });
+  });
+}
+
+async function saveSetting(key, value) {
+  await withStore(SETTINGS_STORE, 'readwrite', (store) => store.put({ key, value }));
+}
+
+async function deleteSetting(key) {
+  await withStore(SETTINGS_STORE, 'readwrite', (store) => store.delete(key));
+}
+
+function getReportLogo() {
+  return getSetting(LOGO_SETTING_KEY);
+}
+
+async function saveReportLogo(blob) {
+  await saveSetting(LOGO_SETTING_KEY, blob);
+}
+
+async function clearReportLogo() {
+  await deleteSetting(LOGO_SETTING_KEY);
 }
 
 async function withStore(storeName, mode, fn) {
@@ -239,11 +279,13 @@ async function exportAllReportsBackup() {
   for (const p of projects) {
     serializedProjects.push(await serializeProjectForExport(p));
   }
+  const logo = await getReportLogo();
   return {
     kind: 'daily-report-app-backup',
     exportedAt: Date.now(),
     projects: serializedProjects,
     reports: serializedReports,
+    settings: { logo: await blobFieldToEntry(logo) },
   };
 }
 
@@ -295,6 +337,15 @@ async function importReportsBackup(backup) {
     }
   }
 
+  // Only adopt the backup's logo if this device doesn't already have one --
+  // import never overwrites something already set up locally.
+  let logoAdded = false;
+  const incomingLogo = backup && backup.settings && backup.settings.logo;
+  if (incomingLogo && !(await getReportLogo())) {
+    await saveReportLogo(entryToBlobField(incomingLogo));
+    logoAdded = true;
+  }
+
   return {
     added,
     updated,
@@ -304,5 +355,6 @@ async function importReportsBackup(backup) {
     projectsUpdated,
     projectsSkipped,
     projectsTotal: incomingProjects.length,
+    logoAdded,
   };
 }

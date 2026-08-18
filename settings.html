@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Settings</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1c3d5a">
+<link rel="stylesheet" href="style.css">
+<script src="theme.js"></script>
+<style>
+  /* Mirrors the printed header box (columns A-B, rows 1-4 of the template)
+     so what you see here is the space the logo actually gets on the report. */
+  #logo-preview-box {
+    width: 251px;   /* 188.25pt */
+    height: 83px;   /*  62.10pt */
+    border: 1.5px dashed var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    margin-bottom: 0.6rem;
+  }
+  #logo-preview-box img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  #logo-preview-box .lp-empty { color: #8b96a1; font-size: 0.8rem; text-align: center; padding: 0 0.5rem; }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <a href="index.html" class="home-link">
+    <h1>Settings</h1>
+    <div class="app-sub">Applies to every report</div>
+  </a>
+  <span></span>
+</header>
+<div class="back-bar">
+  <a href="index.html">&larr; All Projects</a>
+  <span class="bb-sep">//</span>
+  <span class="bb-cur">Settings</span>
+</div>
+
+<main>
+  <div class="step">
+    <div class="step-header">
+      <span class="step-num">LOGO</span>
+      <h2>Company Logo</h2>
+    </div>
+    <div class="step-body">
+      <p class="hint" style="margin-top:0;">Prints in the top-left of every Daily Work Report. It's scaled to fit this box without stretching, so any shape works &mdash; wide logos just sit shorter.</p>
+
+      <div id="logo-preview-box">
+        <span class="lp-empty" id="logo-empty">No logo set &mdash; this area prints blank</span>
+        <img id="logo-img" alt="Current logo" hidden>
+      </div>
+
+      <div class="uz" id="uz-logo">
+        <input type="file" id="f-logo" accept="image/*">
+        <span class="uz-icon">&#128444;</span>
+        <span class="uz-lbl">Upload Logo</span>
+        <span class="uz-hint">PNG, JPG or GIF &mdash; a transparent PNG looks best</span>
+        <span class="uz-fname" id="fn-logo"></span>
+      </div>
+
+      <button type="button" class="btn-danger" id="btn-remove-logo" hidden>Remove Logo</button>
+      <div class="success" id="logo-saved" hidden style="margin-top:0.75rem;">Logo saved.</div>
+    </div>
+  </div>
+
+  <p class="hint">The logo is stored on this device only. Use <strong>Export All Data</strong> on the home screen to carry it (and everything else) to another device.</p>
+</main>
+
+<script src="common.js"></script>
+<script src="defaults.js"></script>
+<script src="storage.js"></script>
+<script>
+let previewUrl = null;
+
+function showLogo(blob) {
+  const img = $('#logo-img');
+  if (previewUrl) URL.revokeObjectURL(previewUrl);
+  if (blob) {
+    previewUrl = URL.createObjectURL(blob);
+    img.src = previewUrl;
+    img.hidden = false;
+    $('#logo-empty').hidden = true;
+    $('#btn-remove-logo').hidden = false;
+    $('#uz-logo').classList.add('has');
+  } else {
+    previewUrl = null;
+    img.removeAttribute('src');
+    img.hidden = true;
+    $('#logo-empty').hidden = false;
+    $('#btn-remove-logo').hidden = true;
+    $('#uz-logo').classList.remove('has');
+    $('#fn-logo').textContent = '';
+  }
+}
+
+function flashSaved() {
+  const el = $('#logo-saved');
+  el.hidden = false;
+  clearTimeout(flashSaved._t);
+  flashSaved._t = setTimeout(() => { el.hidden = true; }, 2500);
+}
+
+$('#f-logo').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (!/^image\//.test(file.type)) {
+    alert('That file is not an image.');
+    return;
+  }
+  try {
+    // Stored as-is: these are small, and re-encoding would only cost quality.
+    await saveReportLogo(file);
+    $('#fn-logo').textContent = file.name;
+    showLogo(file);
+    flashSaved();
+  } catch (err) {
+    console.error(err);
+    alert('Could not save the logo: ' + err.message);
+  } finally {
+    e.target.value = '';
+  }
+});
+
+$('#btn-remove-logo').addEventListener('click', async () => {
+  if (!confirm('Remove the logo? Reports will print with a blank space where it sits.')) return;
+  await clearReportLogo();
+  showLogo(null);
+});
+
+(async () => {
+  showLogo(await getReportLogo());
+})();
+</script>
+</body>
+</html>

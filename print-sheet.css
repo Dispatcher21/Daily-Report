@@ -36,6 +36,25 @@
   object-fit: contain;
 }
 
+/* Company logo in the header block. Left-aligned and padded like the text it
+   replaced, rather than filling the box edge to edge. */
+.print-cell.print-logo {
+  padding: 2pt 4pt;
+  align-items: center;
+  justify-content: flex-start;
+}
+/* Both dimensions auto so the element box matches the image's own aspect
+   ratio, capped by the header box. Without overriding the height:100% above,
+   the box would fill the cell and object-fit would letterbox inside it --
+   which looks the same, but leaves the logo padded rather than left-aligned. */
+.print-cell.print-logo img {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
 /* Vertical column headers (Excel textRotation). Rotating an inner span rather
    than the cell keeps the cell's own grid box intact. */
 .print-cell .rot-text {

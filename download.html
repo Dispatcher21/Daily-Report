@@ -88,13 +88,13 @@ function pdfFilename(reports) {
 // Renders each report's sheets into `sandbox` one at a time, rasterizes each
 // at print resolution, and places it on a real US Letter page at the size and
 // orientation the template's own page setup asks for.
-async function buildPdfBlob(sandbox, layout, reports, onProgress) {
+async function buildPdfBlob(sandbox, layout, reports, logoBlob, onProgress) {
   const captures = [];
   let done = 0;
   const total = reports.length * 2;
 
   for (const report of reports) {
-    const pages = renderReportPages(sandbox, layout, report);
+    const pages = renderReportPages(sandbox, layout, report, logoBlob);
     await waitForImages(sandbox);
     // A rAF-based settle wait can hang indefinitely if the tab is backgrounded
     // (rAF is throttled/suspended when not visible) -- setTimeout still fires.
@@ -168,11 +168,12 @@ async function buildPdfBlob(sandbox, layout, reports, onProgress) {
     : `${reports.length} reports selected`;
 
   const layout = await loadPrintLayout();
+  const logoBlob = await getReportLogo();
   const sandbox = $('#render-sandbox');
 
   let pdfBlob;
   try {
-    pdfBlob = await buildPdfBlob(sandbox, layout, reports, (done, total) => {
+    pdfBlob = await buildPdfBlob(sandbox, layout, reports, logoBlob, (done, total) => {
       $('#pdf-status').textContent = `Rendering page ${done} of ${total}…`;
     });
   } catch (err) {
