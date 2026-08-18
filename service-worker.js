@@ -1,7 +1,7 @@
 // Caches the app shell + template so it keeps working with no signal in
 // the field. Bump CACHE_NAME whenever any of these files change so the new
 // version actually gets picked up.
-const CACHE_NAME = 'daily-report-app-v29';
+const CACHE_NAME = 'daily-report-app-v30';
 const ASSETS = [
   './',
   './index.html',
@@ -21,6 +21,7 @@ const ASSETS = [
   './defaults.js',
   './storage.js',
   './project-file.js',
+  './quantity-calc.js',
   './lib/xlsx.min.js',
   './lib/qrcode.min.js',
   './lib/jspdf.umd.min.js',

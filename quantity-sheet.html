@@ -50,6 +50,7 @@
 <script src="common.js"></script>
 <script src="defaults.js"></script>
 <script src="storage.js"></script>
+<script src="quantity-calc.js"></script>
 <script>
 const projectId = queryParam('project');
 const preselected = new Set((queryParam('report') || '').split(',').filter(Boolean));
@@ -175,25 +176,14 @@ function buildQuantitySheetWorkbook(reports, project) {
   }
   const dates = Array.from(byDate.keys()).sort(compareDateKeys);
 
-  // Unique pay items, first-seen order (mirrors the order the inspector
-  // entered them rather than an arbitrary re-sort).
-  const itemOrder = [];
-  const itemMeta = new Map();
-  for (const date of dates) {
-    for (const it of byDate.get(date)) {
-      const key = String(it.itemNumber).trim();
-      if (!itemMeta.has(key)) {
-        itemMeta.set(key, { itemNumber: key, description: it.description || '', unit: it.unit || '' });
-        itemOrder.push(key);
-      }
-    }
-  }
-  if (itemOrder.length === 0) return null;
+  // Flattened in the same order as the By Day columns (chronological,
+  // undated last) so "first seen" means the same thing in both sheets.
+  const flatItems = dates.flatMap((date) => byDate.get(date));
+  const items = aggregatePayItemTotals(flatItems, project.payItemCatalog);
+  if (items.length === 0) return null;
+  const itemOrder = items.map((it) => it.itemNumber);
 
   const perDateQty = new Map(); // date -> Map(itemNumber -> that day's own qty)
-  const totalQty = new Map(); // itemNumber -> sum across every selected day
-  itemOrder.forEach((k) => totalQty.set(k, 0));
-
   for (const date of dates) {
     const dayMap = new Map();
     itemOrder.forEach((k) => dayMap.set(k, 0));
@@ -202,50 +192,36 @@ function buildQuantitySheetWorkbook(reports, project) {
       dayMap.set(key, dayMap.get(key) + (Number(it.qty) || 0));
     }
     perDateQty.set(date, dayMap);
-    itemOrder.forEach((k) => totalQty.set(k, totalQty.get(k) + dayMap.get(k)));
   }
 
-  // The planned/bid quantity per item, from the project's pay item catalog --
-  // not every item necessarily has one on file, so percent complete just
-  // stays blank for those rather than showing a bogus 0%.
-  const catalogByItem = new Map((project.payItemCatalog || []).map((p) => [String(p.itemNumber).trim(), p]));
-
   const wb = XLSX.utils.book_new();
-  const metaRow = (k) => {
-    const m = itemMeta.get(k);
-    return [m.itemNumber, m.description, m.unit];
-  };
 
   const totalsRows = [['Item Number', 'Description', 'Unit', 'Total Quantity', 'Per Plans Total', '% Complete']];
-  let sumTotal = 0;
-  let sumPlanned = 0;
-  itemOrder.forEach((k) => {
-    const total = totalQty.get(k);
-    const cat = catalogByItem.get(k);
-    const planned = cat && Number(cat.plannedQty) > 0 ? Number(cat.plannedQty) : null;
-    if (planned) {
-      sumTotal += total;
-      sumPlanned += planned;
-    }
-    totalsRows.push([...metaRow(k), total, planned != null ? planned : '', planned != null ? total / planned : '']);
+  items.forEach((it) => {
+    totalsRows.push([
+      it.itemNumber, it.description, it.unit, it.total,
+      it.planned != null ? it.planned : '',
+      it.pct != null ? it.pct : '',
+    ]);
   });
   totalsRows.push([]);
-  totalsRows.push(['', '', '', '', 'Overall % Complete', sumPlanned > 0 ? sumTotal / sumPlanned : '']);
+  const overall = overallPercentComplete(items);
+  totalsRows.push(['', '', '', '', 'Overall % Complete', overall != null ? overall : '']);
 
   const totalsWs = XLSX.utils.aoa_to_sheet(totalsRows);
   totalsWs['!cols'] = [{ wch: 16 }, { wch: 42 }, { wch: 8 }, { wch: 14 }, { wch: 16 }, { wch: 12 }];
   // % Complete column (index 5) for every item row, plus the overall summary
   // row at the very end -- both need the percentage format, not the raw
   // fraction SheetJS would otherwise render as e.g. "0.42".
-  itemOrder.forEach((k, i) => setCellFormat(totalsWs, i + 1, 5, '0.0%'));
+  items.forEach((it, i) => setCellFormat(totalsWs, i + 1, 5, '0.0%'));
   setCellFormat(totalsWs, totalsRows.length - 1, 5, '0.0%');
   XLSX.utils.book_append_sheet(wb, totalsWs, 'Totals');
 
   const matrixHeader = ['Item Number', 'Description', 'Unit', ...dates.map(displayDate)];
   const matrixRows = [matrixHeader];
-  itemOrder.forEach((k) => {
-    const row = [...metaRow(k)];
-    dates.forEach((date) => row.push(perDateQty.get(date).get(k)));
+  items.forEach((it) => {
+    const row = [it.itemNumber, it.description, it.unit];
+    dates.forEach((date) => row.push(perDateQty.get(date).get(it.itemNumber)));
     matrixRows.push(row);
   });
   const matrixWs = XLSX.utils.aoa_to_sheet(matrixRows);
