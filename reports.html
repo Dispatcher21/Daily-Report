@@ -64,6 +64,7 @@
     <div class="step-body">
       <div class="export-bar" style="margin-top:0;">
         <button type="button" class="btn-primary" id="btn-print-selected">Generate Selected</button>
+        <button type="button" class="btn-secondary" id="btn-sync-selected">Sync Selected</button>
         <button type="button" class="btn-secondary" id="btn-qty-sheet-selected">Quantity Sheet Selected</button>
         <button type="button" class="btn-secondary" id="btn-mass-edit-selected">Mass Edit Selected</button>
         <button type="button" class="btn-danger" id="btn-delete-selected">Delete Selected</button>
@@ -111,6 +112,10 @@
 <script src="common.js"></script>
 <script src="defaults.js"></script>
 <script src="storage.js"></script>
+<script src="lib/fflate.min.js"></script>
+<script src="lib/xlsx.min.js"></script>
+<script src="report-bundle.js"></script>
+<script src="sync-export.js"></script>
 <script>
 const projectId = queryParam('project');
 let project = null;
@@ -211,6 +216,7 @@ function updateBulkBar() {
   $('#btn-print-selected').textContent = n === 1 ? 'Generate Selected' : `Generate Selected (${n})`;
   $('#btn-delete-selected').textContent = n === 1 ? 'Delete Selected' : `Delete Selected (${n})`;
   $('#btn-qty-sheet-selected').textContent = n === 1 ? 'Quantity Sheet Selected' : `Quantity Sheet Selected (${n})`;
+  $('#btn-sync-selected').textContent = n === 1 ? 'Sync Selected' : `Sync Selected (${n})`;
 }
 
 ['f-date-from', 'f-date-to', 'f-search', 'f-sort'].forEach((id) => {
@@ -245,6 +251,54 @@ $('#btn-qty-sheet-selected').addEventListener('click', () => {
   if (selectedIds.size === 0) return;
   const ids = Array.from(selectedIds).join(',');
   location.href = `quantity-sheet.html?project=${project.id}&report=${ids}`;
+});
+
+// Builds a .report bundle per selected report (data + photos, for another
+// device running this app) plus one fresh project summary spreadsheet (for
+// anyone just browsing the destination folder), then hands them to the OS
+// share sheet so they land wherever the inspector already has a cloud
+// account signed in -- OneDrive, Drive, whatever. Falls back to plain
+// downloads on browsers that can't share files (desktop, mainly), same
+// pattern already used for the setup-sharing flow in Settings.
+$('#btn-sync-selected').addEventListener('click', async () => {
+  if (selectedIds.size === 0) return;
+  const selected = allReports.filter((r) => selectedIds.has(r.id));
+
+  const btn = $('#btn-sync-selected');
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Preparing...';
+  try {
+    const files = [];
+    for (const report of selected) {
+      const blob = await buildReportBundle(project, report);
+      files.push(new File([blob], reportBundleFilename(report), { type: 'application/octet-stream' }));
+    }
+
+    // The whole project's history, not just what's selected -- useful as a
+    // standing reference regardless of which reports triggered this share.
+    const allProjectReports = await getReportsForProject(project.id);
+    const wb = buildMasterWorkbook(project, allProjectReports);
+    const xlsxOut = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    files.push(new File(
+      [xlsxOut],
+      masterSpreadsheetFilename(project),
+      { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }
+    ));
+
+    if (navigator.canShare && navigator.canShare({ files })) {
+      await navigator.share({ files, title: `${project.name} — Sync` });
+    } else {
+      files.forEach((file) => triggerDownload(file, file.name));
+    }
+  } catch (err) {
+    if (err && err.name === 'AbortError') return; // user dismissed the share sheet
+    console.error(err);
+    alert('Could not prepare the sync files: ' + err.message);
+  } finally {
+    btn.textContent = original;
+    btn.disabled = false;
+  }
 });
 
 $('#btn-delete-selected').addEventListener('click', async () => {

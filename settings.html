@@ -188,7 +188,7 @@
       <div class="home-toolbar" style="margin-top:0.75rem;">
         <button type="button" id="btn-export-backup" class="text-btn-outline">Export All Data</button>
         <button type="button" id="btn-import-backup" class="text-btn-outline">Import Data</button>
-        <input type="file" id="import-file-input" accept="application/json,.json" hidden>
+        <input type="file" id="import-file-input" accept="application/json,.json,.report" hidden>
       </div>
     </div>
   </div>
@@ -199,6 +199,7 @@
 
 <script src="lib/qrcode.min.js"></script>
 <script src="lib/msal-browser.min.js"></script>
+<script src="lib/fflate.min.js"></script>
 <script src="lib/xlsx.min.js"></script>
 <script src="lib/html2canvas.min.js"></script>
 <script src="lib/jspdf.umd.min.js"></script>
@@ -208,6 +209,7 @@
 <script src="setup-share.js"></script>
 <script src="render-report.js"></script>
 <script src="pdf-export.js"></script>
+<script src="report-bundle.js"></script>
 <script src="onedrive-config.js"></script>
 <script src="onedrive-auth.js"></script>
 <script src="onedrive-client.js"></script>
@@ -367,24 +369,48 @@ $('#btn-export-backup').addEventListener('click', async () => {
 
 $('#btn-import-backup').addEventListener('click', () => $('#import-file-input').click());
 
+// Accepts either a full backup (.json, everything, from Export All Data
+// above) or a single .report bundle (from Sync Selected on the Reports
+// page) -- told apart by content, not by trusting the file's extension,
+// since a .report is just a zip wearing one. Valid JSON means the backup
+// path; anything else at least attempts the bundle path before giving up.
 $('#import-file-input').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   e.target.value = '';
   if (!file) return;
   try {
-    const text = await file.text();
-    const backup = JSON.parse(text);
-    if (backup.kind !== 'daily-report-app-backup') {
-      alert("That doesn't look like a Daily Report backup file.");
+    let backup = null;
+    try {
+      backup = JSON.parse(await file.text());
+    } catch (err) {
+      backup = null;
+    }
+
+    if (backup) {
+      if (backup.kind !== 'daily-report-app-backup') {
+        alert("That doesn't look like a Daily Report backup file.");
+        return;
+      }
+      const result = await importReportsBackup(backup);
+      alert(
+        `Import complete.\nProjects: ${result.projectsAdded} new, ${result.projectsUpdated} updated, ${result.projectsSkipped} already up to date.\nReports: ${result.added} new, ${result.updated} updated, ${result.skipped} already up to date.` +
+          (result.logoAdded ? '\nCompany logo restored.' : '')
+      );
+      showLogo(await getReportLogo());
+      applyHeaderLogo();
       return;
     }
-    const result = await importReportsBackup(backup);
+
+    const bundle = await tryParseReportBundle(file);
+    if (!bundle) {
+      alert("That doesn't look like a Daily Report backup file or a .report bundle.");
+      return;
+    }
+    const projectResult = await mergeProjectRecord(bundle.project);
+    const reportResult = await mergeReportRecord(bundle.report);
     alert(
-      `Import complete.\nProjects: ${result.projectsAdded} new, ${result.projectsUpdated} updated, ${result.projectsSkipped} already up to date.\nReports: ${result.added} new, ${result.updated} updated, ${result.skipped} already up to date.` +
-        (result.logoAdded ? '\nCompany logo restored.' : '')
+      `Import complete.\nProject "${bundle.project.name}": ${projectResult}.\nReport #${bundle.report.reportNo} (${bundle.report.date || 'undated'}): ${reportResult}.`
     );
-    showLogo(await getReportLogo());
-    applyHeaderLogo();
   } catch (err) {
     console.error(err);
     alert('Could not import that file: ' + err.message);
