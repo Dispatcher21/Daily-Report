@@ -665,6 +665,38 @@ input[type="file"] { min-height: 0; }
   padding: 0.75rem 1rem; color: var(--danger); margin: 0.75rem 0; font-size: 0.88rem;
 }
 
+/* ---------- Tooltips ---------- */
+/* data-tip carries the text; the bubble is pure CSS so nothing needs to be
+   positioned or shown/hidden from JS. Hover for a mouse, focus for a
+   keyboard -- there's no touch equivalent, so on a phone these are just
+   inert (the numbers still stand on their own). */
+[data-tip] { position: relative; cursor: help; }
+[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: 50%; bottom: calc(100% + 10px);
+  transform: translateX(-50%) translateY(4px);
+  background: var(--text); color: var(--bg);
+  font-size: 0.74rem; font-weight: 500; line-height: 1.4;
+  padding: 0.55rem 0.7rem; border-radius: var(--radius-sm);
+  width: max-content; max-width: 230px; text-align: left;
+  box-shadow: var(--shadow-lg);
+  opacity: 0; visibility: hidden; pointer-events: none; z-index: 30;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+[data-tip]::before {
+  content: '';
+  position: absolute; left: 50%; bottom: calc(100% + 4px);
+  transform: translateX(-50%) translateY(4px);
+  border: 6px solid transparent; border-top-color: var(--text);
+  opacity: 0; visibility: hidden; pointer-events: none; z-index: 30;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+[data-tip]:hover::after, [data-tip]:hover::before,
+[data-tip]:focus-visible::after, [data-tip]:focus-visible::before {
+  opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0);
+}
+
 /* ---------- Project dashboard ---------- */
 
 .dash-grid {

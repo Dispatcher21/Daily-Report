@@ -174,9 +174,10 @@ function ringSvg(pct) {
     </div>`;
 }
 
-function statCard(value, label, sub) {
+function statCard(value, label, sub, tip) {
+  const tipAttrs = tip ? ` data-tip="${escapeHtml(tip)}" tabindex="0"` : '';
   return `
-    <div class="dash-card">
+    <div class="dash-card"${tipAttrs}>
       <span class="dc-value">${escapeHtml(String(value))}</span>
       <span class="dc-label">${escapeHtml(label)}</span>
       ${sub ? `<span class="dc-sub">${escapeHtml(sub)}</span>` : ''}
@@ -201,26 +202,49 @@ function renderDashboard(reports, project) {
   let daysSinceNtp = null;
   const ntpDate = (project.meta || {}).ntpDate;
   if (/^\d{4}-\d{2}-\d{2}$/.test(ntpDate || '')) {
-    daysSinceNtp = daysBetween(ntpDate, todayIso());
+    const d = daysBetween(ntpDate, todayIso());
+    if (Number.isFinite(d)) daysSinceNtp = d;
   }
 
   const flatItems = dated.concat(reports.filter((r) => !r.date)).flatMap((r) => r.payItems || []);
   const items = aggregatePayItemTotals(flatItems, project.payItemCatalog);
   const overall = overallPercentComplete(items);
 
+  const overallTip = overall == null
+    ? 'No pay item on this project has both usage and a Per Plans Total, so there\'s nothing to weight yet.'
+    : `Total quantity used across every pay item that has a Per Plans Total on file, divided by their combined planned quantity. Items with no Per Plans Total aren't counted either way.`;
+
   $('#dash-stats').innerHTML =
-    `<div class="dash-card dc-headline">
+    `<div class="dash-card dc-headline" data-tip="${escapeHtml(overallTip)}" tabindex="0">
       ${ringSvg(overall)}
       <div>
         <span class="dc-label">Overall % Complete</span>
         <span class="dc-sub">${overall == null ? 'No pay items with a Per Plans Total yet' : 'Weighted by planned quantity'}</span>
       </div>
     </div>` +
-    statCard(reports.length, 'Reports Filed') +
-    statCard(daysSinceNtp != null ? daysSinceNtp : '—', 'Days Since NTP', daysSinceNtp == null ? 'No NTP date on file' : '') +
-    statCard(totalHours.toFixed(1), 'Total Hours Worked') +
-    statCard(avgHoursPerWeek != null ? avgHoursPerWeek.toFixed(1) : '—', 'Avg Hours / Week') +
-    statCard(items.length, 'Pay Items Tracked');
+    statCard(reports.length, 'Reports Filed', '', 'Number of daily reports saved for this project.') +
+    statCard(
+      daysSinceNtp != null ? daysSinceNtp : '—',
+      'Days Since NTP',
+      daysSinceNtp == null ? 'No NTP date on file' : '',
+      daysSinceNtp != null
+        ? `Calendar days from the NTP Date (${ntpDate}) to today. Not a days-remaining-in-contract figure -- there's no total contract length on file.`
+        : 'No usable NTP Date is set in this project\'s data file, so elapsed days can\'t be calculated.'
+    ) +
+    statCard(
+      totalHours.toFixed(1), 'Total Hours Worked', '',
+      'Sum of the Hours field across every report on file for this project.'
+    ) +
+    statCard(
+      avgHoursPerWeek != null ? avgHoursPerWeek.toFixed(1) : '—', 'Avg Hours / Week', '',
+      avgHoursPerWeek != null
+        ? 'Total hours worked, divided by the number of weeks between the earliest and latest dated report.'
+        : 'No dated reports yet to measure a week span from.'
+    ) +
+    statCard(
+      items.length, 'Pay Items Tracked', '',
+      'Number of distinct pay item numbers that appear on at least one report.'
+    );
 
   // Only items with a planned quantity can meaningfully show a % bar; the
   // rest just don't have a target to measure against. Sorted least-complete
@@ -231,8 +255,9 @@ function renderDashboard(reports, project) {
     .map((it) => {
       const widthPct = Math.min(it.pct * 100, 100);
       const cls = it.pct >= 1 ? 'br-over' : '';
+      const barTip = `${it.total.toLocaleString()} ${it.unit || ''} used of ${it.planned.toLocaleString()} ${it.unit || ''} planned (${(it.pct * 100).toFixed(1)}%).`;
       return `
-        <div class="bar-row">
+        <div class="bar-row" data-tip="${escapeHtml(barTip)}" tabindex="0">
           <div class="br-top">
             <span class="br-label">${escapeHtml(it.itemNumber)} <span class="br-desc">${escapeHtml(it.description)}</span></span>
             <span class="br-pct">${(it.pct * 100).toFixed(1)}%</span>

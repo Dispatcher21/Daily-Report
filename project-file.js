@@ -62,10 +62,54 @@ function findSheet(workbook, name) {
   return sheetName ? workbook.Sheets[sheetName] : null;
 }
 
+function isoDate(y, m, d) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${y}-${pad(m)}-${pad(d)}`;
+}
+
+// Every date input and calculation elsewhere in the app (the report editor's
+// date field, the dashboard's "days since NTP") needs 'YYYY-MM-DD' -- but a
+// cell someone typed a date into rarely comes through that way. A cell
+// actually formatted as a date reads back as an Excel serial number (days
+// since 1899-12-30) since the file is read with cellDates:false; a cell
+// someone just typed text into carries whatever format they reached for,
+// which for most people is M/D/YYYY, not ISO.
+function normalizeDateValue(value) {
+  if (value == null || value === '') return '';
+  if (value instanceof Date) return isoDate(value.getFullYear(), value.getMonth() + 1, value.getDate());
+  if (typeof value === 'number' && isFinite(value)) {
+    const d = XLSX.SSF.parse_date_code(value);
+    return d ? isoDate(d.y, d.m, d.d) : '';
+  }
+
+  const str = String(value).trim();
+  if (!str) return '';
+
+  let m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(str);
+  if (m) return isoDate(+m[1], +m[2], +m[3]);
+
+  // M/D/YYYY (or M-D-YYYY, or a 2-digit year) -- the format most people
+  // reach for by default when typing a date into a spreadsheet cell.
+  m = /^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/.exec(str);
+  if (m) {
+    let year = +m[3];
+    if (year < 100) year += year < 70 ? 2000 : 1900;
+    let month = +m[1];
+    let day = +m[2];
+    if (month > 12 && day <= 12) [month, day] = [day, month]; // was actually D/M/Y
+    // Neither reading works (e.g. "22/13/2026") -- leave the original text
+    // alone rather than emit something ISO-shaped but not an actual date.
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) return isoDate(year, month, day);
+    return str;
+  }
+
+  return str; // unrecognized -- leave as-is rather than silently discarding it
+}
+
 // Reads FIELD | VALUE rows, matched by label text (not position), so a
 // reordered or lightly-edited file still parses correctly. "DEFAULT
 // TRAFFIC CONTROL STATUS" is normalized from natural text ("In Place") to
-// the internal value the report form uses.
+// the internal value the report form uses; "NTP DATE" is normalized to ISO.
 function parseProjectInfoSheet(ws) {
   if (!ws) return {};
   const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
@@ -75,6 +119,13 @@ function parseProjectInfoSheet(ws) {
     const label = String(row[0]).trim().toUpperCase();
     const field = PROJECT_INFO_FIELDS.find((f) => f.label === label);
     if (!field || row[1] == null || String(row[1]).trim() === '') continue;
+
+    if (field.key === 'ntpDate') {
+      const normalized = normalizeDateValue(row[1]);
+      if (normalized) result[field.key] = normalized;
+      continue;
+    }
+
     let value = String(row[1]).trim();
     if (field.key === 'trafficControlSelect') {
       const v = value.toUpperCase().replace(/[^A-Z]/g, '_');
@@ -222,7 +273,7 @@ function downloadProjectDataTemplate() {
       name: 'This Appears on the App Front Page',
       projectNo: '###',
       projectName: '',
-      ntpDate: 'YYYY-MM-DD',
+      ntpDate: '6/22/2026', // any of 6/22/2026, 06-22-2026 or 2026-06-22 parses fine
       representative: 'JOHN JACOB JINGLHIMER SMITH',
       peName: 'NOTTA RE-AL ENJINIR',
     },
