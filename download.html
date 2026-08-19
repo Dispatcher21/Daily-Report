@@ -145,7 +145,13 @@ async function buildPdfBlob(sandbox, layout, reports, logoBlob, onProgress) {
         height: el.offsetHeight,
       });
 
-      captures.push({ dataUrl: canvas.toDataURL('image/jpeg', 0.94), geom });
+      // dataUrl feeds jsPDF's addImage; viewBlob backs the mobile gallery's
+      // "open full-size" links. Browsers (Chrome in particular) block a
+      // top-level navigation to a data: URL as a phishing precaution -- an
+      // <a href="data:...target="_blank"> click just silently does nothing
+      // -- but a blob: URL isn't subject to that restriction.
+      const viewBlob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.94));
+      captures.push({ dataUrl: canvas.toDataURL('image/jpeg', 0.94), viewBlob, geom });
 
       $$('img', el).forEach((img) => {
         if (img.src.startsWith('blob:')) URL.revokeObjectURL(img.src);
@@ -230,15 +236,16 @@ async function buildPdfBlob(sandbox, layout, reports, logoBlob, onProgress) {
     const gallery = $('#pdf-mobile-gallery');
     gallery.hidden = false;
     gallery.innerHTML = captures
-      .map(
-        (cap, i) => `
+      .map((cap, i) => {
+        const viewUrl = URL.createObjectURL(cap.viewBlob);
+        return `
         <div>
           ${captures.length > 1 ? `<p class="pdf-page-label">Page ${i + 1} of ${captures.length}</p>` : ''}
-          <a class="pdf-page-preview" href="${cap.dataUrl}" target="_blank" rel="noopener">
+          <a class="pdf-page-preview" href="${viewUrl}" target="_blank" rel="noopener">
             <img src="${cap.dataUrl}" alt="Report page ${i + 1}" loading="lazy">
           </a>
-        </div>`
-      )
+        </div>`;
+      })
       .join('');
   } else {
     const frame = $('#pdf-frame');

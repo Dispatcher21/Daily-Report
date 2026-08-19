@@ -760,15 +760,20 @@ input[type="file"] { min-height: 0; }
 }
 
 /* The headline card pairs an SVG ring with its own number/label -- it earns
-   the extra width on wider screens since it's the one figure meant to read
-   as "the answer" at a glance. */
+   the extra width so the ring + two lines of text have room to sit side by
+   side without wrapping into a mess. A dedicated narrow-phone override used
+   to collapse this back to a single ~150px column, which was nowhere near
+   enough room for the ring plus its label and left the text overflowing;
+   removed rather than patched, since .dash-grid's own auto-fit already
+   collapses to one column on anything too narrow for two, and span-2 on a
+   one-column grid is just a no-op full-width card. */
 .dash-card.dc-headline {
   grid-column: span 2;
   flex-direction: row;
   align-items: center;
   gap: 1.1rem;
 }
-@media (max-width: 420px) { .dash-card.dc-headline { grid-column: span 1; } }
+.dash-card.dc-headline > div { min-width: 0; }
 
 .ring-wrap { position: relative; width: 84px; height: 84px; flex: 0 0 auto; }
 .ring-wrap svg { width: 100%; height: 100%; transform: rotate(-90deg); }
