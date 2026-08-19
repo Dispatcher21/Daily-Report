@@ -152,6 +152,11 @@ function renderSheetGrid(sheetData, coordValues, coordImages) {
           cellEl.style.fontSize = RR_NOWRAP_CELLS[coord] + 'pt';
         }
         if (RR_INDENT_CELLS[coord]) cellEl.style.paddingLeft = RR_INDENT_CELLS[coord] + 'pt';
+        if (RR_PAY_ITEM_DESC_CELLS.has(coord)) {
+          cellEl.style.whiteSpace = 'pre-wrap';
+          cellEl.style.overflow = 'hidden';
+          cellEl.classList.add('rr-shrink-wrap');
+        }
         const rot = (styleData && styleData.align && styleData.align.rot) || 0;
         if (rot && text) {
           const span = document.createElement('span');
@@ -225,6 +230,18 @@ const RR_NOWRAP_CELLS = { I12: 10 };
 // sits in, so it overflows right up to where its value starts in K11 and the
 // two words collide. A little indent restores the gap the printed form has.
 const RR_INDENT_CELLS = { K11: 10 };
+
+// The pay item Description cell (K28:O28, and one row per item below it)
+// isn't marked wrap-enabled in the template, so by default it inherits the
+// same "spill into the next cell" behaviour every other unwrapped label
+// gets -- fine when that neighbour is blank, but here it's the Quantity and
+// Unit columns, which always have their own real values. A long description
+// was rendering directly on top of them. Forced to wrap and clip to its own
+// column instead; fitWrappedText() below shrinks it further if it still
+// doesn't fit the row's fixed height.
+const RR_PAY_ITEM_DESC_CELLS = new Set(
+  Array.from({ length: PAY_ITEM_ROW_COUNT }, (_, i) => 'K' + (RR_PAY_ITEM_FIRST_ROW + i))
+);
 
 function buildSheet1Values(report) {
   const v = Object.assign({}, LABEL_OVERRIDES);
@@ -387,6 +404,7 @@ function renderReportPages(container, layout, report, logoBlob) {
     page.appendChild(grid);
     container.appendChild(page);
     fitRotatedText(page); // needs layout, so only after it's in the document
+    fitWrappedText(page);
     return { el: page, geom: pageGeometry(sheetData) };
   });
 }
@@ -403,6 +421,21 @@ function fitRotatedText(scope) {
     while (span.scrollWidth > avail && size > 4) {
       size -= 0.5;
       span.style.fontSize = size + 'px';
+    }
+  });
+}
+
+// Pay item descriptions are forced to wrap and clip inside their own column
+// (see RR_PAY_ITEM_DESC_CELLS) rather than spilling into Quantity/Unit. A
+// long one can still need more lines than the row's fixed height allows;
+// shrink it instead of silently losing whatever wraps past the clip.
+function fitWrappedText(scope) {
+  $$('.rr-shrink-wrap', scope).forEach((cell) => {
+    if (!cell.textContent.trim()) return;
+    let size = parseFloat(getComputedStyle(cell).fontSize);
+    while (cell.scrollHeight > cell.clientHeight + 0.5 && size > 6) {
+      size -= 0.5;
+      cell.style.fontSize = size + 'px';
     }
   });
 }
