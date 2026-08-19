@@ -154,13 +154,37 @@
     </div>
   </div>
 
+  <div class="step" id="onedrive-step">
+    <div class="step-header">
+      <span class="step-num">SYNC</span>
+      <h2>OneDrive Sync <span style="font-weight:400;opacity:.75;">(testing)</span></h2>
+    </div>
+    <div class="step-body">
+      <p class="hint" style="margin-top:0;">Keeps your reports up to date across your own devices through your company OneDrive &mdash; a PDF and photos per report, plus a project spreadsheet, land in a dedicated OneDrive folder this app can see and nothing else. This is the only feature in the app that transmits anything, and only when you tap Sync.</p>
+
+      <div id="onedrive-disconnected">
+        <button type="button" class="btn-primary" id="btn-onedrive-connect">Connect OneDrive</button>
+      </div>
+
+      <div id="onedrive-connected" hidden>
+        <div class="success" id="onedrive-account-line" style="margin-bottom:0.75rem;"></div>
+        <button type="button" class="btn-primary" id="btn-onedrive-sync" style="margin-bottom:0.5rem;">Sync Now</button>
+        <p class="hint" id="onedrive-last-synced" style="margin:0 0 0.75rem;"></p>
+        <button type="button" class="text-btn" id="btn-onedrive-disconnect" style="padding:0;color:var(--danger);">Disconnect</button>
+      </div>
+
+      <div id="onedrive-sync-status" class="hint" style="margin-top:0.75rem;" hidden></div>
+      <div class="err" id="onedrive-sync-error" hidden></div>
+    </div>
+  </div>
+
   <div class="step">
     <div class="step-header">
       <span class="step-num">BACKUP</span>
       <h2>Export &amp; Import</h2>
     </div>
     <div class="step-body">
-      <p class="hint" style="margin-top:0;">Export saves everything &mdash; all projects, reports, photos and your logo &mdash; to one file you move yourself (email, OneDrive, USB). Import merges it back in and never deletes anything. Nothing is ever transmitted anywhere by this app.</p>
+      <p class="hint" style="margin-top:0;">Export saves everything &mdash; all projects, reports, photos and your logo &mdash; to one file you move yourself (email, OneDrive, USB). Import merges it back in and never deletes anything. The file itself never leaves your device unless you move it.</p>
       <div class="home-toolbar" style="margin-top:0.75rem;">
         <button type="button" id="btn-export-backup" class="text-btn-outline">Export All Data</button>
         <button type="button" id="btn-import-backup" class="text-btn-outline">Import Data</button>
@@ -171,11 +195,24 @@
 
 </main>
 
+<div id="onedrive-sync-sandbox" style="position:fixed;top:0;left:-20000px;z-index:-1;"></div>
+
 <script src="lib/qrcode.min.js"></script>
+<script src="lib/msal-browser.min.js"></script>
+<script src="lib/xlsx.min.js"></script>
+<script src="lib/html2canvas.min.js"></script>
+<script src="lib/jspdf.umd.min.js"></script>
 <script src="common.js"></script>
 <script src="defaults.js"></script>
 <script src="storage.js"></script>
 <script src="setup-share.js"></script>
+<script src="render-report.js"></script>
+<script src="pdf-export.js"></script>
+<script src="onedrive-config.js"></script>
+<script src="onedrive-auth.js"></script>
+<script src="onedrive-client.js"></script>
+<script src="sync-export.js"></script>
+<script src="sync-engine.js"></script>
 <script>
 let previewUrl = null;
 
@@ -520,12 +557,94 @@ $('#btn-show-qr').addEventListener('click', async () => {
   }
 });
 
+// ---------- OneDrive Sync ----------
+
+function formatSyncedAt(ts) {
+  if (!ts) return 'Never synced yet.';
+  const d = new Date(ts);
+  return 'Last synced ' + d.toLocaleDateString() + ' at ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+async function refreshOneDriveSection() {
+  const connected = isOneDriveConnected();
+  $('#onedrive-disconnected').hidden = connected;
+  $('#onedrive-connected').hidden = !connected;
+  if (!connected) return;
+
+  const account = getOneDriveAccount();
+  $('#onedrive-account-line').textContent = `Connected as ${account.username}`;
+
+  const syncedTimes = (await getAllProjects()).map((p) => p.syncedAt).filter(Boolean);
+  $('#onedrive-last-synced').textContent = formatSyncedAt(syncedTimes.length ? Math.max(...syncedTimes) : null);
+}
+
+$('#btn-onedrive-connect').addEventListener('click', async () => {
+  $('#onedrive-sync-error').hidden = true;
+  try {
+    await connectOneDrive(); // navigates away to Microsoft's sign-in page
+  } catch (err) {
+    console.error(err);
+    $('#onedrive-sync-error').textContent = 'Could not start sign-in: ' + err.message;
+    $('#onedrive-sync-error').hidden = false;
+  }
+});
+
+$('#btn-onedrive-disconnect').addEventListener('click', async () => {
+  if (!confirm('Disconnect OneDrive on this device? Nothing already synced is deleted -- this just stops syncing until you connect again.')) return;
+  disconnectOneDrive();
+  await refreshOneDriveSection();
+});
+
+$('#btn-onedrive-sync').addEventListener('click', async () => {
+  const btn = $('#btn-onedrive-sync');
+  const statusEl = $('#onedrive-sync-status');
+  const errorEl = $('#onedrive-sync-error');
+  errorEl.hidden = true;
+  statusEl.hidden = false;
+  statusEl.textContent = 'Starting sync…';
+  btn.disabled = true;
+
+  try {
+    const summary = await syncAllProjects($('#onedrive-sync-sandbox'), (progress) => {
+      statusEl.textContent = progress.phase === 'pull'
+        ? `Checking ${progress.project.name}…`
+        : `Sending ${progress.project.name}: report ${progress.done + 1} of ${progress.total}…`;
+    });
+
+    const bits = [];
+    if (summary.reportsPushed) bits.push(`${summary.reportsPushed} report(s) sent`);
+    if (summary.reportsPulled) bits.push(`${summary.reportsPulled} report(s) received`);
+    statusEl.textContent = `Sync complete — ${bits.length ? bits.join(', ') : 'everything already up to date'}.`;
+
+    if (summary.errors.length) {
+      errorEl.textContent = summary.errors.map((e) => `${e.project}: ${e.message}`).join('\n');
+      errorEl.hidden = false;
+    }
+  } catch (err) {
+    console.error(err);
+    statusEl.hidden = true;
+    errorEl.textContent = 'Sync failed: ' + err.message;
+    errorEl.hidden = false;
+  } finally {
+    btn.disabled = false;
+    await refreshOneDriveSection();
+  }
+});
+
 // ---------- Init ----------
 
 (async () => {
   renderInstallSection();
   await refreshShareSection();
   showLogo(await getReportLogo());
+  try {
+    await initOneDriveAuth();
+  } catch (err) {
+    // Expected to fail until onedrive-config.js carries a real client ID --
+    // the rest of Settings still has to work in the meantime.
+    console.error('OneDrive auth init failed:', err);
+  }
+  await refreshOneDriveSection();
 })();
 </script>
 </body>

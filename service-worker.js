@@ -1,7 +1,7 @@
 // Caches the app shell + template so it keeps working with no signal in
 // the field. Bump CACHE_NAME whenever any of these files change so the new
 // version actually gets picked up.
-const CACHE_NAME = 'daily-report-app-v35';
+const CACHE_NAME = 'daily-report-app-v36';
 const ASSETS = [
   './',
   './index.html',
@@ -13,6 +13,7 @@ const ASSETS = [
   './quantity-sheet.html',
   './print-layout.json',
   './render-report.js',
+  './pdf-export.js',
   './setup-share.js',
   './style.css',
   './print-sheet.css',
@@ -22,10 +23,16 @@ const ASSETS = [
   './storage.js',
   './project-file.js',
   './quantity-calc.js',
+  './onedrive-config.js',
+  './onedrive-auth.js',
+  './onedrive-client.js',
+  './sync-export.js',
+  './sync-engine.js',
   './lib/xlsx.min.js',
   './lib/qrcode.min.js',
   './lib/jspdf.umd.min.js',
   './lib/html2canvas.min.js',
+  './lib/msal-browser.min.js',
   './template/daily-work-report-template.xlsx',
   './manifest.json',
   './icon.svg',

@@ -393,3 +393,63 @@ async function importReportsBackup(backup) {
     logoAdded,
   };
 }
+
+// ---------- OneDrive sync ----------
+//
+// One item at a time (as pulled down from OneDrive's Data/ folder, one file
+// per report/project) rather than a whole backup object -- same "newer
+// updatedAt wins" rule importReportsBackup uses in bulk, just applied one
+// at a time since that's how a folder listing naturally arrives. Takes an
+// already-fully-formed record (real Blob objects, not the {data,type}
+// entry shape a JSON file carries) so it works the same whether the record
+// came from deserializeImportedReport (the local backup file, which embeds
+// photos as base64) or from OneDrive sync (which reconstructs photos from
+// separately-downloaded files -- see sync-engine.js).
+async function mergeReportRecord(report) {
+  const existing = await getReport(report.id);
+  if (!existing) {
+    await putReportRaw(report);
+    return 'added';
+  }
+  if ((report.updatedAt || 0) > (existing.updatedAt || 0)) {
+    await putReportRaw(report);
+    return 'updated';
+  }
+  return 'skipped';
+}
+async function mergeIncomingReport(raw) {
+  return mergeReportRecord(deserializeImportedReport(raw));
+}
+
+async function mergeProjectRecord(project) {
+  const existing = await getProject(project.id);
+  if (!existing) {
+    await putProjectRaw(project);
+    return 'added';
+  }
+  if ((project.updatedAt || 0) > (existing.updatedAt || 0)) {
+    await putProjectRaw(project);
+    return 'updated';
+  }
+  return 'skipped';
+}
+async function mergeIncomingProject(raw) {
+  return mergeProjectRecord(deserializeImportedProject(raw));
+}
+
+// Stamps when a report/project was last successfully pushed to OneDrive,
+// via putRaw rather than saveReport/saveProject -- those bump `updatedAt`,
+// which would make a just-synced item look locally-changed again on the
+// very next sync check and push it right back up in a pointless loop.
+async function markReportSynced(reportId, syncedAt) {
+  const report = await getReport(reportId);
+  if (!report) return;
+  report.syncedAt = syncedAt;
+  await putReportRaw(report);
+}
+async function markProjectSynced(projectId, syncedAt) {
+  const project = await getProject(projectId);
+  if (!project) return;
+  project.syncedAt = syncedAt;
+  await putProjectRaw(project);
+}
