@@ -793,11 +793,11 @@ input[type="file"] { min-height: 0; }
   font-size: 0.88rem; margin: 1rem 0;
 }
 
-.bar-list { display: flex; flex-direction: column; gap: 0.7rem; max-height: 480px; overflow-y: auto; padding-right: 0.25rem; }
+.bar-list { display: flex; flex-direction: column; gap: 0.9rem; max-height: 560px; overflow-y: auto; padding-right: 0.25rem; }
 .bar-row { min-width: 0; }
 .bar-row .br-top {
-  display: flex; justify-content: space-between; align-items: baseline;
-  gap: 0.6rem; margin-bottom: 0.3rem; font-size: 0.82rem;
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 0.6rem; margin-bottom: 0.35rem; font-size: 0.82rem;
 }
 /* A flex item's default min-width is auto (its content's natural width), not
    0 -- without this, overflow:hidden/ellipsis never actually kicks in and a
@@ -805,17 +805,67 @@ input[type="file"] { min-height: 0; }
    of truncating. */
 .bar-row .br-label { flex: 1 1 auto; min-width: 0; font-weight: 700; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bar-row .br-desc { color: var(--text-dim); font-weight: 400; }
-.bar-row .br-pct { font-weight: 700; color: var(--text-dim); white-space: nowrap; flex: 0 0 auto; }
 .bar-track {
   height: 12px; border-radius: 8px; background: var(--surface-3); overflow: hidden;
 }
 .bar-fill {
   height: 100%; border-radius: 8px;
-  background: linear-gradient(90deg, var(--brand), var(--brand-light));
   transition: width 0.6s ease;
 }
-.bar-fill.br-over { background: linear-gradient(90deg, var(--ok), var(--brand-light)); }
-.bar-fill.br-nodata { background: var(--border-strong); }
+.bar-row .br-sub {
+  display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap;
+  gap: 0.3rem 0.6rem; margin-top: 0.35rem; font-size: 0.76rem; color: var(--text-dim);
+}
+.bar-row .br-sub .br-pct { font-weight: 700; color: var(--text); white-space: nowrap; flex: 0 0 auto; }
+
+/* ---------- Pay item status bands ----------
+   One shared colour language (five bands + "no target") used in three
+   places: the pill badge on each row, that row's bar fill, and the summary
+   strip's segments/legend dots above the list -- so the colour always means
+   the same thing wherever it shows up on the page. */
+.status-dot.status-notstarted, .status-bar span.status-notstarted, .bar-fill.status-notstarted,
+.status-dot.status-none, .status-bar span.status-none, .bar-fill.status-none { background: var(--border-strong); }
+.status-dot.status-early, .status-bar span.status-early, .bar-fill.status-early { background: var(--warn); }
+.status-dot.status-progress, .status-bar span.status-progress, .bar-fill.status-progress { background: linear-gradient(90deg, var(--brand), var(--brand-light)); }
+.status-dot.status-near, .status-bar span.status-near, .bar-fill.status-near { background: linear-gradient(90deg, var(--ok), var(--brand-light)); }
+.status-dot.status-over, .status-bar span.status-over, .bar-fill.status-over { background: linear-gradient(90deg, var(--danger), var(--warn)); }
+
+.pill {
+  display: inline-flex; align-items: center; flex: 0 0 auto; white-space: nowrap;
+  font-size: 0.64rem; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase;
+  padding: 3px 8px; border-radius: 10px;
+}
+.pill.status-notstarted, .pill.status-none { background: var(--surface-3); color: var(--text-dim); border: 1px solid var(--border); }
+.pill.status-early { background: var(--warn-bg); color: var(--warn); border: 1px solid var(--warn-border); }
+.pill.status-progress { background: var(--brand-dim); color: var(--link); }
+.pill.status-near { background: var(--ok-bg); color: var(--ok); }
+.pill.status-over { background: var(--danger-bg); color: var(--danger); }
+
+.status-bar { display: flex; height: 14px; border-radius: 8px; overflow: hidden; background: var(--surface-3); margin-bottom: 0.7rem; }
+.status-bar span { height: 100%; display: block; }
+.status-legend { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; margin-bottom: 1rem; }
+.status-legend .sl-item { display: flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; color: var(--text-dim); }
+.status-legend .sl-dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; display: inline-block; }
+
+/* ---------- Progress-over-time chart ---------- */
+
+.trend-svg { width: 100%; height: auto; display: block; }
+.trend-grid { stroke: var(--border); stroke-width: 1; }
+.trend-axis-label { font-size: 9px; fill: var(--text-dim); }
+.trend-area { fill: var(--brand-dim); stroke: none; }
+.trend-line { fill: none; stroke: var(--brand); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.trend-dot { fill: var(--brand); stroke: var(--surface); stroke-width: 2; }
+
+/* ---------- Weather & schedule log ---------- */
+
+.weather-log { display: flex; flex-direction: column; gap: 0.6rem; max-height: 460px; overflow-y: auto; padding-right: 0.25rem; }
+.wlog-row { display: flex; gap: 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.65rem 0.8rem; background: var(--surface); }
+.wlog-date { flex: 0 0 auto; width: 60px; font-weight: 700; font-size: 0.8rem; color: var(--text); }
+.wlog-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.82rem; color: var(--text-dim); }
+.wlog-weather { color: var(--text); }
+.wlog-tc { display: flex; align-items: center; gap: 0.4rem; }
+.wlog-tc .status-dot { width: 8px; height: 8px; display: inline-block; border-radius: 50%; flex: 0 0 auto; }
+.wlog-comment { font-style: italic; }
 
 .settings-toggle {
   width: 100%; display: flex; align-items: center; justify-content: space-between;

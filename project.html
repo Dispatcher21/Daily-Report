@@ -48,12 +48,35 @@
 
     <div class="step">
       <div class="step-header">
-        <span class="step-num">PROGRESS</span>
+        <span class="step-num">PAY ITEMS</span>
         <h2>Pay Item Completion</h2>
       </div>
       <div class="step-body">
+        <div id="dash-status-summary"></div>
         <div class="bar-list" id="dash-bars"></div>
-        <p class="hint" id="dash-bars-empty" hidden style="margin:0;">None of the pay items used on reports so far have a Per Plans Total on file &mdash; add one to each item in the project's data file to see completion bars here.</p>
+        <p class="hint" id="dash-bars-empty" hidden style="margin:0;">This project's pay item catalog is empty &mdash; add items to the project's data file to see them here.</p>
+      </div>
+    </div>
+
+    <div class="step" id="dash-trend-step" hidden>
+      <div class="step-header">
+        <span class="step-num">TREND</span>
+        <h2>Progress Over Time</h2>
+      </div>
+      <div class="step-body">
+        <div id="dash-trend-chart"></div>
+        <p class="hint" id="dash-trend-hint" hidden style="margin-top:0.5rem;">Only one dated report on file so far &mdash; a trend line will appear once there's more than one date to compare.</p>
+      </div>
+    </div>
+
+    <div class="step" id="dash-weather-step" hidden>
+      <div class="step-header">
+        <span class="step-num">CONDITIONS</span>
+        <h2>Weather &amp; Schedule</h2>
+      </div>
+      <div class="step-body">
+        <div class="dash-grid" id="dash-weather-stats" style="margin-top:0;"></div>
+        <div class="weather-log" id="dash-weather-log"></div>
       </div>
     </div>
   </div>
@@ -184,6 +207,26 @@ function statCard(value, label, sub, tip) {
     </div>`;
 }
 
+function fmtMoney(n) {
+  return n == null ? '—' : n.toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+}
+
+// Colour-coded completion band for one pay item's percent complete -- the
+// same five bands drive the status pill, the bar fill, and the summary strip
+// at the top of the section, so an inspector reads one consistent colour
+// language across all three. Thresholds: nothing used yet, under half, half
+// to 90%, 90% to 110% (effectively "done" either side of exactly on-target),
+// and meaningfully over -- which is flagged as attention-worthy (an overrun),
+// not as extra good news.
+function completionBand(pct) {
+  if (pct == null) return { cls: 'status-none', label: 'No Target' };
+  if (pct <= 0) return { cls: 'status-notstarted', label: 'Not Started' };
+  if (pct < 0.5) return { cls: 'status-early', label: 'Early' };
+  if (pct < 0.9) return { cls: 'status-progress', label: 'In Progress' };
+  if (pct < 1.1) return { cls: 'status-near', label: pct >= 1 ? 'Complete' : 'Near Complete' };
+  return { cls: 'status-over', label: 'Over Plan' };
+}
+
 function renderDashboard(reports, project) {
   const hasReports = reports.length > 0;
   $('#dash-empty').hidden = hasReports;
@@ -206,12 +249,16 @@ function renderDashboard(reports, project) {
     if (Number.isFinite(d)) daysSinceNtp = d;
   }
 
+  // Every pay item in the catalog, not just ones that have shown up on a
+  // report yet -- an item nobody's touched still counts toward the
+  // project's total scope (and toward the weighted % complete below).
   const flatItems = dated.concat(reports.filter((r) => !r.date)).flatMap((r) => r.payItems || []);
-  const items = aggregatePayItemTotals(flatItems, project.payItemCatalog);
+  const items = fullPayItemCatalogOverview(flatItems, project.payItemCatalog);
   const overall = overallPercentComplete(items);
+  const { totalContract, totalEarned, pctByValue } = contractValueSummary(items);
 
   const overallTip = overall == null
-    ? 'No pay item on this project has both usage and a Per Plans Total, so there\'s nothing to weight yet.'
+    ? 'No pay item on this project has both a Per Plans Total and any usage yet, so there\'s nothing to weight.'
     : `Total quantity used across every pay item that has a Per Plans Total on file, divided by their combined planned quantity. Items with no Per Plans Total aren't counted either way.`;
 
   $('#dash-stats').innerHTML =
@@ -242,27 +289,172 @@ function renderDashboard(reports, project) {
         : 'No dated reports yet to measure a week span from.'
     ) +
     statCard(
-      items.length, 'Pay Items Tracked', '',
-      'Number of distinct pay item numbers that appear on at least one report.'
+      items.length, 'Pay Items in Catalog', '',
+      'Number of distinct pay item numbers on this project, whether or not they\'ve shown up on a report yet.'
+    ) +
+    statCard(
+      fmtMoney(totalContract), 'Total Contract Value', '',
+      'Sum of Per Plans Total × Unit Price across every pay item that has both on file.'
+    ) +
+    statCard(
+      fmtMoney(totalEarned),
+      'Earned to Date',
+      pctByValue != null ? `${(pctByValue * 100).toFixed(1)}% of contract value` : '',
+      'Sum of quantity used × Unit Price across every pay item that has a Unit Price on file.'
     );
 
-  // Only items with a planned quantity can meaningfully show a % bar; the
-  // rest just don't have a target to measure against. Sorted least-complete
-  // first so whatever needs attention shows up at the top.
-  const chartItems = items.filter((it) => it.planned != null).sort((a, b) => a.pct - b.pct);
-  $('#dash-bars-empty').hidden = chartItems.length > 0;
-  $('#dash-bars').innerHTML = chartItems
-    .map((it) => {
-      const widthPct = Math.min(it.pct * 100, 100);
-      const cls = it.pct >= 1 ? 'br-over' : '';
-      const barTip = `${it.total.toLocaleString()} ${it.unit || ''} used of ${it.planned.toLocaleString()} ${it.unit || ''} planned (${(it.pct * 100).toFixed(1)}%).`;
+  renderPayItems(items);
+  renderTrendChart(progressOverTime(dated, project.payItemCatalog));
+  renderWeatherSchedule(dated);
+}
+
+// ---------- Pay item completion (color-coded list + summary strip) ----------
+
+function renderPayItems(items) {
+  $('#dash-bars-empty').hidden = items.length > 0;
+  if (items.length === 0) {
+    $('#dash-status-summary').innerHTML = '';
+    $('#dash-bars').innerHTML = '';
+    return;
+  }
+
+  // Items with a real target sort least-complete-first, so whatever needs
+  // attention floats to the top; items with no Per Plans Total at all follow,
+  // grouped at the bottom since there's no completion to rank them by.
+  const withTarget = items.filter((it) => it.pct != null).sort((a, b) => a.pct - b.pct);
+  const noTarget = items
+    .filter((it) => it.pct == null)
+    .sort((a, b) => a.itemNumber.localeCompare(b.itemNumber, undefined, { numeric: true }));
+  const sorted = withTarget.concat(noTarget);
+
+  const bandOrder = ['status-notstarted', 'status-early', 'status-progress', 'status-near', 'status-over', 'status-none'];
+  const bandLabels = {
+    'status-notstarted': 'Not Started', 'status-early': 'Early', 'status-progress': 'In Progress',
+    'status-near': 'Near/Complete', 'status-over': 'Over Plan', 'status-none': 'No Target',
+  };
+  const counts = Object.fromEntries(bandOrder.map((b) => [b, 0]));
+  sorted.forEach((it) => counts[completionBand(it.pct).cls]++);
+  const total = sorted.length;
+
+  const segments = bandOrder.filter((b) => counts[b] > 0)
+    .map((b) => `<span class="${b}" style="width:${(counts[b] / total) * 100}%"></span>`).join('');
+  const legend = bandOrder.filter((b) => counts[b] > 0)
+    .map((b) => `<span class="sl-item"><span class="sl-dot ${b}"></span>${bandLabels[b]} (${counts[b]})</span>`).join('');
+  $('#dash-status-summary').innerHTML = `<div class="status-bar">${segments}</div><div class="status-legend">${legend}</div>`;
+
+  $('#dash-bars').innerHTML = sorted.map((it) => {
+    const band = completionBand(it.pct);
+    const widthPct = it.pct == null ? 0 : Math.min(Math.max(it.pct, 0) * 100, 100);
+    const pctLabel = it.pct == null ? '—' : `${(it.pct * 100).toFixed(1)}%`;
+    const qtyLine = it.planned != null
+      ? `${it.total.toLocaleString()} of ${it.planned.toLocaleString()} ${it.unit || ''} planned`
+      : `${it.total.toLocaleString()} ${it.unit || ''} used — no Per Plans Total on file`;
+    const moneyLine = it.unitPrice != null
+      ? ` &middot; ${fmtMoney(it.earnedTotal)} earned${it.contractTotal != null ? ' of ' + fmtMoney(it.contractTotal) : ''}`
+      : '';
+    const tip = `${qtyLine}.${it.unitPrice != null ? ' Unit price ' + fmtMoney(it.unitPrice) + '/' + (it.unit || 'unit') + '.' : ' No Unit Price on file.'}`;
+    return `
+      <div class="bar-row" data-tip="${escapeHtml(tip)}" tabindex="0">
+        <div class="br-top">
+          <span class="br-label">${escapeHtml(it.itemNumber)} <span class="br-desc">${escapeHtml(it.description)}</span></span>
+          <span class="pill ${band.cls}">${band.label}</span>
+        </div>
+        <div class="bar-track"><div class="bar-fill ${band.cls}" style="width:${widthPct}%"></div></div>
+        <div class="br-sub"><span>${qtyLine}${moneyLine}</span><span class="br-pct">${pctLabel}</span></div>
+      </div>`;
+  }).join('');
+}
+
+// ---------- Progress over time (hand-rolled SVG line chart) ----------
+
+function trendDateLabel(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  return m ? `${m[2]}/${m[3]}` : iso;
+}
+
+function renderTrendChart(points) {
+  const step = $('#dash-trend-step');
+  step.hidden = points.length === 0;
+  $('#dash-trend-hint').hidden = points.length !== 1;
+  if (points.length === 0) {
+    $('#dash-trend-chart').innerHTML = '';
+    return;
+  }
+
+  const w = 640, h = 220, padL = 38, padR = 12, padT = 14, padB = 26;
+  const innerW = w - padL - padR, innerH = h - padT - padB;
+  const n = points.length;
+  const x = (i) => padL + (n <= 1 ? innerW / 2 : (innerW * i) / (n - 1));
+  const y = (pct) => padT + innerH * (1 - Math.max(0, Math.min(1, pct || 0)));
+
+  const gridLines = [0, 0.25, 0.5, 0.75, 1].map((f) => {
+    const gy = y(f);
+    return `<line x1="${padL}" y1="${gy}" x2="${w - padR}" y2="${gy}" class="trend-grid"></line>
+      <text x="${padL - 6}" y="${gy + 3}" class="trend-axis-label" text-anchor="end">${Math.round(f * 100)}%</text>`;
+  }).join('');
+
+  const coords = points.map((p, i) => [x(i), y(p.pct)]);
+  let pathSection = '';
+  if (n > 1) {
+    const linePath = 'M' + coords.map((c) => c.join(',')).join(' L');
+    const areaPath = `M${coords[0][0]},${padT + innerH} L${coords.map((c) => c.join(',')).join(' L')} L${coords[n - 1][0]},${padT + innerH} Z`;
+    pathSection = `<path d="${areaPath}" class="trend-area"></path><path d="${linePath}" class="trend-line"></path>`;
+  }
+
+  const dots = points.map((p, i) => {
+    const [cx, cy] = coords[i];
+    const tip = `${p.date}: ${p.pct != null ? (p.pct * 100).toFixed(1) + '% complete' : 'no target set yet'}${p.earned != null ? ', ' + fmtMoney(p.earned) + ' earned' : ''}`;
+    return `<circle cx="${cx}" cy="${cy}" r="4" class="trend-dot"><title>${escapeHtml(tip)}</title></circle>`;
+  }).join('');
+
+  const xLabels = `<text x="${x(0)}" y="${h - 6}" class="trend-axis-label" text-anchor="start">${trendDateLabel(points[0].date)}</text>` +
+    (n > 1 ? `<text x="${x(n - 1)}" y="${h - 6}" class="trend-axis-label" text-anchor="end">${trendDateLabel(points[n - 1].date)}</text>` : '');
+
+  $('#dash-trend-chart').innerHTML = `
+    <svg viewBox="0 0 ${w} ${h}" class="trend-svg" role="img" aria-label="Overall percent complete over time">
+      ${gridLines}${pathSection}${dots}${xLabels}
+    </svg>`;
+}
+
+// ---------- Weather & schedule log ----------
+
+// Deliberately excludes a bare "wind" -- "light wind" or "breezy" in an
+// otherwise clear-day description is routine, not a schedule risk. "Windy"
+// and qualified wind ("high wind", "strong wind", gusts) still count.
+const ADVERSE_WEATHER_RE = /rain|storm|snow|\bice\b|icy|sleet|flood|hurricane|thunder|windy|(high|strong|heavy) wind|gust/i;
+
+function renderWeatherSchedule(dated) {
+  const step = $('#dash-weather-step');
+  const loggable = dated.filter((r) =>
+    r.weatherDesc || r.tempHigh || r.tempLow || r.trafficControlSelect || r.controllingItem || r.commentsOnTime
+  );
+  step.hidden = loggable.length === 0;
+  if (loggable.length === 0) return;
+
+  const weatherFlagged = dated.filter((r) => ADVERSE_WEATHER_RE.test(r.weatherDesc || '')).length;
+  const attentionDays = dated.filter((r) => r.trafficControlSelect === 'ATTENTION_REQUIRED').length;
+
+  $('#dash-weather-stats').innerHTML =
+    statCard(weatherFlagged, 'Weather-Flagged Days', '', 'Dated reports whose Weather Description mentions rain, snow, wind, or similar adverse conditions.') +
+    statCard(attentionDays, 'Traffic Control Attention Days', '', 'Dated reports where Traffic Control Status was set to "Attention Required".');
+
+  $('#dash-weather-log').innerHTML = loggable
+    .slice()
+    .reverse()
+    .map((r) => {
+      const isAttention = r.trafficControlSelect === 'ATTENTION_REQUIRED';
+      const temps = (r.tempHigh || r.tempLow) ? `${r.tempHigh || '—'}°/${r.tempLow || '—'}°F` : '';
+      const weatherText = [r.weatherDesc, temps].filter(Boolean).join(' · ');
+      const isAdverse = ADVERSE_WEATHER_RE.test(r.weatherDesc || '');
       return `
-        <div class="bar-row" data-tip="${escapeHtml(barTip)}" tabindex="0">
-          <div class="br-top">
-            <span class="br-label">${escapeHtml(it.itemNumber)} <span class="br-desc">${escapeHtml(it.description)}</span></span>
-            <span class="br-pct">${(it.pct * 100).toFixed(1)}%</span>
+        <div class="wlog-row">
+          <div class="wlog-date">${escapeHtml(r.date)}</div>
+          <div class="wlog-body">
+            ${weatherText ? `<div class="wlog-weather">${isAdverse ? '<span title="Adverse weather">⛈️</span> ' : ''}${escapeHtml(weatherText)}</div>` : ''}
+            ${r.trafficControlSelect ? `<div class="wlog-tc"><span class="status-dot ${isAttention ? 'status-over' : 'status-near'}"></span>Traffic Control: ${isAttention ? 'Attention Required' : 'In Place'}</div>` : ''}
+            ${r.controllingItem ? `<div><strong>Controlling Item:</strong> ${escapeHtml(r.controllingItem)}</div>` : ''}
+            ${r.commentsOnTime ? `<div class="wlog-comment">${escapeHtml(r.commentsOnTime)}</div>` : ''}
           </div>
-          <div class="bar-track"><div class="bar-fill ${cls}" style="width:${widthPct}%"></div></div>
         </div>`;
     })
     .join('');
