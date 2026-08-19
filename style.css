@@ -508,6 +508,22 @@ input[type="file"] { min-height: 0; }
   background: none; border: none; color: var(--danger); font-size: 1.4rem;
   cursor: pointer; padding: 0 0.3rem; min-width: 2.5rem; min-height: 2.5rem;
 }
+/* Two native <input type="time"> fields have a browser-enforced minimum
+   render width that a 5-column row has no room for once a phone gets narrow
+   enough -- it was pushing the whole page wider. Below that width, wrap the
+   subtotal onto its own line instead of fighting the inputs for space. */
+@media (max-width: 400px) {
+  .time-entry-row {
+    grid-template-columns: 1fr auto 1fr;
+    grid-template-areas: "start to end" "subtotal subtotal remove";
+    row-gap: 0.2rem;
+  }
+  .time-entry-row .te-start { grid-area: start; }
+  .time-entry-row span.te-to { grid-area: to; }
+  .time-entry-row .te-end { grid-area: end; }
+  .time-entry-row .te-subtotal { grid-area: subtotal; text-align: left; min-width: 0; }
+  .time-entry-row .te-remove { grid-area: remove; justify-self: end; }
+}
 
 .total-hours-row {
   display: flex; align-items: baseline; justify-content: space-between;
@@ -696,6 +712,14 @@ input[type="file"] { min-height: 0; }
 [data-tip]:focus-visible::after, [data-tip]:focus-visible::before {
   opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0);
 }
+/* A touch device has no hover, so these can never actually be triggered --
+   and being visibility:hidden rather than display:none, they still occupy
+   layout space and were quietly widening the whole page's scrollable area
+   on narrow screens even while invisible. Drop them outright where hover
+   doesn't exist rather than carry dead, overflow-causing boxes around. */
+@media (hover: none) {
+  [data-tip]::after, [data-tip]::before { content: none; }
+}
 
 /* ---------- Project dashboard ---------- */
 
@@ -765,11 +789,16 @@ input[type="file"] { min-height: 0; }
 }
 
 .bar-list { display: flex; flex-direction: column; gap: 0.7rem; max-height: 480px; overflow-y: auto; padding-right: 0.25rem; }
+.bar-row { min-width: 0; }
 .bar-row .br-top {
   display: flex; justify-content: space-between; align-items: baseline;
   gap: 0.6rem; margin-bottom: 0.3rem; font-size: 0.82rem;
 }
-.bar-row .br-label { font-weight: 700; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A flex item's default min-width is auto (its content's natural width), not
+   0 -- without this, overflow:hidden/ellipsis never actually kicks in and a
+   long description just pushes the row (and the whole page) wider instead
+   of truncating. */
+.bar-row .br-label { flex: 1 1 auto; min-width: 0; font-weight: 700; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bar-row .br-desc { color: var(--text-dim); font-weight: 400; }
 .bar-row .br-pct { font-weight: 700; color: var(--text-dim); white-space: nowrap; flex: 0 0 auto; }
 .bar-track {

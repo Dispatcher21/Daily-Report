@@ -24,6 +24,10 @@
   }
   #pdf-frame { width: 100%; height: 100%; border: 0; display: block; }
   #pdf-status { text-align: center; padding: 2.5rem 1rem; color: #dfe3e6; font-size: 0.9rem; }
+  #pdf-mobile-ready { text-align: center; padding: 2.5rem 1.25rem; color: #dfe3e6; }
+  #pdf-ready-icon { font-size: 2.6rem; display: block; margin-bottom: 0.75rem; }
+  #pdf-ready-text { font-weight: 700; font-size: 1rem; margin: 0 0 0.5rem; }
+  #pdf-mobile-ready .hint { color: #b7c0c9; }
 
   /* Off-screen sandbox: laid out normally (not display:none) so html2canvas
      can measure real geometry, just parked where nobody sees it. */
@@ -56,8 +60,14 @@
       <div id="pdf-preview-wrap">
         <div id="pdf-status">Rendering PDF preview&hellip;</div>
         <iframe id="pdf-frame" title="PDF preview" hidden></iframe>
+        <div id="pdf-mobile-ready" hidden>
+          <span id="pdf-ready-icon">&#128196;</span>
+          <p id="pdf-ready-text">Your report is ready.</p>
+          <p class="hint" style="margin:0;">Phone browsers can't preview a PDF inline here &mdash; use the buttons below to view or save it.</p>
+        </div>
       </div>
       <div class="export-bar">
+        <button type="button" class="btn-secondary" id="btn-view-pdf" hidden>View PDF</button>
         <button type="button" class="btn-primary" id="btn-download-pdf" disabled>Download PDF</button>
       </div>
     </div>
@@ -74,6 +84,14 @@
 <script src="render-report.js"></script>
 <script>
 const { jsPDF } = window.jspdf;
+
+// Same signal used elsewhere in the app (Settings' install instructions) to
+// tell a phone/tablet apart from a desktop browser -- iPadOS reports as
+// "MacIntel" like a real Mac, so touch points are the only way to catch it.
+function isMobileDevice() {
+  const ua = navigator.userAgent;
+  return /Android|iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
 
 // Rasterize each sheet at roughly this many dots per inch. The DOM renders at
 // 96dpi, so the html2canvas scale needed for a target DPI is TARGET/96 --
@@ -187,10 +205,24 @@ async function buildPdfBlob(sandbox, layout, reports, logoBlob, onProgress) {
     return;
   }
 
-  const frame = $('#pdf-frame');
-  frame.src = URL.createObjectURL(pdfBlob);
-  frame.hidden = false;
+  const pdfUrl = URL.createObjectURL(pdfBlob);
   $('#pdf-status').hidden = true;
+
+  // Desktop browsers (Chrome, Edge) render a PDF dropped into an iframe with
+  // their own built-in viewer. Phone browsers generally don't wire that up
+  // for iframes at all -- the frame just stays blank -- but they DO know
+  // what to do with a direct/new-tab navigation to a PDF, so that's the path
+  // offered there instead.
+  if (isMobileDevice()) {
+    $('#pdf-mobile-ready').hidden = false;
+    const btnView = $('#btn-view-pdf');
+    btnView.hidden = false;
+    btnView.addEventListener('click', () => window.open(pdfUrl, '_blank'));
+  } else {
+    const frame = $('#pdf-frame');
+    frame.src = pdfUrl;
+    frame.hidden = false;
+  }
 
   const btnPdf = $('#btn-download-pdf');
   btnPdf.disabled = false;
