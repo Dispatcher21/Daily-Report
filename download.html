@@ -22,12 +22,24 @@
     align-items: center;
     justify-content: center;
   }
+  /* The bare ID selector above beats the UA stylesheet's [hidden]{display:none}
+     on specificity alone, so toggling .hidden on this element did nothing
+     without this. */
+  #pdf-preview-wrap[hidden] { display: none; }
   #pdf-frame { width: 100%; height: 100%; border: 0; display: block; }
   #pdf-status { text-align: center; padding: 2.5rem 1rem; color: #dfe3e6; font-size: 0.9rem; }
-  #pdf-mobile-ready { text-align: center; padding: 2.5rem 1.25rem; color: #dfe3e6; }
-  #pdf-ready-icon { font-size: 2.6rem; display: block; margin-bottom: 0.75rem; }
-  #pdf-ready-text { font-weight: 700; font-size: 1rem; margin: 0 0 0.5rem; }
-  #pdf-mobile-ready .hint { color: #b7c0c9; }
+
+  /* Phone fallback: the same page images that get embedded into the PDF,
+     shown directly as plain <img> tags instead -- unlike a PDF-in-iframe,
+     an image just works everywhere, no native viewer support required. */
+  #pdf-mobile-gallery { display: flex; flex-direction: column; gap: 1.1rem; margin-bottom: 1rem; }
+  .pdf-page-label { font-size: 0.78rem; font-weight: 600; color: var(--text-dim); text-align: center; margin: 0 0 0.35rem; }
+  .pdf-page-preview {
+    display: block; border: 1px solid var(--border); border-radius: 8px;
+    overflow: hidden; background: #fff; box-shadow: var(--shadow); line-height: 0;
+  }
+  .pdf-page-preview img { display: block; width: 100%; height: auto; }
+  #pdf-gallery-hint { text-align: center; margin: -0.5rem 0 0; }
 
   /* Off-screen sandbox: laid out normally (not display:none) so html2canvas
      can measure real geometry, just parked where nobody sees it. */
@@ -60,14 +72,10 @@
       <div id="pdf-preview-wrap">
         <div id="pdf-status">Rendering PDF preview&hellip;</div>
         <iframe id="pdf-frame" title="PDF preview" hidden></iframe>
-        <div id="pdf-mobile-ready" hidden>
-          <span id="pdf-ready-icon">&#128196;</span>
-          <p id="pdf-ready-text">Your report is ready.</p>
-          <p class="hint" style="margin:0;">Phone browsers can't preview a PDF inline here &mdash; use the buttons below to view or save it.</p>
-        </div>
       </div>
+      <p class="hint" id="pdf-gallery-hint" hidden>Tap a page to open it full-size.</p>
+      <div id="pdf-mobile-gallery" hidden></div>
       <div class="export-bar">
-        <button type="button" class="btn-secondary" id="btn-view-pdf" hidden>View PDF</button>
         <button type="button" class="btn-primary" id="btn-download-pdf" disabled>Download PDF</button>
       </div>
     </div>
@@ -158,7 +166,10 @@ async function buildPdfBlob(sandbox, layout, reports, logoBlob, onProgress) {
     if (i > 0) doc.addPage([g.pageW, g.pageH], g.orientation);
     doc.addImage(cap.dataUrl, 'JPEG', g.x, g.y, g.drawW, g.drawH);
   });
-  return doc.output('blob');
+  // captures is returned alongside the blob, not just consumed here -- phones
+  // can't preview the PDF itself (see below), but the same page images that
+  // just got embedded into it work everywhere as plain <img> tags.
+  return { blob: doc.output('blob'), captures };
 }
 
 (async () => {
@@ -194,33 +205,44 @@ async function buildPdfBlob(sandbox, layout, reports, logoBlob, onProgress) {
   $('#no-logo-warning').hidden = !!logoBlob;
   const sandbox = $('#render-sandbox');
 
-  let pdfBlob;
+  let pdfBlob, captures;
   try {
-    pdfBlob = await buildPdfBlob(sandbox, layout, reports, logoBlob, (done, total) => {
+    ({ blob: pdfBlob, captures } = await buildPdfBlob(sandbox, layout, reports, logoBlob, (done, total) => {
       $('#pdf-status').textContent = `Rendering page ${done} of ${total}…`;
-    });
+    }));
   } catch (err) {
     console.error(err);
     $('#pdf-status').textContent = 'Could not generate the PDF: ' + err.message;
     return;
   }
 
-  const pdfUrl = URL.createObjectURL(pdfBlob);
   $('#pdf-status').hidden = true;
 
   // Desktop browsers (Chrome, Edge) render a PDF dropped into an iframe with
   // their own built-in viewer. Phone browsers generally don't wire that up
-  // for iframes at all -- the frame just stays blank -- but they DO know
-  // what to do with a direct/new-tab navigation to a PDF, so that's the path
-  // offered there instead.
+  // for iframes at all -- the frame just stays blank. Rather than fight
+  // that, phones get the same page images that were just rasterized to
+  // build the PDF, shown directly as plain <img> tags -- that has no
+  // dependency on native PDF support at all, so it just works everywhere.
   if (isMobileDevice()) {
-    $('#pdf-mobile-ready').hidden = false;
-    const btnView = $('#btn-view-pdf');
-    btnView.hidden = false;
-    btnView.addEventListener('click', () => window.open(pdfUrl, '_blank'));
+    $('#pdf-preview-wrap').hidden = true;
+    $('#pdf-gallery-hint').hidden = false;
+    const gallery = $('#pdf-mobile-gallery');
+    gallery.hidden = false;
+    gallery.innerHTML = captures
+      .map(
+        (cap, i) => `
+        <div>
+          ${captures.length > 1 ? `<p class="pdf-page-label">Page ${i + 1} of ${captures.length}</p>` : ''}
+          <a class="pdf-page-preview" href="${cap.dataUrl}" target="_blank" rel="noopener">
+            <img src="${cap.dataUrl}" alt="Report page ${i + 1}" loading="lazy">
+          </a>
+        </div>`
+      )
+      .join('');
   } else {
     const frame = $('#pdf-frame');
-    frame.src = pdfUrl;
+    frame.src = URL.createObjectURL(pdfBlob);
     frame.hidden = false;
   }
 
