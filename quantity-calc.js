@@ -9,6 +9,16 @@ function parsedUnitPrice(cat) {
   return cat && cat.unitPrice !== '' && cat.unitPrice != null && isFinite(n) && n >= 0 ? n : null;
 }
 
+// A Lump Sum item has no physical quantity a daily total is ever really
+// counting toward -- "0.25 of 1 LUMP SUM" isn't a meaningful measurement the
+// way "0.664 of 12 MILE" is. These are deliberately kept out of % complete
+// (per-item band, and the project-wide weighted Overall % Complete) even
+// when a Per Plans Total happens to be on file; they still show their raw
+// used quantity and can still carry a dollar value if priced.
+function isLumpSumUnit(unit) {
+  return /^lump\s*sum$|^l\.?s\.?$/i.test(String(unit || '').trim());
+}
+
 // Sums each pay item's quantity across a flat list of pay-item entries
 // (first-seen order, so it's on the caller to pass them in whatever order
 // "first seen" should mean -- chronological, undated-last, whatever fits),
@@ -42,13 +52,14 @@ function aggregatePayItemTotals(flatItems, payItemCatalog) {
     // The catalog's own description/unit win over whatever happened to be
     // typed on the report entry (a catalog item is the authoritative source,
     // and it's the only source at all for items with zero usage).
+    const unit = (cat && cat.unit) || meta.unit;
     return {
       itemNumber: meta.itemNumber,
       description: (cat && cat.description) || meta.description,
-      unit: (cat && cat.unit) || meta.unit,
+      unit,
       total,
       planned,
-      pct: planned != null ? total / planned : null,
+      pct: planned != null && !isLumpSumUnit(unit) ? total / planned : null,
       unitPrice,
       contractTotal: planned != null && unitPrice != null ? planned * unitPrice : null,
       earnedTotal: unitPrice != null ? total * unitPrice : null,
@@ -82,7 +93,7 @@ function fullPayItemCatalogOverview(flatItems, payItemCatalog) {
         unit: cat.unit || '',
         total: 0,
         planned,
-        pct: planned != null ? 0 : null,
+        pct: planned != null && !isLumpSumUnit(cat.unit) ? 0 : null,
         unitPrice,
         contractTotal: planned != null && unitPrice != null ? planned * unitPrice : null,
         earnedTotal: unitPrice != null ? 0 : null,
@@ -152,12 +163,14 @@ function progressOverTime(datedReports, payItemCatalog) {
 // file: sum(quantity used) / sum(quantity planned), not a simple average of
 // each item's own percentage or a count of "finished" items. Items with no
 // planned quantity are excluded from both the numerator and denominator
-// rather than silently counted as 0%.
+// rather than silently counted as 0% -- as are Lump Sum items, whose
+// "quantity" isn't on the same physical scale as everything else being
+// summed, even on the rare occasion one has a Per Plans Total on file.
 function overallPercentComplete(items) {
   let sumTotal = 0;
   let sumPlanned = 0;
   for (const it of items) {
-    if (it.planned != null) {
+    if (it.planned != null && !isLumpSumUnit(it.unit)) {
       sumTotal += it.total;
       sumPlanned += it.planned;
     }

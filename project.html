@@ -279,7 +279,7 @@ function renderDashboard(reports, project) {
 
   const overallTip = overall == null
     ? 'No pay item on this project has both a Per Plans Total and any usage yet, so there\'s nothing to weight.'
-    : `Total quantity used across every pay item that has a Per Plans Total on file, divided by their combined planned quantity. Items with no Per Plans Total aren't counted either way.`;
+    : `Total quantity used across every pay item that has a Per Plans Total on file, divided by their combined planned quantity. Items with no Per Plans Total aren't counted either way, and neither are Lump Sum items, which aren't measured on a comparable scale.`;
 
   $('#dash-stats').innerHTML =
     `<div class="dash-card dc-headline" data-tip="${escapeHtml(overallTip)}" tabindex="0">
@@ -366,9 +366,13 @@ function renderPayItems(items) {
     const band = completionBand(it.pct);
     const widthPct = it.pct == null ? 0 : Math.min(Math.max(it.pct, 0) * 100, 100);
     const pctLabel = it.pct == null ? '—' : `${(it.pct * 100).toFixed(1)}%`;
-    const qtyLine = it.planned != null
+    // Keyed off pct rather than planned: a Lump Sum item is deliberately kept
+    // out of % complete even if it does have a Per Plans Total on file (see
+    // quantity-calc.js), so it reads as plain usage here too, not a target
+    // it isn't actually being measured against.
+    const qtyLine = it.pct != null
       ? `${it.total.toLocaleString()} of ${it.planned.toLocaleString()} ${it.unit || ''} planned`
-      : `${it.total.toLocaleString()} ${it.unit || ''} used — no Per Plans Total on file`;
+      : `${it.total.toLocaleString()} ${it.unit || ''} used — ${it.planned != null ? 'lump sum items aren\'t tracked toward a target' : 'no Per Plans Total on file'}`;
     const moneyLine = it.unitPrice != null
       ? ` &middot; ${fmtMoney(it.earnedTotal)} earned${it.contractTotal != null ? ' of ' + fmtMoney(it.contractTotal) : ''}`
       : '';
