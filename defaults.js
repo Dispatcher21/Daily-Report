@@ -25,7 +25,12 @@ const DEFAULT_EQUIPMENT_LABELS = [
   '', '', '', '', '', '', '',
 ];
 const CONTRACTOR_COUNT = 6; // fixed by the template
-const PAY_ITEM_ROW_COUNT = 6; // fixed by the template
+// How many pay item rows the printed table itself has room for -- not a cap
+// on how many a report can hold. A report can carry more; render-report.js
+// prints the first PAY_ITEM_ROW_COUNT in the table and lists the rest as
+// extra lines in the Summary of Work Performed box. Also the number of
+// blank rows a brand-new report starts with in the editor.
+const PAY_ITEM_ROW_COUNT = 6;
 
 function todayIso() {
   const d = new Date();

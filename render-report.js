@@ -157,6 +157,11 @@ function renderSheetGrid(sheetData, coordValues, coordImages) {
           cellEl.style.overflow = 'hidden';
           cellEl.classList.add('rr-shrink-wrap');
         }
+        // Work summary (I14): already wraps via the template's own cell
+        // style, but now that overflow pay items can be appended onto the
+        // end of it, a long combination needs the same shrink-to-fit safety
+        // net the pay item descriptions get, instead of silently clipping.
+        if (coord === RR_WORK_SUMMARY_CELL) cellEl.classList.add('rr-shrink-wrap');
         const rot = (styleData && styleData.align && styleData.align.rot) || 0;
         if (rot && text) {
           const span = document.createElement('span');
@@ -231,6 +236,9 @@ const RR_NOWRAP_CELLS = { I12: 10 };
 // two words collide. A little indent restores the gap the printed form has.
 const RR_INDENT_CELLS = { K11: 10 };
 
+// The big "Summary of Work Performed" box.
+const RR_WORK_SUMMARY_CELL = 'I14';
+
 // The pay item Description cell (K28:O28, and one row per item below it)
 // isn't marked wrap-enabled in the template, so by default it inherits the
 // same "spill into the next cell" behaviour every other unwrapped label
@@ -276,9 +284,26 @@ function buildSheet1Values(report) {
 
   v['K11'] = report.workSummaryHeader || '';
   v['K12'] = report.trafficControlNote || '';
-  v['I14'] = report.workSummary || '';
 
-  (report.payItems || []).forEach((item, i) => {
+  // The template's table only has PAY_ITEM_ROW_COUNT physical rows. Nothing
+  // beyond that is dropped -- it's listed as extra lines at the end of the
+  // work summary box instead, same order of fields (item number,
+  // description, quantity, unit) and same dash-separated style an inspector
+  // already uses when a day's pay items don't fit in the table by hand.
+  const filledPayItems = (report.payItems || []).filter((it) => it.itemNumber || it.description);
+  const tableItems = filledPayItems.slice(0, PAY_ITEM_ROW_COUNT);
+  const overflowItems = filledPayItems.slice(PAY_ITEM_ROW_COUNT);
+
+  let workSummaryText = report.workSummary || '';
+  if (overflowItems.length > 0) {
+    const overflowLines = overflowItems
+      .map((it) => [it.itemNumber, it.description, [it.qty, it.unit].filter(Boolean).join(' ')].filter(Boolean).join(' - '))
+      .join('\n');
+    workSummaryText += `${workSummaryText ? '\n\n' : ''}Pay Items (did not fit in table above):\n${overflowLines}`;
+  }
+  v[RR_WORK_SUMMARY_CELL] = workSummaryText;
+
+  tableItems.forEach((item, i) => {
     const r = RR_PAY_ITEM_FIRST_ROW + i;
     v['I' + r] = item.itemNumber || '';
     v['K' + r] = item.description || '';

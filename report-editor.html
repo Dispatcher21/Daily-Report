@@ -85,6 +85,7 @@
       <span class="step-tag" id="pay-items-tag">0 / 6</span>
     </div>
     <div class="step-body">
+      <p class="hint" style="margin-top:0;">No limit on how many you add. The printed template has room for 6 in the table itself; anything past that lists automatically at the end of the Summary of Work Performed, the same way it'd be written in by hand.</p>
       <label>Search Catalog <input type="text" id="pi-search" placeholder="Search by item # or description..."></label>
       <div id="pay-catalog-list" class="check-list"></div>
 
@@ -467,21 +468,29 @@ function renderPayItemsStep() {
   }
 
   renderSelectedPayItems();
-  $('#pay-items-tag').textContent = `${payItemFilledCount()} / 6`;
+  const filled = payItemFilledCount();
+  $('#pay-items-tag').textContent = filled > PAY_ITEM_ROW_COUNT
+    ? `${PAY_ITEM_ROW_COUNT} in table + ${filled - PAY_ITEM_ROW_COUNT} in summary`
+    : `${filled} / ${PAY_ITEM_ROW_COUNT}`;
 }
 
+// No cap: the printed template only has room for PAY_ITEM_ROW_COUNT rows in
+// the table itself, but anything beyond that isn't rejected -- render-report.js
+// lists it as extra lines in the Summary of Work Performed box instead, the
+// same way an inspector already writes overflow pay items by hand when a
+// day's list doesn't fit.
 function togglePayItem(catalogItem) {
   const items = report.payItems;
   const existingIdx = items.findIndex((pi) => pi.itemNumber && pi.itemNumber === catalogItem.itemNumber);
   if (existingIdx !== -1) {
-    items[existingIdx] = { itemNumber: '', description: '', qty: '', unit: '' };
+    items.splice(existingIdx, 1);
   } else {
     const emptyIdx = items.findIndex((pi) => !pi.itemNumber && !pi.description);
     if (emptyIdx === -1) {
-      alert('Maximum 6 pay items per report (fixed by the template). Remove one first.');
-      return;
+      items.push({ itemNumber: catalogItem.itemNumber, description: catalogItem.description, qty: '', unit: catalogItem.unit });
+    } else {
+      items[emptyIdx] = { itemNumber: catalogItem.itemNumber, description: catalogItem.description, qty: '', unit: catalogItem.unit };
     }
-    items[emptyIdx] = { itemNumber: catalogItem.itemNumber, description: catalogItem.description, qty: '', unit: catalogItem.unit };
   }
   scheduleSave();
   renderPayItemsStep();
@@ -515,7 +524,7 @@ function renderSelectedPayItems() {
   });
   $$('.si-remove', container).forEach((btn) => {
     btn.addEventListener('click', () => {
-      report.payItems[Number(btn.dataset.idx)] = { itemNumber: '', description: '', qty: '', unit: '' };
+      report.payItems.splice(Number(btn.dataset.idx), 1);
       scheduleSave();
       renderPayItemsStep();
     });
@@ -543,10 +552,10 @@ $('#btn-add-manual-pay').addEventListener('click', () => {
   }
   const emptyIdx = report.payItems.findIndex((pi) => !pi.itemNumber && !pi.description);
   if (emptyIdx === -1) {
-    alert('Maximum 6 pay items per report (fixed by the template). Remove one first.');
-    return;
+    report.payItems.push({ itemNumber, description, qty: '', unit });
+  } else {
+    report.payItems[emptyIdx] = { itemNumber, description, qty: '', unit };
   }
-  report.payItems[emptyIdx] = { itemNumber, description, qty: '', unit };
   $('#mp-num').value = '';
   $('#mp-desc').value = '';
   $('#mp-unit').value = '';
