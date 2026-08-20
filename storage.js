@@ -117,13 +117,27 @@ async function putReportRaw(report) {
   await withStore(REPORTS_STORE, 'readwrite', (store) => store.put(report));
 }
 
+// The onLocalFolder* calls below are optional hooks into local-folder-sync.js
+// (mirrors data to a user-chosen folder) -- storage.js has no idea that file
+// exists. They're plain globals checked by name so pages that don't include
+// local-folder-sync.js work exactly as before, and so this file never needs
+// to import anything sync-related itself. Fired without awaiting: folder I/O
+// shouldn't make the caller wait for a save that's already durable in
+// IndexedDB by this point.
 async function saveReport(report) {
   report.updatedAt = Date.now();
   await putReportRaw(report);
+  if (typeof onLocalFolderReportChanged === 'function') {
+    onLocalFolderReportChanged(report, false).catch((err) => console.error('local folder mirror:', err));
+  }
 }
 
 async function deleteReport(id) {
+  const report = typeof onLocalFolderReportChanged === 'function' ? await getReport(id) : null;
   await withStore(REPORTS_STORE, 'readwrite', (store) => store.delete(id));
+  if (report) {
+    onLocalFolderReportChanged(report, true).catch((err) => console.error('local folder mirror:', err));
+  }
 }
 
 function getAllReports() {
@@ -161,6 +175,9 @@ async function putProjectRaw(project) {
 async function saveProject(project) {
   project.updatedAt = Date.now();
   await putProjectRaw(project);
+  if (typeof onLocalFolderProjectChanged === 'function') {
+    onLocalFolderProjectChanged(project, false).catch((err) => console.error('local folder mirror:', err));
+  }
 }
 
 function getAllProjects() {
@@ -180,11 +197,15 @@ async function getProject(id) {
 
 // Deletes a project and every report that belongs to it.
 async function deleteProject(id) {
+  const project = typeof onLocalFolderProjectChanged === 'function' ? await getProject(id) : null;
   const reports = await getReportsForProject(id);
   for (const r of reports) {
-    await deleteReport(r.id);
+    await deleteReport(r.id); // also mirrors each report's own deletion, see above
   }
   await withStore(PROJECTS_STORE, 'readwrite', (store) => store.delete(id));
+  if (project) {
+    onLocalFolderProjectChanged(project, true).catch((err) => console.error('local folder mirror:', err));
+  }
 }
 
 // One-time, automatic: if there are reports from before projects existed
@@ -394,17 +415,16 @@ async function importReportsBackup(backup) {
   };
 }
 
-// ---------- OneDrive sync ----------
+// ---------- Merging a single incoming record ----------
 //
-// One item at a time (as pulled down from OneDrive's Data/ folder, one file
-// per report/project) rather than a whole backup object -- same "newer
-// updatedAt wins" rule importReportsBackup uses in bulk, just applied one
-// at a time since that's how a folder listing naturally arrives. Takes an
-// already-fully-formed record (real Blob objects, not the {data,type}
-// entry shape a JSON file carries) so it works the same whether the record
-// came from deserializeImportedReport (the local backup file, which embeds
-// photos as base64) or from OneDrive sync (which reconstructs photos from
-// separately-downloaded files -- see sync-engine.js).
+// One item at a time -- as read from a .report bundle or a local sync
+// folder, one file per report/project -- rather than a whole backup object.
+// Same "newer updatedAt wins" rule importReportsBackup uses in bulk, just
+// applied one at a time since that's how these arrive. Takes an
+// already-fully-formed record (real Blob/File objects, not the {data,type}
+// entry shape a JSON backup file carries) so it works the same regardless
+// of where the record came from -- see report-bundle.js and
+// local-folder-sync.js.
 async function mergeReportRecord(report) {
   const existing = await getReport(report.id);
   if (!existing) {
@@ -435,21 +455,4 @@ async function mergeProjectRecord(project) {
 }
 async function mergeIncomingProject(raw) {
   return mergeProjectRecord(deserializeImportedProject(raw));
-}
-
-// Stamps when a report/project was last successfully pushed to OneDrive,
-// via putRaw rather than saveReport/saveProject -- those bump `updatedAt`,
-// which would make a just-synced item look locally-changed again on the
-// very next sync check and push it right back up in a pointless loop.
-async function markReportSynced(reportId, syncedAt) {
-  const report = await getReport(reportId);
-  if (!report) return;
-  report.syncedAt = syncedAt;
-  await putReportRaw(report);
-}
-async function markProjectSynced(projectId, syncedAt) {
-  const project = await getProject(projectId);
-  if (!project) return;
-  project.syncedAt = syncedAt;
-  await putProjectRaw(project);
 }

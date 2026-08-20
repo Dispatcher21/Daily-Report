@@ -154,27 +154,40 @@
     </div>
   </div>
 
-  <div class="step" id="onedrive-step">
+  <div class="step" id="local-folder-step" hidden>
     <div class="step-header">
       <span class="step-num">SYNC</span>
-      <h2>OneDrive Sync <span style="font-weight:400;opacity:.75;">(testing)</span></h2>
+      <h2>Local Save Folder</h2>
     </div>
     <div class="step-body">
-      <p class="hint" style="margin-top:0;">Keeps your reports up to date across your own devices through your company OneDrive &mdash; a PDF and photos per report, plus a project spreadsheet, land in a dedicated OneDrive folder this app can see and nothing else. This is the only feature in the app that transmits anything, and only when you tap Sync.</p>
+      <p class="hint" style="margin-top:0;">Point the app at a folder on this device &mdash; inside your OneDrive, Dropbox, a USB drive, wherever &mdash; and every project and report is kept mirrored there as plain files: no zipping, no proprietary format. Point the same folder on another device and it picks up right where you left off. Nothing is transmitted by this app itself; whatever keeps that folder in sync does that part on its own.</p>
 
-      <div id="onedrive-disconnected">
-        <button type="button" class="btn-primary" id="btn-onedrive-connect">Connect OneDrive</button>
+      <div id="local-folder-none">
+        <button type="button" class="btn-primary" id="btn-choose-folder">Choose Folder</button>
       </div>
 
-      <div id="onedrive-connected" hidden>
-        <div class="success" id="onedrive-account-line" style="margin-bottom:0.75rem;"></div>
-        <button type="button" class="btn-primary" id="btn-onedrive-sync" style="margin-bottom:0.5rem;">Sync Now</button>
-        <p class="hint" id="onedrive-last-synced" style="margin:0 0 0.75rem;"></p>
-        <button type="button" class="text-btn" id="btn-onedrive-disconnect" style="padding:0;color:var(--danger);">Disconnect</button>
+      <div id="local-folder-reconnect" hidden>
+        <p class="hint">Permission to <strong id="local-folder-reconnect-name"></strong> needs to be re-granted before syncing can continue.</p>
+        <button type="button" class="btn-primary" id="btn-reconnect-folder" style="margin-bottom:0.5rem;">Reconnect</button>
+        <br>
+        <button type="button" class="text-btn" id="btn-forget-folder-2" style="padding:0;color:var(--danger);">Forget This Folder</button>
       </div>
 
-      <div id="onedrive-sync-status" class="hint" style="margin-top:0.75rem;" hidden></div>
-      <div class="err" id="onedrive-sync-error" hidden></div>
+      <div id="local-folder-connected" hidden>
+        <div class="success" id="local-folder-name-line" style="margin-bottom:0.75rem;"></div>
+
+        <label class="toggle-row" for="local-folder-autosync" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-bottom:0.75rem;">
+          <input type="checkbox" id="local-folder-autosync">
+          <span>Sync automatically as you work (off = only when you tap Sync Now)</span>
+        </label>
+
+        <button type="button" class="btn-primary" id="btn-sync-folder-now" style="margin-bottom:0.5rem;">Sync Now</button>
+        <p class="hint" id="local-folder-last-synced" style="margin:0 0 0.75rem;"></p>
+        <button type="button" class="text-btn" id="btn-forget-folder" style="padding:0;color:var(--danger);">Forget This Folder</button>
+      </div>
+
+      <div id="local-folder-status" class="hint" style="margin-top:0.75rem;" hidden></div>
+      <div class="err" id="local-folder-error" hidden></div>
     </div>
   </div>
 
@@ -184,37 +197,26 @@
       <h2>Export &amp; Import</h2>
     </div>
     <div class="step-body">
-      <p class="hint" style="margin-top:0;">Export saves everything &mdash; all projects, reports, photos and your logo &mdash; to one file you move yourself (email, OneDrive, USB). Import merges it back in and never deletes anything. The file itself never leaves your device unless you move it.</p>
+      <p class="hint" style="margin-top:0;">Export saves everything &mdash; all projects, reports, photos and your logo &mdash; to one file you move yourself (email, OneDrive, USB). Import merges it back in and never deletes anything. The file itself never leaves your device unless you move it. Select as many <code>.report</code> files at once as you like.</p>
       <div class="home-toolbar" style="margin-top:0.75rem;">
         <button type="button" id="btn-export-backup" class="text-btn-outline">Export All Data</button>
         <button type="button" id="btn-import-backup" class="text-btn-outline">Import Data</button>
-        <input type="file" id="import-file-input" accept="application/json,.json,.report" hidden>
+        <input type="file" id="import-file-input" accept="application/json,.json,.report" multiple hidden>
       </div>
     </div>
   </div>
 
 </main>
 
-<div id="onedrive-sync-sandbox" style="position:fixed;top:0;left:-20000px;z-index:-1;"></div>
-
 <script src="lib/qrcode.min.js"></script>
-<script src="lib/msal-browser.min.js"></script>
 <script src="lib/fflate.min.js"></script>
 <script src="lib/xlsx.min.js"></script>
-<script src="lib/html2canvas.min.js"></script>
-<script src="lib/jspdf.umd.min.js"></script>
 <script src="common.js"></script>
 <script src="defaults.js"></script>
 <script src="storage.js"></script>
 <script src="setup-share.js"></script>
-<script src="render-report.js"></script>
-<script src="pdf-export.js"></script>
 <script src="report-bundle.js"></script>
-<script src="onedrive-config.js"></script>
-<script src="onedrive-auth.js"></script>
-<script src="onedrive-client.js"></script>
-<script src="sync-export.js"></script>
-<script src="sync-engine.js"></script>
+<script src="local-folder-sync.js"></script>
 <script>
 let previewUrl = null;
 
@@ -369,52 +371,78 @@ $('#btn-export-backup').addEventListener('click', async () => {
 
 $('#btn-import-backup').addEventListener('click', () => $('#import-file-input').click());
 
-// Accepts either a full backup (.json, everything, from Export All Data
-// above) or a single .report bundle (from Sync Selected on the Reports
-// page) -- told apart by content, not by trusting the file's extension,
-// since a .report is just a zip wearing one. Valid JSON means the backup
-// path; anything else at least attempts the bundle path before giving up.
-$('#import-file-input').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  e.target.value = '';
-  if (!file) return;
+// Accepts any mix of a full backup (.json, everything, from Export All Data
+// above) and .report bundles (from Sync Selected on the Reports page) in one
+// selection -- each file told apart by content, not by trusting its
+// extension, since a .report is just a zip wearing one. Valid JSON means the
+// backup path; anything else at least attempts the bundle path before
+// giving up on that file. One file failing doesn't stop the rest.
+async function importOneFile(file) {
+  let backup = null;
   try {
-    let backup = null;
-    try {
-      backup = JSON.parse(await file.text());
-    } catch (err) {
-      backup = null;
-    }
-
-    if (backup) {
-      if (backup.kind !== 'daily-report-app-backup') {
-        alert("That doesn't look like a Daily Report backup file.");
-        return;
-      }
-      const result = await importReportsBackup(backup);
-      alert(
-        `Import complete.\nProjects: ${result.projectsAdded} new, ${result.projectsUpdated} updated, ${result.projectsSkipped} already up to date.\nReports: ${result.added} new, ${result.updated} updated, ${result.skipped} already up to date.` +
-          (result.logoAdded ? '\nCompany logo restored.' : '')
-      );
-      showLogo(await getReportLogo());
-      applyHeaderLogo();
-      return;
-    }
-
-    const bundle = await tryParseReportBundle(file);
-    if (!bundle) {
-      alert("That doesn't look like a Daily Report backup file or a .report bundle.");
-      return;
-    }
-    const projectResult = await mergeProjectRecord(bundle.project);
-    const reportResult = await mergeReportRecord(bundle.report);
-    alert(
-      `Import complete.\nProject "${bundle.project.name}": ${projectResult}.\nReport #${bundle.report.reportNo} (${bundle.report.date || 'undated'}): ${reportResult}.`
-    );
+    backup = JSON.parse(await file.text());
   } catch (err) {
-    console.error(err);
-    alert('Could not import that file: ' + err.message);
+    backup = null;
   }
+
+  if (backup) {
+    if (backup.kind !== 'daily-report-app-backup') {
+      return { file: file.name, error: "doesn't look like a Daily Report backup file" };
+    }
+    const result = await importReportsBackup(backup);
+    return { file: file.name, backupResult: result };
+  }
+
+  const bundle = await tryParseReportBundle(file);
+  if (!bundle) {
+    return { file: file.name, error: "doesn't look like a Daily Report backup file or a .report bundle" };
+  }
+  const projectResult = await mergeProjectRecord(bundle.project);
+  const reportResult = await mergeReportRecord(bundle.report);
+  return { file: file.name, bundleResult: { projectName: bundle.project.name, projectResult, reportNo: bundle.report.reportNo, date: bundle.report.date, reportResult } };
+}
+
+$('#import-file-input').addEventListener('change', async (e) => {
+  const files = Array.from(e.target.files || []);
+  e.target.value = '';
+  if (files.length === 0) return;
+
+  const outcomes = [];
+  for (const file of files) {
+    try {
+      outcomes.push(await importOneFile(file));
+    } catch (err) {
+      console.error(err);
+      outcomes.push({ file: file.name, error: err.message });
+    }
+  }
+
+  const errors = outcomes.filter((o) => o.error);
+  const backupResults = outcomes.filter((o) => o.backupResult).map((o) => o.backupResult);
+  const bundleResults = outcomes.filter((o) => o.bundleResult).map((o) => o.bundleResult);
+
+  const lines = [`Import complete: ${files.length} file(s).`];
+  if (backupResults.length > 0) {
+    const p = backupResults.reduce((s, r) => s + r.projectsAdded, 0);
+    const pu = backupResults.reduce((s, r) => s + r.projectsUpdated, 0);
+    const a = backupResults.reduce((s, r) => s + r.added, 0);
+    const u = backupResults.reduce((s, r) => s + r.updated, 0);
+    lines.push(`Backup file(s): projects ${p} new/${pu} updated, reports ${a} new/${u} updated.`);
+    if (backupResults.some((r) => r.logoAdded)) lines.push('Company logo restored.');
+  }
+  if (bundleResults.length > 0) {
+    const added = bundleResults.filter((r) => r.reportResult === 'added').length;
+    const updated = bundleResults.filter((r) => r.reportResult === 'updated').length;
+    const skipped = bundleResults.filter((r) => r.reportResult === 'skipped').length;
+    lines.push(`.report bundle(s): ${added} report(s) added, ${updated} updated, ${skipped} already up to date.`);
+  }
+  if (errors.length > 0) {
+    lines.push(`\nIssues:\n${errors.map((o) => `${o.file}: ${o.error}`).join('\n')}`);
+  }
+  alert(lines.join('\n'));
+
+  showLogo(await getReportLogo());
+  applyHeaderLogo();
 });
 
 // ---------- Install as app ----------
@@ -583,67 +611,103 @@ $('#btn-show-qr').addEventListener('click', async () => {
   }
 });
 
-// ---------- OneDrive Sync ----------
+// ---------- Local Save Folder ----------
 
-function formatSyncedAt(ts) {
-  if (!ts) return 'Never synced yet.';
+let localFolderHandle = null;
+
+function formatLocalFolderSyncedAt(ts) {
+  if (!ts) return 'Not synced yet.';
   const d = new Date(ts);
-  return 'Last synced ' + d.toLocaleDateString() + ' at ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return 'Last full sync: ' + d.toLocaleDateString() + ' at ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-async function refreshOneDriveSection() {
-  const connected = isOneDriveConnected();
-  $('#onedrive-disconnected').hidden = connected;
-  $('#onedrive-connected').hidden = !connected;
-  if (!connected) return;
+async function refreshLocalFolderSection() {
+  if (!localFolderSupported()) {
+    $('#local-folder-step').hidden = true;
+    return;
+  }
+  $('#local-folder-step').hidden = false;
 
-  const account = getOneDriveAccount();
-  $('#onedrive-account-line').textContent = `Connected as ${account.username}`;
+  localFolderHandle = await getLocalFolderHandle();
+  $('#local-folder-none').hidden = !!localFolderHandle;
+  $('#local-folder-reconnect').hidden = true;
+  $('#local-folder-connected').hidden = true;
+  if (!localFolderHandle) return;
 
-  const syncedTimes = (await getAllProjects()).map((p) => p.syncedAt).filter(Boolean);
-  $('#onedrive-last-synced').textContent = formatSyncedAt(syncedTimes.length ? Math.max(...syncedTimes) : null);
+  const permission = await checkLocalFolderPermission(localFolderHandle);
+  if (permission !== 'granted') {
+    $('#local-folder-reconnect').hidden = false;
+    $('#local-folder-reconnect-name').textContent = localFolderHandle.name;
+    return;
+  }
+
+  $('#local-folder-connected').hidden = false;
+  $('#local-folder-name-line').textContent = `Connected: "${localFolderHandle.name}"`;
+  $('#local-folder-autosync').checked = await getLocalFolderAutoSync();
+  $('#local-folder-last-synced').textContent = formatLocalFolderSyncedAt(await getSetting('localFolderLastSyncedAt'));
 }
 
-$('#btn-onedrive-connect').addEventListener('click', async () => {
-  $('#onedrive-sync-error').hidden = true;
+$('#btn-choose-folder').addEventListener('click', async () => {
+  $('#local-folder-error').hidden = true;
   try {
-    await connectOneDrive(); // navigates away to Microsoft's sign-in page
+    await pickLocalFolder();
+    await refreshLocalFolderSection();
+    $('#btn-sync-folder-now').click(); // first connection: pull in what's there, push everything local out
   } catch (err) {
+    if (err && err.name === 'AbortError') return; // user cancelled the folder picker
     console.error(err);
-    $('#onedrive-sync-error').textContent = 'Could not start sign-in: ' + err.message;
-    $('#onedrive-sync-error').hidden = false;
+    $('#local-folder-error').textContent = 'Could not set up that folder: ' + err.message;
+    $('#local-folder-error').hidden = false;
   }
 });
 
-$('#btn-onedrive-disconnect').addEventListener('click', async () => {
-  if (!confirm('Disconnect OneDrive on this device? Nothing already synced is deleted -- this just stops syncing until you connect again.')) return;
-  disconnectOneDrive();
-  await refreshOneDriveSection();
+$('#btn-reconnect-folder').addEventListener('click', async () => {
+  try {
+    const result = await requestLocalFolderPermission(localFolderHandle);
+    if (result !== 'granted') return;
+    await refreshLocalFolderSection();
+  } catch (err) {
+    console.error(err);
+  }
 });
 
-$('#btn-onedrive-sync').addEventListener('click', async () => {
-  const btn = $('#btn-onedrive-sync');
-  const statusEl = $('#onedrive-sync-status');
-  const errorEl = $('#onedrive-sync-error');
+async function forgetLocalFolderFlow() {
+  if (!confirm('Forget this local save folder? Files already written there are left alone -- this just stops syncing to it.')) return;
+  await forgetLocalFolder();
+  await refreshLocalFolderSection();
+}
+$('#btn-forget-folder').addEventListener('click', forgetLocalFolderFlow);
+$('#btn-forget-folder-2').addEventListener('click', forgetLocalFolderFlow);
+
+$('#local-folder-autosync').addEventListener('change', async (e) => {
+  await setLocalFolderAutoSync(e.target.checked);
+});
+
+$('#btn-sync-folder-now').addEventListener('click', async () => {
+  const btn = $('#btn-sync-folder-now');
+  const statusEl = $('#local-folder-status');
+  const errorEl = $('#local-folder-error');
   errorEl.hidden = true;
   statusEl.hidden = false;
   statusEl.textContent = 'Starting sync…';
   btn.disabled = true;
 
   try {
-    const summary = await syncAllProjects($('#onedrive-sync-sandbox'), (progress) => {
+    const summary = await syncLocalFolderNow(localFolderHandle, (progress) => {
       statusEl.textContent = progress.phase === 'pull'
-        ? `Checking ${progress.project.name}…`
-        : `Sending ${progress.project.name}: report ${progress.done + 1} of ${progress.total}…`;
+        ? `Checking ${progress.folder}…`
+        : `Writing ${progress.project.name}…`;
     });
+    await saveSetting('localFolderLastSyncedAt', Date.now());
 
     const bits = [];
-    if (summary.reportsPushed) bits.push(`${summary.reportsPushed} report(s) sent`);
-    if (summary.reportsPulled) bits.push(`${summary.reportsPulled} report(s) received`);
+    if (summary.pushed) bits.push(`${summary.pushed} report(s) written`);
+    if (summary.pulled) bits.push(`${summary.pulled} report(s) pulled in`);
+    if (summary.projectsPulled) bits.push(`${summary.projectsPulled} project(s) pulled in`);
     statusEl.textContent = `Sync complete — ${bits.length ? bits.join(', ') : 'everything already up to date'}.`;
 
     if (summary.errors.length) {
-      errorEl.textContent = summary.errors.map((e) => `${e.project}: ${e.message}`).join('\n');
+      errorEl.textContent = summary.errors.join('\n');
       errorEl.hidden = false;
     }
   } catch (err) {
@@ -653,7 +717,7 @@ $('#btn-onedrive-sync').addEventListener('click', async () => {
     errorEl.hidden = false;
   } finally {
     btn.disabled = false;
-    await refreshOneDriveSection();
+    await refreshLocalFolderSection();
   }
 });
 
@@ -663,14 +727,7 @@ $('#btn-onedrive-sync').addEventListener('click', async () => {
   renderInstallSection();
   await refreshShareSection();
   showLogo(await getReportLogo());
-  try {
-    await initOneDriveAuth();
-  } catch (err) {
-    // Expected to fail until onedrive-config.js carries a real client ID --
-    // the rest of Settings still has to work in the meantime.
-    console.error('OneDrive auth init failed:', err);
-  }
-  await refreshOneDriveSection();
+  await refreshLocalFolderSection();
 })();
 </script>
 </body>

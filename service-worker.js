@@ -1,7 +1,7 @@
 // Caches the app shell + template so it keeps working with no signal in
 // the field. Bump CACHE_NAME whenever any of these files change so the new
 // version actually gets picked up.
-const CACHE_NAME = 'daily-report-app-v37';
+const CACHE_NAME = 'daily-report-app-v40';
 const ASSETS = [
   './',
   './index.html',
@@ -24,16 +24,12 @@ const ASSETS = [
   './storage.js',
   './project-file.js',
   './quantity-calc.js',
-  './onedrive-config.js',
-  './onedrive-auth.js',
-  './onedrive-client.js',
   './sync-export.js',
-  './sync-engine.js',
+  './local-folder-sync.js',
   './lib/xlsx.min.js',
   './lib/qrcode.min.js',
   './lib/jspdf.umd.min.js',
   './lib/html2canvas.min.js',
-  './lib/msal-browser.min.js',
   './lib/fflate.min.js',
   './template/daily-work-report-template.xlsx',
   './manifest.json',
@@ -41,8 +37,17 @@ const ASSETS = [
   './settings-icon.png',
 ];
 
+// cache.addAll(ASSETS) would fetch with the browser's default HTTP caching,
+// which can silently pull a stale copy out of the ordinary HTTP cache even
+// right after bumping CACHE_NAME -- {cache: 'reload'} forces every asset to
+// come from the network on install, so a version bump always means a version
+// bump.
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)));
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) =>
+      Promise.all(ASSETS.map((url) => fetch(url, { cache: 'reload' }).then((res) => cache.put(url, res))))
+    )
+  );
   self.skipWaiting();
 });
 
