@@ -587,11 +587,11 @@ function renderPhotoGrid() {
     .join('');
 
   $$('input[type="file"]', grid).forEach((input) => {
-    input.addEventListener('change', () => {
+    input.addEventListener('change', async () => {
       const idx = Number(input.dataset.add);
       const file = input.files[0];
       if (file) {
-        report.photos[idx] = file;
+        report.photos[idx] = await compressImage(file);
         scheduleSave();
         renderPhotoGrid();
       }
