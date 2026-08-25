@@ -83,7 +83,11 @@ async function renderProjectCards() {
   // One getAllReports() call, not one per project -- it already reads every
   // report in the store, so calling it per-project would just repeat the same
   // full read N times.
-  const [projects, reports] = await Promise.all([getAllProjects(), getAllReports()]);
+  const room = await getCompanyRoom();
+  const [allProjects, reports] = await Promise.all([getAllProjects(), getAllReports()]);
+  // A custom setup's password scopes which projects are even visible, not
+  // just what can be edited -- see projectInScope in firebase-sync.js.
+  const projects = allProjects.filter((p) => projectInScope(p.id, room));
   const countByProject = new Map();
   for (const r of reports) {
     countByProject.set(r.projectId, (countByProject.get(r.projectId) || 0) + 1);

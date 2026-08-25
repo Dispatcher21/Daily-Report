@@ -55,6 +55,8 @@
 <script src="defaults.js"></script>
 <script src="storage.js"></script>
 <script src="quantity-calc.js"></script>
+<script type="module" src="firebase-init.js"></script>
+<script src="firebase-sync.js"></script>
 <script>
 const projectId = queryParam('project');
 // Arriving from Reports' "Quantity Sheet Selected" names specific report
@@ -69,7 +71,7 @@ let rangeMode = 'range'; // 'range' | 'all'
 
 async function init() {
   project = projectId ? await getProject(projectId) : null;
-  if (!project) {
+  if (!project || !projectInScope(project.id, await getCompanyRoom())) {
     location.href = 'index.html';
     return;
   }

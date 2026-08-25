@@ -91,6 +91,8 @@
 <script src="storage.js"></script>
 <script src="render-report.js"></script>
 <script src="pdf-export.js"></script>
+<script type="module" src="firebase-init.js"></script>
+<script src="firebase-sync.js"></script>
 <script>
 // Same signal used elsewhere in the app (Settings' install instructions) to
 // tell a phone/tablet apart from a desktop browser -- iPadOS reports as
@@ -106,7 +108,7 @@ function isMobileDevice() {
   const reportIds = reportIdsParam.split(',').filter(Boolean);
 
   const project = projectId ? await getProject(projectId) : null;
-  if (!project || reportIds.length === 0) {
+  if (!project || reportIds.length === 0 || !projectInScope(project.id, await getCompanyRoom())) {
     $('#pdf-status').textContent = 'Nothing to download.';
     return;
   }

@@ -35,13 +35,23 @@ const COMPANY_CODE_SETTING = 'companyRoomCode';
 const COMPANY_NAME_SETTING = 'companyRoomName';
 const COMPANY_ADMIN_SETTING = 'companyRoomIsAdmin';
 const COMPANY_PERMISSIONS_SETTING = 'companyRoomPermissions';
+// Which projects this device may see -- null/absent means unrestricted
+// (the normal admin/member case). Set only when this device joined via a
+// custom setup's password rather than the company password itself.
+const COMPANY_PROJECT_SCOPE_SETTING = 'companyRoomProjectScope';
+const COMPANY_ROLE_ID_SETTING = 'companyRoomRoleId';
 const LOGO_SYNCED_AT_SETTING = 'companyLogoSyncedAt';
 
 // Both default to admin-only (false) -- a company connected to Firebase for
 // the first time should never be more open than the app-level trust model
 // requires; an admin opens a permission up deliberately from Company
 // Management, not by accident of a missing field on older rooms.
-const DEFAULT_PERMISSIONS = { membersCanEditReports: false, membersCanEditProjects: false, membersCanCreateProjects: false };
+const DEFAULT_PERMISSIONS = {
+  membersCanEditOwnReports: false,
+  membersCanEditAnyReport: false,
+  membersCanEditProjects: false,
+  membersCanCreateProjects: false,
+};
 
 async function hashText(text) {
   const bytes = new TextEncoder().encode(text);
@@ -66,7 +76,14 @@ async function getCompanyRoom() {
     code,
     name: (await getSetting(COMPANY_NAME_SETTING)) || '',
     isAdmin: !!(await getSetting(COMPANY_ADMIN_SETTING)),
+    projectScope: (await getSetting(COMPANY_PROJECT_SCOPE_SETTING)) || null,
   };
+}
+
+// True if this device may see `projectId` -- unrestricted (null scope,
+// the normal admin/member case) unless a custom setup narrowed it down.
+function projectInScope(projectId, room) {
+  return !room || !room.projectScope || room.projectScope.includes(projectId);
 }
 
 // Creates a brand-new company room, joins it locally as admin (whoever sets
@@ -110,6 +127,15 @@ async function createCompanyRoom({ name, password, adminPassword }, onProgress) 
 // password. Pulls in everything the room already has (merge only, same
 // rule as a JSON backup import -- never deletes anything already on this
 // device).
+//
+// A custom setup's password (see createCustomRole) resolves the exact
+// same way as the company password -- hash it, look up companies/{hash} --
+// except what's found there is a small pointer doc rather than the company
+// itself: { isRoleSetup: true, companyCode, permissions, projectIds }. This
+// device then joins that *real* company but adopts the setup's permissions
+// and project scope instead of the plain-member defaults. One password,
+// one field, one flow either way -- the difference is invisible to the
+// person typing it in.
 async function joinCompanyRoom(password, onProgress) {
   if (!password) throw new Error('Enter the company password.');
 
@@ -119,21 +145,42 @@ async function joinCompanyRoom(password, onProgress) {
   await ensureSignedIn();
 
   if (onProgress) onProgress({ phase: 'looking-up' });
-  const code = await hashText(password);
-  const snap = await getDoc(doc(db, 'companies', code));
+  const enteredHash = await hashText(password);
+  const snap = await getDoc(doc(db, 'companies', enteredHash));
   if (!snap.exists()) throw new Error('No company found with that password.');
-
   const data = snap.data();
+
+  let code = enteredHash;
+  let companyDoc = data;
+  let roleId = null;
+  let scopedPermissions = null;
+  let projectIds = null;
+
+  if (data.isRoleSetup) {
+    code = data.companyCode;
+    roleId = data.roleId;
+    scopedPermissions = data.permissions || {};
+    projectIds = data.projectIds || [];
+    const realSnap = await getDoc(doc(db, 'companies', code));
+    if (!realSnap.exists()) throw new Error('This setup points to a company that no longer exists.');
+    companyDoc = realSnap.data();
+  }
+
   await saveSetting(COMPANY_CODE_SETTING, code);
-  await saveSetting(COMPANY_NAME_SETTING, data.name || '');
+  await saveSetting(COMPANY_NAME_SETTING, companyDoc.name || '');
   await saveSetting(COMPANY_ADMIN_SETTING, false);
-  await saveSetting(COMPANY_PERMISSIONS_SETTING, { ...DEFAULT_PERMISSIONS, ...(data.permissions || {}) });
+  await saveSetting(COMPANY_ROLE_ID_SETTING, roleId);
+  await saveSetting(COMPANY_PROJECT_SCOPE_SETTING, projectIds);
+  await saveSetting(
+    COMPANY_PERMISSIONS_SETTING,
+    scopedPermissions ? { ...DEFAULT_PERMISSIONS, ...scopedPermissions } : { ...DEFAULT_PERMISSIONS, ...(companyDoc.permissions || {}) }
+  );
   await saveSetting(LOGO_SYNCED_AT_SETTING, null);
 
   if (onProgress) onProgress({ phase: 'logo' });
   await pullCompanyLogo();
   const pulled = await pullAllCompanyData(code, onProgress);
-  return { code, name: data.name || '', ...pulled };
+  return { code, name: companyDoc.name || '', ...pulled };
 }
 
 // Elevates this device to admin within the room it's already joined, if the
@@ -153,6 +200,10 @@ async function unlockCompanyAdmin(adminPassword) {
     throw new Error('Incorrect admin password.');
   }
   await saveSetting(COMPANY_ADMIN_SETTING, true);
+  // Admin overrides any custom setup's project scope this device might
+  // have joined under -- full access, not a narrower view layered on top.
+  await saveSetting(COMPANY_PROJECT_SCOPE_SETTING, null);
+  await saveSetting(COMPANY_ROLE_ID_SETTING, null);
 }
 
 // Leaves the room on this device only -- the room itself and its data are
@@ -162,14 +213,17 @@ async function leaveCompanyRoom() {
   await deleteSetting(COMPANY_NAME_SETTING);
   await deleteSetting(COMPANY_ADMIN_SETTING);
   await deleteSetting(COMPANY_PERMISSIONS_SETTING);
+  await deleteSetting(COMPANY_PROJECT_SCOPE_SETTING);
+  await deleteSetting(COMPANY_ROLE_ID_SETTING);
   await deleteSetting(LOGO_SYNCED_AT_SETTING);
 }
 
 // Pulls in anything new from the room, then pushes every local project and
 // report back out -- pull first, same ordering as the local-folder sync,
 // so a stale local copy can't clobber something newer that's already in
-// the room. Also refreshes the cached company name/permissions, in case
-// another admin changed them from a different device.
+// the room. Also refreshes the cached company name/permissions (or, for a
+// device that joined via a custom setup, that setup's own permissions and
+// project scope), in case an admin changed them from a different device.
 async function syncCompanyRoomNow(onProgress) {
   const room = await getCompanyRoom();
   if (!room) throw new Error('Not connected to a company room.');
@@ -181,7 +235,19 @@ async function syncCompanyRoomNow(onProgress) {
   if (snap.exists()) {
     const data = snap.data();
     await saveSetting(COMPANY_NAME_SETTING, data.name || '');
-    await saveSetting(COMPANY_PERMISSIONS_SETTING, { ...DEFAULT_PERMISSIONS, ...(data.permissions || {}) });
+    if (!room.isAdmin) {
+      const roleId = await getSetting(COMPANY_ROLE_ID_SETTING);
+      if (roleId) {
+        const roleSnap = await getDoc(doc(db, 'companies', room.code, 'roles', roleId));
+        if (roleSnap.exists()) {
+          const role = roleSnap.data();
+          await saveSetting(COMPANY_PERMISSIONS_SETTING, { ...DEFAULT_PERMISSIONS, ...(role.permissions || {}) });
+          await saveSetting(COMPANY_PROJECT_SCOPE_SETTING, role.projectIds || []);
+        }
+      } else {
+        await saveSetting(COMPANY_PERMISSIONS_SETTING, { ...DEFAULT_PERMISSIONS, ...(data.permissions || {}) });
+      }
+    }
   }
 
   await pullCompanyLogo();
@@ -199,13 +265,39 @@ async function getCompanyPermissions() {
 // True if this device may perform `action` in its current company context.
 // Outside a company there's nothing to protect, so everything is allowed --
 // gating only ever applies once a shared company is actually connected.
+// Report editing isn't covered here -- it depends on which report (see
+// getReportPermissionContext / canEditReportWithContext below), not just a
+// flat yes/no.
 async function companyCan(action) {
   const room = await getCompanyRoom();
   if (!room || room.isAdmin) return true;
   const perms = await getCompanyPermissions();
-  if (action === 'editReports') return !!perms.membersCanEditReports;
   if (action === 'createProjects') return !!perms.membersCanCreateProjects;
   return !!perms.membersCanEditProjects; // 'editProjects'
+}
+
+// Report edit/delete permission depends on *which* report -- "own" only
+// grants it for reports this device's logged-in name created. Fetch this
+// once per page (room/permissions/name each cost a settings read) and
+// reuse it across every row with the synchronous check below, rather than
+// re-fetching per report.
+async function getReportPermissionContext() {
+  const room = await getCompanyRoom();
+  const userName = await getUserName();
+  if (!room || room.isAdmin) return { isAdmin: true, canEditAny: true, canEditOwn: true, userName };
+  const perms = await getCompanyPermissions();
+  return {
+    isAdmin: false,
+    canEditAny: !!perms.membersCanEditAnyReport,
+    canEditOwn: !!perms.membersCanEditOwnReports,
+    userName,
+  };
+}
+
+function canEditReportWithContext(report, ctx) {
+  if (ctx.isAdmin || ctx.canEditAny) return true;
+  if (ctx.canEditOwn) return !!ctx.userName && report.createdBy === ctx.userName;
+  return false;
 }
 
 async function updateCompanyPermissions(patch) {
@@ -300,6 +392,118 @@ async function changeCompanyAdminPassword(newAdminPassword) {
   await ensureSignedIn();
 
   await updateDoc(doc(db, 'companies', room.code), { adminPasswordHash: await hashText(newAdminPassword) });
+}
+
+// ---------- Custom setups ----------
+//
+// A "custom setup" is a named, project-scoped variant of the plain member
+// permissions -- e.g. an inspector who should only ever see one project.
+// It's addressed exactly like the company/admin passwords (hash of its own
+// password), but what lives at that address is a small pointer doc rather
+// than a company: { isRoleSetup, companyCode, roleId, permissions,
+// projectIds } -- see joinCompanyRoom for how a device resolves through it.
+// The companies/{code}/roles/{roleId} doc alongside it is what lets
+// Company Management list/edit/delete setups without knowing their
+// passwords (which, like every other password in this app, are never
+// stored -- only their hash).
+
+async function listCustomRoles() {
+  const room = await getCompanyRoom();
+  if (!room) return [];
+  const { db, ensureSignedIn } = await waitForFirebaseCore();
+  const { collection, getDocs } = await import(FIRESTORE_SDK);
+  await ensureSignedIn();
+  const snap = await getDocs(collection(db, 'companies', room.code, 'roles'));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+// Returns the password so the caller can show it once -- there is no way
+// to retrieve it again after this, same as the company/admin passwords.
+async function createCustomRole({ name, password, permissions, projectIds }) {
+  const room = await getCompanyRoom();
+  if (!room) throw new Error('Not connected to a company.');
+  if (!room.isAdmin) throw new Error('Only an admin can create a custom setup.');
+  if (!name) throw new Error('Name this setup.');
+  if (!password) throw new Error('Choose a password for this setup.');
+
+  const { db, ensureSignedIn } = await waitForFirebaseCore();
+  const { doc, getDoc, setDoc } = await import(FIRESTORE_SDK);
+  await ensureSignedIn();
+
+  const pointerCode = await hashText(password);
+  if (pointerCode === room.code) throw new Error('Choose a password different from the company password.');
+  const existing = await getDoc(doc(db, 'companies', pointerCode));
+  if (existing.exists()) throw new Error('That password is already in use (by this company or another) -- choose a different one.');
+
+  const roleId = crypto.randomUUID();
+  const mergedPermissions = { ...DEFAULT_PERMISSIONS, ...permissions };
+  const finalProjectIds = projectIds || [];
+
+  await setDoc(doc(db, 'companies', room.code, 'roles', roleId), {
+    name,
+    permissions: mergedPermissions,
+    projectIds: finalProjectIds,
+    pointerCode,
+    createdAt: Date.now(),
+  });
+  await setDoc(doc(db, 'companies', pointerCode), {
+    isRoleSetup: true,
+    companyCode: room.code,
+    roleId,
+    name,
+    permissions: mergedPermissions,
+    projectIds: finalProjectIds,
+  });
+
+  return { id: roleId, password };
+}
+
+// Permissions/projects only -- the password (and therefore which pointer
+// doc addresses this role) can't be changed without recreating the setup,
+// same as the company password's rotation trade-off.
+async function updateCustomRole(roleId, { name, permissions, projectIds }) {
+  const room = await getCompanyRoom();
+  if (!room) throw new Error('Not connected to a company.');
+  if (!room.isAdmin) throw new Error('Only an admin can edit a custom setup.');
+
+  const { db, ensureSignedIn } = await waitForFirebaseCore();
+  const { doc, getDoc, updateDoc } = await import(FIRESTORE_SDK);
+  await ensureSignedIn();
+
+  const roleSnap = await getDoc(doc(db, 'companies', room.code, 'roles', roleId));
+  if (!roleSnap.exists()) throw new Error('That setup no longer exists.');
+  const role = roleSnap.data();
+
+  const mergedPermissions = { ...DEFAULT_PERMISSIONS, ...role.permissions, ...permissions };
+  const finalProjectIds = projectIds != null ? projectIds : role.projectIds || [];
+  const finalName = name != null ? name : role.name;
+
+  await updateDoc(doc(db, 'companies', room.code, 'roles', roleId), {
+    name: finalName,
+    permissions: mergedPermissions,
+    projectIds: finalProjectIds,
+  });
+  await updateDoc(doc(db, 'companies', role.pointerCode), {
+    name: finalName,
+    permissions: mergedPermissions,
+    projectIds: finalProjectIds,
+  });
+}
+
+async function deleteCustomRole(roleId) {
+  const room = await getCompanyRoom();
+  if (!room) throw new Error('Not connected to a company.');
+  if (!room.isAdmin) throw new Error('Only an admin can delete a custom setup.');
+
+  const { db, ensureSignedIn } = await waitForFirebaseCore();
+  const { doc, getDoc, deleteDoc } = await import(FIRESTORE_SDK);
+  await ensureSignedIn();
+
+  const roleSnap = await getDoc(doc(db, 'companies', room.code, 'roles', roleId));
+  if (roleSnap.exists()) {
+    await deleteDoc(doc(db, 'companies', roleSnap.data().pointerCode)).catch(() => {});
+  }
+  await deleteDoc(doc(db, 'companies', room.code, 'roles', roleId));
 }
 
 // ---------- Logo sync ----------

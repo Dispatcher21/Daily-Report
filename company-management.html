@@ -140,9 +140,13 @@
     </div>
     <div class="step-body">
       <p class="hint" style="margin-top:0;">Off means admin-only. On lets any member (not just admins) do this.</p>
-      <label class="toggle-row" for="cm-perm-reports" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-bottom:0.75rem;">
-        <input type="checkbox" id="cm-perm-reports">
-        <span>Members can edit/delete reports</span>
+      <label class="toggle-row" for="cm-perm-reports-own" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-bottom:0.75rem;">
+        <input type="checkbox" id="cm-perm-reports-own">
+        <span>Members can edit/delete their own reports</span>
+      </label>
+      <label class="toggle-row" for="cm-perm-reports-any" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-bottom:0.75rem;">
+        <input type="checkbox" id="cm-perm-reports-any">
+        <span>Members can edit/delete ANY reports</span>
       </label>
       <label class="toggle-row" for="cm-perm-projects" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-bottom:0.75rem;">
         <input type="checkbox" id="cm-perm-projects">
@@ -152,6 +156,63 @@
         <input type="checkbox" id="cm-perm-create-projects">
         <span>Members can create new projects</span>
       </label>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-header">
+      <span class="step-num">CUSTOM</span>
+      <h2>Custom Setups</h2>
+    </div>
+    <div class="step-body">
+      <p class="hint" style="margin-top:0;">A named, project-scoped password -- e.g. an inspector who should only ever see one project. Same permission options as above, applied only within the project(s) checked below.</p>
+
+      <div id="cs-list-empty" class="empty-state" hidden style="padding:1.25rem;">No custom setups yet.</div>
+      <div id="cs-list"></div>
+
+      <details class="company-details" id="cs-details" style="margin-top:0.9rem;">
+        <summary>Create Custom Setup</summary>
+
+        <label>Setup Name
+          <input type="text" id="cs-name" placeholder="e.g. Highway 12 Inspector">
+        </label>
+
+        <p class="hint" style="margin-bottom:0.3rem;">Permissions (within the project(s) below only)</p>
+        <label class="toggle-row" for="cs-perm-reports-own" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-bottom:0.6rem;">
+          <input type="checkbox" id="cs-perm-reports-own">
+          <span>Can edit/delete their own reports</span>
+        </label>
+        <label class="toggle-row" for="cs-perm-reports-any" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-bottom:0.6rem;">
+          <input type="checkbox" id="cs-perm-reports-any">
+          <span>Can edit/delete ANY reports</span>
+        </label>
+        <label class="toggle-row" for="cs-perm-projects" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-bottom:0.6rem;">
+          <input type="checkbox" id="cs-perm-projects">
+          <span>Can edit/delete projects</span>
+        </label>
+        <label class="toggle-row" for="cs-perm-create-projects" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;">
+          <input type="checkbox" id="cs-perm-create-projects">
+          <span>Can create new projects</span>
+        </label>
+
+        <p class="hint" style="margin:0.75rem 0 0.3rem;">Projects this setup can see</p>
+        <label class="toggle-row" for="cs-all-projects" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-bottom:0.5rem;">
+          <input type="checkbox" id="cs-all-projects">
+          <span>All projects (no restriction)</span>
+        </label>
+        <div id="cs-project-checks"></div>
+
+        <label style="margin-top:0.75rem;">Password
+          <input type="password" id="cs-password" autocomplete="new-password">
+        </label>
+        <label>Confirm Password
+          <input type="password" id="cs-password-confirm" autocomplete="new-password">
+        </label>
+
+        <button type="button" class="btn-primary" id="btn-create-setup" style="margin-top:0.5rem;">Create Custom Setup</button>
+      </details>
+
+      <div id="cs-created-box" class="success" hidden style="margin-top:0.9rem;"></div>
     </div>
   </div>
 
@@ -326,6 +387,7 @@ $('#cm-project-list').addEventListener('click', async (e) => {
     await deleteProject(id);
     await renderCmProjects();
     await renderCmActivity();
+    await renderCsList();
     return;
   }
 
@@ -395,14 +457,26 @@ $('#cm-f-projects').addEventListener('change', async (e) => {
   if (names.length) cmStatus(`Added/updated: ${names.join(', ')}`);
   if (errors.length) cmError(errors.join('\n'));
   await renderCmProjects();
+  await renderCsList();
 });
 
 // ---------- Permissions ----------
 
-$('#cm-perm-reports').addEventListener('change', async (e) => {
+$('#cm-perm-reports-own').addEventListener('change', async (e) => {
   cmError('');
   try {
-    await updateCompanyPermissions({ membersCanEditReports: e.target.checked });
+    await updateCompanyPermissions({ membersCanEditOwnReports: e.target.checked });
+    cmStatus('Permissions saved.');
+  } catch (err) {
+    console.error(err);
+    e.target.checked = !e.target.checked;
+    cmError('Could not save permission: ' + err.message);
+  }
+});
+$('#cm-perm-reports-any').addEventListener('change', async (e) => {
+  cmError('');
+  try {
+    await updateCompanyPermissions({ membersCanEditAnyReport: e.target.checked });
     cmStatus('Permissions saved.');
   } catch (err) {
     console.error(err);
@@ -430,6 +504,112 @@ $('#cm-perm-create-projects').addEventListener('change', async (e) => {
     console.error(err);
     e.target.checked = !e.target.checked;
     cmError('Could not save permission: ' + err.message);
+  }
+});
+
+// ---------- Custom Setups ----------
+
+function renderCsProjectChecks(projects) {
+  $('#cs-project-checks').innerHTML = projects
+    .map(
+      (p) => `
+      <label class="toggle-row" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-bottom:0.4rem;">
+        <input type="checkbox" class="cs-project-check" value="${p.id}">
+        <span>${escapeHtml(p.name)}</span>
+      </label>`
+    )
+    .join('');
+}
+
+$('#cs-all-projects').addEventListener('change', (e) => {
+  $$('.cs-project-check').forEach((cb) => { cb.disabled = e.target.checked; });
+});
+
+function csPermissionSummary(perms) {
+  const bits = [];
+  if (perms.membersCanEditOwnReports) bits.push('edit own reports');
+  if (perms.membersCanEditAnyReport) bits.push('edit ANY reports');
+  if (perms.membersCanEditProjects) bits.push('edit projects');
+  if (perms.membersCanCreateProjects) bits.push('create projects');
+  return bits.length ? bits.join(', ') : 'view only';
+}
+
+async function renderCsList() {
+  const [roles, projects] = await Promise.all([listCustomRoles(), getAllProjects()]);
+  const projectNameById = new Map(projects.map((p) => [p.id, p.name]));
+
+  $('#cs-list-empty').hidden = roles.length > 0;
+  $('#cs-list').innerHTML = roles
+    .map((r) => {
+      const scope = r.projectIds && r.projectIds.length
+        ? r.projectIds.map((id) => escapeHtml(projectNameById.get(id) || '(deleted project)')).join(', ')
+        : 'All projects';
+      return `
+      <div class="cm-project-row" data-id="${r.id}">
+        <div>
+          <div class="cm-project-name">${escapeHtml(r.name)}</div>
+          <div class="cm-project-sub">${escapeHtml(csPermissionSummary(r.permissions || {}))} &middot; ${scope}</div>
+        </div>
+        <div class="cm-project-actions">
+          <button type="button" class="btn-danger" data-delete-setup="${r.id}">Delete</button>
+        </div>
+      </div>`;
+    })
+    .join('');
+
+  renderCsProjectChecks(projects);
+}
+
+$('#cs-list').addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-delete-setup]');
+  if (!btn) return;
+  if (!confirm('Delete this custom setup? Anyone using its password will be unable to sync again until given a different one.')) return;
+  await deleteCustomRole(btn.dataset.deleteSetup);
+  await renderCsList();
+});
+
+$('#btn-create-setup').addEventListener('click', async () => {
+  const btn = $('#btn-create-setup');
+  cmError('');
+  $('#cs-created-box').hidden = true;
+
+  const name = $('#cs-name').value.trim();
+  const pw = $('#cs-password').value;
+  const confirmPw = $('#cs-password-confirm').value;
+  if (!name) return cmError('Name this setup.');
+  if (!pw || pw !== confirmPw) return cmError('Setup password and confirmation must match.');
+
+  const allProjects = $('#cs-all-projects').checked;
+  const projectIds = allProjects ? null : $$('.cs-project-check:checked').map((cb) => cb.value);
+  if (!allProjects && projectIds.length === 0) return cmError('Check at least one project, or choose "All projects".');
+
+  const permissions = {
+    membersCanEditOwnReports: $('#cs-perm-reports-own').checked,
+    membersCanEditAnyReport: $('#cs-perm-reports-any').checked,
+    membersCanEditProjects: $('#cs-perm-projects').checked,
+    membersCanCreateProjects: $('#cs-perm-create-projects').checked,
+  };
+
+  btn.disabled = true;
+  try {
+    const result = await createCustomRole({ name, password: pw, permissions, projectIds });
+    $('#cs-name').value = '';
+    $('#cs-password').value = '';
+    $('#cs-password-confirm').value = '';
+    $('#cs-all-projects').checked = false;
+    $$('.cs-project-check').forEach((cb) => { cb.checked = false; cb.disabled = false; });
+    $$('#cs-details input[type="checkbox"]:not(.cs-project-check):not(#cs-all-projects)').forEach((cb) => { cb.checked = false; });
+
+    $('#cs-created-box').innerHTML =
+      `<strong>"${escapeHtml(name)}" created.</strong> Give this password to whoever should use it -- it won't be shown again:<br>` +
+      `<span style="font-family:monospace;font-size:1.1rem;user-select:all;">${escapeHtml(result.password)}</span>`;
+    $('#cs-created-box').hidden = false;
+    await renderCsList();
+  } catch (err) {
+    console.error(err);
+    cmError('Could not create setup: ' + err.message);
+  } finally {
+    btn.disabled = false;
   }
 });
 
@@ -569,12 +749,14 @@ $('#btn-refresh-activity').addEventListener('click', async () => {
   showCmLogo(await getReportLogo());
 
   const perms = await getCompanyPermissions();
-  $('#cm-perm-reports').checked = !!perms.membersCanEditReports;
+  $('#cm-perm-reports-own').checked = !!perms.membersCanEditOwnReports;
+  $('#cm-perm-reports-any').checked = !!perms.membersCanEditAnyReport;
   $('#cm-perm-projects').checked = !!perms.membersCanEditProjects;
   $('#cm-perm-create-projects').checked = !!perms.membersCanCreateProjects;
 
   await renderCmProjects();
   await renderCmActivity();
+  await renderCsList();
 })();
 </script>
 </body>

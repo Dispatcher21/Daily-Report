@@ -124,10 +124,13 @@ const projectId = queryParam('project');
 let project = null;
 let allReports = [];
 let selectedIds = new Set();
+// Fetched once per page load (room/permissions/name each cost a settings
+// read) rather than per report -- see canEditReportWithContext.
+let reportPermCtx = { isAdmin: true, canEditAny: true, canEditOwn: true, userName: null };
 
 async function init() {
   project = projectId ? await getProject(projectId) : null;
-  if (!project) {
+  if (!project || !projectInScope(project.id, await getCompanyRoom())) {
     location.href = 'index.html';
     return;
   }
@@ -137,9 +140,11 @@ async function init() {
   $('#fab-new-report').href = `report-editor.html?project=${project.id}&report=new`;
 
   // Company members may be restricted from editing/deleting reports once
-  // saved -- gated here, not by hiding "+ New Report" (creating one is
-  // always allowed).
-  if (!(await companyCan('editReports'))) {
+  // saved (and "own reports only" restricts *which* ones -- see render(),
+  // which only gives a row a checkbox if this context allows it) -- gated
+  // here, not by hiding "+ New Report" (creating one is always allowed).
+  reportPermCtx = await getReportPermissionContext();
+  if (!reportPermCtx.isAdmin && !reportPermCtx.canEditAny && !reportPermCtx.canEditOwn) {
     $('#btn-delete-selected').hidden = true;
     $('#btn-mass-edit-selected').hidden = true;
   }
@@ -185,20 +190,24 @@ function render() {
     container.innerHTML = '<div class="empty-state">No reports match the current filters.</div>';
   } else {
     container.innerHTML = list
-      .map(
-        (r) => `
+      .map((r) => {
+        const editable = canEditReportWithContext(r, reportPermCtx);
+        const checkbox = editable
+          ? `<input type="checkbox" class="report-row-check" ${selectedIds.has(r.id) ? 'checked' : ''}>`
+          : `<span class="report-row-check-spacer"></span>`;
+        return `
         <div class="report-row" data-id="${r.id}">
-          <input type="checkbox" class="report-row-check" ${selectedIds.has(r.id) ? 'checked' : ''}>
+          ${checkbox}
           <div class="report-row-main" data-open="${r.id}">
-            <span class="report-row-date">${r.date || '(no date)'}</span>
+            <span class="report-row-date">${r.date || '(no date)'}${r.createdBy || r.representative ? ` <span class="report-row-author">${escapeHtml(r.createdBy || r.representative)}</span>` : ''}</span>
             <span class="report-row-sub">${escapeHtml(r.activity || 'No activity noted')}</span>
           </div>
           <div class="report-row-actions">
             <a class="btn-sm" href="report-editor.html?project=${project.id}&report=${r.id}">Edit</a>
             <span class="report-row-no">#${r.reportNo}</span>
           </div>
-        </div>`
-      )
+        </div>`;
+      })
       .join('');
   }
 
@@ -216,7 +225,8 @@ function render() {
     });
   });
 
-  $('#btn-select-all').textContent = selectedIds.size === list.length && list.length > 0 ? 'Deselect all' : 'Select all';
+  const editableCount = list.filter((r) => canEditReportWithContext(r, reportPermCtx)).length;
+  $('#btn-select-all').textContent = selectedIds.size === editableCount && editableCount > 0 ? 'Deselect all' : 'Select all';
   updateBulkBar();
 }
 
@@ -243,7 +253,7 @@ $('#btn-clear-filters').addEventListener('click', () => {
 });
 
 $('#btn-select-all').addEventListener('click', () => {
-  const list = getFilteredSorted();
+  const list = getFilteredSorted().filter((r) => canEditReportWithContext(r, reportPermCtx));
   if (selectedIds.size === list.length && list.length > 0) {
     selectedIds.clear();
   } else {
@@ -314,7 +324,11 @@ $('#btn-sync-selected').addEventListener('click', async () => {
 
 $('#btn-delete-selected').addEventListener('click', async () => {
   if (selectedIds.size === 0) return;
-  const selected = allReports.filter((r) => selectedIds.has(r.id));
+  // Never trust selection state alone for a destructive bulk action --
+  // re-check permission per report here too, not just when the checkbox
+  // was drawn.
+  const selected = allReports.filter((r) => selectedIds.has(r.id) && canEditReportWithContext(r, reportPermCtx));
+  if (selected.length === 0) return;
 
   // Name what's going, so a mis-tap on the wrong row is obvious before it's
   // too late -- there's no undo and these are a day's work each.
@@ -374,7 +388,7 @@ $('#btn-apply-mass-edit').addEventListener('click', async () => {
   const btn = $('#btn-apply-mass-edit');
   btn.disabled = true;
   try {
-    const selected = allReports.filter((r) => selectedIds.has(r.id));
+    const selected = allReports.filter((r) => selectedIds.has(r.id) && canEditReportWithContext(r, reportPermCtx));
     for (const r of selected) {
       r[field] = value;
       await saveReport(r);

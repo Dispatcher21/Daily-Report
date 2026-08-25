@@ -630,8 +630,14 @@ input[type="file"] { min-height: 0; }
 }
 .report-row.selectable { border-color: var(--brand-light); }
 .report-row-check { width: 1.35rem; height: 1.35rem; flex-shrink: 0; }
+.report-row-check-spacer { display: inline-block; width: 1.35rem; height: 1.35rem; flex-shrink: 0; }
 .report-row .report-row-main { display: flex; flex-direction: column; flex: 1; min-width: 0; cursor: pointer; }
 .report-row .report-row-date { font-weight: 700; font-size: 1rem; }
+.report-row .report-row-author {
+  font-size: 0.68rem; font-weight: 700; color: var(--link);
+  background: var(--brand-dim); padding: 2px 8px; border-radius: 10px;
+  vertical-align: middle; white-space: nowrap;
+}
 .report-row .report-row-sub { font-size: 0.83rem; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .report-row .report-row-actions { display: flex; align-items: center; gap: 0.5rem; }
 .report-row .report-row-no {

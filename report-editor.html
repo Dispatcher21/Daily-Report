@@ -220,7 +220,7 @@ function lockReportEditor() {
 
 async function init() {
   project = projectId ? await getProject(projectId) : null;
-  if (!project) {
+  if (!project || !projectInScope(project.id, await getCompanyRoom())) {
     location.href = 'index.html';
     return;
   }
@@ -242,8 +242,9 @@ async function init() {
     }
     normalizeReport(report);
     // Creating a brand-new report (above) is always allowed -- this only
-    // gates opening one that already exists.
-    editable = await companyCan('editReports');
+    // gates opening one that already exists. "Own reports" depends on
+    // whether this device's logged-in name matches who created it.
+    editable = canEditReportWithContext(report, await getReportPermissionContext());
   }
 
   document.title = `Report #${report.reportNo} — ${project.name}`;

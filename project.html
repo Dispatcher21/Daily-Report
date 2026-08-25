@@ -159,7 +159,7 @@ let project = null;
 async function init() {
   const id = queryParam('id');
   project = id ? await getProject(id) : null;
-  if (!project) {
+  if (!project || !projectInScope(project.id, await getCompanyRoom())) {
     location.href = 'index.html';
     return;
   }
