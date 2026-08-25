@@ -130,13 +130,22 @@ async function saveReport(report) {
   if (typeof onLocalFolderReportChanged === 'function') {
     onLocalFolderReportChanged(report, false).catch((err) => console.error('local folder mirror:', err));
   }
+  if (typeof onCompanySyncReportChanged === 'function') {
+    onCompanySyncReportChanged(report, false).catch((err) => console.error('company sync mirror:', err));
+  }
 }
 
 async function deleteReport(id) {
-  const report = typeof onLocalFolderReportChanged === 'function' ? await getReport(id) : null;
+  const needsReport = typeof onLocalFolderReportChanged === 'function' || typeof onCompanySyncReportChanged === 'function';
+  const report = needsReport ? await getReport(id) : null;
   await withStore(REPORTS_STORE, 'readwrite', (store) => store.delete(id));
   if (report) {
-    onLocalFolderReportChanged(report, true).catch((err) => console.error('local folder mirror:', err));
+    if (typeof onLocalFolderReportChanged === 'function') {
+      onLocalFolderReportChanged(report, true).catch((err) => console.error('local folder mirror:', err));
+    }
+    if (typeof onCompanySyncReportChanged === 'function') {
+      onCompanySyncReportChanged(report, true).catch((err) => console.error('company sync mirror:', err));
+    }
   }
 }
 
@@ -178,6 +187,9 @@ async function saveProject(project) {
   if (typeof onLocalFolderProjectChanged === 'function') {
     onLocalFolderProjectChanged(project, false).catch((err) => console.error('local folder mirror:', err));
   }
+  if (typeof onCompanySyncProjectChanged === 'function') {
+    onCompanySyncProjectChanged(project, false).catch((err) => console.error('company sync mirror:', err));
+  }
 }
 
 function getAllProjects() {
@@ -197,14 +209,20 @@ async function getProject(id) {
 
 // Deletes a project and every report that belongs to it.
 async function deleteProject(id) {
-  const project = typeof onLocalFolderProjectChanged === 'function' ? await getProject(id) : null;
+  const needsProject = typeof onLocalFolderProjectChanged === 'function' || typeof onCompanySyncProjectChanged === 'function';
+  const project = needsProject ? await getProject(id) : null;
   const reports = await getReportsForProject(id);
   for (const r of reports) {
     await deleteReport(r.id); // also mirrors each report's own deletion, see above
   }
   await withStore(PROJECTS_STORE, 'readwrite', (store) => store.delete(id));
   if (project) {
-    onLocalFolderProjectChanged(project, true).catch((err) => console.error('local folder mirror:', err));
+    if (typeof onLocalFolderProjectChanged === 'function') {
+      onLocalFolderProjectChanged(project, true).catch((err) => console.error('local folder mirror:', err));
+    }
+    if (typeof onCompanySyncProjectChanged === 'function') {
+      onCompanySyncProjectChanged(project, true).catch((err) => console.error('company sync mirror:', err));
+    }
   }
 }
 

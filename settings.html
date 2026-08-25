@@ -12,7 +12,7 @@
 <style>
   /* Mirrors the printed header box (columns A-B, rows 1-4 of the template)
      so what you see here is the space the logo actually gets on the report. */
-  #logo-preview-box {
+  .logo-preview-box {
     width: 251px;   /* 188.25pt */
     height: 83px;   /*  62.10pt */
     border: 1.5px dashed var(--border-strong);
@@ -25,14 +25,23 @@
     overflow: hidden;
     margin-bottom: 0.6rem;
   }
-  #logo-preview-box img { max-width: 100%; max-height: 100%; object-fit: contain; }
-  #logo-preview-box .lp-empty { color: #8b96a1; font-size: 0.8rem; }
+  .logo-preview-box img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .logo-preview-box .lp-empty { color: #8b96a1; font-size: 0.8rem; }
 
-  .toggle-row {
-    display: flex; align-items: center; justify-content: space-between;
-    gap: 1rem; min-height: var(--tap);
+  .company-details {
+    margin-top: 0.9rem;
+    padding-top: 0.9rem;
+    border-top: 1.5px dashed var(--border);
   }
-  .toggle-row input[type="checkbox"] { flex: 0 0 auto; }
+  .company-details summary {
+    font-size: 0.95rem;
+    font-weight: 700;
+    cursor: pointer;
+    min-height: var(--tap);
+    display: flex;
+    align-items: center;
+  }
+  .company-details[open] summary { margin-bottom: 0.6rem; }
 </style>
 </head>
 <body>
@@ -73,36 +82,6 @@
 
   <div class="step">
     <div class="step-header">
-      <span class="step-num">LOGO</span>
-      <h2>Company Logo</h2>
-    </div>
-    <div class="step-body">
-      <p class="hint" style="margin-top:0;">Prints in the top-left of every Daily Work Report. It's scaled to fit this box without stretching, so any shape works &mdash; wide logos just sit shorter.</p>
-
-      <div class="warn" id="no-logo-warning" hidden>
-        <strong>No logo uploaded.</strong> Every report you generate will print with a blank space where the company logo belongs.
-      </div>
-
-      <div id="logo-preview-box">
-        <span class="lp-empty" id="logo-empty">No logo set &mdash; this area prints blank</span>
-        <img id="logo-img" alt="Current logo" hidden>
-      </div>
-
-      <div class="uz" id="uz-logo">
-        <input type="file" id="f-logo" accept="image/*">
-        <span class="uz-icon">&#128444;</span>
-        <span class="uz-lbl">Upload Logo</span>
-        <span class="uz-hint">PNG, JPG or GIF &mdash; a transparent PNG looks best</span>
-        <span class="uz-fname" id="fn-logo"></span>
-      </div>
-
-      <button type="button" class="btn-danger" id="btn-remove-logo" hidden>Remove Logo</button>
-      <div class="success" id="logo-saved" hidden style="margin-top:0.75rem;">Logo saved.</div>
-    </div>
-  </div>
-
-  <div class="step">
-    <div class="step-header">
       <span class="step-num">INSTALL</span>
       <h2>Install as App</h2>
     </div>
@@ -121,104 +100,119 @@
 
   <div class="step">
     <div class="step-header">
-      <span class="step-num">SHARE</span>
-      <h2>Share Setup</h2>
+      <span class="step-num">COMPANY</span>
+      <h2>Company</h2>
     </div>
     <div class="step-body">
-      <p class="hint" style="margin-top:0;">Sends your projects and logo to another inspector so they start configured. Your reports and photos are never included.</p>
 
-      <div class="empty-state" id="share-none" hidden style="padding:1.25rem;">Add a project first &mdash; there's nothing to share yet.</div>
+      <div id="company-none">
+        <p class="hint" style="margin-top:0;">Connect this device to your company so the logo, projects, pay items, and reports stay the same across everyone's devices.</p>
 
-      <div id="share-controls" hidden>
-        <button type="button" class="btn-primary" id="btn-share-setup">Share Setup File</button>
-        <p class="hint">Creates a small file they can open on their phone. One tap and they're set up, logo included.</p>
+        <details class="company-details">
+          <summary>Create Company</summary>
 
-        <div class="sig-block">
-          <label>QR handoff &mdash; project
-            <select id="qr-project"></select>
-            <span class="hint">One project per code. A QR holds about 2,900 characters, so a large pay item catalog won't fit &mdash; use the file for those.</span>
+          <label>Company Name
+            <input type="text" id="cc-name" autocomplete="off">
           </label>
-          <label class="toggle-row" for="qr-omit-catalog" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;">
-            <input type="checkbox" id="qr-omit-catalog">
-            <span>Leave out the pay item catalog (makes the code much easier to scan)</span>
+
+          <div class="logo-preview-box">
+            <span class="lp-empty" id="cc-logo-empty">No logo set</span>
+            <img id="cc-logo-img" alt="Logo preview" hidden>
+          </div>
+          <div class="uz" id="uz-cc-logo">
+            <input type="file" id="cc-f-logo" accept="image/*">
+            <span class="uz-icon">&#128444;</span>
+            <span class="uz-lbl">Upload Logo (optional)</span>
+            <span class="uz-fname" id="cc-fn-logo"></span>
+          </div>
+
+          <div class="uz" id="uz-cc-projects" style="margin-top:0.75rem;">
+            <input type="file" id="cc-f-projects" accept=".xlsx" multiple>
+            <span class="uz-icon">&#128193;</span>
+            <span class="uz-lbl">Upload Project Excel File(s) (optional)</span>
+            <span class="uz-fname" id="cc-fn-projects"></span>
+          </div>
+
+          <label style="margin-top:0.75rem;">Company Password
+            <input type="password" id="cc-password" autocomplete="new-password">
           </label>
-          <button type="button" class="btn-secondary" id="btn-show-qr">Show Setup QR</button>
+          <label>Confirm Company Password
+            <input type="password" id="cc-password-confirm" autocomplete="new-password">
+          </label>
+          <label>Admin Password
+            <input type="password" id="cc-admin-password" autocomplete="new-password">
+            <span class="hint">Whoever knows this can replace the logo and add/update projects &mdash; give it only to whoever should manage those. Must differ from the company password.</span>
+          </label>
+          <label>Confirm Admin Password
+            <input type="password" id="cc-admin-password-confirm" autocomplete="new-password">
+          </label>
+
+          <button type="button" class="btn-primary" id="btn-create-company" style="margin-top:0.5rem;">Create Company</button>
+        </details>
+
+        <details class="company-details" style="margin-top:0.75rem;">
+          <summary>Join Company</summary>
+          <label>Company Password
+            <input type="password" id="jc-password" autocomplete="current-password">
+          </label>
+          <button type="button" class="btn-secondary" id="btn-join-company">Join Company</button>
+        </details>
+      </div>
+
+      <div id="company-connected" hidden>
+        <div class="success" id="company-line" style="margin-bottom:0.75rem;"></div>
+
+        <div class="logo-preview-box">
+          <span class="lp-empty" id="company-logo-empty">No logo set &mdash; this area prints blank</span>
+          <img id="company-logo-img" alt="Current logo" hidden>
         </div>
 
-        <div id="qr-wrap" hidden style="text-align:center;margin-top:0.75rem;">
-          <div id="qr-box" style="display:inline-block;background:#fff;padding:12px;border-radius:8px;border:1.5px solid var(--border);"></div>
-          <p class="hint" id="qr-note" style="text-align:center;"></p>
+        <div id="company-admin-only" hidden>
+          <div class="uz" id="uz-company-logo">
+            <input type="file" id="f-company-logo" accept="image/*">
+            <span class="uz-icon">&#128444;</span>
+            <span class="uz-lbl">Replace Logo</span>
+            <span class="uz-fname" id="fn-company-logo"></span>
+          </div>
+          <button type="button" class="btn-danger" id="btn-remove-company-logo" style="margin-bottom:0.75rem;">Remove Logo</button>
+
+          <div class="uz" id="uz-company-projects">
+            <input type="file" id="f-company-projects" accept=".xlsx" multiple>
+            <span class="uz-icon">&#128193;</span>
+            <span class="uz-lbl">Add / Update Project(s) from Excel</span>
+            <span class="uz-fname" id="fn-company-projects"></span>
+          </div>
         </div>
-        <div class="warn" id="qr-toobig" hidden></div>
-      </div>
-    </div>
-  </div>
 
-  <div class="step" id="local-folder-step" hidden>
-    <div class="step-header">
-      <span class="step-num">SYNC</span>
-      <h2>Local Save Folder</h2>
-    </div>
-    <div class="step-body">
-      <p class="hint" style="margin-top:0;">Point the app at a folder on this device &mdash; inside your OneDrive, Dropbox, a USB drive, wherever &mdash; and every project and report is kept mirrored there as plain files: no zipping, no proprietary format. Point the same folder on another device and it picks up right where you left off. Nothing is transmitted by this app itself; whatever keeps that folder in sync does that part on its own.</p>
+        <div id="company-unlock-admin" hidden>
+          <div class="sig-block" style="margin-top:0.75rem;">
+            <label>Admin Password
+              <input type="password" id="ua-password" autocomplete="current-password">
+            </label>
+            <button type="button" class="btn-secondary" id="btn-unlock-admin">Unlock Admin Access</button>
+          </div>
+        </div>
 
-      <div id="local-folder-none">
-        <button type="button" class="btn-primary" id="btn-choose-folder">Choose Folder</button>
-      </div>
-
-      <div id="local-folder-reconnect" hidden>
-        <p class="hint">Permission to <strong id="local-folder-reconnect-name"></strong> needs to be re-granted before syncing can continue.</p>
-        <button type="button" class="btn-primary" id="btn-reconnect-folder" style="margin-bottom:0.5rem;">Reconnect</button>
+        <button type="button" class="btn-primary" id="btn-sync-company-now" style="margin:0.75rem 0 0.5rem;">Sync Now</button>
         <br>
-        <button type="button" class="text-btn" id="btn-forget-folder-2" style="padding:0;color:var(--danger);">Forget This Folder</button>
+        <button type="button" class="text-btn" id="btn-leave-company" style="padding:0;color:var(--danger);">Leave This Company</button>
       </div>
 
-      <div id="local-folder-connected" hidden>
-        <div class="success" id="local-folder-name-line" style="margin-bottom:0.75rem;"></div>
-
-        <label class="toggle-row" for="local-folder-autosync" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-bottom:0.75rem;">
-          <input type="checkbox" id="local-folder-autosync">
-          <span>Sync automatically as you work (off = only when you tap Sync Now)</span>
-        </label>
-
-        <button type="button" class="btn-primary" id="btn-sync-folder-now" style="margin-bottom:0.5rem;">Sync Now</button>
-        <p class="hint" id="local-folder-last-synced" style="margin:0 0 0.75rem;"></p>
-        <button type="button" class="text-btn" id="btn-forget-folder" style="padding:0;color:var(--danger);">Forget This Folder</button>
-      </div>
-
-      <div id="local-folder-status" class="hint" style="margin-top:0.75rem;" hidden></div>
-      <div class="err" id="local-folder-error" hidden></div>
-    </div>
-  </div>
-
-  <div class="step">
-    <div class="step-header">
-      <span class="step-num">BACKUP</span>
-      <h2>Export &amp; Import</h2>
-    </div>
-    <div class="step-body">
-      <p class="hint" style="margin-top:0;">Export saves everything &mdash; all projects, reports, photos and your logo &mdash; to one file you move yourself (email, OneDrive, USB). Import merges it back in and never deletes anything. The file itself never leaves your device unless you move it. Select as many <code>.report</code> files at once as you like.</p>
-      <div class="home-toolbar" style="margin-top:0.75rem;">
-        <button type="button" id="btn-export-backup" class="text-btn-outline">Export All Data</button>
-        <button type="button" id="btn-import-backup" class="text-btn-outline">Import Data</button>
-        <input type="file" id="import-file-input" accept="application/json,.json,.report" multiple hidden>
-      </div>
+      <div id="company-status" class="hint" style="margin-top:0.75rem;" hidden></div>
+      <div class="err" id="company-error" hidden></div>
     </div>
   </div>
 
 </main>
 
-<script src="lib/qrcode.min.js"></script>
-<script src="lib/fflate.min.js"></script>
 <script src="lib/xlsx.min.js"></script>
 <script src="common.js"></script>
 <script src="defaults.js"></script>
 <script src="storage.js"></script>
-<script src="setup-share.js"></script>
-<script src="report-bundle.js"></script>
-<script src="local-folder-sync.js"></script>
+<script src="project-file.js"></script>
+<script type="module" src="firebase-init.js"></script>
+<script src="firebase-sync.js"></script>
 <script>
-let previewUrl = null;
 
 // ---------- Appearance ----------
 
@@ -284,167 +278,6 @@ $('#btn-reset-accent').addEventListener('click', () => {
 });
 renderAccentSwatches();
 
-// ---------- Logo ----------
-
-function showLogo(blob) {
-  const img = $('#logo-img');
-  if (previewUrl) URL.revokeObjectURL(previewUrl);
-  if (blob) {
-    previewUrl = URL.createObjectURL(blob);
-    img.src = previewUrl;
-    img.hidden = false;
-    $('#logo-empty').hidden = true;
-    $('#btn-remove-logo').hidden = false;
-    $('#uz-logo').classList.add('has');
-  } else {
-    previewUrl = null;
-    img.removeAttribute('src');
-    img.hidden = true;
-    $('#logo-empty').hidden = false;
-    $('#btn-remove-logo').hidden = true;
-    $('#uz-logo').classList.remove('has');
-    $('#fn-logo').textContent = '';
-  }
-  $('#no-logo-warning').hidden = !!blob;
-}
-
-function flashSaved() {
-  const el = $('#logo-saved');
-  el.hidden = false;
-  clearTimeout(flashSaved._t);
-  flashSaved._t = setTimeout(() => { el.hidden = true; }, 2500);
-}
-
-$('#f-logo').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  if (!/^image\//.test(file.type)) {
-    alert('That file is not an image.');
-    return;
-  }
-  try {
-    // Stored as-is: these are small, and re-encoding would only cost quality.
-    await saveReportLogo(file);
-    $('#fn-logo').textContent = file.name;
-    showLogo(file);
-    flashSaved();
-    applyHeaderLogo();
-  } catch (err) {
-    console.error(err);
-    alert('Could not save the logo: ' + err.message);
-  } finally {
-    e.target.value = '';
-  }
-});
-
-$('#btn-remove-logo').addEventListener('click', async () => {
-  if (!confirm('Remove the logo? Reports will print with a blank space where it sits.')) return;
-  await clearReportLogo();
-  showLogo(null);
-  applyHeaderLogo();
-});
-
-// ---------- Backup / restore ----------
-
-$('#btn-export-backup').addEventListener('click', async () => {
-  const btn = $('#btn-export-backup');
-  const original = btn.textContent;
-  btn.textContent = 'Exporting...';
-  btn.disabled = true;
-  try {
-    const backup = await exportAllReportsBackup();
-    const json = JSON.stringify(backup);
-    const d = new Date();
-    const pad = (n) => String(n).padStart(2, '0');
-    triggerDownload(
-      new Blob([json], { type: 'application/json' }),
-      `DailyReportApp_Backup_${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.json`
-    );
-  } catch (err) {
-    console.error(err);
-    alert('Could not export data: ' + err.message);
-  } finally {
-    btn.textContent = original;
-    btn.disabled = false;
-  }
-});
-
-$('#btn-import-backup').addEventListener('click', () => $('#import-file-input').click());
-
-// Accepts any mix of a full backup (.json, everything, from Export All Data
-// above) and .report bundles (from Sync Selected on the Reports page) in one
-// selection -- each file told apart by content, not by trusting its
-// extension, since a .report is just a zip wearing one. Valid JSON means the
-// backup path; anything else at least attempts the bundle path before
-// giving up on that file. One file failing doesn't stop the rest.
-async function importOneFile(file) {
-  let backup = null;
-  try {
-    backup = JSON.parse(await file.text());
-  } catch (err) {
-    backup = null;
-  }
-
-  if (backup) {
-    if (backup.kind !== 'daily-report-app-backup') {
-      return { file: file.name, error: "doesn't look like a Daily Report backup file" };
-    }
-    const result = await importReportsBackup(backup);
-    return { file: file.name, backupResult: result };
-  }
-
-  const bundle = await tryParseReportBundle(file);
-  if (!bundle) {
-    return { file: file.name, error: "doesn't look like a Daily Report backup file or a .report bundle" };
-  }
-  const projectResult = await mergeProjectRecord(bundle.project);
-  const reportResult = await mergeReportRecord(bundle.report);
-  return { file: file.name, bundleResult: { projectName: bundle.project.name, projectResult, reportNo: bundle.report.reportNo, date: bundle.report.date, reportResult } };
-}
-
-$('#import-file-input').addEventListener('change', async (e) => {
-  const files = Array.from(e.target.files || []);
-  e.target.value = '';
-  if (files.length === 0) return;
-
-  const outcomes = [];
-  for (const file of files) {
-    try {
-      outcomes.push(await importOneFile(file));
-    } catch (err) {
-      console.error(err);
-      outcomes.push({ file: file.name, error: err.message });
-    }
-  }
-
-  const errors = outcomes.filter((o) => o.error);
-  const backupResults = outcomes.filter((o) => o.backupResult).map((o) => o.backupResult);
-  const bundleResults = outcomes.filter((o) => o.bundleResult).map((o) => o.bundleResult);
-
-  const lines = [`Import complete: ${files.length} file(s).`];
-  if (backupResults.length > 0) {
-    const p = backupResults.reduce((s, r) => s + r.projectsAdded, 0);
-    const pu = backupResults.reduce((s, r) => s + r.projectsUpdated, 0);
-    const a = backupResults.reduce((s, r) => s + r.added, 0);
-    const u = backupResults.reduce((s, r) => s + r.updated, 0);
-    lines.push(`Backup file(s): projects ${p} new/${pu} updated, reports ${a} new/${u} updated.`);
-    if (backupResults.some((r) => r.logoAdded)) lines.push('Company logo restored.');
-  }
-  if (bundleResults.length > 0) {
-    const added = bundleResults.filter((r) => r.reportResult === 'added').length;
-    const updated = bundleResults.filter((r) => r.reportResult === 'updated').length;
-    const skipped = bundleResults.filter((r) => r.reportResult === 'skipped').length;
-    lines.push(`.report bundle(s): ${added} report(s) added, ${updated} updated, ${skipped} already up to date.`);
-  }
-  if (errors.length > 0) {
-    lines.push(`\nIssues:\n${errors.map((o) => `${o.file}: ${o.error}`).join('\n')}`);
-  }
-  alert(lines.join('\n'));
-
-  showLogo(await getReportLogo());
-  applyHeaderLogo();
-});
-
 // ---------- Install as app ----------
 
 function renderInstallSection() {
@@ -487,247 +320,273 @@ $('#btn-install').addEventListener('click', async () => {
 
 window.addEventListener('install-availability-changed', renderInstallSection);
 
-// ---------- Share setup ----------
+// ---------- Company ----------
 
-function appBaseUrl() {
-  return location.href.split('#')[0].replace(/[^/]*$/, '') + 'index.html';
+const companyLogoPreviewUrls = { create: null, connected: null };
+
+function showCreateLogoPreview(blob) {
+  const img = $('#cc-logo-img');
+  if (companyLogoPreviewUrls.create) URL.revokeObjectURL(companyLogoPreviewUrls.create);
+  if (blob) {
+    companyLogoPreviewUrls.create = URL.createObjectURL(blob);
+    img.src = companyLogoPreviewUrls.create;
+    img.hidden = false;
+    $('#cc-logo-empty').hidden = true;
+  } else {
+    companyLogoPreviewUrls.create = null;
+    img.removeAttribute('src');
+    img.hidden = true;
+    $('#cc-logo-empty').hidden = false;
+  }
 }
 
-async function refreshShareSection() {
-  const projects = await getAllProjects();
-  $('#share-none').hidden = projects.length > 0;
-  $('#share-controls').hidden = projects.length === 0;
-  $('#qr-project').innerHTML = projects
-    .map((p) => `<option value="${p.id}">${escapeHtml(p.name)} (${(p.payItemCatalog || []).length} items)</option>`)
-    .join('');
+function showCompanyLogo(blob) {
+  const img = $('#company-logo-img');
+  if (companyLogoPreviewUrls.connected) URL.revokeObjectURL(companyLogoPreviewUrls.connected);
+  if (blob) {
+    companyLogoPreviewUrls.connected = URL.createObjectURL(blob);
+    img.src = companyLogoPreviewUrls.connected;
+    img.hidden = false;
+    $('#company-logo-empty').hidden = true;
+  } else {
+    companyLogoPreviewUrls.connected = null;
+    img.removeAttribute('src');
+    img.hidden = true;
+    $('#company-logo-empty').hidden = false;
+  }
 }
 
-$('#btn-share-setup').addEventListener('click', async () => {
-  const btn = $('#btn-share-setup');
-  const original = btn.textContent;
-  btn.textContent = 'Preparing...';
+function companyStatus(text) {
+  const el = $('#company-status');
+  el.textContent = text;
+  el.hidden = !text;
+}
+function companyError(text) {
+  const el = $('#company-error');
+  el.textContent = text;
+  el.hidden = !text;
+}
+
+async function refreshCompanySection() {
+  const room = await getCompanyRoom();
+  $('#company-none').hidden = !!room;
+  $('#company-connected').hidden = !room;
+  if (!room) return;
+
+  $('#company-line').textContent = room.isAdmin
+    ? `Connected to "${room.name || 'your company'}" — Admin`
+    : `Connected to "${room.name || 'your company'}"`;
+
+  $('#company-admin-only').hidden = !room.isAdmin;
+  $('#company-unlock-admin').hidden = room.isAdmin;
+
+  showCompanyLogo(await getReportLogo());
+}
+
+// -- Create Company --
+
+let ccPendingLogo = null;
+let ccPendingProjects = [];
+
+$('#cc-f-logo').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (!/^image\//.test(file.type)) {
+    alert('That file is not an image.');
+    e.target.value = '';
+    return;
+  }
+  ccPendingLogo = await capImageDimensions(file);
+  $('#cc-fn-logo').textContent = file.name;
+  showCreateLogoPreview(ccPendingLogo);
+});
+
+$('#cc-f-projects').addEventListener('change', async (e) => {
+  const files = Array.from(e.target.files || []);
+  e.target.value = '';
+  if (files.length === 0) return;
+  for (const file of files) {
+    try {
+      const parsed = await parseProjectDataFile(file);
+      ccPendingProjects.push(makeProjectFromParsedFile(parsed));
+    } catch (err) {
+      alert(`Could not read ${file.name}: ${err.message}`);
+    }
+  }
+  $('#cc-fn-projects').textContent = ccPendingProjects.length
+    ? `${ccPendingProjects.length} project(s) ready: ${ccPendingProjects.map((p) => p.name).join(', ')}`
+    : '';
+});
+
+$('#btn-create-company').addEventListener('click', async () => {
+  const btn = $('#btn-create-company');
+  companyError('');
+  const name = $('#cc-name').value.trim();
+  const password = $('#cc-password').value;
+  const passwordConfirm = $('#cc-password-confirm').value;
+  const adminPassword = $('#cc-admin-password').value;
+  const adminPasswordConfirm = $('#cc-admin-password-confirm').value;
+
+  if (!password || password !== passwordConfirm) return companyError('Company password and confirmation must match.');
+  if (!adminPassword || adminPassword !== adminPasswordConfirm) return companyError('Admin password and confirmation must match.');
+  if (adminPassword === password) return companyError('Admin password must be different from the company password.');
+
+  btn.disabled = true;
+  btn.textContent = 'Creating...';
+  try {
+    if (ccPendingLogo) await saveReportLogo(ccPendingLogo);
+    for (const project of ccPendingProjects) await saveProject(project);
+    await createCompanyRoom({ name, password, adminPassword });
+
+    ccPendingLogo = null;
+    ccPendingProjects = [];
+    $('#cc-name').value = '';
+    $('#cc-password').value = '';
+    $('#cc-password-confirm').value = '';
+    $('#cc-admin-password').value = '';
+    $('#cc-admin-password-confirm').value = '';
+    $('#cc-fn-logo').textContent = '';
+    $('#cc-fn-projects').textContent = '';
+
+    await refreshCompanySection();
+    applyHeaderLogo();
+  } catch (err) {
+    console.error(err);
+    companyError('Could not create company: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Create Company';
+  }
+});
+
+// -- Join Company --
+
+$('#btn-join-company').addEventListener('click', async () => {
+  const btn = $('#btn-join-company');
+  companyError('');
+  const password = $('#jc-password').value;
+  btn.disabled = true;
+  btn.textContent = 'Joining...';
+  try {
+    const result = await joinCompanyRoom(password);
+    $('#jc-password').value = '';
+    await refreshCompanySection();
+    applyHeaderLogo();
+    companyStatus(`Joined — pulled ${result.projectsPulled} project(s), ${result.reportsPulled} report(s).`);
+  } catch (err) {
+    console.error(err);
+    companyError(err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Join Company';
+  }
+});
+
+// -- Connected: admin actions --
+
+$('#f-company-logo').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (!/^image\//.test(file.type)) {
+    alert('That file is not an image.');
+    e.target.value = '';
+    return;
+  }
+  try {
+    const capped = await capImageDimensions(file);
+    await saveReportLogo(capped);
+    $('#fn-company-logo').textContent = file.name;
+    showCompanyLogo(capped);
+    applyHeaderLogo();
+    await pushCompanyLogo();
+    companyStatus('Logo updated.');
+  } catch (err) {
+    console.error(err);
+    companyError('Could not save the logo: ' + err.message);
+  } finally {
+    e.target.value = '';
+  }
+});
+
+$('#btn-remove-company-logo').addEventListener('click', async () => {
+  if (!confirm('Remove the company logo? Reports will print with a blank space where it sits.')) return;
+  await clearReportLogo();
+  showCompanyLogo(null);
+  applyHeaderLogo();
+});
+
+$('#f-company-projects').addEventListener('change', async (e) => {
+  const files = Array.from(e.target.files || []);
+  e.target.value = '';
+  if (files.length === 0) return;
+
+  const names = [];
+  const errors = [];
+  for (const file of files) {
+    try {
+      const parsed = await parseProjectDataFile(file);
+      const project = makeProjectFromParsedFile(parsed);
+      await saveProject(project); // live hook pushes this to the company automatically
+      names.push(project.name);
+    } catch (err) {
+      errors.push(`${file.name}: ${err.message}`);
+    }
+  }
+  if (names.length) companyStatus(`Added/updated: ${names.join(', ')}`);
+  if (errors.length) companyError(errors.join('\n'));
+});
+
+// -- Connected: unlock admin --
+
+$('#btn-unlock-admin').addEventListener('click', async () => {
+  const btn = $('#btn-unlock-admin');
+  companyError('');
+  const password = $('#ua-password').value;
   btn.disabled = true;
   try {
-    const payload = await buildSetupPayload({ includeLogo: true });
-    const encoded = await encodeSetupPayload(payload);
-    const summaryHtml = (payload.projects || [])
-      .map((p) => `<li>${escapeHtml(p.name)}</li>`)
-      .join('') + (payload.logo ? '<li>Company logo</li>' : '');
-    const html = buildSetupCardHtml(encoded, appBaseUrl(), summaryHtml);
-    const file = new File([html], 'DailyReports-Setup.html', { type: 'text/html' });
-
-    // Native share sheet where it exists (AirDrop, Nearby Share, Teams, mail);
-    // otherwise fall back to a plain download they can attach themselves.
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      await navigator.share({ files: [file], title: 'Daily Reports setup' });
-    } else {
-      triggerDownload(file, file.name);
-    }
+    await unlockCompanyAdmin(password);
+    $('#ua-password').value = '';
+    await refreshCompanySection();
+    companyStatus('Admin access unlocked.');
   } catch (err) {
-    if (err && err.name === 'AbortError') return; // user dismissed the sheet
-    console.error(err);
-    alert('Could not build the setup file: ' + err.message);
+    companyError(err.message);
   } finally {
-    btn.textContent = original;
     btn.disabled = false;
   }
 });
 
-$('#btn-show-qr').addEventListener('click', async () => {
-  const wrap = $('#qr-wrap');
-  if (!wrap.hidden) {
-    wrap.hidden = true;
-    $('#qr-toobig').hidden = true;
-    $('#btn-show-qr').textContent = 'Show Setup QR';
-    return;
-  }
-  try {
-    const project = (await getAllProjects()).find((p) => p.id === $('#qr-project').value);
-    if (!project) return;
-    const omitCatalog = $('#qr-omit-catalog').checked;
+// -- Connected: sync / leave --
 
-    const payload = {
-      v: 1,
-      projects: [{
-        id: project.id,
-        name: project.name,
-        meta: project.meta,
-        payItemCatalog: omitCatalog ? [] : project.payItemCatalog || [],
-        defaultContractors: project.defaultContractors || [],
-        defaultEquipmentLabels: project.defaultEquipmentLabels || [],
-      }],
-    };
-    const url = setupUrlFor(await encodeSetupPayload(payload), appBaseUrl());
-
-    // Prefer the more robust correction level; fall back to the weaker one
-    // only if the data won't otherwise fit.
-    let qr = null;
-    let ecc = null;
-    for (const level of ['M', 'L']) {
-      try {
-        const candidate = qrcode(0, level); // 0 = smallest version that fits
-        candidate.addData(url);
-        candidate.make();
-        qr = candidate;
-        ecc = level;
-        break;
-      } catch (e) { /* too much data at this correction level */ }
-    }
-
-    if (!qr) {
-      const items = (project.payItemCatalog || []).length;
-      $('#qr-toobig').innerHTML =
-        `<strong>Too big for a QR code.</strong> ${escapeHtml(project.name)} needs ${url.length} characters ` +
-        `and a QR code holds about 2,900. Tick "leave out the pay item catalog" above (${items} items is what's ` +
-        `filling it), or use <strong>Share Setup File</strong>, which has no size limit.`;
-      $('#qr-toobig').hidden = false;
-      wrap.hidden = true;
-      return;
-    }
-    $('#qr-toobig').hidden = true;
-
-    const modules = qr.getModuleCount();
-    $('#qr-box').innerHTML = qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true });
-    const svg = $('#qr-box svg');
-    if (svg) {
-      // Keep roughly 3px per module so a phone camera can resolve it, but stay
-      // inside a phone screen.
-      const px = Math.min(Math.max(modules * 3, 220), 320);
-      svg.style.width = px + 'px';
-      svg.style.height = px + 'px';
-      svg.style.display = 'block';
-    }
-    const dense = modules > 120;
-    $('#qr-note').textContent =
-      `${url.length} characters · ${modules}×${modules} · error correction ${ecc}` +
-      (dense ? ' — dense code, hold the camera close and steady.' : '') +
-      ' Logo is not included in a QR.';
-    wrap.hidden = false;
-    $('#btn-show-qr').textContent = 'Hide Setup QR';
-    wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  } catch (err) {
-    console.error(err);
-    alert('Could not build the QR code: ' + err.message);
-  }
-});
-
-// ---------- Local Save Folder ----------
-
-let localFolderHandle = null;
-
-function formatLocalFolderSyncedAt(ts) {
-  if (!ts) return 'Not synced yet.';
-  const d = new Date(ts);
-  return 'Last full sync: ' + d.toLocaleDateString() + ' at ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
-
-async function refreshLocalFolderSection() {
-  if (!localFolderSupported()) {
-    $('#local-folder-step').hidden = true;
-    return;
-  }
-  $('#local-folder-step').hidden = false;
-
-  localFolderHandle = await getLocalFolderHandle();
-  $('#local-folder-none').hidden = !!localFolderHandle;
-  $('#local-folder-reconnect').hidden = true;
-  $('#local-folder-connected').hidden = true;
-  if (!localFolderHandle) return;
-
-  const permission = await checkLocalFolderPermission(localFolderHandle);
-  if (permission !== 'granted') {
-    $('#local-folder-reconnect').hidden = false;
-    $('#local-folder-reconnect-name').textContent = localFolderHandle.name;
-    return;
-  }
-
-  $('#local-folder-connected').hidden = false;
-  $('#local-folder-name-line').textContent = `Connected: "${localFolderHandle.name}"`;
-  $('#local-folder-autosync').checked = await getLocalFolderAutoSync();
-  $('#local-folder-last-synced').textContent = formatLocalFolderSyncedAt(await getSetting('localFolderLastSyncedAt'));
-}
-
-$('#btn-choose-folder').addEventListener('click', async () => {
-  $('#local-folder-error').hidden = true;
-  try {
-    await pickLocalFolder();
-    await refreshLocalFolderSection();
-    $('#btn-sync-folder-now').click(); // first connection: pull in what's there, push everything local out
-  } catch (err) {
-    if (err && err.name === 'AbortError') return; // user cancelled the folder picker
-    console.error(err);
-    $('#local-folder-error').textContent = 'Could not set up that folder: ' + err.message;
-    $('#local-folder-error').hidden = false;
-  }
-});
-
-$('#btn-reconnect-folder').addEventListener('click', async () => {
-  try {
-    const result = await requestLocalFolderPermission(localFolderHandle);
-    if (result !== 'granted') return;
-    await refreshLocalFolderSection();
-  } catch (err) {
-    console.error(err);
-  }
-});
-
-async function forgetLocalFolderFlow() {
-  if (!confirm('Forget this local save folder? Files already written there are left alone -- this just stops syncing to it.')) return;
-  await forgetLocalFolder();
-  await refreshLocalFolderSection();
-}
-$('#btn-forget-folder').addEventListener('click', forgetLocalFolderFlow);
-$('#btn-forget-folder-2').addEventListener('click', forgetLocalFolderFlow);
-
-$('#local-folder-autosync').addEventListener('change', async (e) => {
-  await setLocalFolderAutoSync(e.target.checked);
-});
-
-$('#btn-sync-folder-now').addEventListener('click', async () => {
-  const btn = $('#btn-sync-folder-now');
-  const statusEl = $('#local-folder-status');
-  const errorEl = $('#local-folder-error');
-  errorEl.hidden = true;
-  statusEl.hidden = false;
-  statusEl.textContent = 'Starting sync…';
+$('#btn-sync-company-now').addEventListener('click', async () => {
+  const btn = $('#btn-sync-company-now');
+  companyError('');
   btn.disabled = true;
-
+  btn.textContent = 'Syncing...';
   try {
-    const summary = await syncLocalFolderNow(localFolderHandle, (progress) => {
-      statusEl.textContent = progress.phase === 'pull'
-        ? `Checking ${progress.folder}…`
-        : `Writing ${progress.project.name}…`;
-    });
-    await saveSetting('localFolderLastSyncedAt', Date.now());
-
-    const bits = [];
-    if (summary.pushed) bits.push(`${summary.pushed} report(s) written`);
-    if (summary.pulled) bits.push(`${summary.pulled} report(s) pulled in`);
-    if (summary.projectsPulled) bits.push(`${summary.projectsPulled} project(s) pulled in`);
-    statusEl.textContent = `Sync complete — ${bits.length ? bits.join(', ') : 'everything already up to date'}.`;
-
-    if (summary.errors.length) {
-      errorEl.textContent = summary.errors.join('\n');
-      errorEl.hidden = false;
-    }
+    const result = await syncCompanyRoomNow();
+    showCompanyLogo(await getReportLogo());
+    applyHeaderLogo();
+    companyStatus(`Sync complete — pulled ${result.projectsPulled} project(s), ${result.reportsPulled} report(s).`);
   } catch (err) {
     console.error(err);
-    statusEl.hidden = true;
-    errorEl.textContent = 'Sync failed: ' + err.message;
-    errorEl.hidden = false;
+    companyError('Sync failed: ' + err.message);
   } finally {
     btn.disabled = false;
-    await refreshLocalFolderSection();
+    btn.textContent = 'Sync Now';
   }
+});
+
+$('#btn-leave-company').addEventListener('click', async () => {
+  if (!confirm('Leave this company? The company and its data are untouched -- this only disconnects this device.')) return;
+  await leaveCompanyRoom();
+  await refreshCompanySection();
 });
 
 // ---------- Init ----------
 
 (async () => {
   renderInstallSection();
-  await refreshShareSection();
-  showLogo(await getReportLogo());
-  await refreshLocalFolderSection();
+  await refreshCompanySection();
 })();
 </script>
 </body>
