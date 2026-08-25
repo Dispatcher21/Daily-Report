@@ -42,6 +42,38 @@
     align-items: center;
   }
   .company-details[open] summary { margin-bottom: 0.6rem; }
+
+  .cc-project-chips {
+    display: flex; flex-wrap: wrap; gap: 0.4rem;
+    margin: 0.5rem 0 0;
+  }
+  .cc-chip {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    background: var(--surface-3); border: 1px solid var(--border); border-radius: 999px;
+    padding: 0.3rem 0.5rem 0.3rem 0.7rem;
+    font-size: 0.82rem; color: var(--text-dim);
+  }
+  .cc-chip button {
+    all: unset; cursor: pointer; line-height: 1; font-size: 0.95rem;
+    color: var(--text-dim); padding: 0 0.15rem;
+  }
+  .cc-chip button:hover { color: var(--danger); }
+
+  .spinner {
+    display: inline-block; width: 1em; height: 1em;
+    border: 2px solid rgba(255,255,255,0.4); border-top-color: #fff;
+    border-radius: 50%; animation: spin 0.7s linear infinite;
+    vertical-align: -0.15em; margin-right: 0.5rem;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .cc-progress {
+    display: flex; align-items: center; margin-top: 0.6rem;
+    font-size: 0.85rem; color: var(--text-dim);
+  }
+  .cc-progress .spinner {
+    border-color: var(--border-strong); border-top-color: var(--brand-light);
+  }
 </style>
 </head>
 <body>
@@ -108,7 +140,7 @@
       <div id="company-none">
         <p class="hint" style="margin-top:0;">Connect this device to your company so the logo, projects, pay items, and reports stay the same across everyone's devices.</p>
 
-        <details class="company-details">
+        <details class="company-details" id="cc-details">
           <summary>Create Company</summary>
 
           <label>Company Name
@@ -130,8 +162,8 @@
             <input type="file" id="cc-f-projects" accept=".xlsx" multiple>
             <span class="uz-icon">&#128193;</span>
             <span class="uz-lbl">Upload Project Excel File(s) (optional)</span>
-            <span class="uz-fname" id="cc-fn-projects"></span>
           </div>
+          <div class="cc-project-chips" id="cc-project-chips"></div>
 
           <label style="margin-top:0.75rem;">Company Password
             <input type="password" id="cc-password" autocomplete="new-password">
@@ -148,6 +180,10 @@
           </label>
 
           <button type="button" class="btn-primary" id="btn-create-company" style="margin-top:0.5rem;">Create Company</button>
+          <div class="cc-progress" id="cc-progress" hidden>
+            <span class="spinner"></span>
+            <span id="cc-progress-text"></span>
+          </div>
         </details>
 
         <details class="company-details" style="margin-top:0.75rem;">
@@ -401,6 +437,18 @@ $('#cc-f-logo').addEventListener('change', async (e) => {
   showCreateLogoPreview(ccPendingLogo);
 });
 
+function renderCcProjectChips() {
+  $('#cc-project-chips').innerHTML = ccPendingProjects
+    .map((p, i) => `<span class="cc-chip">${escapeHtml(p.name)}<button type="button" data-remove-cc-project="${i}" aria-label="Remove ${escapeHtml(p.name)}">&times;</button></span>`)
+    .join('');
+}
+$('#cc-project-chips').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-remove-cc-project]');
+  if (!btn) return;
+  ccPendingProjects.splice(Number(btn.dataset.removeCcProject), 1);
+  renderCcProjectChips();
+});
+
 $('#cc-f-projects').addEventListener('change', async (e) => {
   const files = Array.from(e.target.files || []);
   e.target.value = '';
@@ -413,13 +461,26 @@ $('#cc-f-projects').addEventListener('change', async (e) => {
       alert(`Could not read ${file.name}: ${err.message}`);
     }
   }
-  $('#cc-fn-projects').textContent = ccPendingProjects.length
-    ? `${ccPendingProjects.length} project(s) ready: ${ccPendingProjects.map((p) => p.name).join(', ')}`
-    : '';
+  renderCcProjectChips();
 });
+
+function setCcFormDisabled(disabled) {
+  $$('#cc-details input, #cc-details button').forEach((el) => {
+    el.disabled = disabled;
+  });
+}
+
+function ccProgressText(progress) {
+  if (progress.phase === 'logo') return 'Uploading logo…';
+  if (progress.phase === 'projects') return progress.count ? `Saved ${progress.count} project(s)…` : 'Creating company…';
+  if (progress.phase === 'reports') return `Syncing reports… (${progress.index}/${progress.total})`;
+  return 'Creating company…';
+}
 
 $('#btn-create-company').addEventListener('click', async () => {
   const btn = $('#btn-create-company');
+  const progressEl = $('#cc-progress');
+  const progressText = $('#cc-progress-text');
   companyError('');
   const name = $('#cc-name').value.trim();
   const password = $('#cc-password').value;
@@ -431,12 +492,17 @@ $('#btn-create-company').addEventListener('click', async () => {
   if (!adminPassword || adminPassword !== adminPasswordConfirm) return companyError('Admin password and confirmation must match.');
   if (adminPassword === password) return companyError('Admin password must be different from the company password.');
 
-  btn.disabled = true;
-  btn.textContent = 'Creating...';
+  setCcFormDisabled(true);
+  progressEl.hidden = false;
+  progressText.textContent = 'Saving locally…';
   try {
     if (ccPendingLogo) await saveReportLogo(ccPendingLogo);
     for (const project of ccPendingProjects) await saveProject(project);
-    await createCompanyRoom({ name, password, adminPassword });
+
+    progressText.textContent = 'Creating company…';
+    await createCompanyRoom({ name, password, adminPassword }, (progress) => {
+      progressText.textContent = ccProgressText(progress);
+    });
 
     ccPendingLogo = null;
     ccPendingProjects = [];
@@ -446,7 +512,7 @@ $('#btn-create-company').addEventListener('click', async () => {
     $('#cc-admin-password').value = '';
     $('#cc-admin-password-confirm').value = '';
     $('#cc-fn-logo').textContent = '';
-    $('#cc-fn-projects').textContent = '';
+    renderCcProjectChips();
 
     await refreshCompanySection();
     applyHeaderLogo();
@@ -454,8 +520,8 @@ $('#btn-create-company').addEventListener('click', async () => {
     console.error(err);
     companyError('Could not create company: ' + err.message);
   } finally {
-    btn.disabled = false;
-    btn.textContent = 'Create Company';
+    setCcFormDisabled(false);
+    progressEl.hidden = true;
   }
 });
 

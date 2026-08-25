@@ -67,7 +67,7 @@ async function getCompanyRoom() {
 // already on this device -- logo, projects, and reports -- so a room
 // created from a device with existing data starts other devices off with
 // it, exactly like the first connection to a Local Save Folder does.
-async function createCompanyRoom({ name, password, adminPassword }) {
+async function createCompanyRoom({ name, password, adminPassword }, onProgress) {
   if (!password) throw new Error('Choose a company password.');
   if (!adminPassword) throw new Error('Choose an admin password.');
 
@@ -86,8 +86,11 @@ async function createCompanyRoom({ name, password, adminPassword }) {
   await saveSetting(COMPANY_NAME_SETTING, name || '');
   await saveSetting(COMPANY_ADMIN_SETTING, true);
 
-  if (await getReportLogo()) await pushCompanyLogo();
-  await pushAllLocalData(code);
+  if (await getReportLogo()) {
+    if (onProgress) onProgress({ phase: 'logo' });
+    await pushCompanyLogo();
+  }
+  await pushAllLocalData(code, onProgress);
 
   return { code, name: name || '' };
 }
@@ -152,12 +155,12 @@ async function leaveCompanyRoom() {
 // report back out -- pull first, same ordering as the local-folder sync,
 // so a stale local copy can't clobber something newer that's already in
 // the room.
-async function syncCompanyRoomNow() {
+async function syncCompanyRoomNow(onProgress) {
   const room = await getCompanyRoom();
   if (!room) throw new Error('Not connected to a company room.');
   await pullCompanyLogo();
   const pulled = await pullAllCompanyData(room.code);
-  await pushAllLocalData(room.code);
+  await pushAllLocalData(room.code, onProgress);
   return pulled;
 }
 
@@ -256,22 +259,24 @@ async function pushReportToCompany(code, report) {
   const { ref, uploadBytes, deleteObject } = await import(STORAGE_SDK);
   await ensureSignedIn();
 
+  // All slots upload/delete in parallel rather than one at a time -- a
+  // report with 6 photos + a signature was 7 sequential round trips before,
+  // which is where "Create Company" felt like it hung on a device with any
+  // real amount of local data.
   const photos = report.photos || [];
-  for (let i = 0; i < REPORT_PHOTO_SLOTS; i++) {
+  const photoUploads = photos.map((photo, i) => {
     const photoRef = ref(storage, reportPhotoPath(code, report.id, i));
-    if (photos[i]) {
-      await uploadBytes(photoRef, photos[i], { contentType: photos[i].type || 'image/jpeg' });
-    } else {
-      await deleteObject(photoRef).catch(() => {}); // wasn't there -- nothing to remove
-    }
-  }
+    return photo
+      ? uploadBytes(photoRef, photo, { contentType: photo.type || 'image/jpeg' })
+      : deleteObject(photoRef).catch(() => {}); // wasn't there -- nothing to remove
+  });
 
   const sigRef = ref(storage, reportSignaturePath(code, report.id));
-  if (report.repSignatureImage) {
-    await uploadBytes(sigRef, report.repSignatureImage, { contentType: report.repSignatureImage.type || 'image/png' });
-  } else {
-    await deleteObject(sigRef).catch(() => {});
-  }
+  const sigUpload = report.repSignatureImage
+    ? uploadBytes(sigRef, report.repSignatureImage, { contentType: report.repSignatureImage.type || 'image/png' })
+    : deleteObject(sigRef).catch(() => {});
+
+  await Promise.all([...photoUploads, sigUpload]);
 
   const { photos: _photos, repSignatureImage: _sig, peSignatureImage: _peSig, ...rest } = report;
   const data = JSON.parse(JSON.stringify(rest));
@@ -336,12 +341,16 @@ async function pullAllCompanyData(code) {
   return summary;
 }
 
-async function pushAllLocalData(code) {
+async function pushAllLocalData(code, onProgress) {
   const projects = await getAllProjects();
-  for (const project of projects) await pushProjectToCompany(code, project);
+  await Promise.all(projects.map((project) => pushProjectToCompany(code, project)));
+  if (onProgress) onProgress({ phase: 'projects', count: projects.length });
 
   const reports = await getAllReports();
-  for (const report of reports) await pushReportToCompany(code, report);
+  for (let i = 0; i < reports.length; i++) {
+    await pushReportToCompany(code, reports[i]);
+    if (onProgress) onProgress({ phase: 'reports', index: i + 1, total: reports.length });
+  }
 }
 
 // ---------- live hooks -- called from storage.js after every save/delete ----------
