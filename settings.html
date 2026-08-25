@@ -565,6 +565,17 @@ $('#btn-create-company').addEventListener('click', async () => {
 
 // -- Join Company --
 
+function companyProgressText(progress) {
+  if (progress.phase === 'signing-in') return 'Signing in…';
+  if (progress.phase === 'looking-up') return 'Looking up company…';
+  if (progress.phase === 'pulling') return 'Pulling latest data…';
+  if (progress.phase === 'creating') return 'Creating new company address…';
+  if (progress.phase === 'logo') return 'Pulling company logo…';
+  if (progress.phase === 'projects') return progress.count != null ? `Pushed ${progress.count} project(s)…` : 'Pulling projects…';
+  if (progress.phase === 'reports') return `${progress.total ? 'Syncing' : 'Pulling'} reports… (${progress.index}/${progress.total})`;
+  return 'Working…';
+}
+
 $('#btn-join-company').addEventListener('click', async () => {
   const btn = $('#btn-join-company');
   companyError('');
@@ -572,7 +583,9 @@ $('#btn-join-company').addEventListener('click', async () => {
   btn.disabled = true;
   btn.textContent = 'Joining...';
   try {
-    const result = await joinCompanyRoom(password);
+    const result = await joinCompanyRoom(password, (progress) => {
+      companyStatus(companyProgressText(progress));
+    });
     $('#jc-password').value = '';
     await refreshCompanySection();
     applyHeaderLogo();
@@ -680,7 +693,9 @@ $('#btn-sync-company-now').addEventListener('click', async () => {
   btn.disabled = true;
   btn.textContent = 'Syncing...';
   try {
-    const result = await syncCompanyRoomNow();
+    const result = await syncCompanyRoomNow((progress) => {
+      companyStatus(companyProgressText(progress));
+    });
     showCompanyLogo(await getReportLogo());
     applyHeaderLogo();
     companyStatus(`Sync complete — pulled ${result.projectsPulled} project(s), ${result.reportsPulled} report(s).`);

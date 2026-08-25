@@ -64,6 +64,15 @@
 <script src="firebase-sync.js"></script>
 <script>
 
+function loginProgressText(progress) {
+  if (progress.phase === 'signing-in') return 'Signing in…';
+  if (progress.phase === 'looking-up') return 'Looking up company…';
+  if (progress.phase === 'logo') return 'Pulling company logo…';
+  if (progress.phase === 'projects') return 'Pulling projects…';
+  if (progress.phase === 'reports') return `Pulling reports… (${progress.index}/${progress.total})`;
+  return 'Working…';
+}
+
 $('#btn-continue').addEventListener('click', async () => {
   const btn = $('#btn-continue');
   const progressEl = $('#login-progress');
@@ -81,11 +90,13 @@ $('#btn-continue').addEventListener('click', async () => {
 
   btn.disabled = true;
   progressEl.hidden = false;
-  progressText.textContent = password ? 'Joining company…' : 'Saving…';
+  progressText.textContent = password ? 'Signing in…' : 'Saving…';
   try {
     await saveUserName(name);
     if (password) {
-      await joinCompanyRoom(password);
+      await joinCompanyRoom(password, (progress) => {
+        progressText.textContent = loginProgressText(progress);
+      });
     }
     location.href = 'index.html';
   } catch (err) {

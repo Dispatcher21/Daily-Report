@@ -110,13 +110,15 @@ async function createCompanyRoom({ name, password, adminPassword }, onProgress) 
 // password. Pulls in everything the room already has (merge only, same
 // rule as a JSON backup import -- never deletes anything already on this
 // device).
-async function joinCompanyRoom(password) {
+async function joinCompanyRoom(password, onProgress) {
   if (!password) throw new Error('Enter the company password.');
 
+  if (onProgress) onProgress({ phase: 'signing-in' });
   const { db, ensureSignedIn } = await waitForFirebaseCore();
   const { doc, getDoc } = await import(FIRESTORE_SDK);
   await ensureSignedIn();
 
+  if (onProgress) onProgress({ phase: 'looking-up' });
   const code = await hashText(password);
   const snap = await getDoc(doc(db, 'companies', code));
   if (!snap.exists()) throw new Error('No company found with that password.');
@@ -128,8 +130,9 @@ async function joinCompanyRoom(password) {
   await saveSetting(COMPANY_PERMISSIONS_SETTING, { ...DEFAULT_PERMISSIONS, ...(data.permissions || {}) });
   await saveSetting(LOGO_SYNCED_AT_SETTING, null);
 
+  if (onProgress) onProgress({ phase: 'logo' });
   await pullCompanyLogo();
-  const pulled = await pullAllCompanyData(code);
+  const pulled = await pullAllCompanyData(code, onProgress);
   return { code, name: data.name || '', ...pulled };
 }
 
@@ -182,7 +185,7 @@ async function syncCompanyRoomNow(onProgress) {
   }
 
   await pullCompanyLogo();
-  const pulled = await pullAllCompanyData(room.code);
+  const pulled = await pullAllCompanyData(room.code, onProgress);
   await pushAllLocalData(room.code, onProgress);
   return pulled;
 }
@@ -258,7 +261,7 @@ async function changeCompanyPassword(newPassword, onProgress) {
 
   if (onProgress) onProgress({ phase: 'pulling' });
   await pullCompanyLogo();
-  await pullAllCompanyData(room.code);
+  await pullAllCompanyData(room.code, onProgress);
 
   const oldSnap = await getDoc(doc(db, 'companies', room.code));
   const oldData = oldSnap.exists() ? oldSnap.data() : {};
@@ -433,7 +436,7 @@ async function deleteReportFromCompany(code, report) {
 
 // ---------- Bulk pull / push -- used by join and "Sync Now" ----------
 
-async function pullAllCompanyData(code) {
+async function pullAllCompanyData(code, onProgress) {
   const { db, storage, ensureSignedIn } = await waitForFirebaseCore();
   const { collection, getDocs } = await import(FIRESTORE_SDK);
   const { ref, getBytes } = await import(STORAGE_SDK);
@@ -441,6 +444,7 @@ async function pullAllCompanyData(code) {
 
   const summary = { projectsPulled: 0, reportsPulled: 0 };
 
+  if (onProgress) onProgress({ phase: 'projects' });
   const projectsSnap = await getDocs(collection(db, 'companies', code, 'projects'));
   for (const d of projectsSnap.docs) {
     const result = await mergeProjectRecord({ ...d.data(), id: d.id });
@@ -448,24 +452,32 @@ async function pullAllCompanyData(code) {
   }
 
   const reportsSnap = await getDocs(collection(db, 'companies', code, 'reports'));
-  for (const d of reportsSnap.docs) {
+  const reportDocs = reportsSnap.docs;
+  for (let i = 0; i < reportDocs.length; i++) {
+    const d = reportDocs[i];
+    if (onProgress) onProgress({ phase: 'reports', index: i + 1, total: reportDocs.length });
+
     const data = d.data();
     const report = { ...data, id: d.id };
     delete report.photoSlots;
     delete report.hasSignature;
 
-    report.photos = [];
-    for (let i = 0; i < REPORT_PHOTO_SLOTS; i++) {
-      if (data.photoSlots && data.photoSlots[i]) {
-        const bytes = await getBytes(ref(storage, reportPhotoPath(code, d.id, i)));
-        report.photos.push(new Blob([bytes], { type: 'image/jpeg' }));
-      } else {
-        report.photos.push(null);
-      }
-    }
-    report.repSignatureImage = data.hasSignature
-      ? new Blob([await getBytes(ref(storage, reportSignaturePath(code, d.id)))], { type: 'image/png' })
-      : null;
+    // All slots download in parallel rather than one at a time -- a report
+    // with 6 photos + a signature was 7 sequential round trips before,
+    // which is where Join/Sync Now felt like it hung on a company with any
+    // real amount of data (same bug already fixed on the push side).
+    const photoDownloads = Array.from({ length: REPORT_PHOTO_SLOTS }, (_, slot) =>
+      data.photoSlots && data.photoSlots[slot]
+        ? getBytes(ref(storage, reportPhotoPath(code, d.id, slot))).then((bytes) => new Blob([bytes], { type: 'image/jpeg' }))
+        : Promise.resolve(null)
+    );
+    const sigDownload = data.hasSignature
+      ? getBytes(ref(storage, reportSignaturePath(code, d.id))).then((bytes) => new Blob([bytes], { type: 'image/png' }))
+      : Promise.resolve(null);
+
+    const [photos, signature] = await Promise.all([Promise.all(photoDownloads), sigDownload]);
+    report.photos = photos;
+    report.repSignatureImage = signature;
 
     const result = await mergeReportRecord(report);
     if (result !== 'skipped') summary.reportsPulled++;

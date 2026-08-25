@@ -488,7 +488,7 @@ $('#btn-refresh-activity').addEventListener('click', async () => {
   btn.disabled = true;
   btn.textContent = 'Refreshing...';
   try {
-    await syncCompanyRoomNow();
+    await syncCompanyRoomNow((progress) => cmStatus(ccpProgressText(progress)));
     await renderCmProjects();
     await renderCmActivity();
     cmStatus('Refreshed.');
