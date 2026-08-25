@@ -144,9 +144,13 @@
         <input type="checkbox" id="cm-perm-reports">
         <span>Members can edit/delete reports</span>
       </label>
-      <label class="toggle-row" for="cm-perm-projects" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;">
+      <label class="toggle-row" for="cm-perm-projects" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-bottom:0.75rem;">
         <input type="checkbox" id="cm-perm-projects">
         <span>Members can edit/delete projects</span>
+      </label>
+      <label class="toggle-row" for="cm-perm-create-projects" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;">
+        <input type="checkbox" id="cm-perm-create-projects">
+        <span>Members can create new projects</span>
       </label>
     </div>
   </div>
@@ -378,6 +382,17 @@ $('#cm-perm-projects').addEventListener('change', async (e) => {
     cmError('Could not save permission: ' + err.message);
   }
 });
+$('#cm-perm-create-projects').addEventListener('change', async (e) => {
+  cmError('');
+  try {
+    await updateCompanyPermissions({ membersCanCreateProjects: e.target.checked });
+    cmStatus('Permissions saved.');
+  } catch (err) {
+    console.error(err);
+    e.target.checked = !e.target.checked;
+    cmError('Could not save permission: ' + err.message);
+  }
+});
 
 // ---------- Admin password ----------
 
@@ -517,6 +532,7 @@ $('#btn-refresh-activity').addEventListener('click', async () => {
   const perms = await getCompanyPermissions();
   $('#cm-perm-reports').checked = !!perms.membersCanEditReports;
   $('#cm-perm-projects').checked = !!perms.membersCanEditProjects;
+  $('#cm-perm-create-projects').checked = !!perms.membersCanCreateProjects;
 
   await renderCmProjects();
   await renderCmActivity();

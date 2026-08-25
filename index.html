@@ -111,13 +111,17 @@ async function renderProjectCards() {
       </a>`;
     })
     .join('');
-  grid.innerHTML =
-    cards +
-    `<div class="hub-card add-card" id="btn-add-project">+ Add Project</div>`;
+  const canCreate = await companyCan('createProjects');
+  grid.innerHTML = cards + (canCreate ? `<div class="hub-card add-card" id="btn-add-project">+ Add Project</div>` : '');
   if (projects.length === 0) {
-    grid.insertAdjacentHTML('afterbegin', '<div class="empty-state" style="grid-column:1/-1;">No projects yet. Tap "+ Add Project" to upload your first project\'s data file.</div>');
+    grid.insertAdjacentHTML(
+      'afterbegin',
+      canCreate
+        ? '<div class="empty-state" style="grid-column:1/-1;">No projects yet. Tap "+ Add Project" to upload your first project\'s data file.</div>'
+        : '<div class="empty-state" style="grid-column:1/-1;">No projects yet -- ask an admin to add one.</div>'
+    );
   }
-  $('#btn-add-project').addEventListener('click', showAddProjectPanel);
+  if (canCreate) $('#btn-add-project').addEventListener('click', showAddProjectPanel);
 
   $('#qty-no-projects').hidden = projects.length > 0;
   $('#qty-picker').hidden = projects.length === 0;

@@ -41,7 +41,7 @@ const LOGO_SYNCED_AT_SETTING = 'companyLogoSyncedAt';
 // the first time should never be more open than the app-level trust model
 // requires; an admin opens a permission up deliberately from Company
 // Management, not by accident of a missing field on older rooms.
-const DEFAULT_PERMISSIONS = { membersCanEditReports: false, membersCanEditProjects: false };
+const DEFAULT_PERMISSIONS = { membersCanEditReports: false, membersCanEditProjects: false, membersCanCreateProjects: false };
 
 async function hashText(text) {
   const bytes = new TextEncoder().encode(text);
@@ -203,7 +203,9 @@ async function companyCan(action) {
   const room = await getCompanyRoom();
   if (!room || room.isAdmin) return true;
   const perms = await getCompanyPermissions();
-  return action === 'editReports' ? !!perms.membersCanEditReports : !!perms.membersCanEditProjects;
+  if (action === 'editReports') return !!perms.membersCanEditReports;
+  if (action === 'createProjects') return !!perms.membersCanCreateProjects;
+  return !!perms.membersCanEditProjects; // 'editProjects'
 }
 
 async function updateCompanyPermissions(patch) {
