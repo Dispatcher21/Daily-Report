@@ -8,6 +8,7 @@ const PROJECTS_STORE = 'projects';
 const SETTINGS_STORE = 'settings';
 const DEFAULT_TEMPLATE_URL = 'template/daily-work-report-template.xlsx';
 const LOGO_SETTING_KEY = 'reportLogo';
+const USER_NAME_SETTING_KEY = 'userName';
 
 function openDb() {
   return new Promise((resolve, reject) => {
@@ -62,6 +63,18 @@ async function saveReportLogo(blob) {
 
 async function clearReportLogo() {
   await deleteSetting(LOGO_SETTING_KEY);
+}
+
+// The name this device is logged in as (see login.html) -- used to prefill
+// a new report's Representative field and to stamp who created/last edited
+// one, so an admin can tell whose work is whose. Optional: a device that
+// never logged in just has no name, and everything behaves as it always
+// did (blank/carried-forward representative, no attribution).
+function getUserName() {
+  return getSetting(USER_NAME_SETTING_KEY);
+}
+async function saveUserName(name) {
+  await saveSetting(USER_NAME_SETTING_KEY, name || '');
 }
 
 // Shows the company logo in the header bar, but only once the app is actually
@@ -125,6 +138,11 @@ async function putReportRaw(report) {
 // shouldn't make the caller wait for a save that's already durable in
 // IndexedDB by this point.
 async function saveReport(report) {
+  const userName = await getUserName();
+  if (userName) {
+    if (!report.createdBy) report.createdBy = userName; // set once, never overwritten by a later editor
+    report.lastEditedBy = userName;
+  }
   report.updatedAt = Date.now();
   await putReportRaw(report);
   if (typeof onLocalFolderReportChanged === 'function') {

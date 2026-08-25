@@ -27,6 +27,10 @@
 
 <main>
 
+  <div class="warn" id="readonly-banner" hidden>
+    You don't have permission to edit reports for this company &mdash; ask an admin to unlock this, or open Company Management to change it.
+  </div>
+
   <div class="step">
     <div class="step-header"><span class="step-num">STEP 1</span><h2>Report Info</h2></div>
     <div class="step-body">
@@ -181,6 +185,8 @@
 <script src="defaults.js"></script>
 <script src="storage.js"></script>
 <script src="local-folder-sync.js"></script>
+<script type="module" src="firebase-init.js"></script>
+<script src="firebase-sync.js"></script>
 <script>
 const projectId = queryParam('project');
 let project = null;
@@ -189,11 +195,27 @@ let activeContractorTab = 0;
 let saveTimer = null;
 let payItemSearch = '';
 let manualPayOpen = false;
+let editable = true;
 
 function scheduleSave() {
-  if (!report) return;
+  if (!report || !editable) return;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => saveReport(report).catch(console.error), 400);
+}
+
+// Disables every form control except navigation/print, for a member who
+// isn't allowed to edit an already-saved report -- creating a brand new one
+// is always allowed regardless (see init()), this only applies once a
+// report already exists.
+function lockReportEditor() {
+  $('#readonly-banner').hidden = false;
+  $$('main input, main textarea, main select, main button').forEach((el) => {
+    if (el.id === 'btn-generate') return; // viewing/printing isn't an edit
+    el.disabled = true;
+  });
+  // The signature pad draws from raw pointer events on a <canvas>, not a
+  // disable-able form control -- block interaction the same way instead.
+  $$('main canvas.sig-pad').forEach((c) => { c.style.pointerEvents = 'none'; });
 }
 
 async function init() {
@@ -209,7 +231,7 @@ async function init() {
   if (reportParam === 'new') {
     const existing = await getReportsForProject(project.id);
     const nextNo = await getNextReportNo(project.id);
-    report = makeBlankReport(nextNo, project, existing[0]);
+    report = await makeBlankReport(nextNo, project, existing[0]);
     await saveReport(report);
     history.replaceState(null, '', `report-editor.html?project=${project.id}&report=${report.id}`);
   } else {
@@ -219,12 +241,21 @@ async function init() {
       return;
     }
     normalizeReport(report);
+    // Creating a brand-new report (above) is always allowed -- this only
+    // gates opening one that already exists.
+    editable = await companyCan('editReports');
   }
 
   document.title = `Report #${report.reportNo} — ${project.name}`;
   $('#editor-title').textContent = `Report #${report.reportNo} - ${report.date || ''}`;
 
-  renderEditor();
+  // finally, not just a trailing call: a permission gate should fail safe
+  // (locked) if rendering throws for any reason, not silently fail open.
+  try {
+    renderEditor();
+  } finally {
+    if (!editable) lockReportEditor();
+  }
 }
 
 function bindText(id, field) {

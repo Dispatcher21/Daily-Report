@@ -143,6 +143,8 @@
 <script src="project-file.js"></script>
 <script src="report-bundle.js"></script>
 <script src="quantity-calc.js"></script>
+<script type="module" src="firebase-init.js"></script>
+<script src="firebase-sync.js"></script>
 <script>
 let project = null;
 
@@ -160,6 +162,13 @@ async function init() {
 
   $('#card-new-report').href = `report-editor.html?project=${project.id}&report=new`;
   $('#card-view-reports').href = `reports.html?project=${project.id}`;
+
+  // Renaming/re-uploading/deleting the project itself may be restricted to
+  // admins -- viewing the dashboard and filing reports never is.
+  if (!(await companyCan('editProjects'))) {
+    $('#uz-reupload').hidden = true;
+    $('#btn-delete-project').hidden = true;
+  }
 
   const reports = await getReportsForProject(project.id);
   $('#report-count').textContent = reports.length;

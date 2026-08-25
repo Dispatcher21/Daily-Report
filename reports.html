@@ -117,6 +117,8 @@
 <script src="lib/xlsx.min.js"></script>
 <script src="report-bundle.js"></script>
 <script src="sync-export.js"></script>
+<script type="module" src="firebase-init.js"></script>
+<script src="firebase-sync.js"></script>
 <script>
 const projectId = queryParam('project');
 let project = null;
@@ -133,6 +135,14 @@ async function init() {
   $('#project-name-sub').textContent = project.name;
   $('#bb-back-link').href = `project.html?id=${project.id}`;
   $('#fab-new-report').href = `report-editor.html?project=${project.id}&report=new`;
+
+  // Company members may be restricted from editing/deleting reports once
+  // saved -- gated here, not by hiding "+ New Report" (creating one is
+  // always allowed).
+  if (!(await companyCan('editReports'))) {
+    $('#btn-delete-selected').hidden = true;
+    $('#btn-mass-edit-selected').hidden = true;
+  }
 
   allReports = await getReportsForProject(project.id);
   render();

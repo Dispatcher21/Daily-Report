@@ -34,7 +34,14 @@ const REPORT_PHOTO_SLOTS = 6;
 const COMPANY_CODE_SETTING = 'companyRoomCode';
 const COMPANY_NAME_SETTING = 'companyRoomName';
 const COMPANY_ADMIN_SETTING = 'companyRoomIsAdmin';
+const COMPANY_PERMISSIONS_SETTING = 'companyRoomPermissions';
 const LOGO_SYNCED_AT_SETTING = 'companyLogoSyncedAt';
+
+// Both default to admin-only (false) -- a company connected to Firebase for
+// the first time should never be more open than the app-level trust model
+// requires; an admin opens a permission up deliberately from Company
+// Management, not by accident of a missing field on older rooms.
+const DEFAULT_PERMISSIONS = { membersCanEditReports: false, membersCanEditProjects: false };
 
 async function hashText(text) {
   const bytes = new TextEncoder().encode(text);
@@ -79,12 +86,14 @@ async function createCompanyRoom({ name, password, adminPassword }, onProgress) 
   await setDoc(doc(db, 'companies', code), {
     name: name || '',
     adminPasswordHash: await hashText(adminPassword),
+    permissions: DEFAULT_PERMISSIONS,
     createdAt: serverTimestamp(),
   });
 
   await saveSetting(COMPANY_CODE_SETTING, code);
   await saveSetting(COMPANY_NAME_SETTING, name || '');
   await saveSetting(COMPANY_ADMIN_SETTING, true);
+  await saveSetting(COMPANY_PERMISSIONS_SETTING, DEFAULT_PERMISSIONS);
 
   if (await getReportLogo()) {
     if (onProgress) onProgress({ phase: 'logo' });
@@ -116,6 +125,7 @@ async function joinCompanyRoom(password) {
   await saveSetting(COMPANY_CODE_SETTING, code);
   await saveSetting(COMPANY_NAME_SETTING, data.name || '');
   await saveSetting(COMPANY_ADMIN_SETTING, false);
+  await saveSetting(COMPANY_PERMISSIONS_SETTING, { ...DEFAULT_PERMISSIONS, ...(data.permissions || {}) });
   await saveSetting(LOGO_SYNCED_AT_SETTING, null);
 
   await pullCompanyLogo();
@@ -148,20 +158,143 @@ async function leaveCompanyRoom() {
   await deleteSetting(COMPANY_CODE_SETTING);
   await deleteSetting(COMPANY_NAME_SETTING);
   await deleteSetting(COMPANY_ADMIN_SETTING);
+  await deleteSetting(COMPANY_PERMISSIONS_SETTING);
   await deleteSetting(LOGO_SYNCED_AT_SETTING);
 }
 
 // Pulls in anything new from the room, then pushes every local project and
 // report back out -- pull first, same ordering as the local-folder sync,
 // so a stale local copy can't clobber something newer that's already in
-// the room.
+// the room. Also refreshes the cached company name/permissions, in case
+// another admin changed them from a different device.
 async function syncCompanyRoomNow(onProgress) {
   const room = await getCompanyRoom();
   if (!room) throw new Error('Not connected to a company room.');
+
+  const { db, ensureSignedIn } = await waitForFirebaseCore();
+  const { doc, getDoc } = await import(FIRESTORE_SDK);
+  await ensureSignedIn();
+  const snap = await getDoc(doc(db, 'companies', room.code));
+  if (snap.exists()) {
+    const data = snap.data();
+    await saveSetting(COMPANY_NAME_SETTING, data.name || '');
+    await saveSetting(COMPANY_PERMISSIONS_SETTING, { ...DEFAULT_PERMISSIONS, ...(data.permissions || {}) });
+  }
+
   await pullCompanyLogo();
   const pulled = await pullAllCompanyData(room.code);
   await pushAllLocalData(room.code, onProgress);
   return pulled;
+}
+
+// ---------- Company Management -- admin-only actions ----------
+
+async function getCompanyPermissions() {
+  return { ...DEFAULT_PERMISSIONS, ...((await getSetting(COMPANY_PERMISSIONS_SETTING)) || {}) };
+}
+
+// True if this device may perform `action` in its current company context.
+// Outside a company there's nothing to protect, so everything is allowed --
+// gating only ever applies once a shared company is actually connected.
+async function companyCan(action) {
+  const room = await getCompanyRoom();
+  if (!room || room.isAdmin) return true;
+  const perms = await getCompanyPermissions();
+  return action === 'editReports' ? !!perms.membersCanEditReports : !!perms.membersCanEditProjects;
+}
+
+async function updateCompanyPermissions(patch) {
+  const room = await getCompanyRoom();
+  if (!room) throw new Error('Not connected to a company.');
+  if (!room.isAdmin) throw new Error('Only an admin can change permissions.');
+
+  const { db, ensureSignedIn } = await waitForFirebaseCore();
+  const { doc, updateDoc } = await import(FIRESTORE_SDK);
+  await ensureSignedIn();
+
+  const merged = { ...(await getCompanyPermissions()), ...patch };
+  await updateDoc(doc(db, 'companies', room.code), { permissions: merged });
+  await saveSetting(COMPANY_PERMISSIONS_SETTING, merged);
+  return merged;
+}
+
+async function updateCompanyName(name) {
+  const room = await getCompanyRoom();
+  if (!room) throw new Error('Not connected to a company.');
+  if (!room.isAdmin) throw new Error('Only an admin can rename the company.');
+
+  const { db, ensureSignedIn } = await waitForFirebaseCore();
+  const { doc, updateDoc } = await import(FIRESTORE_SDK);
+  await ensureSignedIn();
+
+  await updateDoc(doc(db, 'companies', room.code), { name: name || '' });
+  await saveSetting(COMPANY_NAME_SETTING, name || '');
+}
+
+// Rotates the *company* password -- unlike the admin password, this isn't
+// a single field: the room's address (companies/{code}) is derived from
+// hash(password), so this pulls in the latest data first (so nothing this
+// device hasn't seen yet gets left behind), creates a new room at
+// hash(newPassword) with the same name/permissions/admin password, and
+// pushes every local project and report into it -- reusing pushAllLocalData
+// exactly as Create Company and Sync Now do, since this device's IndexedDB
+// already holds the full picture once the pull above completes.
+//
+// The old room is deliberately left in place rather than deleted: deleting
+// it would turn a stale device's next autosave into a silent write to a
+// company that no longer exists to anyone, which is worse than a harmless
+// orphaned room sitting unused in Firestore. There is no way to push the
+// new password to other devices automatically -- the caller is responsible
+// for telling every other device to Leave and rejoin with it.
+async function changeCompanyPassword(newPassword, onProgress) {
+  const room = await getCompanyRoom();
+  if (!room) throw new Error('Not connected to a company.');
+  if (!room.isAdmin) throw new Error('Only an admin can change the company password.');
+  if (!newPassword) throw new Error('Enter a new company password.');
+
+  const { db, ensureSignedIn } = await waitForFirebaseCore();
+  const { doc, getDoc, setDoc, serverTimestamp } = await import(FIRESTORE_SDK);
+  await ensureSignedIn();
+
+  if (onProgress) onProgress({ phase: 'pulling' });
+  await pullCompanyLogo();
+  await pullAllCompanyData(room.code);
+
+  const oldSnap = await getDoc(doc(db, 'companies', room.code));
+  const oldData = oldSnap.exists() ? oldSnap.data() : {};
+
+  const newCode = await hashText(newPassword);
+  if (onProgress) onProgress({ phase: 'creating' });
+  await setDoc(doc(db, 'companies', newCode), {
+    name: oldData.name || '',
+    adminPasswordHash: oldData.adminPasswordHash,
+    permissions: oldData.permissions || DEFAULT_PERMISSIONS,
+    createdAt: serverTimestamp(),
+  });
+
+  await saveSetting(COMPANY_CODE_SETTING, newCode);
+  await saveSetting(LOGO_SYNCED_AT_SETTING, null); // force a fresh logo push under the new address
+
+  if (await getReportLogo()) {
+    if (onProgress) onProgress({ phase: 'logo' });
+    await pushCompanyLogo();
+  }
+  await pushAllLocalData(newCode, onProgress);
+
+  return { oldCode: room.code, newCode };
+}
+
+async function changeCompanyAdminPassword(newAdminPassword) {
+  const room = await getCompanyRoom();
+  if (!room) throw new Error('Not connected to a company.');
+  if (!room.isAdmin) throw new Error('Only an admin can change the admin password.');
+  if (!newAdminPassword) throw new Error('Enter a new admin password.');
+
+  const { db, ensureSignedIn } = await waitForFirebaseCore();
+  const { doc, updateDoc } = await import(FIRESTORE_SDK);
+  await ensureSignedIn();
+
+  await updateDoc(doc(db, 'companies', room.code), { adminPasswordHash: await hashText(newAdminPassword) });
 }
 
 // ---------- Logo sync ----------

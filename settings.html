@@ -95,6 +95,21 @@
 
   <div class="step">
     <div class="step-header">
+      <span class="step-num">YOU</span>
+      <h2>Your Name</h2>
+    </div>
+    <div class="step-body">
+      <p class="hint" style="margin-top:0;">Fills in as Representative on new reports you file, and lets an admin tell whose work is whose.</p>
+      <label>Your Name
+        <input type="text" id="f-user-name" autocomplete="name">
+      </label>
+      <button type="button" class="btn-primary" id="btn-save-user-name" style="margin-top:0.5rem;">Save Name</button>
+      <div class="success" id="user-name-saved" hidden style="margin-top:0.75rem;">Name saved.</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-header">
       <span class="step-num">DISPLAY</span>
       <h2>Appearance</h2>
     </div>
@@ -420,6 +435,8 @@ async function refreshCompanySection() {
 }
 
 // -- Create Company --
+// (findSimilarProject / applyProjectUpdate now live in defaults.js, shared
+// with company-management.html)
 
 let ccPendingLogo = null;
 let ccPendingProjects = [];
@@ -453,10 +470,31 @@ $('#cc-f-projects').addEventListener('change', async (e) => {
   const files = Array.from(e.target.files || []);
   e.target.value = '';
   if (files.length === 0) return;
+  const existingProjects = await getAllProjects();
   for (const file of files) {
     try {
       const parsed = await parseProjectDataFile(file);
-      ccPendingProjects.push(makeProjectFromParsedFile(parsed));
+      const candidate = makeProjectFromParsedFile(parsed);
+
+      const stagedMatch = findSimilarProject(ccPendingProjects, candidate);
+      const match = stagedMatch || findSimilarProject(existingProjects, candidate);
+
+      if (match) {
+        const merge = confirm(
+          `"${candidate.name}" looks like it matches the existing project "${match.name}".\n\n` +
+          `OK: update "${match.name}" with this file.\nCancel: add "${candidate.name}" as a separate new project.`
+        );
+        if (merge) {
+          const merged = applyProjectUpdate(match, candidate);
+          if (stagedMatch) {
+            ccPendingProjects[ccPendingProjects.indexOf(stagedMatch)] = merged;
+          } else {
+            ccPendingProjects.push(merged);
+          }
+          continue;
+        }
+      }
+      ccPendingProjects.push(candidate);
     } catch (err) {
       alert(`Could not read ${file.name}: ${err.message}`);
     }
@@ -588,11 +626,24 @@ $('#f-company-projects').addEventListener('change', async (e) => {
 
   const names = [];
   const errors = [];
+  const existingProjects = await getAllProjects();
   for (const file of files) {
     try {
       const parsed = await parseProjectDataFile(file);
-      const project = makeProjectFromParsedFile(parsed);
+      const candidate = makeProjectFromParsedFile(parsed);
+      const match = findSimilarProject(existingProjects, candidate);
+
+      let project = candidate;
+      if (match) {
+        const merge = confirm(
+          `"${candidate.name}" looks like it matches the existing project "${match.name}".\n\n` +
+          `OK: update "${match.name}" with this file.\nCancel: add "${candidate.name}" as a separate new project.`
+        );
+        if (merge) project = applyProjectUpdate(match, candidate);
+      }
+
       await saveProject(project); // live hook pushes this to the company automatically
+      existingProjects.push(project); // so a second file in this same batch can match against it too
       names.push(project.name);
     } catch (err) {
       errors.push(`${file.name}: ${err.message}`);
@@ -648,9 +699,25 @@ $('#btn-leave-company').addEventListener('click', async () => {
   await refreshCompanySection();
 });
 
+// ---------- Your Name ----------
+
+$('#btn-save-user-name').addEventListener('click', async () => {
+  const name = $('#f-user-name').value.trim();
+  if (!name) {
+    alert('Enter your name.');
+    return;
+  }
+  await saveUserName(name);
+  const el = $('#user-name-saved');
+  el.hidden = false;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.hidden = true; }, 2500);
+});
+
 // ---------- Init ----------
 
 (async () => {
+  $('#f-user-name').value = (await getUserName()) || '';
   renderInstallSection();
   await refreshCompanySection();
 })();

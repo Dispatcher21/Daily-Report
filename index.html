@@ -21,6 +21,8 @@
 </header>
 
 <main>
+  <a class="btn-secondary" id="link-company-management" href="company-management.html" hidden style="display:block;text-align:center;text-decoration:none;margin-bottom:1rem;">&#9881;&#65039; Company Management</a>
+
   <div class="eyebrow">Your Projects</div>
   <div id="hub-grid" class="hub-grid"></div>
 
@@ -79,8 +81,11 @@
 <script src="local-folder-sync.js"></script>
 <script src="project-file.js"></script>
 <script src="setup-share.js"></script>
+<script type="module" src="firebase-init.js"></script>
+<script src="firebase-sync.js"></script>
 <script>
 let pendingParsed = null;
+
 
 async function renderProjectCards() {
   // One getAllReports() call, not one per project -- it already reads every
@@ -242,6 +247,13 @@ async function handleIncomingSetup() {
 // ---------- Init ----------
 
 (async () => {
+  if (!(await getUserName())) {
+    location.href = 'login.html';
+    return;
+  }
+  const room = await getCompanyRoom();
+  $('#link-company-management').hidden = !(room && room.isAdmin);
+
   await handleIncomingSetup();
   await adoptOrphanReportsIfAny();
   await renderProjectCards();

@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Company Management</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1c3d5a">
+<link rel="stylesheet" href="style.css">
+<script src="theme.js"></script>
+<style>
+  .logo-preview-box {
+    width: 251px; height: 83px;
+    border: 1.5px dashed var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: #fff;
+    display: flex; align-items: center; justify-content: flex-start;
+    padding: 3px 5px; overflow: hidden; margin-bottom: 0.6rem;
+  }
+  .logo-preview-box img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .logo-preview-box .lp-empty { color: #8b96a1; font-size: 0.8rem; }
+
+  .cm-project-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+    padding: 0.6rem 0; border-bottom: 1px solid var(--border);
+  }
+  .cm-project-row:last-child { border-bottom: none; }
+  .cm-project-name { font-weight: 600; }
+  .cm-project-sub { font-size: 0.8rem; color: var(--text-dim); }
+  .cm-project-actions { display: flex; gap: 0.5rem; flex: 0 0 auto; }
+
+  .cc-project-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.5rem 0 0; }
+  .cc-chip {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    background: var(--surface-3); border: 1px solid var(--border); border-radius: 999px;
+    padding: 0.3rem 0.5rem 0.3rem 0.7rem; font-size: 0.82rem; color: var(--text-dim);
+  }
+  .cc-chip button { all: unset; cursor: pointer; line-height: 1; font-size: 0.95rem; color: var(--text-dim); padding: 0 0.15rem; }
+  .cc-chip button:hover { color: var(--danger); }
+
+  .spinner {
+    display: inline-block; width: 1em; height: 1em;
+    border: 2px solid var(--border-strong); border-top-color: var(--brand-light);
+    border-radius: 50%; animation: spin 0.7s linear infinite;
+    vertical-align: -0.15em; margin-right: 0.5rem;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .cc-progress {
+    display: flex; align-items: center; margin-top: 0.6rem;
+    font-size: 0.85rem; color: var(--text-dim);
+  }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <a href="index.html" class="home-link">
+    <h1>Company Management</h1>
+    <div class="app-sub" id="cm-company-sub">Admin</div>
+  </a>
+  <span></span>
+</header>
+<div class="back-bar">
+  <a href="index.html">&larr; All Projects</a>
+  <span class="bb-sep">//</span>
+  <span class="bb-cur">Company Management</span>
+</div>
+
+<main>
+
+  <div class="step">
+    <div class="step-header">
+      <span class="step-num">NAME</span>
+      <h2>Company Name</h2>
+    </div>
+    <div class="step-body">
+      <label>Company Name
+        <input type="text" id="cm-name">
+      </label>
+      <button type="button" class="btn-primary" id="btn-save-name" style="margin-top:0.5rem;">Save Name</button>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-header">
+      <span class="step-num">LOGO</span>
+      <h2>Company Logo</h2>
+    </div>
+    <div class="step-body">
+      <div class="logo-preview-box">
+        <span class="lp-empty" id="cm-logo-empty">No logo set &mdash; this area prints blank</span>
+        <img id="cm-logo-img" alt="Current logo" hidden>
+      </div>
+      <div class="uz" id="uz-cm-logo">
+        <input type="file" id="cm-f-logo" accept="image/*">
+        <span class="uz-icon">&#128444;</span>
+        <span class="uz-lbl">Replace Logo</span>
+        <span class="uz-fname" id="cm-fn-logo"></span>
+      </div>
+      <button type="button" class="btn-danger" id="btn-remove-cm-logo" style="margin-top:0.75rem;">Remove Logo</button>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-header">
+      <span class="step-num">PROJECTS</span>
+      <h2>Projects</h2>
+    </div>
+    <div class="step-body">
+      <div class="uz" id="uz-cm-projects">
+        <input type="file" id="cm-f-projects" accept=".xlsx" multiple>
+        <span class="uz-icon">&#128193;</span>
+        <span class="uz-lbl">Add / Update Project(s) from Excel</span>
+      </div>
+
+      <div class="empty-state" id="cm-projects-empty" hidden style="padding:1.25rem;">No projects yet.</div>
+      <div id="cm-project-list"></div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-header">
+      <span class="step-num">ACTIVITY</span>
+      <h2>Who's Done What</h2>
+    </div>
+    <div class="step-body">
+      <p class="hint" style="margin-top:0;">Reports grouped by whoever's logged in as on the device that created them. Only reflects data this device has synced -- tap Refresh to pull in the latest first.</p>
+      <button type="button" class="btn-secondary" id="btn-refresh-activity" style="margin-bottom:0.75rem;">Refresh</button>
+      <div class="empty-state" id="cm-activity-empty" hidden style="padding:1.25rem;">No reports yet.</div>
+      <div id="cm-activity-list"></div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-header">
+      <span class="step-num">ACCESS</span>
+      <h2>Member Permissions</h2>
+    </div>
+    <div class="step-body">
+      <p class="hint" style="margin-top:0;">Off means admin-only. On lets any member (not just admins) do this.</p>
+      <label class="toggle-row" for="cm-perm-reports" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-bottom:0.75rem;">
+        <input type="checkbox" id="cm-perm-reports">
+        <span>Members can edit/delete reports</span>
+      </label>
+      <label class="toggle-row" for="cm-perm-projects" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;">
+        <input type="checkbox" id="cm-perm-projects">
+        <span>Members can edit/delete projects</span>
+      </label>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-header">
+      <span class="step-num">SECURITY</span>
+      <h2>Admin Password</h2>
+    </div>
+    <div class="step-body">
+      <p class="hint" style="margin-top:0;">Changes who can unlock admin access on a device -- doesn't affect anyone already unlocked, and doesn't affect the company password below.</p>
+      <label>New Admin Password
+        <input type="password" id="cm-admin-password" autocomplete="new-password">
+      </label>
+      <label>Confirm New Admin Password
+        <input type="password" id="cm-admin-password-confirm" autocomplete="new-password">
+      </label>
+      <button type="button" class="btn-primary" id="btn-change-admin-password" style="margin-top:0.5rem;">Change Admin Password</button>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-header">
+      <span class="step-num">SECURITY</span>
+      <h2>Company Password</h2>
+    </div>
+    <div class="step-body">
+      <div class="warn" style="margin-top:0;">
+        Every other device stays on the old password until someone manually opens Settings &rarr; Leave This Company, then rejoins with the new one. There's no way to push the change to them automatically -- tell your team before (or right after) you do this. Nothing already synced is lost either way; a device just won't sync anything new until it rejoins.
+      </div>
+      <label>New Company Password
+        <input type="password" id="cm-company-password" autocomplete="new-password">
+      </label>
+      <label>Confirm New Company Password
+        <input type="password" id="cm-company-password-confirm" autocomplete="new-password">
+      </label>
+      <button type="button" class="btn-primary" id="btn-change-company-password" style="margin-top:0.5rem;">Change Company Password</button>
+      <div class="cc-progress" id="ccp-progress" hidden>
+        <span class="spinner"></span>
+        <span id="ccp-progress-text"></span>
+      </div>
+    </div>
+  </div>
+
+  <div id="cm-status" class="hint" style="margin-top:0.75rem;" hidden></div>
+  <div class="err" id="cm-error" hidden></div>
+
+</main>
+
+<script src="lib/xlsx.min.js"></script>
+<script src="common.js"></script>
+<script src="defaults.js"></script>
+<script src="storage.js"></script>
+<script src="project-file.js"></script>
+<script type="module" src="firebase-init.js"></script>
+<script src="firebase-sync.js"></script>
+<script>
+
+function cmStatus(text) {
+  const el = $('#cm-status');
+  el.textContent = text;
+  el.hidden = !text;
+}
+function cmError(text) {
+  const el = $('#cm-error');
+  el.textContent = text;
+  el.hidden = !text;
+}
+
+let cmLogoPreviewUrl = null;
+function showCmLogo(blob) {
+  const img = $('#cm-logo-img');
+  if (cmLogoPreviewUrl) URL.revokeObjectURL(cmLogoPreviewUrl);
+  if (blob) {
+    cmLogoPreviewUrl = URL.createObjectURL(blob);
+    img.src = cmLogoPreviewUrl;
+    img.hidden = false;
+    $('#cm-logo-empty').hidden = true;
+  } else {
+    cmLogoPreviewUrl = null;
+    img.removeAttribute('src');
+    img.hidden = true;
+    $('#cm-logo-empty').hidden = false;
+  }
+}
+
+// ---------- Name ----------
+
+$('#btn-save-name').addEventListener('click', async () => {
+  const btn = $('#btn-save-name');
+  cmError('');
+  btn.disabled = true;
+  try {
+    await updateCompanyName($('#cm-name').value.trim());
+    $('#cm-company-sub').textContent = `Admin — ${$('#cm-name').value.trim() || 'Company Management'}`;
+    cmStatus('Company name saved.');
+  } catch (err) {
+    console.error(err);
+    cmError('Could not save name: ' + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ---------- Logo ----------
+
+$('#cm-f-logo').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (!/^image\//.test(file.type)) {
+    alert('That file is not an image.');
+    e.target.value = '';
+    return;
+  }
+  try {
+    const capped = await capImageDimensions(file);
+    await saveReportLogo(capped);
+    $('#cm-fn-logo').textContent = file.name;
+    showCmLogo(capped);
+    applyHeaderLogo();
+    await pushCompanyLogo();
+    cmStatus('Logo updated.');
+  } catch (err) {
+    console.error(err);
+    cmError('Could not save the logo: ' + err.message);
+  } finally {
+    e.target.value = '';
+  }
+});
+
+$('#btn-remove-cm-logo').addEventListener('click', async () => {
+  if (!confirm('Remove the company logo? Reports will print with a blank space where it sits.')) return;
+  await clearReportLogo();
+  showCmLogo(null);
+  applyHeaderLogo();
+});
+
+// ---------- Projects ----------
+
+async function renderCmProjects() {
+  const projects = await getAllProjects();
+  $('#cm-projects-empty').hidden = projects.length > 0;
+  $('#cm-project-list').innerHTML = projects
+    .map(
+      (p) => `
+      <div class="cm-project-row" data-id="${p.id}">
+        <div>
+          <div class="cm-project-name">${escapeHtml(p.name)}</div>
+          <div class="cm-project-sub">${p.payItemCatalog.length} pay item(s)${p.meta.projectNo ? ' &middot; #' + escapeHtml(p.meta.projectNo) : ''}</div>
+        </div>
+        <div class="cm-project-actions">
+          <a class="btn-secondary" href="project.html?id=${p.id}">Manage</a>
+          <button type="button" class="btn-danger" data-delete-project="${p.id}">Delete</button>
+        </div>
+      </div>`
+    )
+    .join('');
+}
+
+$('#cm-project-list').addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-delete-project]');
+  if (!btn) return;
+  const id = btn.dataset.deleteProject;
+  const projects = await getAllProjects();
+  const project = projects.find((p) => p.id === id);
+  if (!project) return;
+  if (!confirm(`Delete "${project.name}"? Its reports go with it. This cannot be undone.`)) return;
+  await deleteProject(id);
+  await renderCmProjects();
+  await renderCmActivity();
+});
+
+$('#cm-f-projects').addEventListener('change', async (e) => {
+  const files = Array.from(e.target.files || []);
+  e.target.value = '';
+  if (files.length === 0) return;
+
+  const names = [];
+  const errors = [];
+  const existingProjects = await getAllProjects();
+  for (const file of files) {
+    try {
+      const parsed = await parseProjectDataFile(file);
+      const candidate = makeProjectFromParsedFile(parsed);
+      const match = findSimilarProject(existingProjects, candidate);
+
+      let project = candidate;
+      if (match) {
+        const merge = confirm(
+          `"${candidate.name}" looks like it matches the existing project "${match.name}".\n\n` +
+          `OK: update "${match.name}" with this file.\nCancel: add "${candidate.name}" as a separate new project.`
+        );
+        if (merge) project = applyProjectUpdate(match, candidate);
+      }
+
+      await saveProject(project);
+      existingProjects.push(project);
+      names.push(project.name);
+    } catch (err) {
+      errors.push(`${file.name}: ${err.message}`);
+    }
+  }
+  if (names.length) cmStatus(`Added/updated: ${names.join(', ')}`);
+  if (errors.length) cmError(errors.join('\n'));
+  await renderCmProjects();
+});
+
+// ---------- Permissions ----------
+
+$('#cm-perm-reports').addEventListener('change', async (e) => {
+  cmError('');
+  try {
+    await updateCompanyPermissions({ membersCanEditReports: e.target.checked });
+    cmStatus('Permissions saved.');
+  } catch (err) {
+    console.error(err);
+    e.target.checked = !e.target.checked;
+    cmError('Could not save permission: ' + err.message);
+  }
+});
+$('#cm-perm-projects').addEventListener('change', async (e) => {
+  cmError('');
+  try {
+    await updateCompanyPermissions({ membersCanEditProjects: e.target.checked });
+    cmStatus('Permissions saved.');
+  } catch (err) {
+    console.error(err);
+    e.target.checked = !e.target.checked;
+    cmError('Could not save permission: ' + err.message);
+  }
+});
+
+// ---------- Admin password ----------
+
+$('#btn-change-admin-password').addEventListener('click', async () => {
+  const btn = $('#btn-change-admin-password');
+  cmError('');
+  const pw = $('#cm-admin-password').value;
+  const confirmPw = $('#cm-admin-password-confirm').value;
+  if (!pw || pw !== confirmPw) return cmError('New admin password and confirmation must match.');
+
+  btn.disabled = true;
+  try {
+    await changeCompanyAdminPassword(pw);
+    $('#cm-admin-password').value = '';
+    $('#cm-admin-password-confirm').value = '';
+    cmStatus('Admin password changed.');
+  } catch (err) {
+    console.error(err);
+    cmError('Could not change admin password: ' + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+function ccpProgressText(progress) {
+  if (progress.phase === 'pulling') return 'Pulling latest data first…';
+  if (progress.phase === 'creating') return 'Creating new company address…';
+  if (progress.phase === 'logo') return 'Uploading logo…';
+  if (progress.phase === 'projects') return progress.count ? `Copied ${progress.count} project(s)…` : 'Copying projects…';
+  if (progress.phase === 'reports') return `Copying reports… (${progress.index}/${progress.total})`;
+  return 'Working…';
+}
+
+$('#btn-change-company-password').addEventListener('click', async () => {
+  const btn = $('#btn-change-company-password');
+  const progressEl = $('#ccp-progress');
+  const progressText = $('#ccp-progress-text');
+  cmError('');
+  const pw = $('#cm-company-password').value;
+  const confirmPw = $('#cm-company-password-confirm').value;
+  if (!pw || pw !== confirmPw) return cmError('New company password and confirmation must match.');
+
+  if (!confirm(
+    'Change the company password?\n\n' +
+    'Every other device keeps using the old password until someone manually leaves and rejoins this company with the new one. ' +
+    'Nothing already synced is lost -- a device just stops syncing anything new until it rejoins.\n\n' +
+    'Continue?'
+  )) return;
+
+  btn.disabled = true;
+  progressEl.hidden = false;
+  progressText.textContent = 'Starting…';
+  try {
+    await changeCompanyPassword(pw, (progress) => {
+      progressText.textContent = ccpProgressText(progress);
+    });
+    $('#cm-company-password').value = '';
+    $('#cm-company-password-confirm').value = '';
+    cmStatus('Company password changed on this device. Tell your team to rejoin with the new password.');
+  } catch (err) {
+    console.error(err);
+    cmError('Could not change company password: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    progressEl.hidden = true;
+  }
+});
+
+// ---------- Activity ----------
+
+// Grouped by whoever created each report (see storage.js's saveReport
+// stamping) -- falls back to the Representative field for reports saved
+// before that existed, so older data still shows up here rather than
+// vanishing into "Unknown".
+async function renderCmActivity() {
+  const [reports, projects] = await Promise.all([getAllReports(), getAllProjects()]);
+  const projectNameById = new Map(projects.map((p) => [p.id, p.name]));
+
+  const byAuthor = new Map();
+  for (const r of reports) {
+    const author = r.createdBy || r.representative || 'Unknown';
+    if (!byAuthor.has(author)) byAuthor.set(author, { count: 0, latest: 0, projects: new Set() });
+    const entry = byAuthor.get(author);
+    entry.count++;
+    entry.latest = Math.max(entry.latest, r.updatedAt || 0);
+    entry.projects.add(projectNameById.get(r.projectId) || 'Unknown project');
+  }
+  const rows = Array.from(byAuthor.entries()).sort((a, b) => b[1].latest - a[1].latest);
+
+  $('#cm-activity-empty').hidden = rows.length > 0;
+  $('#cm-activity-list').innerHTML = rows
+    .map(
+      ([author, info]) => `
+      <div class="cm-project-row">
+        <div>
+          <div class="cm-project-name">${escapeHtml(author)}</div>
+          <div class="cm-project-sub">${info.count} report(s) &middot; ${Array.from(info.projects).map(escapeHtml).join(', ')}</div>
+        </div>
+        <div class="cm-project-sub">${info.latest ? new Date(info.latest).toLocaleDateString() : ''}</div>
+      </div>`
+    )
+    .join('');
+}
+
+$('#btn-refresh-activity').addEventListener('click', async () => {
+  const btn = $('#btn-refresh-activity');
+  cmError('');
+  btn.disabled = true;
+  btn.textContent = 'Refreshing...';
+  try {
+    await syncCompanyRoomNow();
+    await renderCmProjects();
+    await renderCmActivity();
+    cmStatus('Refreshed.');
+  } catch (err) {
+    console.error(err);
+    cmError('Could not refresh: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Refresh';
+  }
+});
+
+// ---------- Init ----------
+
+(async () => {
+  const room = await getCompanyRoom();
+  if (!room || !room.isAdmin) {
+    location.href = 'index.html';
+    return;
+  }
+
+  $('#cm-company-sub').textContent = `Admin — ${room.name || 'Company Management'}`;
+  $('#cm-name').value = room.name || '';
+  showCmLogo(await getReportLogo());
+
+  const perms = await getCompanyPermissions();
+  $('#cm-perm-reports').checked = !!perms.membersCanEditReports;
+  $('#cm-perm-projects').checked = !!perms.membersCanEditProjects;
+
+  await renderCmProjects();
+  await renderCmActivity();
+})();
+</script>
+</body>
+</html>

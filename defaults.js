@@ -51,10 +51,15 @@ function todayIso() {
 // working conditions, etc.) just use the project default every time, since
 // they never carried forward from a previous report before -- there's
 // nothing to regress.
-function makeBlankReport(nextReportNo, project, previous) {
+async function makeBlankReport(nextReportNo, project, previous) {
   const meta = (project && project.meta) || {};
   const projectContractors = (project && project.defaultContractors) || [];
   const projectEquipmentLabels = (project && project.defaultEquipmentLabels) || [];
+  // A device logged in with a name (see login.html) always wins over
+  // carry-forward/project-default -- that old behavior was a convenience
+  // for "same person, next day"; a real identity is a better answer to the
+  // same question, and covers a different person picking up the project too.
+  const loggedInName = typeof getUserName === 'function' ? await getUserName() : null;
 
   return {
     id: crypto.randomUUID(),
@@ -68,7 +73,7 @@ function makeBlankReport(nextReportNo, project, previous) {
     peName: previous ? previous.peName : meta.peName || '',
     projectNo: meta.projectNo || '',
     projectName: meta.projectName || '',
-    representative: previous ? previous.representative : meta.representative || '',
+    representative: loggedInName || (previous ? previous.representative : meta.representative || ''),
     ntpDate: meta.ntpDate || '',
     contractors: previous
       ? previous.contractors.map((c) => ({ name: c.name }))
@@ -198,5 +203,36 @@ function makeProjectFromParsedFile(parsed) {
     payItemCatalog: parsed.payItemCatalog || [],
     createdAt: Date.now(),
     updatedAt: Date.now(),
+  };
+}
+
+// Finds an existing project a freshly-parsed one probably represents a new
+// version of, so re-uploading a project's file can update it in place
+// instead of always creating a duplicate. Matched by project number first
+// (the stable key project data files are built around), falling back to an
+// exact name match for files that don't carry one.
+function findSimilarProject(pool, candidate) {
+  const projectNo = ((candidate.meta && candidate.meta.projectNo) || '').trim().toLowerCase();
+  const name = (candidate.name || '').trim().toLowerCase();
+  return (
+    pool.find((p) => {
+      const pNo = ((p.meta && p.meta.projectNo) || '').trim().toLowerCase();
+      if (projectNo && pNo && projectNo === pNo) return true;
+      return !!name && (p.name || '').trim().toLowerCase() === name;
+    }) || null
+  );
+}
+
+// Keeps the matched project's identity (id/createdAt) but adopts everything
+// the new file carries -- this is what makes it an update rather than a
+// second, separate project with the same content.
+function applyProjectUpdate(existing, candidate) {
+  return {
+    ...existing,
+    name: candidate.name,
+    meta: candidate.meta,
+    payItemCatalog: candidate.payItemCatalog,
+    defaultContractors: candidate.defaultContractors,
+    defaultEquipmentLabels: candidate.defaultEquipmentLabels,
   };
 }

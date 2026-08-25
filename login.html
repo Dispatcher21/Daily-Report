@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Daily Work Reports</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1c3d5a">
+<link rel="stylesheet" href="style.css">
+<script src="theme.js"></script>
+<style>
+  .spinner {
+    display: inline-block; width: 1em; height: 1em;
+    border: 2px solid rgba(255,255,255,0.4); border-top-color: #fff;
+    border-radius: 50%; animation: spin 0.7s linear infinite;
+    vertical-align: -0.15em; margin-right: 0.5rem;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div>
+    <h1>Daily Work Reports</h1>
+    <div class="app-sub">Field inspection reporting</div>
+  </div>
+  <span></span>
+</header>
+
+<main>
+  <div class="step">
+    <div class="step-header">
+      <span class="step-num">WELCOME</span>
+      <h2>Get Started</h2>
+    </div>
+    <div class="step-body">
+      <p class="hint" style="margin-top:0;">Your name fills in as Representative on every report you file, so an admin can tell whose work is whose. This is remembered on this device -- you won't see this again unless you change it in Settings.</p>
+
+      <label>Your Name
+        <input type="text" id="f-name" autocomplete="name">
+      </label>
+
+      <label style="margin-top:0.75rem;">Company Password <span class="hint" style="display:inline;">(optional)</span>
+        <input type="password" id="f-password" autocomplete="current-password">
+        <span class="hint">Leave blank to use the app on this device only. You can join or create a company later from Settings.</span>
+      </label>
+
+      <button type="button" class="btn-primary" id="btn-continue" style="margin-top:0.75rem;">Continue</button>
+      <div class="cc-progress" id="login-progress" hidden style="display:flex;align-items:center;margin-top:0.6rem;font-size:0.85rem;color:var(--text-dim);">
+        <span class="spinner"></span>
+        <span id="login-progress-text"></span>
+      </div>
+      <div class="err" id="login-error" hidden></div>
+    </div>
+  </div>
+</main>
+
+<script src="common.js"></script>
+<script src="defaults.js"></script>
+<script src="storage.js"></script>
+<script type="module" src="firebase-init.js"></script>
+<script src="firebase-sync.js"></script>
+<script>
+
+$('#btn-continue').addEventListener('click', async () => {
+  const btn = $('#btn-continue');
+  const progressEl = $('#login-progress');
+  const progressText = $('#login-progress-text');
+  const errorEl = $('#login-error');
+  errorEl.hidden = true;
+
+  const name = $('#f-name').value.trim();
+  const password = $('#f-password').value;
+  if (!name) {
+    errorEl.textContent = 'Enter your name.';
+    errorEl.hidden = false;
+    return;
+  }
+
+  btn.disabled = true;
+  progressEl.hidden = false;
+  progressText.textContent = password ? 'Joining company…' : 'Saving…';
+  try {
+    await saveUserName(name);
+    if (password) {
+      await joinCompanyRoom(password);
+    }
+    location.href = 'index.html';
+  } catch (err) {
+    console.error(err);
+    errorEl.textContent = password
+      ? 'Could not join with that company password: ' + err.message + ' Your name is saved -- clear the password and continue if you want to join later instead.'
+      : 'Could not continue: ' + err.message;
+    errorEl.hidden = false;
+  } finally {
+    btn.disabled = false;
+    progressEl.hidden = true;
+  }
+});
+
+// Already set up on this device -- skip straight past.
+(async () => {
+  const name = await getUserName();
+  if (name) location.href = 'index.html';
+})();
+</script>
+</body>
+</html>

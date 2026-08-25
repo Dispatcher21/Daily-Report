@@ -1,7 +1,7 @@
 {
   "name": "Daily Work Reports",
   "short_name": "Daily Reports",
-  "start_url": "./index.html",
+  "start_url": "./login.html",
   "scope": "./",
   "display": "standalone",
   "background_color": "#1c3d5a",
