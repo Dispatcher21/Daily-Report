@@ -302,6 +302,11 @@ async function renderCmProjects() {
           <div class="cm-project-sub">${p.payItemCatalog.length} pay item(s)${p.meta.projectNo ? ' &middot; #' + escapeHtml(p.meta.projectNo) : ''}</div>
         </div>
         <div class="cm-project-actions">
+          <label class="btn-secondary" style="cursor:pointer;margin:0;">
+            &#128444; ${p.backgroundImage ? 'Replace' : 'Background'}
+            <input type="file" accept="image/*" data-bg-upload="${p.id}" hidden>
+          </label>
+          ${p.backgroundImage ? `<button type="button" class="btn-secondary" data-remove-bg="${p.id}">Remove BG</button>` : ''}
           <a class="btn-secondary" href="project.html?id=${p.id}">Manage</a>
           <button type="button" class="btn-danger" data-delete-project="${p.id}">Delete</button>
         </div>
@@ -311,16 +316,50 @@ async function renderCmProjects() {
 }
 
 $('#cm-project-list').addEventListener('click', async (e) => {
-  const btn = e.target.closest('[data-delete-project]');
-  if (!btn) return;
-  const id = btn.dataset.deleteProject;
-  const projects = await getAllProjects();
-  const project = projects.find((p) => p.id === id);
+  const deleteBtn = e.target.closest('[data-delete-project]');
+  if (deleteBtn) {
+    const id = deleteBtn.dataset.deleteProject;
+    const projects = await getAllProjects();
+    const project = projects.find((p) => p.id === id);
+    if (!project) return;
+    if (!confirm(`Delete "${project.name}"? Its reports go with it. This cannot be undone.`)) return;
+    await deleteProject(id);
+    await renderCmProjects();
+    await renderCmActivity();
+    return;
+  }
+
+  const removeBgBtn = e.target.closest('[data-remove-bg]');
+  if (removeBgBtn) {
+    const id = removeBgBtn.dataset.removeBg;
+    const project = (await getAllProjects()).find((p) => p.id === id);
+    if (!project) return;
+    project.backgroundImage = null;
+    await saveProject(project);
+    await renderCmProjects();
+  }
+});
+
+$('#cm-project-list').addEventListener('change', async (e) => {
+  const input = e.target.closest('[data-bg-upload]');
+  if (!input) return;
+  const file = input.files[0];
+  if (!file) return;
+  if (!/^image\//.test(file.type)) {
+    alert('That file is not an image.');
+    return;
+  }
+  const id = input.dataset.bgUpload;
+  const project = (await getAllProjects()).find((p) => p.id === id);
   if (!project) return;
-  if (!confirm(`Delete "${project.name}"? Its reports go with it. This cannot be undone.`)) return;
-  await deleteProject(id);
-  await renderCmProjects();
-  await renderCmActivity();
+  try {
+    project.backgroundImage = await compressImage(file, { maxDim: 1600, quality: 0.75 });
+    await saveProject(project);
+    await renderCmProjects();
+  } catch (err) {
+    console.error(err);
+    alert('Could not save the background image: ' + err.message);
+  }
 });
 
 $('#cm-f-projects').addEventListener('change', async (e) => {

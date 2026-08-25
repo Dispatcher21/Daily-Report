@@ -127,7 +127,7 @@ window.addEventListener('appinstalled', () => {
   window.deferredInstallPrompt = null;
   appWasInstalledThisSession = true;
   window.dispatchEvent(new CustomEvent('install-availability-changed'));
-  applyBranding(); // the header logo only shows once installed -- update now, not on next load
+  applyBranding(); // harmless if already applied -- cheap enough to just rerun
 });
 
 function isAppInstalled() {

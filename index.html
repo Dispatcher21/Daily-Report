@@ -9,6 +9,14 @@
 <meta name="theme-color" content="#1c3d5a">
 <link rel="stylesheet" href="style.css">
 <script src="theme.js"></script>
+<style>
+  /* A plain `hidden` attribute doesn't work here: this link also needs
+     display:block while visible, and any author-stylesheet rule that sets
+     display on an element overrides the UA [hidden]{display:none} rule
+     regardless of specificity -- so visibility is a class, not `hidden`. */
+  #link-company-management { display: none; text-align: center; text-decoration: none; margin-bottom: 1rem; }
+  #link-company-management.show { display: block; }
+</style>
 </head>
 <body>
 
@@ -21,27 +29,10 @@
 </header>
 
 <main>
-  <a class="btn-secondary" id="link-company-management" href="company-management.html" hidden style="display:block;text-align:center;text-decoration:none;margin-bottom:1rem;">&#9881;&#65039; Company Management</a>
+  <a class="btn-secondary" id="link-company-management" href="company-management.html">&#9881;&#65039; Company Management</a>
 
   <div class="eyebrow">Your Projects</div>
   <div id="hub-grid" class="hub-grid"></div>
-
-  <div class="step">
-    <div class="step-header">
-      <span class="step-num">QUANTITIES</span>
-      <h2>Quantity Sheet</h2>
-    </div>
-    <div class="step-body">
-      <p class="hint" style="margin-top:0;">Builds an Excel breakdown of pay item quantities across a project's reports &mdash; totals with percent complete, and a day-by-day comparison, in one workbook.</p>
-      <div class="empty-state" id="qty-no-projects" hidden style="padding:1.25rem;">Add a project first &mdash; there's nothing to build a quantity sheet from yet.</div>
-      <div id="qty-picker" hidden>
-        <label>Project
-          <select id="qty-project-select"></select>
-        </label>
-        <a class="btn-primary" id="btn-qty-continue" href="#" style="display:block;text-align:center;text-decoration:none;">Choose Days</a>
-      </div>
-    </div>
-  </div>
 
   <!-- ADD PROJECT PANEL (revealed in place, no separate page) -->
   <div id="add-project-panel" class="step" hidden>
@@ -85,6 +76,7 @@
 <script src="firebase-sync.js"></script>
 <script>
 let pendingParsed = null;
+let hubCardBgUrls = [];
 
 
 async function renderProjectCards() {
@@ -97,13 +89,25 @@ async function renderProjectCards() {
     countByProject.set(r.projectId, (countByProject.get(r.projectId) || 0) + 1);
   }
 
+  // Re-rendered on every project add/save, so previous cards' background
+  // object URLs need revoking or they'd leak one per render.
+  hubCardBgUrls.forEach((url) => URL.revokeObjectURL(url));
+  hubCardBgUrls = [];
+
   const grid = $('#hub-grid');
   const cards = projects
     .map((p) => {
       const n = countByProject.get(p.id) || 0;
       const countLabel = n === 1 ? '1 report' : `${n} reports`;
+      let bgHtml = '';
+      if (p.backgroundImage) {
+        const url = URL.createObjectURL(p.backgroundImage);
+        hubCardBgUrls.push(url);
+        bgHtml = `<img class="hc-bg-img" src="${url}" alt=""><div class="hc-bg-fade"></div>`;
+      }
       return `
-      <a class="hub-card" href="project.html?id=${p.id}">
+      <a class="hub-card${p.backgroundImage ? ' has-bg' : ''}" href="project.html?id=${p.id}">
+        ${bgHtml}
         <span class="hc-icon">&#128193;</span>
         <div class="hc-title">${escapeHtml(p.name)}</div>
         <div class="hc-desc">${escapeHtml(p.meta.projectName || '')}</div>
@@ -122,20 +126,6 @@ async function renderProjectCards() {
     );
   }
   if (canCreate) $('#btn-add-project').addEventListener('click', showAddProjectPanel);
-
-  $('#qty-no-projects').hidden = projects.length > 0;
-  $('#qty-picker').hidden = projects.length === 0;
-  if (projects.length > 0) {
-    $('#qty-project-select').innerHTML = projects
-      .map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`)
-      .join('');
-    updateQtyContinueLink();
-  }
-}
-
-function updateQtyContinueLink() {
-  const id = $('#qty-project-select').value;
-  $('#btn-qty-continue').href = `quantity-sheet.html?project=${id}`;
 }
 
 function showAddProjectPanel() {
@@ -152,8 +142,6 @@ function resetAddProjectPanel() {
   $('#f-project-data').value = '';
   $('#btn-save-new-project').disabled = true;
 }
-
-$('#qty-project-select').addEventListener('change', updateQtyContinueLink);
 
 $('#btn-download-project-template').addEventListener('click', downloadProjectDataTemplate);
 
@@ -256,7 +244,7 @@ async function handleIncomingSetup() {
     return;
   }
   const room = await getCompanyRoom();
-  $('#link-company-management').hidden = !(room && room.isAdmin);
+  $('#link-company-management').classList.toggle('show', !!(room && room.isAdmin));
 
   await handleIncomingSetup();
   await adoptOrphanReportsIfAny();

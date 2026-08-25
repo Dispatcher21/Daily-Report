@@ -77,16 +77,15 @@ async function saveUserName(name) {
   await saveSetting(USER_NAME_SETTING_KEY, name || '');
 }
 
-// Shows the company logo in the header bar, but only once the app is actually
-// installed (added to the home screen) -- a browser tab already has its own
-// favicon, so this is reserved for the "feels like a real app" moment.
+// Shows the company logo in the header bar -- in the installed app and in
+// a plain browser tab alike, since this is used as a regular website too,
+// not just installed.
 async function applyHeaderLogo() {
   try {
     const header = document.querySelector('.app-header');
     if (!header) return;
 
-    const installed = typeof isAppInstalled === 'function' && isAppInstalled();
-    const logo = installed ? await getReportLogo() : null;
+    const logo = await getReportLogo();
 
     let img = header.querySelector('.header-logo');
     if (!logo) {
@@ -347,6 +346,7 @@ function deserializeImportedReport(raw) {
 async function serializeProjectForExport(project) {
   const copy = { ...project };
   delete copy.templateBlob; // retired -- see makeProjectFromParsedFile
+  copy.backgroundImage = await blobFieldToEntry(project.backgroundImage);
   return copy;
 }
 
@@ -355,6 +355,7 @@ function deserializeImportedProject(raw) {
   // Older backups carry a template copy; drop it rather than decoding it.
   delete project.templateBlob;
   delete project.templateFileName;
+  project.backgroundImage = entryToBlobField(raw.backgroundImage);
   return project;
 }
 

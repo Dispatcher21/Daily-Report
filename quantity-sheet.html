@@ -28,20 +28,24 @@
 <main>
   <div class="step">
     <div class="step-header">
-      <span class="step-num">PICK DAYS</span>
-      <h2>Highlight the Days to Include</h2>
+      <span class="step-num">RANGE</span>
+      <h2>Choose Which Reports to Include</h2>
     </div>
     <div class="step-body">
-      <p class="hint" style="margin-top:0;">Builds one Excel file from the pay items on the reports you check below: a Totals tab (with % complete against each item's Per Plans Total, when set) and a By Day tab with one column per day. Days sharing the same date are combined.</p>
+      <p class="hint" style="margin-top:0;">Builds one Excel file from the pay items on the reports in range: a Totals tab (with % complete against each item's Per Plans Total, when set) and a By Day tab with one column per day. Days sharing the same date are combined.</p>
 
-      <div class="select-all-row">
-        <button type="button" class="text-btn" id="btn-select-all">Select all</button>
-        <span id="select-count-label"></span>
+      <div class="segmented" id="range-mode-picker">
+        <button type="button" data-mode="range">Date Range</button>
+        <button type="button" data-mode="all">All Reports</button>
       </div>
 
-      <div id="report-list" class="report-list"></div>
+      <div class="field-grid" id="range-fields" style="margin-top:0.75rem;">
+        <label>From <input type="date" id="f-date-from"></label>
+        <label>To <input type="date" id="f-date-to"></label>
+      </div>
+      <p class="hint" id="range-summary" style="margin-bottom:0;"></p>
 
-      <button type="button" class="btn-primary" id="btn-generate" disabled>Generate Quantity Sheet</button>
+      <button type="button" class="btn-primary" id="btn-generate" disabled style="margin-top:0.75rem;">Generate Quantity Sheet</button>
     </div>
   </div>
 </main>
@@ -53,10 +57,15 @@
 <script src="quantity-calc.js"></script>
 <script>
 const projectId = queryParam('project');
-const preselected = new Set((queryParam('report') || '').split(',').filter(Boolean));
+// Arriving from Reports' "Quantity Sheet Selected" names specific report
+// ids -- rather than keep a separate selection mechanism for that, it's
+// translated into a date range (that batch's own min/max date) so there's
+// exactly one selection model on this page. If none of those reports have
+// a date, a range can't represent them, so it falls back to All Reports.
+const preselectedIds = new Set((queryParam('report') || '').split(',').filter(Boolean));
 let project = null;
 let allReports = [];
-let selectedIds = new Set(preselected);
+let rangeMode = 'range'; // 'range' | 'all'
 
 async function init() {
   project = projectId ? await getProject(projectId) : null;
@@ -69,73 +78,66 @@ async function init() {
   $('#bb-back-link').href = `reports.html?project=${project.id}`;
 
   allReports = (await getReportsForProject(project.id)).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
-  // Arriving with ?report= names specific ids -- if any no longer exist, don't
-  // silently keep a stale phantom selection.
-  selectedIds = new Set(Array.from(selectedIds).filter((id) => allReports.some((r) => r.id === id)));
-  render();
-}
 
-function render() {
-  const container = $('#report-list');
-  if (allReports.length === 0) {
-    container.innerHTML = '<div class="empty-state">No reports in this project yet.</div>';
+  const datedReports = allReports.filter((r) => r.date);
+  if (preselectedIds.size > 0) {
+    const picked = datedReports.filter((r) => preselectedIds.has(r.id));
+    if (picked.length > 0) {
+      $('#f-date-from').value = picked[0].date;
+      $('#f-date-to').value = picked[picked.length - 1].date;
+    } else {
+      rangeMode = 'all'; // none of the preselected reports have a date to range over
+    }
+  } else if (datedReports.length > 0) {
+    // No handoff -- default the range to cover everything on file, so
+    // "Date Range" starts out equivalent to "All" and the user narrows it.
+    $('#f-date-from').value = datedReports[0].date;
+    $('#f-date-to').value = datedReports[datedReports.length - 1].date;
   } else {
-    container.innerHTML = allReports
-      .map((r) => {
-        const items = (r.payItems || []).filter((it) => it && String(it.itemNumber || '').trim() !== '');
-        const sub = items.length
-          ? `${items.length} pay item${items.length === 1 ? '' : 's'} &mdash; ${escapeHtml(items.map((it) => it.itemNumber).join(', '))}`
-          : 'No pay items listed';
-        return `
-        <div class="report-row" data-id="${r.id}">
-          <input type="checkbox" class="report-row-check" ${selectedIds.has(r.id) ? 'checked' : ''}>
-          <div class="report-row-main" data-open="${r.id}">
-            <span class="report-row-date">${r.date || '(no date)'}</span>
-            <span class="report-row-sub">${sub}</span>
-          </div>
-          <span class="report-row-no">#${r.reportNo}</span>
-        </div>`;
-      })
-      .join('');
+    rangeMode = 'all'; // nothing has a date at all -- a range can never match anything
   }
 
-  $$('.report-row-check', container).forEach((cb) => {
-    cb.addEventListener('change', (e) => {
-      const id = e.target.closest('.report-row').dataset.id;
-      if (e.target.checked) selectedIds.add(id);
-      else selectedIds.delete(id);
-      updateControls();
-    });
-  });
-  // Tapping the row (not the checkbox) toggles it too, same as the checkbox --
-  // there's nothing to navigate to here, unlike reports.html's list.
-  $$('[data-open]', container).forEach((el) => {
-    el.addEventListener('click', () => {
-      const cb = el.closest('.report-row').querySelector('.report-row-check');
-      cb.checked = !cb.checked;
-      cb.dispatchEvent(new Event('change', { bubbles: true }));
-    });
-  });
+  renderRangeMode();
+}
 
+function selectedReports() {
+  if (rangeMode === 'all') return allReports;
+  const from = $('#f-date-from').value;
+  const to = $('#f-date-to').value;
+  if (!from && !to) return [];
+  return allReports.filter((r) => r.date && (!from || r.date >= from) && (!to || r.date <= to));
+}
+
+function renderRangeMode() {
+  $$('#range-mode-picker button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === rangeMode)));
+  $('#range-fields').style.display = rangeMode === 'all' ? 'none' : '';
   updateControls();
 }
 
 function updateControls() {
-  const n = selectedIds.size;
-  $('#select-count-label').textContent = n > 0 ? `${n} selected` : '';
-  $('#btn-select-all').textContent = n === allReports.length && allReports.length > 0 ? 'Deselect all' : 'Select all';
+  const selected = selectedReports();
+  const n = selected.length;
+  if (allReports.length === 0) {
+    $('#range-summary').textContent = 'No reports in this project yet.';
+  } else if (rangeMode === 'all') {
+    $('#range-summary').textContent = `${n} report(s) -- every report in this project.`;
+  } else if (n === 0) {
+    $('#range-summary').textContent = 'No reports fall in that range.';
+  } else {
+    $('#range-summary').textContent = `${n} report(s) from ${selected[0].date} to ${selected[n - 1].date}.`;
+  }
   $('#btn-generate').disabled = n === 0;
   $('#btn-generate').textContent = n > 1 ? `Generate Quantity Sheet (${n})` : 'Generate Quantity Sheet';
 }
 
-$('#btn-select-all').addEventListener('click', () => {
-  if (selectedIds.size === allReports.length && allReports.length > 0) {
-    selectedIds.clear();
-  } else {
-    allReports.forEach((r) => selectedIds.add(r.id));
-  }
-  render();
+$('#range-mode-picker').addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  rangeMode = btn.dataset.mode;
+  renderRangeMode();
 });
+$('#f-date-from').addEventListener('input', updateControls);
+$('#f-date-to').addEventListener('input', updateControls);
 
 // ---------- Workbook building ----------
 
@@ -232,7 +234,7 @@ function buildQuantitySheetWorkbook(reports, project) {
 }
 
 $('#btn-generate').addEventListener('click', () => {
-  const selected = allReports.filter((r) => selectedIds.has(r.id));
+  const selected = selectedReports();
   if (selected.length === 0) return;
 
   const btn = $('#btn-generate');

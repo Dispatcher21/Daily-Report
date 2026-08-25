@@ -361,17 +361,35 @@ async function pullCompanyLogo() {
 // anything Firestore can't store (undefined values, functions) via the
 // JSON round-trip below.
 
+function projectBackgroundPath(code, projectId) {
+  return `companies/${code}/projects/${projectId}/background`;
+}
+
 async function pushProjectToCompany(code, project) {
-  const { db, ensureSignedIn } = await waitForFirebaseCore();
+  const { db, storage, ensureSignedIn } = await waitForFirebaseCore();
   const { doc, setDoc } = await import(FIRESTORE_SDK);
+  const { ref, uploadBytes, deleteObject } = await import(STORAGE_SDK);
   await ensureSignedIn();
-  await setDoc(doc(db, 'companies', code, 'projects', project.id), JSON.parse(JSON.stringify(project)));
+
+  const bgRef = ref(storage, projectBackgroundPath(code, project.id));
+  if (project.backgroundImage) {
+    await uploadBytes(bgRef, project.backgroundImage, { contentType: project.backgroundImage.type || 'image/jpeg' });
+  } else {
+    await deleteObject(bgRef).catch(() => {});
+  }
+
+  const { backgroundImage: _bg, ...rest } = project;
+  const data = JSON.parse(JSON.stringify(rest));
+  data.hasBackgroundImage = !!project.backgroundImage;
+  await setDoc(doc(db, 'companies', code, 'projects', project.id), data);
 }
 
 async function deleteProjectFromCompany(code, project) {
-  const { db, ensureSignedIn } = await waitForFirebaseCore();
+  const { db, storage, ensureSignedIn } = await waitForFirebaseCore();
   const { doc, deleteDoc } = await import(FIRESTORE_SDK);
+  const { ref, deleteObject } = await import(STORAGE_SDK);
   await ensureSignedIn();
+  await deleteObject(ref(storage, projectBackgroundPath(code, project.id))).catch(() => {});
   await deleteDoc(doc(db, 'companies', code, 'projects', project.id));
 }
 
@@ -449,7 +467,13 @@ async function pullAllCompanyData(code, onProgress) {
   if (onProgress) onProgress({ phase: 'projects' });
   const projectsSnap = await getDocs(collection(db, 'companies', code, 'projects'));
   for (const d of projectsSnap.docs) {
-    const result = await mergeProjectRecord({ ...d.data(), id: d.id });
+    const data = d.data();
+    const project = { ...data, id: d.id };
+    delete project.hasBackgroundImage;
+    project.backgroundImage = data.hasBackgroundImage
+      ? new Blob([await getBytes(ref(storage, projectBackgroundPath(code, d.id)))], { type: 'image/jpeg' })
+      : null;
+    const result = await mergeProjectRecord(project);
     if (result !== 'skipped') summary.projectsPulled++;
   }
 

@@ -12,6 +12,9 @@
 </head>
 <body>
 
+<img class="page-bg-img" id="page-bg-img" alt="" hidden>
+<div class="page-bg-fade" id="page-bg-fade" hidden></div>
+
 <header class="app-header">
   <a href="index.html" class="home-link">
     <h1 id="project-title">Loading&hellip;</h1>
@@ -36,6 +39,11 @@
       <span class="hc-icon">&#128203;</span>
       <div class="hc-title">View Reports</div>
       <div class="hc-desc"><span id="report-count">0</span> saved report(s)</div>
+    </a>
+    <a class="hub-card" id="card-quantity-sheet" href="#">
+      <span class="hc-icon">&#128202;</span>
+      <div class="hc-title">Quantity Sheet</div>
+      <div class="hc-desc">Pay item totals by date range</div>
     </a>
   </div>
 
@@ -160,8 +168,16 @@ async function init() {
   $('#project-title').textContent = project.name;
   $('#bb-project-name').textContent = project.name;
 
+  if (project.backgroundImage) {
+    const url = URL.createObjectURL(project.backgroundImage);
+    $('#page-bg-img').src = url;
+    $('#page-bg-img').hidden = false;
+    $('#page-bg-fade').hidden = false;
+  }
+
   $('#card-new-report').href = `report-editor.html?project=${project.id}&report=new`;
   $('#card-view-reports').href = `reports.html?project=${project.id}`;
+  $('#card-quantity-sheet').href = `quantity-sheet.html?project=${project.id}`;
 
   // Renaming/re-uploading/deleting the project itself may be restricted to
   // admins -- viewing the dashboard and filing reports never is.
