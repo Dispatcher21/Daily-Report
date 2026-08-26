@@ -9,6 +9,12 @@
 <meta name="theme-color" content="#1c3d5a">
 <link rel="stylesheet" href="style.css">
 <script src="theme.js"></script>
+<style>
+  /* Off-screen sandbox for generating report-row thumbnails -- laid out
+     normally (not display:none) so html2canvas measures real layout, just
+     never visible. Same technique as download.html's #render-sandbox. */
+  #render-sandbox { position: fixed; top: 0; left: -20000px; z-index: -1; }
+</style>
 </head>
 <body>
 
@@ -109,6 +115,8 @@
   <a class="fab" id="fab-new-report" href="#">+ New Report</a>
 </main>
 
+<div id="render-sandbox"></div>
+
 <script src="common.js"></script>
 <script src="defaults.js"></script>
 <script src="storage.js"></script>
@@ -126,6 +134,134 @@ let selectedIds = new Set();
 // Fetched once per page load (room/permissions/name each cost a settings
 // read) rather than per report -- see canEditReportWithContext.
 let reportPermCtx = { isAdmin: true, canEditAny: true, canEditOwn: true, userName: null };
+
+// ---------- Report row thumbnails ----------
+//
+// A small rendered image of each report's main sheet, generated lazily (not
+// blocking the list) and cached on the report itself (thumbnail/thumbnailAt,
+// local-only -- see defaults.js/firebase-sync.js) so it's instant on every
+// visit after the first. render-report.js/print-sheet.css/html2canvas are
+// loaded on demand rather than as static <script> tags, so a page with
+// nothing left to generate never pays for them at all.
+let thumbnailUrls = new Map(); // report id -> object URL, kept for the life of the page
+let thumbnailInFlight = new Set();
+let thumbnailLibsPromise = null;
+const THUMB_CAPTURE_WIDTH = 90; // device px, before scaling for a retina screen
+
+function loadScriptOnce(src) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('Failed to load ' + src));
+    document.head.appendChild(s);
+  });
+}
+function loadStylesheetOnce(href) {
+  return new Promise((resolve, reject) => {
+    const l = document.createElement('link');
+    l.rel = 'stylesheet';
+    l.href = href;
+    l.onload = resolve;
+    l.onerror = () => reject(new Error('Failed to load ' + href));
+    document.head.appendChild(l);
+  });
+}
+// A single shared promise so two overlapping ensureThumbnails() calls (e.g.
+// the admin changes a filter while thumbnails are still generating) can't
+// both inject render-report.js -- a second copy would throw redeclaring its
+// top-level consts.
+function ensureThumbnailLibs() {
+  if (!thumbnailLibsPromise) {
+    thumbnailLibsPromise = Promise.all([
+      loadStylesheetOnce('print-sheet.css'),
+      loadScriptOnce('lib/html2canvas.min.js'),
+      loadScriptOnce('render-report.js'),
+    ]);
+  }
+  return thumbnailLibsPromise;
+}
+
+function showThumb(id, blob) {
+  const url = URL.createObjectURL(blob);
+  thumbnailUrls.set(id, url);
+  const wrap = document.querySelector(`.report-row-thumb-wrap[data-thumb="${id}"]`);
+  if (wrap) wrap.innerHTML = `<img src="${url}" alt="">`;
+}
+
+// Renders just the main report sheet (not the Daily Photo Log page) into
+// `sandbox` at thumbnail size and rasterizes it -- the same renderReportPages
+// used for the real PDF, just captured far smaller since nothing here needs
+// print resolution.
+async function generateReportThumbnailBlob(sandbox, layout, report, logoBlob) {
+  const pages = renderReportPages(sandbox, layout, report, logoBlob);
+  await waitForImages(sandbox);
+  await new Promise((resolve) => setTimeout(resolve, 30));
+
+  const page1 = pages[0].el;
+  pages[1].el.remove();
+
+  const scale = (THUMB_CAPTURE_WIDTH * (window.devicePixelRatio > 1 ? 2 : 1)) / page1.offsetWidth;
+  const canvas = await html2canvas(page1, {
+    scale,
+    backgroundColor: '#ffffff',
+    useCORS: true,
+    width: page1.offsetWidth,
+    height: page1.offsetHeight,
+  });
+  $$('img', page1).forEach((img) => {
+    if (img.src.startsWith('blob:')) URL.revokeObjectURL(img.src);
+  });
+  page1.remove();
+
+  return new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.72));
+}
+
+// Wires up whatever's already cached immediately (cheap: just an object
+// URL), then generates the rest one at a time in the background, yielding a
+// frame between each so scrolling/typing on the list stays responsive.
+async function ensureThumbnails(list) {
+  list.forEach((r) => {
+    if (r.thumbnail && r.thumbnailAt === r.updatedAt && !thumbnailUrls.has(r.id)) {
+      showThumb(r.id, r.thumbnail);
+    }
+  });
+
+  const stale = list.filter((r) => (!r.thumbnail || r.thumbnailAt !== r.updatedAt) && !thumbnailInFlight.has(r.id));
+  if (stale.length === 0) return;
+
+  try {
+    await ensureThumbnailLibs();
+  } catch (err) {
+    console.error('Could not load thumbnail renderer:', err);
+    return;
+  }
+  const sandbox = $('#render-sandbox');
+  const [layout, logoBlob] = await Promise.all([loadPrintLayout(), getReportLogo()]);
+
+  for (const r of stale) {
+    thumbnailInFlight.add(r.id);
+    try {
+      const blob = await generateReportThumbnailBlob(sandbox, layout, r, logoBlob);
+      r.thumbnail = blob;
+      r.thumbnailAt = r.updatedAt;
+      // putReportRaw, not saveReport -- generating a thumbnail to look at
+      // the list isn't an edit, so it shouldn't bump updatedAt/lastEditedBy
+      // (which would just invalidate the thumbnail it's trying to cache).
+      await putReportRaw(r);
+      showThumb(r.id, blob);
+    } catch (err) {
+      console.error('Thumbnail generation failed for report', r.id, err);
+    } finally {
+      thumbnailInFlight.delete(r.id);
+    }
+    // setTimeout, not requestAnimationFrame -- rAF is throttled/suspended
+    // on a backgrounded tab and would hang the whole loop (see the same
+    // caution in pdf-export.js). setTimeout still fires either way, and
+    // still yields long enough for scrolling/typing to stay responsive.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+}
 
 async function init() {
   project = projectId ? await getProject(projectId) : null;
@@ -194,9 +330,11 @@ function render() {
         const checkbox = editable
           ? `<input type="checkbox" class="report-row-check" ${selectedIds.has(r.id) ? 'checked' : ''}>`
           : `<span class="report-row-check-spacer"></span>`;
+        const thumbSrc = thumbnailUrls.get(r.id);
         return `
         <div class="report-row" data-id="${r.id}">
           ${checkbox}
+          <div class="report-row-thumb-wrap" data-thumb="${r.id}">${thumbSrc ? `<img src="${thumbSrc}" alt="">` : '<span class="report-row-thumb-placeholder">&#128196;</span>'}</div>
           <div class="report-row-main" data-open="${r.id}">
             <span class="report-row-date">${r.date || '(no date)'}${r.createdBy || r.representative ? ` <span class="report-row-author">${escapeHtml(r.createdBy || r.representative)}</span>` : ''}</span>
             <span class="report-row-sub">${escapeHtml(r.activity || 'No activity noted')}</span>
@@ -227,6 +365,8 @@ function render() {
   const editableCount = list.filter((r) => canEditReportWithContext(r, reportPermCtx)).length;
   $('#btn-select-all').textContent = selectedIds.size === editableCount && editableCount > 0 ? 'Deselect all' : 'Select all';
   updateBulkBar();
+
+  if (list.length > 0) ensureThumbnails(list).catch((err) => console.error(err));
 }
 
 function updateBulkBar() {

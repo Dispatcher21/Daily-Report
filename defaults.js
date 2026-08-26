@@ -127,6 +127,12 @@ async function makeBlankReport(nextReportNo, project, previous) {
     // fetches them on open, download.html before generating a PDF.
     photosFetched: [true, true, true, true, true, true],
     signatureFetched: true,
+    // Small rendered preview of the report's main sheet, shown on
+    // reports.html. Local-only -- never pushed to the company (see
+    // pushReportToCompany) -- and regenerated whenever thumbnailAt stops
+    // matching updatedAt (see ensureThumbnails in reports.html).
+    thumbnail: null,
+    thumbnailAt: null,
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };

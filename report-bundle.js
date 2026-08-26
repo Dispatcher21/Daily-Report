@@ -45,6 +45,8 @@ async function buildReportBundle(project, report) {
   delete reportPayload.photos;
   delete reportPayload.repSignatureImage;
   delete reportPayload.peSignatureImage; // retired field, never round-tripped
+  delete reportPayload.thumbnail; // local-only preview blob, regenerated on the receiving device
+  delete reportPayload.thumbnailAt;
   files['report.json'] = fflate.strToU8(JSON.stringify(reportPayload));
 
   const photos = report.photos || [];
