@@ -460,6 +460,45 @@ main { max-width: 780px; margin: 0 auto; padding: 1rem; }
 .fo-btn.active { background: var(--danger); color: #fff; border-color: var(--danger); }
 .fo-btn.fo-hide-btn.active { background: var(--text-dim); border-color: var(--text-dim); }
 
+/* Two-column layout on required-fields.html: the field list plus a live
+   preview of the actual printed report that highlights whatever row the
+   admin is hovering or dragging. */
+.rf-layout { display: flex; gap: 1.25rem; align-items: flex-start; }
+.rf-list-col { flex: 1 1 380px; min-width: 0; }
+.rf-preview-col {
+  flex: 1 1 420px; min-width: 0;
+  position: sticky; top: 1rem;
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 0.75rem;
+  box-shadow: var(--shadow);
+}
+.rf-preview-col h3 { margin: 0 0 0.6rem; font-size: 0.85rem; color: var(--text-dim); }
+.rf-preview-page-wrap { margin: 0 auto 0.75rem; position: relative; overflow: hidden; border: 1px solid var(--border); }
+.rf-preview-page-wrap:last-child { margin-bottom: 0; }
+@media (max-width: 900px) {
+  .rf-layout { flex-direction: column; }
+  .rf-preview-col { position: static; max-height: none; width: 100%; }
+}
+
+/* The highlight itself -- a plain class toggle on the matched .print-cell
+   for single/merged-cell fields; a synthetic grid item spanning the same
+   coordinate system for composite fields that cover several cells (see
+   FIELD_HIGHLIGHT_REGIONS in render-report.js). */
+.print-cell.rf-hl-active {
+  outline: 3px solid var(--danger);
+  outline-offset: -2px;
+  background: rgba(211, 47, 47, 0.22) !important;
+  z-index: 5;
+}
+.rf-hl-overlay {
+  background: rgba(211, 47, 47, 0.22);
+  border: 3px solid var(--danger);
+  pointer-events: none;
+  z-index: 5;
+}
+
 /* Floating save bar (required-fields.html) -- edits are staged in memory as
    the admin clicks fields, and only written with saveProject() when this
    is pressed, rather than firing a write per click. */

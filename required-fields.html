@@ -8,6 +8,7 @@
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c3d5a">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="print-sheet.css">
 <script src="theme.js"></script>
 <style>
   /* Room for the floating save bar so it never covers the last row. */
@@ -37,7 +38,15 @@
     <select id="rf-project-picker"></select>
   </label>
 
-  <ul class="field-order-list" id="field-order-list"></ul>
+  <div class="rf-layout">
+    <div class="rf-list-col">
+      <ul class="field-order-list" id="field-order-list"></ul>
+    </div>
+    <div class="rf-preview-col">
+      <h3>Live preview &mdash; hover or drag a row to see where it prints</h3>
+      <div id="rf-preview"></div>
+    </div>
+  </div>
 
 </main>
 
@@ -49,11 +58,13 @@
 <script src="common.js"></script>
 <script src="defaults.js"></script>
 <script src="storage.js"></script>
+<script src="render-report.js"></script>
 <script type="module" src="firebase-init.js"></script>
 <script src="firebase-sync.js"></script>
 <script>
 const projectId = queryParam('project');
 let project = null;
+let previewGrids = null; // { 1: gridEl, 2: gridEl }, set once the preview finishes rendering
 
 // Staged edit state -- nothing here touches the project record until Save.
 let pendingOrder = [];
@@ -156,13 +167,18 @@ function attachRowHandlers() {
   });
 
   $$('.fo-row', list).forEach((row) => {
+    row.addEventListener('mouseenter', () => highlightField(row.dataset.key));
+    row.addEventListener('mouseleave', () => { if (!dragKey) clearHighlight(); });
+
     row.addEventListener('dragstart', () => {
       dragKey = row.dataset.key;
       row.classList.add('dragging');
+      highlightField(dragKey);
     });
     row.addEventListener('dragend', () => {
       row.classList.remove('dragging');
       dragKey = null;
+      clearHighlight();
       pendingOrder = $$('.fo-row', list).map((el) => el.dataset.key);
       updateSaveBar();
     });
@@ -179,6 +195,74 @@ function attachRowHandlers() {
       list.insertBefore(draggedEl, before ? row : row.nextSibling);
     });
   });
+}
+
+// ---------- Live report preview + highlight ----------
+//
+// Renders the same CSS-grid sheets used for the real PDF (render-report.js)
+// from a blank sample report, scaled down to fit this panel, and left in
+// the document (unlike the PDF pipeline, which rasterizes and discards
+// them) so a field can be highlighted on it live as the admin interacts.
+
+function scalePreviewPage(pageEl, targetWidthPx) {
+  const rect = pageEl.getBoundingClientRect();
+  const scale = targetWidthPx / rect.width;
+  const wrap = document.createElement('div');
+  wrap.className = 'rf-preview-page-wrap';
+  wrap.style.width = targetWidthPx + 'px';
+  wrap.style.height = Math.round(rect.height * scale) + 'px';
+  pageEl.style.transform = `scale(${scale})`;
+  pageEl.style.transformOrigin = 'top left';
+  pageEl.parentNode.insertBefore(wrap, pageEl);
+  wrap.appendChild(pageEl);
+}
+
+async function renderPreview() {
+  const previewEl = $('#rf-preview');
+  previewEl.innerHTML = 'Loading preview&hellip;';
+  try {
+    const [layout, logoBlob] = await Promise.all([loadPrintLayout(), getReportLogo()]);
+    const sampleReport = await makeBlankReport(1, project, null);
+    previewEl.innerHTML = '';
+    const pages = renderReportPages(previewEl, layout, sampleReport, logoBlob);
+    const targetWidth = Math.min(previewEl.clientWidth || 380, 420);
+    pages.forEach(({ el }) => scalePreviewPage(el, targetWidth));
+    previewGrids = { 1: pages[0].el.querySelector('.print-grid'), 2: pages[1].el.querySelector('.print-grid') };
+  } catch (err) {
+    console.error(err);
+    previewEl.innerHTML = '<p class="hint">Preview unavailable.</p>';
+  }
+}
+
+function clearHighlight() {
+  if (!previewGrids) return;
+  $$('.rf-hl-active', previewGrids[1]).forEach((el) => el.classList.remove('rf-hl-active'));
+  $$('.rf-hl-active', previewGrids[2]).forEach((el) => el.classList.remove('rf-hl-active'));
+  $$('.rf-hl-overlay').forEach((el) => el.remove());
+}
+
+function highlightField(key) {
+  clearHighlight();
+  if (!previewGrids) return;
+  const region = FIELD_HIGHLIGHT_REGIONS[key];
+  if (!region) return;
+  const grid = previewGrids[region.sheet];
+  if (!grid) return;
+
+  if (region.coord) {
+    const cell = grid.querySelector(`[data-coord="${region.coord}"]`);
+    if (cell) cell.classList.add('rf-hl-active');
+    return;
+  }
+
+  const { fromCol, toCol, fromRow, toRow } = region.range;
+  const colStart = parseCoord(fromCol + '1').col;
+  const colEnd = parseCoord(toCol + '1').col;
+  const overlay = document.createElement('div');
+  overlay.className = 'rf-hl-overlay';
+  overlay.style.gridColumn = `${colStart} / span ${colEnd - colStart + 1}`;
+  overlay.style.gridRow = `${fromRow} / span ${toRow - fromRow + 1}`;
+  grid.appendChild(overlay);
 }
 
 async function saveRequiredFields() {
@@ -242,6 +326,7 @@ async function init() {
   });
 
   renderFieldList();
+  renderPreview();
   $('#fsb-save').addEventListener('click', saveRequiredFields);
 }
 
