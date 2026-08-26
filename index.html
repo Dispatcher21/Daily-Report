@@ -254,6 +254,14 @@ async function handleIncomingSetup() {
   await adoptOrphanReportsIfAny();
   await renderProjectCards();
 })();
+
+// The logo and project background photos sync in the background after
+// Join/Sync Now return (see pullCompanyMediaInBackground) -- this is what
+// makes them show up here without needing a manual reload once they land.
+window.addEventListener('company-media-updated', () => {
+  applyHeaderLogo();
+  renderProjectCards();
+});
 </script>
 </body>
 </html>

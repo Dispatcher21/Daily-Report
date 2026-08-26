@@ -155,6 +155,16 @@
 <script src="firebase-sync.js"></script>
 <script>
 let project = null;
+let pageBgUrl = null;
+
+function showPageBackground(p) {
+  if (!p.backgroundImage) return;
+  if (pageBgUrl) URL.revokeObjectURL(pageBgUrl);
+  pageBgUrl = URL.createObjectURL(p.backgroundImage);
+  $('#page-bg-img').src = pageBgUrl;
+  $('#page-bg-img').hidden = false;
+  $('#page-bg-fade').hidden = false;
+}
 
 async function init() {
   const id = queryParam('id');
@@ -168,12 +178,7 @@ async function init() {
   $('#project-title').textContent = project.name;
   $('#bb-project-name').textContent = project.name;
 
-  if (project.backgroundImage) {
-    const url = URL.createObjectURL(project.backgroundImage);
-    $('#page-bg-img').src = url;
-    $('#page-bg-img').hidden = false;
-    $('#page-bg-fade').hidden = false;
-  }
+  showPageBackground(project);
 
   $('#card-new-report').href = `report-editor.html?project=${project.id}&report=new`;
   $('#card-view-reports').href = `reports.html?project=${project.id}`;
@@ -633,6 +638,16 @@ $('#btn-delete-project').addEventListener('click', async () => {
   if (!confirm(msg)) return;
   await deleteProject(project.id);
   location.href = 'index.html';
+});
+
+// The background photo (and logo, via applyHeaderLogo) syncs in the
+// background after Join/Sync Now return -- this is what shows it here
+// without needing a manual reload once it lands, if this project's the one
+// that got one.
+window.addEventListener('company-media-updated', async () => {
+  applyHeaderLogo();
+  const fresh = await getProject(project.id);
+  if (fresh) { project = fresh; showPageBackground(project); }
 });
 
 init();

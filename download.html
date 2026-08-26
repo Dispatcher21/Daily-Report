@@ -118,8 +118,20 @@ function isMobileDevice() {
 
   const reports = [];
   for (const id of reportIds) {
-    const r = await getReport(id);
-    if (r) reports.push(r);
+    let r = await getReport(id);
+    if (!r) continue;
+    normalizeReport(r);
+    // Same lazy-photo story as report-editor.html -- a PDF needs the
+    // actual bytes, not just knowing a photo exists, so resolve any
+    // unfetched slots before rendering. putReportRaw, not saveReport:
+    // generating a PDF isn't an edit, so it shouldn't bump updatedAt or
+    // restamp lastEditedBy.
+    if ((r.photosFetched || []).some((f) => !f) || r.signatureFetched === false) {
+      $('#pdf-status').textContent = 'Loading photos…';
+      r = await fetchReportMedia(r);
+      await putReportRaw(r);
+    }
+    reports.push(r);
   }
   if (reports.length === 0) {
     $('#pdf-status').textContent = 'Nothing to download.';

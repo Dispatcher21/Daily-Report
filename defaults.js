@@ -120,6 +120,13 @@ async function makeBlankReport(nextReportNo, project, previous) {
     tempHigh: meta.tempHigh || '',
     tempLow: meta.tempLow || '',
     photos: [null, null, null, null, null, null],
+    // A brand-new report has nothing to lazily fetch -- every slot is
+    // locally authoritative already. A report pulled from a company
+    // without downloading its photo bytes (see firebase-sync.js) sets
+    // these to false for whichever slots it deferred; report-editor.html
+    // fetches them on open, download.html before generating a PDF.
+    photosFetched: [true, true, true, true, true, true],
+    signatureFetched: true,
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
@@ -130,6 +137,11 @@ async function makeBlankReport(nextReportNo, project, previous) {
 // 15, and older ones predate the work-summary header field entirely.
 function normalizeReport(report) {
   if (!report) return report;
+  // Only fills in when entirely absent (a report saved before this field
+  // existed) -- an actual `false` from a lazy pull must survive this, not
+  // get reset back to "fetched" just because normalizeReport ran again.
+  if (!Array.isArray(report.photosFetched)) report.photosFetched = [true, true, true, true, true, true];
+  if (report.signatureFetched == null) report.signatureFetched = true;
   if (!Array.isArray(report.equipmentRows)) report.equipmentRows = [];
   while (report.equipmentRows.length < EQUIPMENT_ROW_COUNT) {
     report.equipmentRows.push({ label: '', qty: ['', '', '', '', '', ''] });
@@ -201,6 +213,8 @@ function makeProjectFromParsedFile(parsed) {
     defaultContractors: parsed.contractors || [],
     defaultEquipmentLabels: parsed.equipmentLabels || [],
     payItemCatalog: parsed.payItemCatalog || [],
+    backgroundImage: null,
+    backgroundImageFetched: true, // nothing to fetch -- this project was just created locally
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };

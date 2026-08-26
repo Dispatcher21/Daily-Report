@@ -245,6 +245,20 @@ async function init() {
     // gates opening one that already exists. "Own reports" depends on
     // whether this device's logged-in name matches who created it.
     editable = canEditReportWithContext(report, await getReportPermissionContext());
+
+    // Photos sync lazily -- a report pulled from a company doesn't carry
+    // its photo bytes until something actually opens it (see
+    // fetchReportMedia in firebase-sync.js). Resolve them now, before the
+    // first render, so the grid never shows a stale/empty state.
+    if ((report.photosFetched || []).some((f) => !f) || report.signatureFetched === false) {
+      $('#editor-title').textContent = 'Loading photos…';
+      report = await fetchReportMedia(report);
+      // putReportRaw, not saveReport -- merely opening a report to view it
+      // shouldn't bump updatedAt or restamp lastEditedBy as if it had been
+      // edited, and there's nothing to push back either, since this data
+      // came from the company in the first place.
+      await putReportRaw(report);
+    }
   }
 
   document.title = `Report #${report.reportNo} — ${project.name}`;
@@ -624,6 +638,7 @@ function renderPhotoGrid() {
       const file = input.files[0];
       if (file) {
         report.photos[idx] = await compressImage(file);
+        report.photosFetched[idx] = true; // a freshly-added photo is locally authoritative
         scheduleSave();
         renderPhotoGrid();
       }
@@ -634,6 +649,7 @@ function renderPhotoGrid() {
       e.stopPropagation();
       const idx = Number(btn.dataset.remove);
       report.photos[idx] = null;
+      report.photosFetched[idx] = true; // deliberately empty now, not "unknown"
       scheduleSave();
       renderPhotoGrid();
     });
@@ -683,6 +699,7 @@ function setupSignaturePad(canvasSel, field) {
     drawing = false;
     canvas.toBlob((blob) => {
       report[field] = blob;
+      if (field === 'repSignatureImage') report.signatureFetched = true;
       scheduleSave();
     }, 'image/png');
   };
@@ -693,6 +710,7 @@ function setupSignaturePad(canvasSel, field) {
   $(`[data-clear-sig="${idKey}"]`).onclick = () => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     report[field] = null;
+    if (field === 'repSignatureImage') report.signatureFetched = true;
     scheduleSave();
   };
 }

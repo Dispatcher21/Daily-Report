@@ -27,6 +27,29 @@
 // mergeReportRecord in storage.js -- so a pull here behaves identically to
 // pulling from a folder or importing a backup, just over the network.
 
+// A push writes the Firestore doc only after its Storage uploads/deletes
+// finish, but nothing stops a second, later push for the same report (a
+// rapid re-save, or another device) from finishing its own Storage
+// operations and doc write in between -- there's no cross-service
+// transaction tying "the doc says this photo exists" to "the file is still
+// there" when two pushes for the same report race each other. A pull that
+// hits exactly that window gets object-not-found for a slot the doc
+// (briefly, incorrectly) claims is filled. Rather than let one missing
+// file abort an entire join/sync, treat it as "photo unavailable" and keep
+// going -- everything else pulled is still valid, and the next push of
+// that report will reconcile the doc with what's actually in Storage.
+async function getBytesIfExists(storageRef, getBytesFn) {
+  try {
+    return await getBytesFn(storageRef);
+  } catch (err) {
+    if (err && err.code === 'storage/object-not-found') {
+      console.warn('Storage object missing (likely a sync race), skipping:', storageRef.fullPath);
+      return null;
+    }
+    throw err;
+  }
+}
+
 const FIRESTORE_SDK = 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 const STORAGE_SDK = 'https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js';
 const REPORT_PHOTO_SLOTS = 6;
@@ -177,9 +200,13 @@ async function joinCompanyRoom(password, onProgress) {
   );
   await saveSetting(LOGO_SYNCED_AT_SETTING, null);
 
-  if (onProgress) onProgress({ phase: 'logo' });
-  await pullCompanyLogo();
   const pulled = await pullAllCompanyData(code, onProgress);
+  // Logo + project background photos are fetched eagerly (not deferred
+  // until something's actually opened, unlike report photos), but not
+  // awaited here -- they can be large, and nobody should have to wait on a
+  // photo just to finish logging in. They land locally moments later; see
+  // pullCompanyMediaInBackground.
+  pullCompanyMediaInBackground(code);
   return { code, name: companyDoc.name || '', ...pulled };
 }
 
@@ -250,8 +277,8 @@ async function syncCompanyRoomNow(onProgress) {
     }
   }
 
-  await pullCompanyLogo();
   const pulled = await pullAllCompanyData(room.code, onProgress);
+  pullCompanyMediaInBackground(room.code); // see joinCompanyRoom -- not awaited on purpose
   await pushAllLocalData(room.code, onProgress);
   return pulled;
 }
@@ -354,8 +381,11 @@ async function changeCompanyPassword(newPassword, onProgress) {
   await ensureSignedIn();
 
   if (onProgress) onProgress({ phase: 'pulling' });
-  await pullCompanyLogo();
   await pullAllCompanyData(room.code, onProgress);
+  // Unlike Join/Sync Now, this waits for the logo and every project
+  // background too -- migrating to a new address wants the fullest
+  // possible local picture before copying it, not a fast return.
+  await pullAllCompanyMediaBlocking(room.code);
 
   const oldSnap = await getDoc(doc(db, 'companies', room.code));
   const oldData = oldSnap.exists() ? oldSnap.data() : {};
@@ -550,12 +580,55 @@ async function pullCompanyLogo() {
   if (remoteUpdatedAt <= localSyncedAt) return false; // already current
 
   const logoRef = ref(storage, `companies/${room.code}/logo`);
-  const [bytes, metadata] = await Promise.all([getBytes(logoRef), getMetadata(logoRef)]);
-  const blob = new Blob([bytes], { type: metadata.contentType || 'image/png' });
+  const [bytes, metadata] = await Promise.all([getBytesIfExists(logoRef, getBytes), getMetadata(logoRef).catch(() => null)]);
+  if (!bytes) return false; // logoUpdatedAt says there should be one, but the file's briefly missing (see getBytesIfExists) -- try again next sync
+  const blob = new Blob([bytes], { type: (metadata && metadata.contentType) || 'image/png' });
 
   await saveReportLogo(blob);
   await saveSetting(LOGO_SYNCED_AT_SETTING, Date.now());
   return true;
+}
+
+// Downloads the logo and every project's background image, waiting for
+// all of it. Only changeCompanyPassword uses this -- migrating to a new
+// room address wants the fullest possible local picture before copying
+// everything over, unlike Join/Sync Now which want to return fast (see
+// pullCompanyMediaInBackground below).
+async function pullAllCompanyMediaBlocking(code) {
+  await pullCompanyLogo();
+  const projects = await getAllProjects();
+  for (const project of projects) {
+    if (project.backgroundImageFetched === false) {
+      await putProjectRaw(await fetchProjectBackground(code, project));
+    }
+  }
+}
+
+// Downloads the logo and every project's background image too, but fires
+// without awaiting -- Join and Sync Now return as soon as the small,
+// text-only project/report data has synced, rather than making someone
+// wait on what could be a large photo just to finish logging in. Each
+// piece updates local storage the moment it lands and fires
+// 'company-media-updated' so any open page (index.html's project cards,
+// the header logo, project.html's page background) can refresh itself
+// without the user having to reload.
+function pullCompanyMediaInBackground(code) {
+  pullCompanyLogo()
+    .then((changed) => {
+      if (changed) window.dispatchEvent(new CustomEvent('company-media-updated'));
+    })
+    .catch((err) => console.error('background logo pull:', err));
+
+  getAllProjects().then((projects) => {
+    projects
+      .filter((p) => p.backgroundImageFetched === false)
+      .forEach((project) => {
+        fetchProjectBackground(code, project)
+          .then((updated) => putProjectRaw(updated))
+          .then(() => window.dispatchEvent(new CustomEvent('company-media-updated')))
+          .catch((err) => console.error('background image pull:', err));
+      });
+  });
 }
 
 // ---------- Project sync ----------
@@ -571,21 +644,47 @@ function projectBackgroundPath(code, projectId) {
 
 async function pushProjectToCompany(code, project) {
   const { db, storage, ensureSignedIn } = await waitForFirebaseCore();
-  const { doc, setDoc } = await import(FIRESTORE_SDK);
+  const { doc, getDoc, setDoc } = await import(FIRESTORE_SDK);
   const { ref, uploadBytes, deleteObject } = await import(STORAGE_SDK);
   await ensureSignedIn();
 
-  const bgRef = ref(storage, projectBackgroundPath(code, project.id));
-  if (project.backgroundImage) {
-    await uploadBytes(bgRef, project.backgroundImage, { contentType: project.backgroundImage.type || 'image/jpeg' });
+  // Same story as report photos: a device that pulled this project before
+  // its background image finished downloading in the background (see
+  // pullCompanyMediaInBackground) must never write hasBackgroundImage as
+  // if that meant "no background" -- it just means "unknown here yet".
+  // Preserve whatever the doc currently says for that case instead.
+  const bgFetched = project.backgroundImageFetched !== false;
+  let hasBackgroundImage;
+  if (bgFetched) {
+    const bgRef = ref(storage, projectBackgroundPath(code, project.id));
+    if (project.backgroundImage) {
+      await uploadBytes(bgRef, project.backgroundImage, { contentType: project.backgroundImage.type || 'image/jpeg' });
+    } else {
+      await deleteObject(bgRef).catch(() => {});
+    }
+    hasBackgroundImage = !!project.backgroundImage;
   } else {
-    await deleteObject(bgRef).catch(() => {});
+    const existingDoc = await getDoc(doc(db, 'companies', code, 'projects', project.id));
+    hasBackgroundImage = existingDoc.exists() ? !!existingDoc.data().hasBackgroundImage : false;
   }
 
-  const { backgroundImage: _bg, ...rest } = project;
+  const { backgroundImage: _bg, backgroundImageFetched: _bgf, ...rest } = project;
   const data = JSON.parse(JSON.stringify(rest));
-  data.hasBackgroundImage = !!project.backgroundImage;
+  data.hasBackgroundImage = hasBackgroundImage;
   await setDoc(doc(db, 'companies', code, 'projects', project.id), data);
+}
+
+// Downloads a project's background image if it hasn't been fetched by this
+// device yet -- used by pullCompanyMediaInBackground, not called inline
+// during the main project pull so a slow/large photo can never delay
+// finishing a join. A no-op if already local or the project has none.
+async function fetchProjectBackground(code, project) {
+  if (project.backgroundImageFetched !== false) return project;
+  const { storage, ensureSignedIn } = await waitForFirebaseCore();
+  const { ref, getBytes } = await import(STORAGE_SDK);
+  await ensureSignedIn();
+  const bytes = await getBytesIfExists(ref(storage, projectBackgroundPath(code, project.id)), getBytes);
+  return { ...project, backgroundImage: bytes ? new Blob([bytes], { type: 'image/jpeg' }) : null, backgroundImageFetched: true };
 }
 
 async function deleteProjectFromCompany(code, project) {
@@ -615,16 +714,31 @@ function reportSignaturePath(code, reportId) {
 
 async function pushReportToCompany(code, report) {
   const { db, storage, ensureSignedIn } = await waitForFirebaseCore();
-  const { doc, setDoc } = await import(FIRESTORE_SDK);
+  const { doc, getDoc, setDoc } = await import(FIRESTORE_SDK);
   const { ref, uploadBytes, deleteObject } = await import(STORAGE_SDK);
   await ensureSignedIn();
 
-  // All slots upload/delete in parallel rather than one at a time -- a
-  // report with 6 photos + a signature was 7 sequential round trips before,
-  // which is where "Create Company" felt like it hung on a device with any
-  // real amount of local data.
+  // A slot this device never fetched (photosFetched[i] false -- see
+  // fetchReportMedia) is a total unknown locally: it must be left alone,
+  // not touched in Storage and not overwritten in the doc, or a device
+  // that only opened some of a report's photos would silently delete the
+  // rest of them just by saving an unrelated field. Reading the current
+  // doc first is what makes "leave it alone" possible, since the write
+  // below is otherwise a full overwrite of photoSlots/hasSignature.
+  const existingDoc = await getDoc(doc(db, 'companies', code, 'reports', report.id));
+  const existingData = existingDoc.exists() ? existingDoc.data() : {};
+  const existingPhotoSlots = existingData.photoSlots || [];
+
   const photos = report.photos || [];
+  const photosFetched = report.photosFetched || photos.map(() => true);
+  const signatureFetched = report.signatureFetched !== false;
+
+  // All touched slots upload/delete in parallel rather than one at a time
+  // -- a report with 6 photos + a signature was 7 sequential round trips
+  // before, which is where "Create Company" felt like it hung on a device
+  // with any real amount of local data.
   const photoUploads = photos.map((photo, i) => {
+    if (!photosFetched[i]) return Promise.resolve(); // unknown locally -- don't touch it
     const photoRef = ref(storage, reportPhotoPath(code, report.id, i));
     return photo
       ? uploadBytes(photoRef, photo, { contentType: photo.type || 'image/jpeg' })
@@ -632,16 +746,18 @@ async function pushReportToCompany(code, report) {
   });
 
   const sigRef = ref(storage, reportSignaturePath(code, report.id));
-  const sigUpload = report.repSignatureImage
-    ? uploadBytes(sigRef, report.repSignatureImage, { contentType: report.repSignatureImage.type || 'image/png' })
-    : deleteObject(sigRef).catch(() => {});
+  const sigUpload = !signatureFetched
+    ? Promise.resolve()
+    : report.repSignatureImage
+      ? uploadBytes(sigRef, report.repSignatureImage, { contentType: report.repSignatureImage.type || 'image/png' })
+      : deleteObject(sigRef).catch(() => {});
 
   await Promise.all([...photoUploads, sigUpload]);
 
-  const { photos: _photos, repSignatureImage: _sig, peSignatureImage: _peSig, ...rest } = report;
+  const { photos: _photos, photosFetched: _pf, repSignatureImage: _sig, signatureFetched: _sf, peSignatureImage: _peSig, ...rest } = report;
   const data = JSON.parse(JSON.stringify(rest));
-  data.photoSlots = photos.map((p) => !!p);
-  data.hasSignature = !!report.repSignatureImage;
+  data.photoSlots = photos.map((p, i) => (photosFetched[i] ? !!p : !!existingPhotoSlots[i]));
+  data.hasSignature = signatureFetched ? !!report.repSignatureImage : !!existingData.hasSignature;
   await setDoc(doc(db, 'companies', code, 'reports', report.id), data);
 }
 
@@ -668,19 +784,46 @@ async function pullAllCompanyData(code, onProgress) {
 
   const summary = { projectsPulled: 0, reportsPulled: 0 };
 
+  // Project metadata (name, pay items, everything except the background
+  // photo) stays eager -- small text, needed immediately. The background
+  // photo itself is deferred to pullCompanyMediaInBackground so a large
+  // image can never delay a join/sync finishing; a slot already fetched by
+  // this device previously is carried forward rather than re-marked
+  // unfetched, same reasoning as report photos.
   if (onProgress) onProgress({ phase: 'projects' });
   const projectsSnap = await getDocs(collection(db, 'companies', code, 'projects'));
   for (const d of projectsSnap.docs) {
     const data = d.data();
     const project = { ...data, id: d.id };
     delete project.hasBackgroundImage;
-    project.backgroundImage = data.hasBackgroundImage
-      ? new Blob([await getBytes(ref(storage, projectBackgroundPath(code, d.id)))], { type: 'image/jpeg' })
-      : null;
+
+    const existing = await getProject(d.id);
+    const alreadyFetched = existing && existing.backgroundImageFetched && existing.backgroundImage;
+    if (!data.hasBackgroundImage) {
+      project.backgroundImage = null;
+      project.backgroundImageFetched = true;
+    } else if (alreadyFetched) {
+      project.backgroundImage = existing.backgroundImage;
+      project.backgroundImageFetched = true;
+    } else {
+      project.backgroundImage = null;
+      project.backgroundImageFetched = false;
+    }
+
     const result = await mergeProjectRecord(project);
     if (result !== 'skipped') summary.projectsPulled++;
   }
 
+  // Report data (dates, quantities, notes -- everything except photo/
+  // signature bytes) stays eager: it's small text, and the dashboard and
+  // Quantity Sheet need it available offline right away. Photos are the
+  // heavy part and the thing actually worth deferring -- see
+  // fetchReportMedia, called on demand by report-editor.html and
+  // download.html. A slot already downloaded by this device previously
+  // (photosFetched[i] true with a real Blob) is carried forward here
+  // rather than re-marked as unfetched, so a report doesn't "forget" its
+  // already-local photos just because some other field changed elsewhere
+  // and triggered a re-pull.
   const reportsSnap = await getDocs(collection(db, 'companies', code, 'reports'));
   const reportDocs = reportsSnap.docs;
   for (let i = 0; i < reportDocs.length; i++) {
@@ -692,28 +835,80 @@ async function pullAllCompanyData(code, onProgress) {
     delete report.photoSlots;
     delete report.hasSignature;
 
-    // All slots download in parallel rather than one at a time -- a report
-    // with 6 photos + a signature was 7 sequential round trips before,
-    // which is where Join/Sync Now felt like it hung on a company with any
-    // real amount of data (same bug already fixed on the push side).
-    const photoDownloads = Array.from({ length: REPORT_PHOTO_SLOTS }, (_, slot) =>
-      data.photoSlots && data.photoSlots[slot]
-        ? getBytes(ref(storage, reportPhotoPath(code, d.id, slot))).then((bytes) => new Blob([bytes], { type: 'image/jpeg' }))
-        : Promise.resolve(null)
-    );
-    const sigDownload = data.hasSignature
-      ? getBytes(ref(storage, reportSignaturePath(code, d.id))).then((bytes) => new Blob([bytes], { type: 'image/png' }))
-      : Promise.resolve(null);
+    const existing = await getReport(d.id);
 
-    const [photos, signature] = await Promise.all([Promise.all(photoDownloads), sigDownload]);
-    report.photos = photos;
-    report.repSignatureImage = signature;
+    report.photos = [];
+    report.photosFetched = [];
+    for (let slot = 0; slot < REPORT_PHOTO_SLOTS; slot++) {
+      const remoteHasPhoto = !!(data.photoSlots && data.photoSlots[slot]);
+      const alreadyFetched = existing && existing.photosFetched && existing.photosFetched[slot] && existing.photos && existing.photos[slot];
+      if (!remoteHasPhoto) {
+        report.photos.push(null);
+        report.photosFetched.push(true); // confirmed empty, nothing to fetch
+      } else if (alreadyFetched) {
+        report.photos.push(existing.photos[slot]); // already have it locally -- don't refetch
+        report.photosFetched.push(true);
+      } else {
+        report.photos.push(null);
+        report.photosFetched.push(false); // present remotely, not yet downloaded
+      }
+    }
+
+    const remoteHasSignature = !!data.hasSignature;
+    const signatureAlreadyFetched = existing && existing.signatureFetched && existing.repSignatureImage;
+    if (!remoteHasSignature) {
+      report.repSignatureImage = null;
+      report.signatureFetched = true;
+    } else if (signatureAlreadyFetched) {
+      report.repSignatureImage = existing.repSignatureImage;
+      report.signatureFetched = true;
+    } else {
+      report.repSignatureImage = null;
+      report.signatureFetched = false;
+    }
 
     const result = await mergeReportRecord(report);
     if (result !== 'skipped') summary.reportsPulled++;
   }
 
   return summary;
+}
+
+// Downloads whichever photo/signature slots of `report` haven't been
+// fetched yet (photosFetched[i]/signatureFetched false, left that way by
+// the lazy pull above), returning an updated copy -- doesn't save it, the
+// caller decides when (report-editor.html on open, download.html before
+// generating a PDF). A no-op, no network calls, once everything's already
+// local.
+async function fetchReportMedia(report) {
+  const room = await getCompanyRoom();
+  if (!room) return report;
+
+  const needsPhotos = (report.photosFetched || []).some((f) => !f);
+  const needsSignature = report.signatureFetched === false;
+  if (!needsPhotos && !needsSignature) return report;
+
+  const { storage, ensureSignedIn } = await waitForFirebaseCore();
+  const { ref, getBytes } = await import(STORAGE_SDK);
+  await ensureSignedIn();
+
+  const updated = { ...report, photos: [...report.photos], photosFetched: [...(report.photosFetched || [])] };
+  await Promise.all(
+    updated.photos.map(async (_, slot) => {
+      if (updated.photosFetched[slot]) return;
+      const bytes = await getBytesIfExists(ref(storage, reportPhotoPath(room.code, report.id, slot)), getBytes);
+      updated.photos[slot] = bytes ? new Blob([bytes], { type: 'image/jpeg' }) : null;
+      updated.photosFetched[slot] = true;
+    })
+  );
+
+  if (needsSignature) {
+    const bytes = await getBytesIfExists(ref(storage, reportSignaturePath(room.code, report.id)), getBytes);
+    updated.repSignatureImage = bytes ? new Blob([bytes], { type: 'image/png' }) : null;
+    updated.signatureFetched = true;
+  }
+
+  return updated;
 }
 
 async function pushAllLocalData(code, onProgress) {

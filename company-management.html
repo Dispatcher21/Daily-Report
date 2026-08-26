@@ -397,6 +397,7 @@ $('#cm-project-list').addEventListener('click', async (e) => {
     const project = (await getAllProjects()).find((p) => p.id === id);
     if (!project) return;
     project.backgroundImage = null;
+    project.backgroundImageFetched = true; // deliberately removed, not "unknown"
     await saveProject(project);
     await renderCmProjects();
   }
@@ -416,6 +417,7 @@ $('#cm-project-list').addEventListener('change', async (e) => {
   if (!project) return;
   try {
     project.backgroundImage = await compressImage(file, { maxDim: 1600, quality: 0.75 });
+    project.backgroundImageFetched = true; // freshly uploaded -- locally authoritative
     await saveProject(project);
     await renderCmProjects();
   } catch (err) {
