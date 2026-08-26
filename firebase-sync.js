@@ -233,9 +233,35 @@ async function unlockCompanyAdmin(adminPassword) {
   await saveSetting(COMPANY_ROLE_ID_SETTING, null);
 }
 
-// Leaves the room on this device only -- the room itself and its data are
-// untouched, exactly like "Forget This Folder" for the local-folder sync.
+// Leaves the room on this device only -- the room and its data on the
+// server are completely untouched, exactly like "Forget This Folder" for
+// the local-folder sync (rejoining pulls everything straight back down).
+// Locally, though, this device keeps only reports it actually created or
+// edited (and whichever projects those belong to) -- everything else this
+// device only ever synced passively is pruned, so a departing member
+// doesn't walk away with a full copy of the company's data still sitting
+// on their phone.
 async function leaveCompanyRoom() {
+  const userName = await getUserName();
+
+  let reportIdsToDelete = [];
+  let projectIdsToDelete = [];
+  if (userName) {
+    const reports = await getAllReports();
+    const touchedProjectIds = new Set();
+    for (const r of reports) {
+      if (r.createdBy === userName || r.lastEditedBy === userName) touchedProjectIds.add(r.projectId);
+      else reportIdsToDelete.push(r.id);
+    }
+    const projects = await getAllProjects();
+    projectIdsToDelete = projects.filter((p) => !touchedProjectIds.has(p.id)).map((p) => p.id);
+  }
+
+  // Cleared before the pruning below runs, not after: deleteReport/
+  // deleteProject's live hooks push a deletion to the company, gated on
+  // getCompanyRoom() returning a room -- clearing first makes that a no-op,
+  // so this only ever prunes this device's local copy and never touches
+  // anyone else's data.
   await deleteSetting(COMPANY_CODE_SETTING);
   await deleteSetting(COMPANY_NAME_SETTING);
   await deleteSetting(COMPANY_ADMIN_SETTING);
@@ -243,6 +269,9 @@ async function leaveCompanyRoom() {
   await deleteSetting(COMPANY_PROJECT_SCOPE_SETTING);
   await deleteSetting(COMPANY_ROLE_ID_SETTING);
   await deleteSetting(LOGO_SYNCED_AT_SETTING);
+
+  for (const id of reportIdsToDelete) await deleteReport(id);
+  for (const id of projectIdsToDelete) await deleteProject(id); // also removes any of its remaining reports (none this device touched, by construction)
 }
 
 // Pulls in anything new from the room, then pushes every local project and

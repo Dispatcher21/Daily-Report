@@ -709,7 +709,7 @@ $('#btn-sync-company-now').addEventListener('click', async () => {
 });
 
 $('#btn-leave-company').addEventListener('click', async () => {
-  if (!confirm('Leave this company? The company and its data are untouched -- this only disconnects this device.')) return;
+  if (!confirm('Leave this company? The company\'s data is untouched -- this only disconnects this device, and rejoining brings everything back. Locally, reports/projects you didn\'t create or edit will be removed from this device to avoid leaving with a full copy of the company\'s data; your own work stays.')) return;
   await leaveCompanyRoom();
   await refreshCompanySection();
 });
