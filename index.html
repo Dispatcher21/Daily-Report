@@ -84,10 +84,13 @@ async function renderProjectCards() {
   // report in the store, so calling it per-project would just repeat the same
   // full read N times.
   const room = await getCompanyRoom();
-  const [allProjects, reports] = await Promise.all([getAllProjects(), getAllReports()]);
+  const [allProjects, reports, favoriteIds] = await Promise.all([getAllProjects(), getAllReports(), getFavoriteProjectIds()]);
   // A custom setup's password scopes which projects are even visible, not
   // just what can be edited -- see projectInScope in firebase-sync.js.
   const projects = allProjects.filter((p) => projectInScope(p.id, room));
+  const favoriteSet = new Set(favoriteIds);
+  // Favorited projects first (each list keeps its original order otherwise).
+  projects.sort((a, b) => (favoriteSet.has(b.id) ? 1 : 0) - (favoriteSet.has(a.id) ? 1 : 0));
   const countByProject = new Map();
   for (const r of reports) {
     countByProject.set(r.projectId, (countByProject.get(r.projectId) || 0) + 1);
@@ -109,9 +112,11 @@ async function renderProjectCards() {
         hubCardBgUrls.push(url);
         bgHtml = `<img class="hc-bg-img" src="${url}" alt=""><div class="hc-bg-fade"></div>`;
       }
+      const isFav = favoriteSet.has(p.id);
       return `
       <a class="hub-card${p.backgroundImage ? ' has-bg' : ''}" href="project.html?id=${p.id}">
         ${bgHtml}
+        <button type="button" class="hc-favorite${isFav ? ' is-fav' : ''}" data-favorite-id="${p.id}" title="${isFav ? 'Remove from favorites' : 'Add to favorites'}">&#9733;</button>
         <span class="hc-icon">&#128193;</span>
         <div class="hc-title">${escapeHtml(p.name)}</div>
         <div class="hc-desc">${escapeHtml(p.meta.projectName || '')}</div>
@@ -130,6 +135,15 @@ async function renderProjectCards() {
     );
   }
   if (canCreate) $('#btn-add-project').addEventListener('click', showAddProjectPanel);
+
+  $$('[data-favorite-id]', grid).forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      await toggleFavoriteProject(btn.dataset.favoriteId);
+      await renderProjectCards();
+    });
+  });
 }
 
 function showAddProjectPanel() {

@@ -77,6 +77,29 @@ async function saveUserName(name) {
   await saveSetting(USER_NAME_SETTING_KEY, name || '');
 }
 
+// Favorite-starred projects, kept per device-user (by name), never synced to
+// the company -- two people sharing a login see their own favorites, and
+// switching companies doesn't touch this list.
+function favoriteProjectsSettingKey(userName) {
+  return `favoriteProjects:${userName || '_anon'}`;
+}
+
+async function getFavoriteProjectIds() {
+  const userName = await getUserName();
+  return (await getSetting(favoriteProjectsSettingKey(userName))) || [];
+}
+
+async function toggleFavoriteProject(projectId) {
+  const userName = await getUserName();
+  const key = favoriteProjectsSettingKey(userName);
+  const ids = (await getSetting(key)) || [];
+  const idx = ids.indexOf(projectId);
+  if (idx === -1) ids.push(projectId);
+  else ids.splice(idx, 1);
+  await saveSetting(key, ids);
+  return ids;
+}
+
 // Shows the company logo in the header bar -- in the installed app and in
 // a plain browser tab alike, since this is used as a regular website too,
 // not just installed.

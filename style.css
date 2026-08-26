@@ -341,6 +341,16 @@ main { max-width: 780px; margin: 0 auto; padding: 1rem; }
 .hub-card .hc-icon { font-size: 1.9rem; display: block; margin-bottom: 0.5rem; }
 .hub-card .hc-title { font-weight: 700; font-size: 1.08rem; margin-bottom: 0.3rem; }
 .hub-card .hc-desc { font-size: 0.85rem; color: var(--text-dim); line-height: 1.45; }
+.hub-card .hc-favorite {
+  position: absolute; top: 0.6rem; right: 0.6rem; z-index: 2;
+  width: 2rem; height: 2rem; display: flex; align-items: center; justify-content: center;
+  background: transparent; border: none; border-radius: 50%; cursor: pointer;
+  font-size: 1.25rem; line-height: 1; color: rgba(255,255,255,0.55);
+  padding: 0;
+}
+.hub-card:not(.has-bg) .hc-favorite { color: var(--border); }
+.hub-card .hc-favorite:hover { color: #f5c518; background: rgba(0,0,0,0.12); }
+.hub-card .hc-favorite.is-fav { color: #f5c518; }
 .hub-card .hc-badge {
   position: absolute; top: 0.75rem; right: 0.75rem;
   font-size: 0.62rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
