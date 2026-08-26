@@ -177,49 +177,55 @@ function scalePreviewPage(pageEl, targetWidthPx) {
 }
 
 // One invisible-until-touched box per field, positioned at its real printed
-// coordinates. `coord` fields copy the actual rendered cell's own grid
-// position (data-coord, set by renderSheetGrid) so a merged box highlights
-// correctly without re-deriving its span; `range` fields (a whole table)
-// get an explicit column/row span instead.
+// coordinates -- `coord` fields copy the actual rendered cell's own grid
+// position (data-coord, set by renderSheetGrid) so a merged box lines up
+// without re-deriving its span; `ranges` fields (a whole table, sometimes
+// not a plain rectangle) get one explicit column/row span per rectangle,
+// each wired to open the same field's popover. See FIELD_HIGHLIGHT_REGIONS
+// in render-report.js for why some fields need more than one rectangle.
 function addClickTarget(key, region) {
   const grid = previewGrids[region.sheet];
   if (!grid) return;
-  const target = document.createElement('div');
-  target.className = 'rf-click-target';
-  target.dataset.fieldKey = key;
+  const def = ORDERABLE_FIELD_DEFS.find((d) => d.key === key);
+
+  function place(gridColumn, gridRow) {
+    const target = document.createElement('div');
+    target.className = 'rf-click-target';
+    target.dataset.fieldKey = key;
+    target.style.gridColumn = gridColumn;
+    target.style.gridRow = gridRow;
+    target.title = def ? def.label : key;
+    target.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (currentPopoverEl === target) {
+        closePopover();
+      } else {
+        openPopover(key, target);
+      }
+    });
+    grid.appendChild(target);
+  }
 
   if (region.coord) {
     const cell = grid.querySelector(`[data-coord="${region.coord}"]`);
     if (!cell) return;
-    target.style.gridColumn = cell.style.gridColumn;
-    target.style.gridRow = cell.style.gridRow;
-  } else {
-    const { fromCol, toCol, fromRow, toRow } = region.range;
+    place(cell.style.gridColumn, cell.style.gridRow);
+    return;
+  }
+  region.ranges.forEach(({ fromCol, toCol, fromRow, toRow }) => {
     const colStart = parseCoord(fromCol + '1').col;
     const colEnd = parseCoord(toCol + '1').col;
-    target.style.gridColumn = `${colStart} / span ${colEnd - colStart + 1}`;
-    target.style.gridRow = `${fromRow} / span ${toRow - fromRow + 1}`;
-  }
-
-  const def = ORDERABLE_FIELD_DEFS.find((d) => d.key === key);
-  target.title = def ? def.label : key;
-  target.addEventListener('click', (e) => {
-    e.stopPropagation();
-    if (currentPopoverKey === key) {
-      closePopover();
-    } else {
-      openPopover(key, target);
-    }
+    place(`${colStart} / span ${colEnd - colStart + 1}`, `${fromRow} / span ${toRow - fromRow + 1}`);
   });
-  grid.appendChild(target);
 }
 
 function refreshClickTargetState(key) {
-  const el = document.querySelector(`.rf-click-target[data-field-key="${key}"]`);
-  if (!el) return;
   const hidden = pendingHidden.has(key);
-  el.classList.toggle('is-hidden', hidden);
-  el.classList.toggle('is-required', !hidden && isKeyRequired(key));
+  const required = !hidden && isKeyRequired(key);
+  document.querySelectorAll(`.rf-click-target[data-field-key="${key}"]`).forEach((el) => {
+    el.classList.toggle('is-hidden', hidden);
+    el.classList.toggle('is-required', required);
+  });
 }
 
 function refreshAllClickTargetStates() {

@@ -487,29 +487,40 @@ function waitForImages(container) {
 //
 // Where each admin-configurable field (ORDERABLE_FIELD_DEFS in defaults.js)
 // actually lands on the two printed sheets, so the required-fields picker
-// can highlight the real box on a live preview as the admin drags/hovers a
-// row. `coord` fields resolve through the rendered cell's own data-coord
-// (see renderSheetGrid) -- if that coordinate is the anchor of a merge, the
-// highlight automatically covers the whole merged box, no span math needed
-// here. `range` fields cover several separate cells with no single merge
-// (a whole table), so they get an explicit column/row span instead.
+// can turn the real box on a live preview into a click target. `coord`
+// fields resolve through the rendered cell's own data-coord (see
+// renderSheetGrid) -- if that coordinate is the anchor of a merge, the
+// target automatically covers the whole merged box, no span math needed
+// here. `ranges` fields cover one or more rectangles with no single merge
+// (a whole table), given as explicit column/row spans instead -- more than
+// one when the table isn't a plain rectangle (Contractors & Equipment: the
+// contractor-name header strip only spans columns C-H, while the equipment
+// rows below it also use column A; a single A-H box covering both rows 5-33
+// would reach up into Project No./Project Name/PE Name in columns A-B above
+// row 12, which are unrelated fields with their own click targets).
 const FIELD_HIGHLIGHT_REGIONS = {
   activity: { sheet: 1, coord: 'K7' },
   notes: { sheet: 1, coord: 'K8' },
   representative: { sheet: 1, coord: 'K5' },
   peName: { sheet: 1, coord: 'B9' },
   ntpDate: { sheet: 1, coord: 'Q7' },
-  contractorsEquipment: { sheet: 1, range: { fromCol: 'A', toCol: 'H', fromRow: 5, toRow: RR_EQUIPMENT_LAST_ROW } },
+  contractorsEquipment: {
+    sheet: 1,
+    ranges: [
+      { fromCol: 'C', toCol: 'H', fromRow: 5, toRow: 11 },
+      { fromCol: 'A', toCol: 'H', fromRow: RR_EQUIPMENT_FIRST_ROW, toRow: RR_EQUIPMENT_LAST_ROW },
+    ],
+  },
   workSummaryHeader: { sheet: 1, coord: 'K11' },
   trafficControlNote: { sheet: 1, coord: 'K12' },
   workSummary: { sheet: 1, coord: RR_WORK_SUMMARY_CELL },
-  payItems: { sheet: 1, range: { fromCol: 'I', toCol: 'Q', fromRow: RR_PAY_ITEM_FIRST_ROW, toRow: RR_PAY_ITEM_FIRST_ROW + PAY_ITEM_ROW_COUNT - 1 } },
+  payItems: { sheet: 1, ranges: [{ fromCol: 'I', toCol: 'Q', fromRow: RR_PAY_ITEM_FIRST_ROW, toRow: RR_PAY_ITEM_FIRST_ROW + PAY_ITEM_ROW_COUNT - 1 }] },
   controllingItem: { sheet: 1, coord: 'A35' },
   commentsOnTime: { sheet: 1, coord: 'I35' },
   controllingItemTimeFrom: { sheet: 1, coord: 'C35' },
   controllingItemTimeTo: { sheet: 1, coord: 'F35' },
   workingConditions: { sheet: 1, coord: 'A37' },
-  trafficControlSelect: { sheet: 1, range: { fromCol: 'I', toCol: 'L', fromRow: 37, toRow: 37 } },
+  trafficControlSelect: { sheet: 1, ranges: [{ fromCol: 'I', toCol: 'L', fromRow: 37, toRow: 37 }] },
   workBegin: { sheet: 1, coord: 'C39' },
   workEnd: { sheet: 1, coord: 'F39' },
   repSignatureName: { sheet: 1, coord: 'I39' },
@@ -518,5 +529,5 @@ const FIELD_HIGHLIGHT_REGIONS = {
   weatherDesc: { sheet: 1, coord: 'A41' },
   tempHigh: { sheet: 1, coord: 'D41' },
   tempLow: { sheet: 1, coord: 'F41' },
-  photos: { sheet: 2, range: { fromCol: 'A', toCol: 'O', fromRow: 8, toRow: 46 } },
+  photos: { sheet: 2, ranges: [{ fromCol: 'A', toCol: 'O', fromRow: 8, toRow: 46 }] },
 };
