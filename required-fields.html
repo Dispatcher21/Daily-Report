@@ -9,6 +9,10 @@
 <meta name="theme-color" content="#1c3d5a">
 <link rel="stylesheet" href="style.css">
 <script src="theme.js"></script>
+<style>
+  /* Room for the floating save bar so it never covers the last field. */
+  main { padding-bottom: 4.5rem; }
+</style>
 </head>
 <body>
 
@@ -141,6 +145,11 @@
 
 </main>
 
+<div class="floating-save-bar" id="fsb">
+  <span class="fsb-status" id="fsb-status">Unsaved changes</span>
+  <button type="button" class="btn-primary" id="fsb-save">Save Required Fields</button>
+</div>
+
 <script src="common.js"></script>
 <script src="defaults.js"></script>
 <script src="storage.js"></script>
@@ -149,23 +158,51 @@
 <script>
 const projectId = queryParam('project');
 let project = null;
+let originalRequired = new Set(); // last-saved state, to know whether there's anything to save
+let pendingRequired = new Set(); // what's currently checked on screen, not yet written
 
-function applyRequiredState() {
-  const required = new Set(project.requiredFields || []);
-  $$('.rf-field').forEach((el) => {
-    el.classList.toggle('is-required', required.has(el.dataset.fieldKey));
-  });
+function isDirty() {
+  if (pendingRequired.size !== originalRequired.size) return true;
+  for (const key of pendingRequired) if (!originalRequired.has(key)) return true;
+  return false;
 }
 
-async function toggleField(el) {
+function applyRequiredState() {
+  $$('.rf-field').forEach((el) => {
+    el.classList.toggle('is-required', pendingRequired.has(el.dataset.fieldKey));
+  });
+  const dirty = isDirty();
+  $('#fsb').classList.toggle('show', dirty);
+  $('#fsb-status').textContent = 'Unsaved changes';
+  $('#fsb-save').disabled = !dirty;
+}
+
+function toggleField(el) {
   const key = el.dataset.fieldKey;
-  const set = new Set(project.requiredFields || []);
-  if (set.has(key)) set.delete(key);
-  else set.add(key);
-  project.requiredFields = Array.from(set);
+  if (pendingRequired.has(key)) pendingRequired.delete(key);
+  else pendingRequired.add(key);
+  applyRequiredState();
+}
+
+async function saveRequiredFields() {
+  const btn = $('#fsb-save');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+  project.requiredFields = Array.from(pendingRequired);
   project.updatedAt = Date.now();
   await saveProject(project);
-  applyRequiredState();
+  originalRequired = new Set(pendingRequired);
+  btn.textContent = 'Save Required Fields';
+  $('#fsb-status').textContent = 'Saved.';
+  $('#fsb').classList.remove('show');
+}
+
+// Losing in-progress required-field picks to an accidental tab close or
+// project switch would be a silent, hard-to-notice loss (unlike a report
+// edit, nothing else reminds the admin these weren't saved) -- worth a
+// confirm either way.
+function confirmDiscardIfDirty() {
+  return !isDirty() || confirm('You have unsaved required-field changes. Discard them?');
 }
 
 async function init() {
@@ -178,21 +215,40 @@ async function init() {
   document.title = `Required Fields — ${project.name}`;
   $('#project-name-sub').textContent = project.name;
 
+  originalRequired = new Set(project.requiredFields || []);
+  pendingRequired = new Set(originalRequired);
+
   const allProjects = await getAllProjects();
   $('#rf-project-picker').innerHTML = allProjects
     .map((p) => `<option value="${p.id}"${p.id === project.id ? ' selected' : ''}>${escapeHtml(p.name)}</option>`)
     .join('');
   $('#rf-project-picker').addEventListener('change', (e) => {
+    if (!confirmDiscardIfDirty()) {
+      e.target.value = project.id;
+      return;
+    }
     location.href = `required-fields.html?project=${e.target.value}`;
+  });
+
+  $('#bb-back-link').addEventListener('click', (e) => {
+    if (!confirmDiscardIfDirty()) e.preventDefault();
+  });
+
+  window.addEventListener('beforeunload', (e) => {
+    if (!isDirty()) return;
+    e.preventDefault();
+    e.returnValue = '';
   });
 
   applyRequiredState();
   $$('.rf-field').forEach((el) => {
-    el.addEventListener('click', async (e) => {
+    el.addEventListener('click', (e) => {
       e.preventDefault();
-      await toggleField(el);
+      toggleField(el);
     });
   });
+
+  $('#fsb-save').addEventListener('click', saveRequiredFields);
 }
 
 init();
