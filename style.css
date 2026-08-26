@@ -427,35 +427,38 @@ main { max-width: 780px; margin: 0 auto; padding: 1rem; }
   border-radius: 6px;
 }
 
-/* The clickable field map on required-fields.html -- each box mirrors a
-   real report-editor field so the admin is looking at (a simplified copy
-   of) the actual form, not an abstract settings list. */
-.rf-field {
-  cursor: pointer;
-  border-radius: 6px;
-  outline: 2px solid transparent;
-  outline-offset: 3px;
-  transition: outline-color 0.12s, background 0.12s;
-  position: relative;
+/* The reorderable field list on required-fields.html -- one row per field
+   or composite block, draggable, with its own Required/Hide controls. */
+.field-order-list { list-style: none; margin: 0; padding: 0; }
+.fo-row {
+  display: flex; align-items: center; gap: 0.6rem;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 0.6rem 0.75rem; margin-bottom: 0.5rem;
+  box-shadow: var(--shadow);
 }
-.rf-field:hover { background: var(--surface-2); }
-.rf-field.is-required { outline-color: var(--danger); background: var(--danger-bg); }
-.rf-field.is-required::after {
-  content: 'REQUIRED';
-  position: absolute; top: -0.55rem; right: 0.3rem;
-  font-size: 0.58rem; font-weight: 700; letter-spacing: 0.03em;
-  background: var(--danger); color: #fff; padding: 1px 6px; border-radius: 8px;
+.fo-row.dragging { opacity: 0.4; }
+.fo-row.fo-hidden-row { opacity: 0.6; border-style: dashed; }
+.fo-handle { cursor: grab; color: var(--text-dim); font-size: 1.1rem; line-height: 1; touch-action: none; }
+.fo-arrows { display: flex; flex-direction: column; gap: 2px; }
+.fo-arrow {
+  background: none; border: none; color: var(--text-dim); cursor: pointer;
+  font-size: 0.55rem; line-height: 1; padding: 2px 4px; min-height: 0;
 }
-.rf-field input, .rf-field textarea { pointer-events: none; }
-.rf-field-block {
-  display: block;
-  padding: 0.75rem;
-  border: 1px dashed var(--border);
-  margin-bottom: 0.6rem;
+.fo-arrow:hover { color: var(--link); }
+.fo-label { flex: 1; font-weight: 700; font-size: 0.9rem; color: var(--text); }
+.fo-hidden-tag {
+  font-size: 0.6rem; font-weight: 700; letter-spacing: 0.03em;
+  background: var(--surface-2); color: var(--text-dim); padding: 1px 6px; border-radius: 8px;
+  margin-left: 0.4rem;
 }
-.rf-field-block:last-child { margin-bottom: 0; }
-.rf-field-block .rf-field-title { display: block; font-weight: 700; color: var(--text); margin-bottom: 0.2rem; }
-.rf-field-block .hint { margin: 0; }
+.fo-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; justify-content: flex-end; }
+.fo-btn {
+  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.01em;
+  background: var(--surface-2); color: var(--text-dim); border: 1px solid var(--border);
+  border-radius: 8px; padding: 4px 10px; cursor: pointer; min-height: 0; white-space: nowrap;
+}
+.fo-btn.active { background: var(--danger); color: #fff; border-color: var(--danger); }
+.fo-btn.fo-hide-btn.active { background: var(--text-dim); border-color: var(--text-dim); }
 
 /* Floating save bar (required-fields.html) -- edits are staged in memory as
    the admin clicks fields, and only written with saveProject() when this

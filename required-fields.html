@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="style.css">
 <script src="theme.js"></script>
 <style>
-  /* Room for the floating save bar so it never covers the last field. */
+  /* Room for the floating save bar so it never covers the last row. */
   main { padding-bottom: 4.5rem; }
 </style>
 </head>
@@ -31,117 +31,13 @@
 
 <main>
 
-  <p class="hint" style="margin:0 0 0.75rem;">Tap any field below to mark it required for this project. A report can't be generated as a PDF until every marked field is filled in -- required fields also get a red outline right on the report form itself, so it's clear what's still missing while filling one out.</p>
+  <p class="hint" style="margin:0 0 0.75rem;">Drag a row (or use the arrows) to change where it appears on the report form. <strong>Hide</strong> removes it from the form entirely -- members never see it, and it's skipped everywhere else, including required-field checks. <strong>Required</strong> blocks Generate Report until it's filled in. Report No., Date, and Time Worked always stay fixed at the top and aren't listed here.</p>
 
   <label style="max-width:360px;margin-bottom:1rem;">Project
     <select id="rf-project-picker"></select>
   </label>
 
-  <div class="step">
-    <div class="step-header"><span class="step-num">STEP 1</span><h2>Report Info</h2></div>
-    <div class="step-body">
-      <label class="rf-field" data-field-key="activity">Activity <input type="text" disabled></label>
-      <label class="rf-field" data-field-key="notes">Notes <textarea disabled rows="2"></textarea></label>
-      <div class="field-grid">
-        <label class="rf-field" data-field-key="representative">Representative <input type="text" disabled></label>
-        <label class="rf-field" data-field-key="peName">PE Name <input type="text" disabled></label>
-      </div>
-      <label class="rf-field" data-field-key="ntpDate">NTP Date <input type="date" disabled></label>
-    </div>
-  </div>
-
-  <div class="step">
-    <div class="step-header"><span class="step-num">STEP 2</span><h2>Contractors Force &amp; Equipment</h2></div>
-    <div class="step-body">
-      <label class="rf-field rf-field-block" data-field-key="contractors">
-        <span class="rf-field-title">Contractors</span>
-        <span class="hint">Requires at least one contractor name filled in.</span>
-      </label>
-      <label class="rf-field rf-field-block" data-field-key="equipmentRows">
-        <span class="rf-field-title">Equipment</span>
-        <span class="hint">Requires at least one equipment quantity filled in.</span>
-      </label>
-    </div>
-  </div>
-
-  <div class="step">
-    <div class="step-header"><span class="step-num">STEP 3</span><h2>Work Summary</h2></div>
-    <div class="step-body">
-      <label class="rf-field" data-field-key="workSummaryHeader">Work Summary (top line) <input type="text" disabled></label>
-      <label class="rf-field" data-field-key="trafficControlNote">Short Work Summary <input type="text" disabled></label>
-      <label class="rf-field" data-field-key="workSummary">Summary of Work Performed <textarea disabled rows="4"></textarea></label>
-    </div>
-  </div>
-
-  <div class="step">
-    <div class="step-header"><span class="step-num">STEP 4</span><h2>Pay Items</h2></div>
-    <div class="step-body">
-      <label class="rf-field rf-field-block" data-field-key="payItems">
-        <span class="rf-field-title">Pay Items</span>
-        <span class="hint">Requires at least one pay item with a quantity entered.</span>
-      </label>
-    </div>
-  </div>
-
-  <div class="step">
-    <div class="step-header"><span class="step-num">STEP 5</span><h2>Controlling Item</h2></div>
-    <div class="step-body">
-      <label class="rf-field" data-field-key="controllingItem">Controlling Item <input type="text" disabled></label>
-      <label class="rf-field" data-field-key="commentsOnTime">Comments on Time Charged <textarea disabled rows="2"></textarea></label>
-      <div class="field-grid">
-        <label class="rf-field" data-field-key="controllingItemTimeFrom">Time From <input type="text" disabled></label>
-        <label class="rf-field" data-field-key="controllingItemTimeTo">Time To <input type="text" disabled></label>
-      </div>
-      <label class="rf-field" data-field-key="workingConditions">Working Conditions <input type="text" disabled></label>
-    </div>
-  </div>
-
-  <div class="step">
-    <div class="step-header"><span class="step-num">STEP 6</span><h2>Traffic Control Status</h2></div>
-    <div class="step-body">
-      <label class="rf-field rf-field-block" data-field-key="trafficControlSelect">
-        <span class="rf-field-title">Traffic Control Status</span>
-        <span class="hint">Requires either "In Place" or "Attention Required" to be selected.</span>
-      </label>
-    </div>
-  </div>
-
-  <div class="step">
-    <div class="step-header"><span class="step-num">STEP 7</span><h2>Sign-off</h2></div>
-    <div class="step-body">
-      <div class="field-grid">
-        <label class="rf-field" data-field-key="workBegin">Work Begin <input type="text" disabled></label>
-        <label class="rf-field" data-field-key="workEnd">Work End <input type="text" disabled></label>
-      </div>
-      <label class="rf-field" data-field-key="repSignatureName">Representative Name <input type="text" disabled></label>
-      <label class="rf-field rf-field-block" data-field-key="repSignatureImage">
-        <span class="rf-field-title">Representative Signature</span>
-        <span class="hint">Requires an actual drawn signature, not just the typed name above.</span>
-      </label>
-      <label class="rf-field" data-field-key="peSignatureName">Project Engineer Name <input type="text" disabled></label>
-    </div>
-  </div>
-
-  <div class="step">
-    <div class="step-header"><span class="step-num">STEP 8</span><h2>Weather</h2></div>
-    <div class="step-body">
-      <label class="rf-field" data-field-key="weatherDesc">Description <input type="text" disabled></label>
-      <div class="field-grid">
-        <label class="rf-field" data-field-key="tempHigh">High &deg;F <input type="number" disabled></label>
-        <label class="rf-field" data-field-key="tempLow">Low &deg;F <input type="number" disabled></label>
-      </div>
-    </div>
-  </div>
-
-  <div class="step">
-    <div class="step-header"><span class="step-num">STEP 9</span><h2>Photos (max 6)</h2></div>
-    <div class="step-body">
-      <label class="rf-field rf-field-block" data-field-key="photos">
-        <span class="rf-field-title">Photos</span>
-        <span class="hint">Requires at least one photo attached.</span>
-      </label>
-    </div>
-  </div>
+  <ul class="field-order-list" id="field-order-list"></ul>
 
 </main>
 
@@ -158,51 +54,152 @@
 <script>
 const projectId = queryParam('project');
 let project = null;
-let originalRequired = new Set(); // last-saved state, to know whether there's anything to save
-let pendingRequired = new Set(); // what's currently checked on screen, not yet written
+
+// Staged edit state -- nothing here touches the project record until Save.
+let pendingOrder = [];
+let pendingHidden = new Set();
+let pendingRequired = new Set();
+let originalOrder = [];
+let originalHidden = new Set();
+let originalRequired = new Set();
+
+let dragKey = null;
 
 function isDirty() {
-  if (pendingRequired.size !== originalRequired.size) return true;
-  for (const key of pendingRequired) if (!originalRequired.has(key)) return true;
+  if (pendingOrder.join('|') !== originalOrder.join('|')) return true;
+  if (pendingHidden.size !== originalHidden.size || [...pendingHidden].some((k) => !originalHidden.has(k))) return true;
+  if (pendingRequired.size !== originalRequired.size || [...pendingRequired].some((k) => !originalRequired.has(k))) return true;
   return false;
 }
 
-function applyRequiredState() {
-  $$('.rf-field').forEach((el) => {
-    el.classList.toggle('is-required', pendingRequired.has(el.dataset.fieldKey));
-  });
+function updateSaveBar() {
   const dirty = isDirty();
   $('#fsb').classList.toggle('show', dirty);
   $('#fsb-status').textContent = 'Unsaved changes';
   $('#fsb-save').disabled = !dirty;
 }
 
-function toggleField(el) {
-  const key = el.dataset.fieldKey;
+function requiredButtonHtml(key, label) {
+  const on = pendingRequired.has(key);
+  return `<button type="button" class="fo-btn${on ? ' active' : ''}" data-toggle-required="${key}">${escapeHtml(label)}</button>`;
+}
+
+function rowHtml(key) {
+  const def = ORDERABLE_FIELD_DEFS.find((d) => d.key === key);
+  if (!def) return '';
+  const hidden = pendingHidden.has(key);
+  const requiredHtml = key === 'contractorsEquipment'
+    ? requiredButtonHtml('contractors', 'Require Contractors') + requiredButtonHtml('equipmentRows', 'Require Equipment')
+    : requiredButtonHtml(key, 'Required');
+  return `
+    <li class="fo-row${hidden ? ' fo-hidden-row' : ''}" draggable="true" data-key="${key}">
+      <span class="fo-handle" title="Drag to reorder">&#8942;&#8942;</span>
+      <span class="fo-arrows">
+        <button type="button" class="fo-arrow" data-move="up" data-key="${key}" title="Move up">&#9650;</button>
+        <button type="button" class="fo-arrow" data-move="down" data-key="${key}" title="Move down">&#9660;</button>
+      </span>
+      <span class="fo-label">${escapeHtml(def.label)}${hidden ? ' <span class="fo-hidden-tag">HIDDEN</span>' : ''}</span>
+      <span class="fo-actions">
+        ${hidden ? '' : requiredHtml}
+        <button type="button" class="fo-btn fo-hide-btn${hidden ? ' active' : ''}" data-toggle-hidden="${key}">${hidden ? 'Unhide' : 'Hide'}</button>
+      </span>
+    </li>`;
+}
+
+function renderFieldList() {
+  $('#field-order-list').innerHTML = pendingOrder.map(rowHtml).join('');
+  attachRowHandlers();
+  updateSaveBar();
+}
+
+function moveKey(key, dir) {
+  const idx = pendingOrder.indexOf(key);
+  const swapWith = idx + dir;
+  if (idx === -1 || swapWith < 0 || swapWith >= pendingOrder.length) return;
+  [pendingOrder[idx], pendingOrder[swapWith]] = [pendingOrder[swapWith], pendingOrder[idx]];
+  renderFieldList();
+}
+
+function toggleRequired(key) {
   if (pendingRequired.has(key)) pendingRequired.delete(key);
   else pendingRequired.add(key);
-  applyRequiredState();
+  renderFieldList();
+}
+
+function toggleHidden(key) {
+  if (pendingHidden.has(key)) {
+    pendingHidden.delete(key);
+  } else {
+    pendingHidden.add(key);
+    // A hidden field can't be filled in, so it can't stay marked required.
+    if (key === 'contractorsEquipment') {
+      pendingRequired.delete('contractors');
+      pendingRequired.delete('equipmentRows');
+    } else {
+      pendingRequired.delete(key);
+    }
+  }
+  renderFieldList();
+}
+
+function attachRowHandlers() {
+  const list = $('#field-order-list');
+
+  $$('[data-toggle-required]', list).forEach((btn) => {
+    btn.addEventListener('click', () => toggleRequired(btn.dataset.toggleRequired));
+  });
+  $$('[data-toggle-hidden]', list).forEach((btn) => {
+    btn.addEventListener('click', () => toggleHidden(btn.dataset.toggleHidden));
+  });
+  $$('[data-move]', list).forEach((btn) => {
+    btn.addEventListener('click', () => moveKey(btn.dataset.key, btn.dataset.move === 'up' ? -1 : 1));
+  });
+
+  $$('.fo-row', list).forEach((row) => {
+    row.addEventListener('dragstart', () => {
+      dragKey = row.dataset.key;
+      row.classList.add('dragging');
+    });
+    row.addEventListener('dragend', () => {
+      row.classList.remove('dragging');
+      dragKey = null;
+      pendingOrder = $$('.fo-row', list).map((el) => el.dataset.key);
+      updateSaveBar();
+    });
+    // Physically move the actual dragged node rather than re-rendering the
+    // list, so the browser's in-progress drag doesn't lose its source
+    // element (replacing it via innerHTML mid-drag silently kills the drag).
+    row.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      if (!dragKey || dragKey === row.dataset.key) return;
+      const draggedEl = list.querySelector(`[data-key="${dragKey}"]`);
+      if (!draggedEl) return;
+      const rect = row.getBoundingClientRect();
+      const before = e.clientY - rect.top < rect.height / 2;
+      list.insertBefore(draggedEl, before ? row : row.nextSibling);
+    });
+  });
 }
 
 async function saveRequiredFields() {
   const btn = $('#fsb-save');
   btn.disabled = true;
   btn.textContent = 'Saving...';
-  project.requiredFields = Array.from(pendingRequired);
+  project.fieldOrder = [...pendingOrder];
+  project.hiddenFields = [...pendingHidden];
+  project.requiredFields = [...pendingRequired];
   project.updatedAt = Date.now();
   await saveProject(project);
+  originalOrder = [...pendingOrder];
+  originalHidden = new Set(pendingHidden);
   originalRequired = new Set(pendingRequired);
   btn.textContent = 'Save Required Fields';
   $('#fsb-status').textContent = 'Saved.';
   $('#fsb').classList.remove('show');
 }
 
-// Losing in-progress required-field picks to an accidental tab close or
-// project switch would be a silent, hard-to-notice loss (unlike a report
-// edit, nothing else reminds the admin these weren't saved) -- worth a
-// confirm either way.
 function confirmDiscardIfDirty() {
-  return !isDirty() || confirm('You have unsaved required-field changes. Discard them?');
+  return !isDirty() || confirm('You have unsaved changes. Discard them?');
 }
 
 async function init() {
@@ -215,7 +212,11 @@ async function init() {
   document.title = `Required Fields — ${project.name}`;
   $('#project-name-sub').textContent = project.name;
 
+  originalOrder = getFieldOrder(project);
+  originalHidden = new Set(project.hiddenFields || []);
   originalRequired = new Set(project.requiredFields || []);
+  pendingOrder = [...originalOrder];
+  pendingHidden = new Set(originalHidden);
   pendingRequired = new Set(originalRequired);
 
   const allProjects = await getAllProjects();
@@ -240,14 +241,7 @@ async function init() {
     e.returnValue = '';
   });
 
-  applyRequiredState();
-  $$('.rf-field').forEach((el) => {
-    el.addEventListener('click', (e) => {
-      e.preventDefault();
-      toggleField(el);
-    });
-  });
-
+  renderFieldList();
   $('#fsb-save').addEventListener('click', saveRequiredFields);
 }
 

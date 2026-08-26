@@ -214,6 +214,8 @@ function makeProjectFromParsedFile(parsed) {
     defaultEquipmentLabels: parsed.equipmentLabels || [],
     payItemCatalog: parsed.payItemCatalog || [],
     requiredFields: [],
+    hiddenFields: [],
+    fieldOrder: [],
     backgroundImage: null,
     backgroundImageFetched: true, // nothing to fetch -- this project was just created locally
     createdAt: Date.now(),
@@ -287,10 +289,75 @@ const REQUIRED_FIELD_DEFS = [
   { key: 'photos', label: 'Photos (at least one)', isEmpty: (r) => !Array.isArray(r.photos) || r.photos.every((p) => !p) },
 ];
 
+// ---------- Field visibility & order (admin-configurable, per project) ----------
+//
+// Contractors and Equipment share one entry here ('contractorsEquipment')
+// even though REQUIRED_FIELD_DEFS above tracks them separately -- on the
+// actual report-editor.html form they're one physical widget (a tab picks
+// the contractor, equipment quantities are per-tab), so they can only be
+// shown/hidden/repositioned as a unit. They can still be marked required
+// independently -- that's a finer distinction than the widget's layout has
+// to support.
+const ORDERABLE_FIELD_DEFS = [
+  { key: 'activity', label: 'Activity', kind: 'simple' },
+  { key: 'notes', label: 'Notes', kind: 'simple' },
+  { key: 'representative', label: 'Representative', kind: 'simple' },
+  { key: 'peName', label: 'PE Name', kind: 'simple' },
+  { key: 'ntpDate', label: 'NTP Date', kind: 'simple' },
+  { key: 'contractorsEquipment', label: 'Contractors & Equipment', kind: 'block' },
+  { key: 'workSummaryHeader', label: 'Work Summary (top line)', kind: 'simple' },
+  { key: 'trafficControlNote', label: 'Short Work Summary', kind: 'simple' },
+  { key: 'workSummary', label: 'Summary of Work Performed', kind: 'simple' },
+  { key: 'payItems', label: 'Pay Items', kind: 'block' },
+  { key: 'controllingItem', label: 'Controlling Item', kind: 'simple' },
+  { key: 'commentsOnTime', label: 'Comments on Time Charged', kind: 'simple' },
+  { key: 'controllingItemTimeFrom', label: 'Controlling Item Time From', kind: 'simple' },
+  { key: 'controllingItemTimeTo', label: 'Controlling Item Time To', kind: 'simple' },
+  { key: 'workingConditions', label: 'Working Conditions', kind: 'simple' },
+  { key: 'trafficControlSelect', label: 'Traffic Control Status', kind: 'block' },
+  { key: 'workBegin', label: 'Work Begin', kind: 'simple' },
+  { key: 'workEnd', label: 'Work End', kind: 'simple' },
+  { key: 'repSignatureName', label: 'Representative Name', kind: 'simple' },
+  { key: 'repSignatureImage', label: 'Representative Signature', kind: 'block' },
+  { key: 'peSignatureName', label: 'Project Engineer Name', kind: 'simple' },
+  { key: 'weatherDesc', label: 'Weather Description', kind: 'simple' },
+  { key: 'tempHigh', label: 'High Temp', kind: 'simple' },
+  { key: 'tempLow', label: 'Low Temp', kind: 'simple' },
+  { key: 'photos', label: 'Photos', kind: 'block' },
+];
+const DEFAULT_FIELD_ORDER = ORDERABLE_FIELD_DEFS.map((d) => d.key);
+
+// A required-field key that isn't its own orderable block (contractors,
+// equipmentRows) resolves to the block that actually controls whether it's
+// on the form at all.
+const REQUIRED_TO_BLOCK_KEY = { contractors: 'contractorsEquipment', equipmentRows: 'contractorsEquipment' };
+function blockKeyFor(requiredKey) {
+  return REQUIRED_TO_BLOCK_KEY[requiredKey] || requiredKey;
+}
+
+// Saved order, with any keys the admin never touched (new app version added
+// one, or this project predates the feature) appended at the end in their
+// default position rather than silently dropped.
+function getFieldOrder(project) {
+  const saved = (project && Array.isArray(project.fieldOrder) && project.fieldOrder) || [];
+  const known = new Set(DEFAULT_FIELD_ORDER);
+  const savedValid = saved.filter((k) => known.has(k));
+  const missing = DEFAULT_FIELD_ORDER.filter((k) => !savedValid.includes(k));
+  return [...savedValid, ...missing];
+}
+
+function isFieldHidden(project, key) {
+  return ((project && project.hiddenFields) || []).includes(blockKeyFor(key));
+}
+
 // Which of a project's marked-required fields this particular report hasn't
-// filled in yet -- empty array means it's good to generate.
+// filled in yet -- empty array means it's good to generate. A required field
+// whose block the admin later hid is never enforced -- there'd be no way
+// left on the form to satisfy it.
 function getMissingRequiredFields(report, project) {
   const required = (project && project.requiredFields) || [];
   if (!required.length || !report) return [];
-  return REQUIRED_FIELD_DEFS.filter((def) => required.includes(def.key) && def.isEmpty(report));
+  return REQUIRED_FIELD_DEFS.filter(
+    (def) => required.includes(def.key) && !isFieldHidden(project, def.key) && def.isEmpty(report)
+  );
 }
