@@ -40,6 +40,11 @@
       <div class="hc-title">View Reports</div>
       <div class="hc-desc"><span id="report-count">0</span> saved report(s)</div>
     </a>
+    <a class="hub-card" id="card-quick-quantity" href="#">
+      <span class="hc-icon">&#9998;</span>
+      <div class="hc-title">Quick Quantity Add</div>
+      <div class="hc-desc">Log pay item quantities for any date</div>
+    </a>
     <a class="hub-card" id="card-quantity-sheet" href="#">
       <span class="hc-icon">&#128202;</span>
       <div class="hc-title">Quantity Sheet</div>
@@ -183,6 +188,7 @@ async function init() {
   $('#card-new-report').href = `report-editor.html?project=${project.id}&report=new`;
   $('#card-view-reports').href = `reports.html?project=${project.id}`;
   $('#card-quantity-sheet').href = `quantity-sheet.html?project=${project.id}`;
+  $('#card-quick-quantity').href = `quick-quantity.html?project=${project.id}`;
 
   // Renaming/re-uploading/deleting the project itself may be restricted to
   // admins -- viewing the dashboard and filing reports never is.

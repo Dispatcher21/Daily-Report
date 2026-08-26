@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Quick Quantity Add</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1c3d5a">
+<link rel="stylesheet" href="style.css">
+<script src="theme.js"></script>
+<style>
+  .qq-row {
+    display: flex; align-items: center; gap: 0.75rem;
+    padding: 0.6rem 0; border-bottom: 1px solid var(--border);
+  }
+  .qq-row:last-child { border-bottom: none; }
+  .qq-item-info { flex: 1; min-width: 0; }
+  .qq-item-num { font-weight: 700; }
+  .qq-item-desc { font-size: 0.85rem; color: var(--text-dim); }
+  .qq-qty-wrap { display: flex; align-items: center; gap: 0.4rem; flex: 0 0 auto; }
+  .qq-qty { width: 6.5rem; text-align: right; }
+  .qq-unit { font-size: 0.8rem; color: var(--text-dim); width: 2.5rem; }
+  .qq-manual-row .qq-item-num { font-weight: 400; }
+  .qq-manual-remove { flex: 0 0 auto; }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div>
+    <h1>Quick Quantity Add</h1>
+    <div class="app-sub" id="project-name-sub"></div>
+  </div>
+  <span></span>
+</header>
+<div class="back-bar">
+  <a href="#" id="bb-back-link">&larr; Project</a>
+  <span class="bb-sep">//</span>
+  <span class="bb-cur">Quick Quantity Add</span>
+</div>
+
+<main>
+  <div class="step">
+    <div class="step-header">
+      <span class="step-num">DATE</span>
+      <h2>Which Day</h2>
+    </div>
+    <div class="step-body">
+      <label>Date <input type="date" id="f-date"></label>
+      <p class="hint" id="date-context" style="margin-bottom:0;"></p>
+      <div id="multi-report-picker" hidden>
+        <label>Multiple reports exist on this date -- which one?
+          <select id="f-report-picker"></select>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-header">
+      <span class="step-num">QUANTITIES</span>
+      <h2>Pay Item Quantities</h2>
+    </div>
+    <div class="step-body">
+      <p class="hint" style="margin-top:0;">Fill in only what applies -- leave the rest blank. Saving adds these straight to that date's report.</p>
+      <div class="warn" id="readonly-banner" hidden style="margin-bottom:0.75rem;">You don't have permission to edit that date's report.</div>
+
+      <div id="catalog-list"></div>
+      <div class="empty-state" id="catalog-empty" hidden style="padding:1.25rem;">This project has no pay item catalog.</div>
+
+      <div class="add-manual" id="add-manual-section" style="margin-top:1rem;">
+        <div class="add-manual-header" id="toggle-manual-pay-item">
+          <span id="manual-pay-toggle-icon">&#9656;</span>
+          <span>ADD ITEM NOT IN CATALOG</span>
+        </div>
+        <div class="add-manual-fields" id="manual-pay-fields">
+          <label>Item # <input type="text" id="mp-num"></label>
+          <label>Description <input type="text" id="mp-desc"></label>
+          <label>Unit <input type="text" id="mp-unit"></label>
+          <button type="button" class="btn-sm" id="btn-add-manual-pay">+ Add</button>
+        </div>
+      </div>
+      <div id="manual-list"></div>
+
+      <button type="button" class="btn-primary" id="btn-save-quantities" style="margin-top:1rem;">Save Quantities</button>
+      <div class="success" id="save-success" hidden style="margin-top:0.75rem;"></div>
+      <div class="err" id="save-error" hidden></div>
+    </div>
+  </div>
+</main>
+
+<script src="common.js"></script>
+<script src="defaults.js"></script>
+<script src="storage.js"></script>
+<script type="module" src="firebase-init.js"></script>
+<script src="firebase-sync.js"></script>
+<script>
+const projectId = queryParam('project');
+let project = null;
+let allReports = [];
+let manualItems = []; // ad-hoc items not in the catalog: {itemNumber, description, unit}
+let currentReport = null; // the report the date currently resolves to, or null if it'll be created
+
+async function init() {
+  project = projectId ? await getProject(projectId) : null;
+  if (!project || !projectInScope(project.id, await getCompanyRoom())) {
+    location.href = 'index.html';
+    return;
+  }
+  document.title = `Quick Quantity Add — ${project.name}`;
+  $('#project-name-sub').textContent = project.name;
+  $('#bb-back-link').href = `project.html?id=${project.id}`;
+
+  allReports = await getReportsForProject(project.id);
+  $('#f-date').value = todayIso();
+
+  renderCatalogList();
+  await updateDateContext();
+}
+
+function renderCatalogList() {
+  const catalog = project.payItemCatalog || [];
+  $('#catalog-empty').hidden = catalog.length > 0;
+  $('#catalog-list').innerHTML = catalog
+    .map(
+      (it, i) => `
+      <div class="qq-row" data-item-number="${escapeHtml(it.itemNumber)}">
+        <div class="qq-item-info">
+          <div class="qq-item-num">${escapeHtml(it.itemNumber)}</div>
+          <div class="qq-item-desc">${escapeHtml(it.description || '')}</div>
+        </div>
+        <div class="qq-qty-wrap">
+          <input type="number" step="any" class="qq-qty" id="qty-${i}" data-item-number="${escapeHtml(it.itemNumber)}">
+          <span class="qq-unit">${escapeHtml(it.unit || '')}</span>
+        </div>
+      </div>`
+    )
+    .join('');
+}
+
+function renderManualList() {
+  $('#manual-list').innerHTML = manualItems
+    .map(
+      (it, i) => `
+      <div class="qq-row qq-manual-row" data-manual-idx="${i}">
+        <div class="qq-item-info">
+          <div class="qq-item-num">${escapeHtml(it.itemNumber || '(no #)')}</div>
+          <div class="qq-item-desc">${escapeHtml(it.description || '')}</div>
+        </div>
+        <div class="qq-qty-wrap">
+          <input type="number" step="any" class="qq-qty" id="manual-qty-${i}">
+          <span class="qq-unit">${escapeHtml(it.unit || '')}</span>
+        </div>
+        <button type="button" class="text-btn qq-manual-remove" data-remove-manual="${i}" style="color:var(--danger);">&times;</button>
+      </div>`
+    )
+    .join('');
+  $$('[data-remove-manual]', $('#manual-list')).forEach((btn) => {
+    btn.addEventListener('click', () => {
+      manualItems.splice(Number(btn.dataset.removeManual), 1);
+      renderManualList();
+    });
+  });
+}
+
+// Fills in whatever quantities the resolved report already has for this
+// date, so re-opening a date you already logged shows what's there instead
+// of blank fields that would otherwise look like a fresh entry.
+function prefillFromReport(report) {
+  manualItems = [];
+  const catalogNumbers = new Set((project.payItemCatalog || []).map((it) => it.itemNumber));
+  $$('.qq-qty', $('#catalog-list')).forEach((input) => { input.value = ''; });
+  if (!report) {
+    renderManualList();
+    return;
+  }
+  for (const pi of report.payItems || []) {
+    if (!pi.itemNumber && !pi.description) continue;
+    if (catalogNumbers.has(pi.itemNumber)) {
+      const input = document.querySelector(`.qq-qty[data-item-number="${CSS.escape(pi.itemNumber)}"]`);
+      if (input) input.value = pi.qty || '';
+    } else {
+      manualItems.push({ itemNumber: pi.itemNumber, description: pi.description, unit: pi.unit, qty: pi.qty });
+    }
+  }
+  renderManualList();
+  // Re-show whatever qty the just-added manual rows carried in.
+  manualItems.forEach((it, i) => {
+    const input = $(`#manual-qty-${i}`);
+    if (input) input.value = it.qty || '';
+  });
+}
+
+async function updateDateContext() {
+  const date = $('#f-date').value;
+  const matches = allReports.filter((r) => r.date === date);
+
+  $('#multi-report-picker').hidden = matches.length <= 1;
+  if (matches.length > 1) {
+    $('#f-report-picker').innerHTML = matches
+      .map((r) => `<option value="${r.id}">Report #${r.reportNo}${r.activity ? ' — ' + escapeHtml(r.activity) : ''}</option>`)
+      .join('');
+    currentReport = matches.find((r) => r.id === $('#f-report-picker').value) || matches[0];
+  } else {
+    currentReport = matches[0] || null;
+  }
+
+  const ctx = await getReportPermissionContext();
+  const editable = !currentReport || canEditReportWithContext(currentReport, ctx);
+  $('#readonly-banner').hidden = editable;
+  $('#btn-save-quantities').disabled = !editable;
+
+  $('#date-context').textContent = currentReport
+    ? `Editing Report #${currentReport.reportNo}'s quantities.`
+    : `No report exists for this date yet -- saving will create one.`;
+
+  prefillFromReport(currentReport);
+}
+
+$('#f-date').addEventListener('change', updateDateContext);
+$('#f-report-picker').addEventListener('change', async () => {
+  const matches = allReports.filter((r) => r.date === $('#f-date').value);
+  currentReport = matches.find((r) => r.id === $('#f-report-picker').value) || matches[0];
+  const ctx = await getReportPermissionContext();
+  const editable = !currentReport || canEditReportWithContext(currentReport, ctx);
+  $('#readonly-banner').hidden = editable;
+  $('#btn-save-quantities').disabled = !editable;
+  prefillFromReport(currentReport);
+});
+
+// ---------- Add item not in catalog ----------
+
+let manualPayOpen = false;
+$('#toggle-manual-pay-item').addEventListener('click', () => {
+  manualPayOpen = !manualPayOpen;
+  $('#manual-pay-fields').classList.toggle('show', manualPayOpen);
+  $('#manual-pay-toggle-icon').textContent = manualPayOpen ? '▾' : '▸';
+});
+$('#btn-add-manual-pay').addEventListener('click', () => {
+  const itemNumber = $('#mp-num').value.trim();
+  const description = $('#mp-desc').value.trim();
+  const unit = $('#mp-unit').value.trim();
+  if (!itemNumber && !description) return;
+  manualItems.push({ itemNumber, description, unit, qty: '' });
+  $('#mp-num').value = '';
+  $('#mp-desc').value = '';
+  $('#mp-unit').value = '';
+  renderManualList();
+});
+
+// ---------- Save ----------
+
+function collectEntries() {
+  const entries = [];
+  $$('.qq-qty', $('#catalog-list')).forEach((input) => {
+    const qty = input.value.trim();
+    if (!qty) return;
+    const it = (project.payItemCatalog || []).find((c) => c.itemNumber === input.dataset.itemNumber);
+    if (it) entries.push({ itemNumber: it.itemNumber, description: it.description, unit: it.unit, qty });
+  });
+  manualItems.forEach((it, i) => {
+    const input = $(`#manual-qty-${i}`);
+    const qty = input ? input.value.trim() : '';
+    if (!qty) return;
+    entries.push({ itemNumber: it.itemNumber, description: it.description, unit: it.unit, qty });
+  });
+  return entries;
+}
+
+$('#btn-save-quantities').addEventListener('click', async () => {
+  const btn = $('#btn-save-quantities');
+  $('#save-error').hidden = true;
+  $('#save-success').hidden = true;
+
+  const date = $('#f-date').value;
+  if (!date) return;
+  const entries = collectEntries();
+  if (entries.length === 0) {
+    $('#save-error').textContent = 'Enter at least one quantity.';
+    $('#save-error').hidden = false;
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+  try {
+    let report = currentReport;
+    if (report) {
+      const ctx = await getReportPermissionContext();
+      if (!canEditReportWithContext(report, ctx)) throw new Error("You don't have permission to edit that date's report.");
+      for (const entry of entries) {
+        const idx = report.payItems.findIndex((pi) => pi.itemNumber === entry.itemNumber);
+        if (idx === -1) report.payItems.push({ ...entry });
+        else report.payItems[idx] = { ...report.payItems[idx], ...entry };
+      }
+    } else {
+      const nextNo = await getNextReportNo(project.id);
+      const previous = allReports[0]; // most recently updated -- carries forward representative/contractors/etc, same as a normal new report
+      report = await makeBlankReport(nextNo, project, previous);
+      report.date = date;
+      report.payItems = entries;
+    }
+    await saveReport(report);
+
+    allReports = await getReportsForProject(project.id);
+    currentReport = report;
+    $('#save-success').textContent = `Saved to Report #${report.reportNo}.`;
+    $('#save-success').hidden = false;
+    await updateDateContext();
+  } catch (err) {
+    console.error(err);
+    $('#save-error').textContent = 'Could not save: ' + err.message;
+    $('#save-error').hidden = false;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save Quantities';
+  }
+});
+
+init();
+</script>
+</body>
+</html>
