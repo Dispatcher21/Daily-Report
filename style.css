@@ -427,17 +427,8 @@ main { max-width: 780px; margin: 0 auto; padding: 1rem; }
   border-radius: 6px;
 }
 
-/* The reorderable field list on required-fields.html -- one row per field
-   or composite block, draggable, with its own Required/Hide controls. */
-.field-order-list { list-style: none; margin: 0; padding: 0; }
-.fo-row {
-  display: flex; align-items: center; gap: 0.6rem;
-  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 0.6rem 0.75rem; margin-bottom: 0.5rem;
-  box-shadow: var(--shadow);
-}
-.fo-row.dragging { opacity: 0.4; }
-.fo-row.fo-hidden-row { opacity: 0.6; border-style: dashed; }
+/* Shared bits reused by both sections below: the drag handle/arrows and
+   the small HIDDEN/REQUIRED badges. */
 .fo-handle { cursor: grab; color: var(--text-dim); font-size: 1.1rem; line-height: 1; touch-action: none; }
 .fo-arrows { display: flex; flex-direction: column; gap: 2px; }
 .fo-arrow {
@@ -445,59 +436,72 @@ main { max-width: 780px; margin: 0 auto; padding: 1rem; }
   font-size: 0.55rem; line-height: 1; padding: 2px 4px; min-height: 0;
 }
 .fo-arrow:hover { color: var(--link); }
-.fo-label { flex: 1; font-weight: 700; font-size: 0.9rem; color: var(--text); }
-.fo-hidden-tag {
+.fo-hidden-tag, .rf-required-tag {
   font-size: 0.6rem; font-weight: 700; letter-spacing: 0.03em;
-  background: var(--surface-2); color: var(--text-dim); padding: 1px 6px; border-radius: 8px;
-  margin-left: 0.4rem;
+  padding: 1px 6px; border-radius: 8px; margin-left: 0.4rem; white-space: nowrap;
 }
-.fo-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; justify-content: flex-end; }
+.fo-hidden-tag { background: var(--surface-2); color: var(--text-dim); }
+.rf-required-tag { background: var(--danger); color: #fff; }
 .fo-btn {
   font-size: 0.72rem; font-weight: 700; letter-spacing: 0.01em;
   background: var(--surface-2); color: var(--text-dim); border: 1px solid var(--border);
-  border-radius: 8px; padding: 4px 10px; cursor: pointer; min-height: 0; white-space: nowrap;
+  border-radius: 8px; padding: 6px 12px; cursor: pointer; min-height: 0; white-space: nowrap;
 }
 .fo-btn.active { background: var(--danger); color: #fff; border-color: var(--danger); }
 .fo-btn.fo-hide-btn.active { background: var(--text-dim); border-color: var(--text-dim); }
 
-/* Two-column layout on required-fields.html: the field list plus a live
-   preview of the actual printed report that highlights whatever row the
-   admin is hovering or dragging. */
-.rf-layout { display: flex; gap: 1.25rem; align-items: flex-start; }
-.rf-list-col { flex: 1 1 380px; min-width: 0; }
-.rf-preview-col {
-  flex: 1 1 420px; min-width: 0;
-  position: sticky; top: 1rem;
-  max-height: calc(100vh - 2rem);
-  overflow: auto;
-  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 0.75rem;
-  box-shadow: var(--shadow);
-}
-.rf-preview-col h3 { margin: 0 0 0.6rem; font-size: 0.85rem; color: var(--text-dim); }
-.rf-preview-page-wrap { margin: 0 auto 0.75rem; position: relative; overflow: hidden; border: 1px solid var(--border); }
-.rf-preview-page-wrap:last-child { margin-bottom: 0; }
-@media (max-width: 900px) {
-  .rf-layout { flex-direction: column; }
-  .rf-preview-col { position: static; max-height: none; width: 100%; }
-}
+/* ---- Section 1: click-the-image to mark Required/Hidden ---- */
 
-/* The highlight itself -- a plain class toggle on the matched .print-cell
-   for single/merged-cell fields; a synthetic grid item spanning the same
-   coordinate system for composite fields that cover several cells (see
-   FIELD_HIGHLIGHT_REGIONS in render-report.js). */
-.print-cell.rf-hl-active {
-  outline: 3px solid var(--danger);
-  outline-offset: -2px;
-  background: rgba(211, 47, 47, 0.22) !important;
-  z-index: 5;
+.rf-preview-page-wrap { margin: 0 auto 0.9rem; position: relative; overflow: hidden; border: 1px solid var(--border); }
+.rf-preview-page-wrap:last-child { margin-bottom: 0; }
+
+/* One invisible-until-touched box per field, positioned over the live
+   preview at that field's real printed coordinates (FIELD_HIGHLIGHT_REGIONS
+   in render-report.js) -- the click target IS the report, not a separate
+   list. State (required/hidden) is visible on the image itself so there's
+   no need to open anything just to see what's already set. */
+.rf-click-target {
+  cursor: pointer;
+  outline: 1px dashed rgba(128, 140, 160, 0.5);
+  outline-offset: -1px;
+  background: transparent;
+  transition: background 0.1s;
+  z-index: 4;
 }
-.rf-hl-overlay {
-  background: rgba(211, 47, 47, 0.22);
-  border: 3px solid var(--danger);
-  pointer-events: none;
-  z-index: 5;
+.rf-click-target:hover { background: rgba(70, 130, 230, 0.16); }
+.rf-click-target.is-required { outline: 2px solid var(--danger); background: rgba(211, 47, 47, 0.18); }
+.rf-click-target.is-hidden { outline: 2px dashed var(--text-dim); background: rgba(120, 120, 120, 0.18); }
+.rf-click-target.rf-popover-open { outline: 2px solid var(--link); background: rgba(70, 130, 230, 0.22); }
+
+/* The options popover that appears when a box on the image is clicked. */
+.rf-popover {
+  position: fixed; z-index: 600;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  padding: 0.75rem;
+  width: 240px;
+  max-width: calc(100vw - 1.5rem);
 }
+.rf-popover[hidden] { display: none; }
+.rf-popover-close {
+  position: absolute; top: 0.4rem; right: 0.5rem;
+  background: none; border: none; color: var(--text-dim); font-size: 1.2rem;
+  cursor: pointer; min-height: 0; padding: 0 0.25rem; line-height: 1;
+}
+.rf-popover-title { font-weight: 700; font-size: 0.88rem; margin: 0 1.2rem 0.6rem 0; color: var(--text); }
+.rf-popover-actions { display: flex; flex-direction: column; gap: 0.4rem; }
+.rf-popover-actions .fo-btn { width: 100%; text-align: center; }
+
+/* ---- Section 2: drag-reorder, styled like the real report-editor form ---- */
+
+#reorder-cards .step { margin-bottom: 0.6rem; cursor: default; }
+#reorder-cards .step.dragging { opacity: 0.4; }
+#reorder-cards .step.rf-hidden-card { opacity: 0.55; border-style: dashed; }
+#reorder-cards .step .step-header { gap: 0.5rem; }
+#reorder-cards .step .step-header h2 { flex: 1; }
+#reorder-cards .step[draggable="true"] .step-header { cursor: grab; }
+.rf-fixed-card .step-header { cursor: default; }
+.rf-fixed-card { opacity: 0.75; }
 
 /* Floating save bar (required-fields.html) -- edits are staged in memory as
    the admin clicks fields, and only written with saveProject() when this

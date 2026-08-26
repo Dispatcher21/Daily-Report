@@ -11,7 +11,7 @@
 <link rel="stylesheet" href="print-sheet.css">
 <script src="theme.js"></script>
 <style>
-  /* Room for the floating save bar so it never covers the last row. */
+  /* Room for the floating save bar so it never covers the last card. */
   main { padding-bottom: 4.5rem; }
 </style>
 </head>
@@ -32,23 +32,33 @@
 
 <main>
 
-  <p class="hint" style="margin:0 0 0.75rem;">Drag a row (or use the arrows) to change where it appears on the report form. <strong>Hide</strong> removes it from the form entirely -- members never see it, and it's skipped everywhere else, including required-field checks. <strong>Required</strong> blocks Generate Report until it's filled in. Report No., Date, and Time Worked always stay fixed at the top and aren't listed here.</p>
-
   <label style="max-width:360px;margin-bottom:1rem;">Project
     <select id="rf-project-picker"></select>
   </label>
 
-  <div class="rf-layout">
-    <div class="rf-list-col">
-      <ul class="field-order-list" id="field-order-list"></ul>
-    </div>
-    <div class="rf-preview-col">
-      <h3>Live preview &mdash; hover or drag a row to see where it prints</h3>
+  <div class="step">
+    <div class="step-header"><span class="step-num">1</span><h2>Mark Required / Hidden</h2></div>
+    <div class="step-body">
+      <p class="hint" style="margin-top:0;">Click any box on the report below to require or hide that field. A required field blocks Generate Report until it's filled in; a hidden field is removed from the on-screen form entirely (and can't stay required).</p>
       <div id="rf-preview"></div>
     </div>
   </div>
 
+  <div class="step">
+    <div class="step-header"><span class="step-num">2</span><h2>Field Order</h2></div>
+    <div class="step-body">
+      <p class="hint" style="margin-top:0;">Drag a card (or use its arrows) to change where it appears on the report-entry form. This is laid out the same way the real form is -- it doesn't affect the printed PDF, which always keeps its fixed layout.</p>
+      <div id="reorder-cards"></div>
+    </div>
+  </div>
+
 </main>
+
+<div class="rf-popover" id="rf-popover" hidden>
+  <button type="button" class="rf-popover-close" id="rf-popover-close">&times;</button>
+  <div class="rf-popover-title" id="rf-popover-title"></div>
+  <div class="rf-popover-actions" id="rf-popover-actions"></div>
+</div>
 
 <div class="floating-save-bar" id="fsb">
   <span class="fsb-status" id="fsb-status">Unsaved changes</span>
@@ -65,6 +75,9 @@
 const projectId = queryParam('project');
 let project = null;
 let previewGrids = null; // { 1: gridEl, 2: gridEl }, set once the preview finishes rendering
+let dragKey = null;
+let currentPopoverKey = null;
+let currentPopoverEl = null;
 
 // Staged edit state -- nothing here touches the project record until Save.
 let pendingOrder = [];
@@ -73,8 +86,6 @@ let pendingRequired = new Set();
 let originalOrder = [];
 let originalHidden = new Set();
 let originalRequired = new Set();
-
-let dragKey = null;
 
 function isDirty() {
   if (pendingOrder.join('|') !== originalOrder.join('|')) return true;
@@ -90,51 +101,18 @@ function updateSaveBar() {
   $('#fsb-save').disabled = !dirty;
 }
 
-function requiredButtonHtml(key, label) {
-  const on = pendingRequired.has(key);
-  return `<button type="button" class="fo-btn${on ? ' active' : ''}" data-toggle-required="${key}">${escapeHtml(label)}</button>`;
-}
-
-function rowHtml(key) {
-  const def = ORDERABLE_FIELD_DEFS.find((d) => d.key === key);
-  if (!def) return '';
-  const hidden = pendingHidden.has(key);
-  const requiredHtml = key === 'contractorsEquipment'
-    ? requiredButtonHtml('contractors', 'Require Contractors') + requiredButtonHtml('equipmentRows', 'Require Equipment')
-    : requiredButtonHtml(key, 'Required');
-  return `
-    <li class="fo-row${hidden ? ' fo-hidden-row' : ''}" draggable="true" data-key="${key}">
-      <span class="fo-handle" title="Drag to reorder">&#8942;&#8942;</span>
-      <span class="fo-arrows">
-        <button type="button" class="fo-arrow" data-move="up" data-key="${key}" title="Move up">&#9650;</button>
-        <button type="button" class="fo-arrow" data-move="down" data-key="${key}" title="Move down">&#9660;</button>
-      </span>
-      <span class="fo-label">${escapeHtml(def.label)}${hidden ? ' <span class="fo-hidden-tag">HIDDEN</span>' : ''}</span>
-      <span class="fo-actions">
-        ${hidden ? '' : requiredHtml}
-        <button type="button" class="fo-btn fo-hide-btn${hidden ? ' active' : ''}" data-toggle-hidden="${key}">${hidden ? 'Unhide' : 'Hide'}</button>
-      </span>
-    </li>`;
-}
-
-function renderFieldList() {
-  $('#field-order-list').innerHTML = pendingOrder.map(rowHtml).join('');
-  attachRowHandlers();
-  updateSaveBar();
-}
-
-function moveKey(key, dir) {
-  const idx = pendingOrder.indexOf(key);
-  const swapWith = idx + dir;
-  if (idx === -1 || swapWith < 0 || swapWith >= pendingOrder.length) return;
-  [pendingOrder[idx], pendingOrder[swapWith]] = [pendingOrder[swapWith], pendingOrder[idx]];
-  renderFieldList();
+// Whether `key` (an ORDERABLE_FIELD_DEFS key) currently counts as required --
+// for the one block with two independent required sub-keys (contractors/
+// equipmentRows), either one being on counts as "this box is required".
+function isKeyRequired(key) {
+  if (key === 'contractorsEquipment') return pendingRequired.has('contractors') || pendingRequired.has('equipmentRows');
+  return pendingRequired.has(key);
 }
 
 function toggleRequired(key) {
   if (pendingRequired.has(key)) pendingRequired.delete(key);
   else pendingRequired.add(key);
-  renderFieldList();
+  updateSaveBar();
 }
 
 function toggleHidden(key) {
@@ -150,119 +128,16 @@ function toggleHidden(key) {
       pendingRequired.delete(key);
     }
   }
-  renderFieldList();
+  updateSaveBar();
 }
 
-function attachRowHandlers() {
-  const list = $('#field-order-list');
-
-  $$('[data-toggle-required]', list).forEach((btn) => {
-    btn.addEventListener('click', () => toggleRequired(btn.dataset.toggleRequired));
-  });
-  $$('[data-toggle-hidden]', list).forEach((btn) => {
-    btn.addEventListener('click', () => toggleHidden(btn.dataset.toggleHidden));
-  });
-  $$('[data-move]', list).forEach((btn) => {
-    btn.addEventListener('click', () => moveKey(btn.dataset.key, btn.dataset.move === 'up' ? -1 : 1));
-  });
-
-  $$('.fo-row', list).forEach((row) => {
-    row.addEventListener('mouseenter', () => highlightField(row.dataset.key));
-    row.addEventListener('mouseleave', () => { if (!dragKey) clearHighlight(); });
-
-    row.addEventListener('dragstart', () => {
-      dragKey = row.dataset.key;
-      row.classList.add('dragging');
-      highlightField(dragKey);
-    });
-    row.addEventListener('dragend', () => {
-      row.classList.remove('dragging');
-      dragKey = null;
-      clearHighlight();
-      pendingOrder = $$('.fo-row', list).map((el) => el.dataset.key);
-      updateSaveBar();
-    });
-    // Physically move the actual dragged node rather than re-rendering the
-    // list, so the browser's in-progress drag doesn't lose its source
-    // element (replacing it via innerHTML mid-drag silently kills the drag).
-    row.addEventListener('dragover', (e) => {
-      e.preventDefault();
-      if (!dragKey || dragKey === row.dataset.key) return;
-      const draggedEl = list.querySelector(`[data-key="${dragKey}"]`);
-      if (!draggedEl) return;
-      const rect = row.getBoundingClientRect();
-      const before = e.clientY - rect.top < rect.height / 2;
-      list.insertBefore(draggedEl, before ? row : row.nextSibling);
-    });
-  });
-}
-
-// ---------- Live report preview + highlight ----------
-//
-// Renders the same CSS-grid sheets used for the real PDF (render-report.js)
-// from a blank sample report, scaled down to fit this panel, and left in
-// the document (unlike the PDF pipeline, which rasterizes and discards
-// them) so a field can be highlighted on it live as the admin interacts.
-
-function scalePreviewPage(pageEl, targetWidthPx) {
-  const rect = pageEl.getBoundingClientRect();
-  const scale = targetWidthPx / rect.width;
-  const wrap = document.createElement('div');
-  wrap.className = 'rf-preview-page-wrap';
-  wrap.style.width = targetWidthPx + 'px';
-  wrap.style.height = Math.round(rect.height * scale) + 'px';
-  pageEl.style.transform = `scale(${scale})`;
-  pageEl.style.transformOrigin = 'top left';
-  pageEl.parentNode.insertBefore(wrap, pageEl);
-  wrap.appendChild(pageEl);
-}
-
-async function renderPreview() {
-  const previewEl = $('#rf-preview');
-  previewEl.innerHTML = 'Loading preview&hellip;';
-  try {
-    const [layout, logoBlob] = await Promise.all([loadPrintLayout(), getReportLogo()]);
-    const sampleReport = await makeBlankReport(1, project, null);
-    previewEl.innerHTML = '';
-    const pages = renderReportPages(previewEl, layout, sampleReport, logoBlob);
-    const targetWidth = Math.min(previewEl.clientWidth || 380, 420);
-    pages.forEach(({ el }) => scalePreviewPage(el, targetWidth));
-    previewGrids = { 1: pages[0].el.querySelector('.print-grid'), 2: pages[1].el.querySelector('.print-grid') };
-  } catch (err) {
-    console.error(err);
-    previewEl.innerHTML = '<p class="hint">Preview unavailable.</p>';
-  }
-}
-
-function clearHighlight() {
-  if (!previewGrids) return;
-  $$('.rf-hl-active', previewGrids[1]).forEach((el) => el.classList.remove('rf-hl-active'));
-  $$('.rf-hl-active', previewGrids[2]).forEach((el) => el.classList.remove('rf-hl-active'));
-  $$('.rf-hl-overlay').forEach((el) => el.remove());
-}
-
-function highlightField(key) {
-  clearHighlight();
-  if (!previewGrids) return;
-  const region = FIELD_HIGHLIGHT_REGIONS[key];
-  if (!region) return;
-  const grid = previewGrids[region.sheet];
-  if (!grid) return;
-
-  if (region.coord) {
-    const cell = grid.querySelector(`[data-coord="${region.coord}"]`);
-    if (cell) cell.classList.add('rf-hl-active');
-    return;
-  }
-
-  const { fromCol, toCol, fromRow, toRow } = region.range;
-  const colStart = parseCoord(fromCol + '1').col;
-  const colEnd = parseCoord(toCol + '1').col;
-  const overlay = document.createElement('div');
-  overlay.className = 'rf-hl-overlay';
-  overlay.style.gridColumn = `${colStart} / span ${colEnd - colStart + 1}`;
-  overlay.style.gridRow = `${fromRow} / span ${toRow - fromRow + 1}`;
-  grid.appendChild(overlay);
+function moveKey(key, dir) {
+  const idx = pendingOrder.indexOf(key);
+  const swapWith = idx + dir;
+  if (idx === -1 || swapWith < 0 || swapWith >= pendingOrder.length) return;
+  [pendingOrder[idx], pendingOrder[swapWith]] = [pendingOrder[swapWith], pendingOrder[idx]];
+  renderReorderCards();
+  updateSaveBar();
 }
 
 async function saveRequiredFields() {
@@ -285,6 +160,247 @@ async function saveRequiredFields() {
 function confirmDiscardIfDirty() {
   return !isDirty() || confirm('You have unsaved changes. Discard them?');
 }
+
+// ---------- Section 1: live report preview + click-to-popover ----------
+
+function scalePreviewPage(pageEl, targetWidthPx) {
+  const rect = pageEl.getBoundingClientRect();
+  const scale = targetWidthPx / rect.width;
+  const wrap = document.createElement('div');
+  wrap.className = 'rf-preview-page-wrap';
+  wrap.style.width = targetWidthPx + 'px';
+  wrap.style.height = Math.round(rect.height * scale) + 'px';
+  pageEl.style.transform = `scale(${scale})`;
+  pageEl.style.transformOrigin = 'top left';
+  pageEl.parentNode.insertBefore(wrap, pageEl);
+  wrap.appendChild(pageEl);
+}
+
+// One invisible-until-touched box per field, positioned at its real printed
+// coordinates. `coord` fields copy the actual rendered cell's own grid
+// position (data-coord, set by renderSheetGrid) so a merged box highlights
+// correctly without re-deriving its span; `range` fields (a whole table)
+// get an explicit column/row span instead.
+function addClickTarget(key, region) {
+  const grid = previewGrids[region.sheet];
+  if (!grid) return;
+  const target = document.createElement('div');
+  target.className = 'rf-click-target';
+  target.dataset.fieldKey = key;
+
+  if (region.coord) {
+    const cell = grid.querySelector(`[data-coord="${region.coord}"]`);
+    if (!cell) return;
+    target.style.gridColumn = cell.style.gridColumn;
+    target.style.gridRow = cell.style.gridRow;
+  } else {
+    const { fromCol, toCol, fromRow, toRow } = region.range;
+    const colStart = parseCoord(fromCol + '1').col;
+    const colEnd = parseCoord(toCol + '1').col;
+    target.style.gridColumn = `${colStart} / span ${colEnd - colStart + 1}`;
+    target.style.gridRow = `${fromRow} / span ${toRow - fromRow + 1}`;
+  }
+
+  const def = ORDERABLE_FIELD_DEFS.find((d) => d.key === key);
+  target.title = def ? def.label : key;
+  target.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (currentPopoverKey === key) {
+      closePopover();
+    } else {
+      openPopover(key, target);
+    }
+  });
+  grid.appendChild(target);
+}
+
+function refreshClickTargetState(key) {
+  const el = document.querySelector(`.rf-click-target[data-field-key="${key}"]`);
+  if (!el) return;
+  const hidden = pendingHidden.has(key);
+  el.classList.toggle('is-hidden', hidden);
+  el.classList.toggle('is-required', !hidden && isKeyRequired(key));
+}
+
+function refreshAllClickTargetStates() {
+  $$('.rf-click-target').forEach((el) => refreshClickTargetState(el.dataset.fieldKey));
+}
+
+async function renderPreview() {
+  const previewEl = $('#rf-preview');
+  previewEl.innerHTML = 'Loading preview&hellip;';
+  try {
+    const [layout, logoBlob] = await Promise.all([loadPrintLayout(), getReportLogo()]);
+    const sampleReport = await makeBlankReport(1, project, null);
+    previewEl.innerHTML = '';
+    const pages = renderReportPages(previewEl, layout, sampleReport, logoBlob);
+    const targetWidth = Math.min(previewEl.clientWidth || 600, 640);
+    pages.forEach(({ el }) => scalePreviewPage(el, targetWidth));
+    previewGrids = { 1: pages[0].el.querySelector('.print-grid'), 2: pages[1].el.querySelector('.print-grid') };
+
+    Object.keys(FIELD_HIGHLIGHT_REGIONS).forEach((key) => addClickTarget(key, FIELD_HIGHLIGHT_REGIONS[key]));
+    refreshAllClickTargetStates();
+  } catch (err) {
+    console.error(err);
+    previewEl.innerHTML = '<p class="hint">Preview unavailable.</p>';
+  }
+}
+
+// ---------- The options popover ----------
+
+function requiredButtonHtml(key, label) {
+  const on = pendingRequired.has(key);
+  return `<button type="button" class="fo-btn${on ? ' active' : ''}" data-toggle-required="${key}">${escapeHtml(label)}</button>`;
+}
+
+function renderPopoverActions(key) {
+  const hidden = pendingHidden.has(key);
+  let html = '';
+  if (!hidden) {
+    html += key === 'contractorsEquipment'
+      ? requiredButtonHtml('contractors', 'Require Contractors') + requiredButtonHtml('equipmentRows', 'Require Equipment')
+      : requiredButtonHtml(key, 'Required');
+  }
+  html += `<button type="button" class="fo-btn fo-hide-btn${hidden ? ' active' : ''}" data-toggle-hidden="${key}">${hidden ? 'Unhide This Field' : 'Hide This Field'}</button>`;
+  const actions = $('#rf-popover-actions');
+  actions.innerHTML = html;
+
+  $$('[data-toggle-required]', actions).forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation(); // the click-outside-closes listener is on document -- this re-renders the popover's own children before that listener runs
+      toggleRequired(btn.dataset.toggleRequired);
+      renderPopoverActions(key);
+      refreshClickTargetState(key);
+      renderReorderCards();
+    });
+  });
+  $$('[data-toggle-hidden]', actions).forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleHidden(btn.dataset.toggleHidden);
+      renderPopoverActions(key);
+      refreshClickTargetState(key);
+      renderReorderCards();
+    });
+  });
+}
+
+function openPopover(key, targetEl) {
+  if (currentPopoverEl) currentPopoverEl.classList.remove('rf-popover-open');
+  currentPopoverKey = key;
+  currentPopoverEl = targetEl;
+  targetEl.classList.add('rf-popover-open');
+
+  const def = ORDERABLE_FIELD_DEFS.find((d) => d.key === key);
+  $('#rf-popover-title').textContent = def ? def.label : key;
+  renderPopoverActions(key);
+
+  const popover = $('#rf-popover');
+  popover.hidden = false;
+  const rect = targetEl.getBoundingClientRect();
+  const pw = popover.offsetWidth;
+  const ph = popover.offsetHeight;
+  let left = rect.left;
+  let top = rect.bottom + 8;
+  if (left + pw > window.innerWidth - 12) left = window.innerWidth - pw - 12;
+  if (left < 12) left = 12;
+  if (top + ph > window.innerHeight - 12) top = rect.top - ph - 8;
+  if (top < 12) top = 12;
+  popover.style.left = left + 'px';
+  popover.style.top = top + 'px';
+}
+
+function closePopover() {
+  if (currentPopoverEl) currentPopoverEl.classList.remove('rf-popover-open');
+  $('#rf-popover').hidden = true;
+  currentPopoverKey = null;
+  currentPopoverEl = null;
+}
+
+// ---------- Section 2: drag-reorder, same visual layout as the real form ----------
+
+const RF_SIMPLE_TYPES = {
+  activity: 'text', notes: 'textarea', representative: 'text', peName: 'text', ntpDate: 'date',
+  workSummaryHeader: 'text', trafficControlNote: 'text', workSummary: 'textarea',
+  controllingItem: 'text', commentsOnTime: 'textarea', controllingItemTimeFrom: 'text', controllingItemTimeTo: 'text',
+  workingConditions: 'text', workBegin: 'text', workEnd: 'text', repSignatureName: 'text', peSignatureName: 'text',
+  weatherDesc: 'text', tempHigh: 'number', tempLow: 'number',
+};
+const RF_BLOCK_NOTES = {
+  contractorsEquipment: 'Contractor tabs + 22-row personnel/equipment table',
+  payItems: 'Pay item catalog picker + selected items list',
+  trafficControlSelect: 'In Place / Attention Required',
+  repSignatureImage: 'Signature pad',
+  photos: '6-slot photo grid',
+};
+
+function reorderCardHtml(key, stepNum) {
+  const def = ORDERABLE_FIELD_DEFS.find((d) => d.key === key);
+  const hidden = pendingHidden.has(key);
+  const required = !hidden && isKeyRequired(key);
+  const body = def.kind === 'block'
+    ? `<p class="hint" style="margin:0;">${escapeHtml(RF_BLOCK_NOTES[key] || '')}</p>`
+    : `<label>${RF_SIMPLE_TYPES[key] === 'textarea' ? '<textarea disabled rows="2"></textarea>' : `<input type="${RF_SIMPLE_TYPES[key] || 'text'}" disabled>`}</label>`;
+  return `
+    <div class="step${hidden ? ' rf-hidden-card' : ''}" draggable="true" data-key="${key}">
+      <div class="step-header">
+        <span class="fo-handle" title="Drag to reorder">&#8942;&#8942;</span>
+        <span class="fo-arrows">
+          <button type="button" class="fo-arrow" data-move="up" data-key="${key}" title="Move up">&#9650;</button>
+          <button type="button" class="fo-arrow" data-move="down" data-key="${key}" title="Move down">&#9660;</button>
+        </span>
+        <span class="step-num">STEP ${stepNum}</span>
+        <h2>${escapeHtml(def.label)}</h2>
+        ${required ? '<span class="rf-required-tag">REQUIRED</span>' : ''}
+        ${hidden ? '<span class="fo-hidden-tag">HIDDEN</span>' : ''}
+      </div>
+      <div class="step-body">${body}</div>
+    </div>`;
+}
+
+function renderReorderCards() {
+  const fixedCard = `
+    <div class="step rf-fixed-card">
+      <div class="step-header"><span class="step-num">STEP 1</span><h2>Report Info</h2></div>
+      <div class="step-body"><p class="hint" style="margin:0;">Report No., Date, and Time Worked always stay fixed here -- not shown below.</p></div>
+    </div>`;
+  $('#reorder-cards').innerHTML = fixedCard + pendingOrder.map((key, i) => reorderCardHtml(key, i + 2)).join('');
+  attachReorderCardHandlers();
+}
+
+function attachReorderCardHandlers() {
+  const list = $('#reorder-cards');
+  $$('[data-move]', list).forEach((btn) => {
+    btn.addEventListener('click', () => moveKey(btn.dataset.key, btn.dataset.move === 'up' ? -1 : 1));
+  });
+
+  $$('.step[draggable="true"]', list).forEach((row) => {
+    row.addEventListener('dragstart', () => {
+      dragKey = row.dataset.key;
+      row.classList.add('dragging');
+    });
+    row.addEventListener('dragend', () => {
+      row.classList.remove('dragging');
+      dragKey = null;
+      pendingOrder = $$('.step[draggable="true"]', list).map((el) => el.dataset.key);
+      updateSaveBar();
+    });
+    // Physically move the actual dragged node rather than re-rendering the
+    // list, so the browser's in-progress drag doesn't lose its source
+    // element (replacing it via innerHTML mid-drag silently kills the drag).
+    row.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      if (!dragKey || dragKey === row.dataset.key) return;
+      const draggedEl = list.querySelector(`[data-key="${dragKey}"]`);
+      if (!draggedEl) return;
+      const rect = row.getBoundingClientRect();
+      const before = e.clientY - rect.top < rect.height / 2;
+      list.insertBefore(draggedEl, before ? row : row.nextSibling);
+    });
+  });
+}
+
+// ---------- Init ----------
 
 async function init() {
   project = projectId ? await getProject(projectId) : null;
@@ -325,8 +441,18 @@ async function init() {
     e.returnValue = '';
   });
 
-  renderFieldList();
-  renderPreview();
+  $('#rf-popover-close').addEventListener('click', closePopover);
+  document.addEventListener('click', (e) => {
+    if (!currentPopoverKey) return;
+    if (e.target.closest('#rf-popover') || e.target.closest('.rf-click-target')) return;
+    closePopover();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closePopover();
+  });
+
+  renderReorderCards();
+  await renderPreview();
   $('#fsb-save').addEventListener('click', saveRequiredFields);
 }
 
