@@ -69,8 +69,8 @@
         <div class="pi-controls" id="pi-controls" hidden>
           <input type="text" id="pi-search" placeholder="Search item # or description...">
           <select id="pi-sort">
-            <option value="default">Sort: Least Complete First</option>
             <option value="most-complete">Sort: Most Complete First</option>
+            <option value="default">Sort: Least Complete First</option>
             <option value="item-number">Sort: Item Number</option>
             <option value="earned-desc">Sort: Highest $ Earned</option>
             <option value="remaining-desc">Sort: Highest $ Remaining</option>
@@ -385,7 +385,7 @@ const PI_BAND_LABELS = {
 let allPayItems = [];
 // Search/sort/band-filter are presentation-only, kept in memory rather than
 // re-fetched -- switching sort order shouldn't need to recompute totals.
-const payItemFilterState = { search: '', sort: 'default', hiddenBands: new Set() };
+const payItemFilterState = { search: '', sort: 'most-complete', hiddenBands: new Set() };
 
 function sortPayItems(items, mode) {
   const byItemNumber = (a, b) => a.itemNumber.localeCompare(b.itemNumber, undefined, { numeric: true });
