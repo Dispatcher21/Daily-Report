@@ -20,11 +20,6 @@ function triggerDownload(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
-function dateStamp() {
-  const n = new Date();
-  return n.toISOString().slice(0, 10).replace(/-/g, '');
-}
-
 // Downscales and re-encodes a photo as JPEG so on-device storage (and later,
 // sync) never has to carry full-resolution phone camera output -- a 4000px,
 // 6MB original becomes roughly 150-400KB. Non-image files (or anything the

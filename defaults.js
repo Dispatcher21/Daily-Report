@@ -158,29 +158,12 @@ function normalizeReport(report) {
   return report;
 }
 
-// Duplicates a past report as the starting point for a new one. Everything
-// carries over EXCEPT what's inherently specific to that one day: the
-// report number, date, photos, and the actual signature images (typed
-// signer names still carry over -- just not the drawn signature itself).
-function copyReport(source, nextReportNo) {
-  const copy = JSON.parse(JSON.stringify(source));
-  copy.id = crypto.randomUUID();
-  copy.reportNo = nextReportNo;
-  copy.date = todayIso();
-  copy.photos = [null, null, null, null, null, null];
-  copy.repSignatureImage = null;
-  delete copy.peSignatureImage; // retired; see makeBlankReport
-  copy.createdAt = Date.now();
-  copy.updatedAt = Date.now();
-  return copy;
-}
-
 // Builds a new project record from a parsed project-data file (see
 // project-file.js).
 //
 // Projects used to carry a copy of the report template .xlsx. Nothing reads it
 // any more -- the PDF is drawn entirely from print-layout.json -- so it's no
-// longer stored, which also keeps it out of backups and shared setups.
+// longer stored, which also keeps it out of shared setups.
 function makeProjectFromParsedFile(parsed) {
   const meta = parsed.meta || {};
   const displayName = meta.name || (meta.projectNo ? `PR#${meta.projectNo} - ${meta.projectName || 'Project'}` : 'New Project');

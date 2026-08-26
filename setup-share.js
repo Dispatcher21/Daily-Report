@@ -1,29 +1,17 @@
-// Sharing a configured setup with another inspector.
+// Receiving a setup someone else shared with this device.
 //
-// The payload is projects + the company logo -- never reports or photos, which
-// are that inspector's own work and often large. It travels two ways:
+// The payload is projects + the company logo -- never reports or photos,
+// which are that inspector's own work and often large. It arrives as a
+// `#setup=...` URL fragment (see index.html), base64url-encoded and
+// optionally gzip-compressed. Fragments are used rather than query strings
+// because a fragment is never sent to the server, so shared setups stay off
+// GitHub's logs.
 //
-//   * a self-contained .html "setup card" that carries the logo and hands the
-//     payload to the hosted app as a URL fragment. The URL is built locally in
-//     the recipient's browser, so the ~2,000-character ceiling that email and
-//     SMS impose on links never applies -- the data arrived as a file.
-//   * a QR code for settings only. A QR tops out near 2,900 bytes, which fits
-//     project data comfortably but cannot fit a logo at print quality.
-//
-// Fragments are used rather than query strings because a fragment is never
-// sent to the server, so shared setups stay off GitHub's logs.
+// There's no way to *create* one of these from within the app any more --
+// whatever screen used to build the link/QR/card for the sending side was
+// removed. This file only needs to be able to read one.
 
 const SETUP_FRAGMENT_KEY = 'setup';
-
-// base64url, so the payload survives a URL without percent-encoding.
-function bytesToBase64Url(bytes) {
-  let binary = '';
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) {
-    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
-  }
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
 
 function base64UrlToBytes(str) {
   const b64 = str.replace(/-/g, '+').replace(/_/g, '/');
@@ -33,12 +21,6 @@ function base64UrlToBytes(str) {
   return bytes;
 }
 
-async function gzip(bytes) {
-  if (typeof CompressionStream !== 'function') return null;
-  const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream('gzip'));
-  return new Uint8Array(await new Response(stream).arrayBuffer());
-}
-
 async function gunzip(bytes) {
   const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
   return new Uint8Array(await new Response(stream).arrayBuffer());
@@ -46,26 +28,11 @@ async function gunzip(bytes) {
 
 // Prefixed with the encoding so an older or CompressionStream-less browser can
 // still read a payload it couldn't have produced. 'g' gzipped, 'r' raw.
-async function encodeSetupPayload(payload) {
-  const raw = new TextEncoder().encode(JSON.stringify(payload));
-  const packed = await gzip(raw);
-  return packed ? 'g' + bytesToBase64Url(packed) : 'r' + bytesToBase64Url(raw);
-}
-
 async function decodeSetupPayload(encoded) {
   const kind = encoded[0];
   const bytes = base64UrlToBytes(encoded.slice(1));
   const raw = kind === 'g' ? await gunzip(bytes) : bytes;
   return JSON.parse(new TextDecoder().decode(raw));
-}
-
-async function blobToDataUrl(blob) {
-  return new Promise((resolve, reject) => {
-    const fr = new FileReader();
-    fr.onload = () => resolve(fr.result);
-    fr.onerror = () => reject(fr.error);
-    fr.readAsDataURL(blob);
-  });
 }
 
 function dataUrlToBlob(dataUrl) {
@@ -75,27 +42,6 @@ function dataUrlToBlob(dataUrl) {
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   return new Blob([bytes], { type: mime });
-}
-
-// `includeLogo` is false for QR codes, where it would blow the size budget.
-async function buildSetupPayload({ includeLogo }) {
-  const projects = (await getAllProjects()).map((p) => ({
-    id: p.id,
-    name: p.name,
-    meta: p.meta,
-    payItemCatalog: p.payItemCatalog || [],
-    defaultContractors: p.defaultContractors || [],
-    defaultEquipmentLabels: p.defaultEquipmentLabels || [],
-  }));
-
-  const payload = { v: 1, projects };
-  if (includeLogo) {
-    const logo = await getReportLogo();
-    if (logo) {
-      payload.logo = await blobToDataUrl(logo);
-    }
-  }
-  return payload;
 }
 
 function describeSetupPayload(payload) {
@@ -136,61 +82,4 @@ async function applySetupPayload(payload) {
   }
 
   return { added, updated, logoAdded };
-}
-
-function setupUrlFor(encoded, base) {
-  const origin = base || location.href.split('#')[0].replace(/[^/]*$/, '') + 'index.html';
-  return `${origin}#${SETUP_FRAGMENT_KEY}=${encoded}`;
-}
-
-// A standalone page that carries the payload and hands it to the app. Phones
-// open .html attachments in a browser, which is the whole reason this exists
-// rather than shipping the raw JSON -- a .json attachment just offers to save.
-function buildSetupCardHtml(encoded, appUrl, summaryHtml) {
-  const target = `${appUrl}#${SETUP_FRAGMENT_KEY}=${encoded}`;
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Daily Reports setup</title>
-<style>
-  :root { color-scheme: light dark; }
-  body {
-    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
-    background: #eef2f6; color: #10171d; padding: 1.25rem;
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  }
-  .card {
-    background: #fff; border: 1px solid #c2ccd6; border-radius: 12px;
-    padding: 1.5rem; max-width: 30rem; width: 100%;
-    box-shadow: 0 6px 20px rgba(16,23,29,.14);
-  }
-  h1 { font-size: 1.2rem; margin: 0 0 .3rem; }
-  .sub { color: #4f5c68; font-size: .88rem; margin-bottom: 1rem; }
-  ul { margin: 0 0 1.25rem; padding-left: 1.1rem; font-size: .92rem; line-height: 1.6; }
-  a.go {
-    display: block; text-align: center; background: #1c3d5a; color: #fff;
-    text-decoration: none; font-weight: 700; font-size: 1.05rem;
-    padding: .95rem; border-radius: 8px; min-height: 44px;
-  }
-  .note { font-size: .78rem; color: #4f5c68; margin-top: .9rem; }
-  @media (prefers-color-scheme: dark) {
-    body { background: #0f1418; color: #eef3f7; }
-    .card { background: #1a2128; border-color: #35424e; }
-    .sub, .note { color: #a2b1be; }
-    a.go { background: #1d4b70; }
-  }
-</style>
-</head>
-<body>
-  <div class="card">
-    <h1>Daily Reports setup</h1>
-    <div class="sub">Someone shared their project setup with you.</div>
-    <ul>${summaryHtml}</ul>
-    <a class="go" href="${target}">Open &amp; Add to My App</a>
-    <p class="note">Opens the Daily Reports app and asks before adding anything. Your own reports aren't affected.</p>
-  </div>
-</body>
-</html>`;
 }

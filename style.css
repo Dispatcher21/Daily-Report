@@ -329,7 +329,7 @@ main { max-width: 780px; margin: 0 auto; padding: 1rem; }
   background: linear-gradient(to bottom, rgba(0,0,0,0.38) 0%, rgba(0,0,0,0.58) 40%, var(--surface) 100%);
   z-index: 0; pointer-events: none;
 }
-.hub-card .hc-icon, .hub-card .hc-title, .hub-card .hc-desc, .hub-card .hc-count, .hub-card .hc-badge {
+.hub-card .hc-icon, .hub-card .hc-title, .hub-card .hc-desc, .hub-card .hc-count {
   position: relative; z-index: 1;
 }
 .hub-card.has-bg .hc-icon, .hub-card.has-bg .hc-title { color: #fff; }
@@ -351,11 +351,6 @@ main { max-width: 780px; margin: 0 auto; padding: 1rem; }
 .hub-card:not(.has-bg) .hc-favorite { color: var(--border); }
 .hub-card .hc-favorite:hover { color: #f5c518; background: rgba(0,0,0,0.12); }
 .hub-card .hc-favorite.is-fav { color: #f5c518; }
-.hub-card .hc-badge {
-  position: absolute; top: 0.75rem; right: 0.75rem;
-  font-size: 0.62rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
-  background: var(--brand-dim); color: var(--link); padding: 3px 9px; border-radius: 10px;
-}
 .hub-card .hc-count {
   display: inline-flex;
   margin-top: 0.6rem;
@@ -623,12 +618,6 @@ input[type="file"] { min-height: 0; }
   border: 1.5px solid var(--border); border-radius: var(--radius-sm);
   max-height: 300px; overflow-y: auto; margin-top: 0.5rem; background: var(--surface);
 }
-.check-list-header {
-  display: flex; align-items: center; gap: 0.5rem; padding: 0.45rem 0.7rem;
-  border-bottom: 1px solid var(--border); background: var(--surface-2);
-  font-size: 0.74rem; color: var(--text-dim); font-weight: 600;
-  position: sticky; top: 0;
-}
 .check-item {
   display: flex; align-items: center; gap: 0.6rem; padding: 0.7rem;
   border-bottom: 1px solid var(--border); font-size: 0.9rem; cursor: pointer;
@@ -767,7 +756,6 @@ input[type="file"] { min-height: 0; }
   padding: 0.85rem 1rem; display: flex; justify-content: space-between; align-items: center;
   gap: 0.7rem; box-shadow: var(--shadow);
 }
-.report-row.selectable { border-color: var(--brand-light); }
 .report-row-check { width: 1.35rem; height: 1.35rem; flex-shrink: 0; }
 .report-row-check-spacer { display: inline-block; width: 1.35rem; height: 1.35rem; flex-shrink: 0; }
 .report-row .report-row-main { display: flex; flex-direction: column; flex: 1; min-width: 0; cursor: pointer; }
@@ -826,18 +814,6 @@ input[type="file"] { min-height: 0; }
 }
 .app-header .text-btn { color: var(--on-brand); }
 .select-all-row .text-btn { padding-left: 0; }
-.text-btn-outline {
-  flex: 1; font-size: 0.88rem; font-weight: 700; padding: 0.7rem; border-radius: var(--radius-sm);
-  border: 1.5px solid var(--brand-light); background: var(--surface); color: var(--link);
-  cursor: pointer; font-family: inherit; min-height: var(--tap);
-}
-.text-btn-outline:hover { background: var(--brand-dim); }
-
-.icon-btn {
-  background: none; border: none; color: var(--on-brand); font-size: 1.5rem;
-  padding: 0.3rem 0.55rem; cursor: pointer; min-width: var(--tap); min-height: var(--tap);
-}
-
 .fab {
   position: fixed; bottom: 1.2rem; left: 50%; transform: translateX(-50%);
   background: var(--brand); color: var(--on-brand); border: none; border-radius: 30px;
@@ -849,8 +825,6 @@ input[type="file"] { min-height: 0; }
 .fab:disabled { background: var(--border-strong); box-shadow: none; cursor: not-allowed; }
 
 .export-bar { margin-top: 1rem; display: flex; flex-direction: column; gap: 0.5rem; }
-.home-toolbar { display: flex; gap: 0.5rem; margin: 1rem 0 0.4rem; }
-.home-toolbar-hint { margin-bottom: 0.8rem; }
 
 .success {
   background: var(--ok-bg); border: 1.5px solid var(--ok); border-radius: var(--radius-sm);

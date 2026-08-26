@@ -1,12 +1,11 @@
 // Thin IndexedDB wrapper for projects and their daily reports (including
-// photo/signature/template blobs) on-device. No library needed.
+// photo/signature blobs) on-device. No library needed.
 
 const DB_NAME = 'daily-report-app';
 const DB_VERSION = 3;
 const REPORTS_STORE = 'reports';
 const PROJECTS_STORE = 'projects';
 const SETTINGS_STORE = 'settings';
-const DEFAULT_TEMPLATE_URL = 'template/daily-work-report-template.xlsx';
 const LOGO_SETTING_KEY = 'reportLogo';
 const USER_NAME_SETTING_KEY = 'userName';
 
@@ -152,13 +151,12 @@ async function putReportRaw(report) {
   await withStore(REPORTS_STORE, 'readwrite', (store) => store.put(report));
 }
 
-// The onLocalFolder* calls below are optional hooks into local-folder-sync.js
-// (mirrors data to a user-chosen folder) -- storage.js has no idea that file
-// exists. They're plain globals checked by name so pages that don't include
-// local-folder-sync.js work exactly as before, and so this file never needs
-// to import anything sync-related itself. Fired without awaiting: folder I/O
-// shouldn't make the caller wait for a save that's already durable in
-// IndexedDB by this point.
+// onCompanySyncReportChanged is an optional hook into firebase-sync.js --
+// storage.js has no idea that file exists. It's a plain global checked by
+// name so pages that don't include firebase-sync.js work exactly as before,
+// and so this file never needs to import anything sync-related itself.
+// Fired without awaiting: a company push shouldn't make the caller wait for
+// a save that's already durable in IndexedDB by this point.
 async function saveReport(report) {
   const userName = await getUserName();
   if (userName) {
@@ -167,22 +165,15 @@ async function saveReport(report) {
   }
   report.updatedAt = Date.now();
   await putReportRaw(report);
-  if (typeof onLocalFolderReportChanged === 'function') {
-    onLocalFolderReportChanged(report, false).catch((err) => console.error('local folder mirror:', err));
-  }
   if (typeof onCompanySyncReportChanged === 'function') {
     onCompanySyncReportChanged(report, false).catch((err) => console.error('company sync mirror:', err));
   }
 }
 
 async function deleteReport(id) {
-  const needsReport = typeof onLocalFolderReportChanged === 'function' || typeof onCompanySyncReportChanged === 'function';
-  const report = needsReport ? await getReport(id) : null;
+  const report = typeof onCompanySyncReportChanged === 'function' ? await getReport(id) : null;
   await withStore(REPORTS_STORE, 'readwrite', (store) => store.delete(id));
   if (report) {
-    if (typeof onLocalFolderReportChanged === 'function') {
-      onLocalFolderReportChanged(report, true).catch((err) => console.error('local folder mirror:', err));
-    }
     if (typeof onCompanySyncReportChanged === 'function') {
       onCompanySyncReportChanged(report, true).catch((err) => console.error('company sync mirror:', err));
     }
@@ -224,9 +215,6 @@ async function putProjectRaw(project) {
 async function saveProject(project) {
   project.updatedAt = Date.now();
   await putProjectRaw(project);
-  if (typeof onLocalFolderProjectChanged === 'function') {
-    onLocalFolderProjectChanged(project, false).catch((err) => console.error('local folder mirror:', err));
-  }
   if (typeof onCompanySyncProjectChanged === 'function') {
     onCompanySyncProjectChanged(project, false).catch((err) => console.error('company sync mirror:', err));
   }
@@ -249,17 +237,13 @@ async function getProject(id) {
 
 // Deletes a project and every report that belongs to it.
 async function deleteProject(id) {
-  const needsProject = typeof onLocalFolderProjectChanged === 'function' || typeof onCompanySyncProjectChanged === 'function';
-  const project = needsProject ? await getProject(id) : null;
+  const project = typeof onCompanySyncProjectChanged === 'function' ? await getProject(id) : null;
   const reports = await getReportsForProject(id);
   for (const r of reports) {
     await deleteReport(r.id); // also mirrors each report's own deletion, see above
   }
   await withStore(PROJECTS_STORE, 'readwrite', (store) => store.delete(id));
   if (project) {
-    if (typeof onLocalFolderProjectChanged === 'function') {
-      onLocalFolderProjectChanged(project, true).catch((err) => console.error('local folder mirror:', err));
-    }
     if (typeof onCompanySyncProjectChanged === 'function') {
       onCompanySyncProjectChanged(project, true).catch((err) => console.error('company sync mirror:', err));
     }
@@ -308,14 +292,14 @@ async function adoptOrphanReportsIfAny() {
   }
 }
 
-// ---------- Backup / restore (manual export-import, no server involved) ----------
+// ---------- Blob <-> JSON-safe encoding ----------
 //
-// Reports and projects both carry Blob fields (photos/signatures, template
-// files), which aren't JSON-safe. Export converts each Blob to base64 text
-// (+ its mime type so it can be reconstructed exactly); import reverses
-// that. The resulting JSON file is fully self-contained -- moving it
-// between devices is entirely up to the user (email, OneDrive, USB,
-// whatever), the app never transmits it anywhere itself.
+// A project's Blob fields (background image, template files) aren't
+// JSON-safe on their own. This converts each Blob to base64 text (+ its
+// mime type so it can be reconstructed exactly) and back -- used by
+// serializeProjectForExport/deserializeImportedProject below, which
+// report-bundle.js relies on to put a project's data in a shareable
+// .report file.
 
 async function blobToBase64(blob) {
   const bytes = new Uint8Array(await blob.arrayBuffer());
@@ -342,30 +326,6 @@ function entryToBlobField(entry) {
   return entry ? base64ToBlob(entry.data, entry.type) : null;
 }
 
-async function serializeReportForExport(report) {
-  const copy = { ...report };
-  copy.photos = [];
-  for (const blob of report.photos || []) {
-    copy.photos.push(await blobFieldToEntry(blob));
-  }
-  copy.repSignatureImage = await blobFieldToEntry(report.repSignatureImage);
-  // peSignatureImage is retired -- only ever present on reports saved before
-  // the engineer's signature box was removed. Carried through backups so an
-  // older file still round-trips; nothing reads it back onto the report.
-  copy.peSignatureImage = await blobFieldToEntry(report.peSignatureImage);
-  return copy;
-}
-
-function deserializeImportedReport(raw) {
-  const report = { ...raw };
-  report.photos = (raw.photos || []).map(entryToBlobField);
-  report.repSignatureImage = entryToBlobField(raw.repSignatureImage);
-  // Dropped rather than decoded: the spread above would otherwise leave the
-  // raw base64 wrapper sitting in a field nothing decodes any more.
-  delete report.peSignatureImage;
-  return report;
-}
-
 async function serializeProjectForExport(project) {
   const copy = { ...project };
   delete copy.templateBlob; // retired -- see makeProjectFromParsedFile
@@ -382,109 +342,12 @@ function deserializeImportedProject(raw) {
   return project;
 }
 
-async function exportAllReportsBackup() {
-  const reports = await getAllReports();
-  const projects = await getAllProjects();
-  const serializedReports = [];
-  for (const r of reports) {
-    serializedReports.push(await serializeReportForExport(r));
-  }
-  const serializedProjects = [];
-  for (const p of projects) {
-    serializedProjects.push(await serializeProjectForExport(p));
-  }
-  const logo = await getReportLogo();
-  return {
-    kind: 'daily-report-app-backup',
-    exportedAt: Date.now(),
-    projects: serializedProjects,
-    reports: serializedReports,
-    settings: {
-      logo: await blobFieldToEntry(logo),
-    },
-  };
-}
-
-// Merges a previously-exported backup into local storage. Per project/report
-// id: newer `updatedAt` wins, items only in the backup get added, items only
-// present locally are left untouched (import never deletes anything).
-async function importReportsBackup(backup) {
-  const incomingProjects = (backup && backup.projects) || [];
-  const existingProjects = await getAllProjects();
-  const existingProjectsById = new Map(existingProjects.map((p) => [p.id, p]));
-
-  let projectsAdded = 0;
-  let projectsUpdated = 0;
-  let projectsSkipped = 0;
-
-  for (const raw of incomingProjects) {
-    const project = deserializeImportedProject(raw);
-    const existingProject = existingProjectsById.get(project.id);
-    if (!existingProject) {
-      await putProjectRaw(project);
-      projectsAdded++;
-    } else if ((project.updatedAt || 0) > (existingProject.updatedAt || 0)) {
-      await putProjectRaw(project);
-      projectsUpdated++;
-    } else {
-      projectsSkipped++;
-    }
-  }
-
-  const incoming = (backup && backup.reports) || [];
-  const existing = await getAllReports();
-  const existingById = new Map(existing.map((r) => [r.id, r]));
-
-  let added = 0;
-  let updated = 0;
-  let skipped = 0;
-
-  for (const raw of incoming) {
-    const report = deserializeImportedReport(raw);
-    const existingReport = existingById.get(report.id);
-    if (!existingReport) {
-      await putReportRaw(report);
-      added++;
-    } else if ((report.updatedAt || 0) > (existingReport.updatedAt || 0)) {
-      await putReportRaw(report);
-      updated++;
-    } else {
-      skipped++;
-    }
-  }
-
-  // Only adopt the backup's logo if this device doesn't already have one --
-  // import never overwrites something already set up locally.
-  let logoAdded = false;
-  const incomingSettings = (backup && backup.settings) || {};
-  if (incomingSettings.logo && !(await getReportLogo())) {
-    await saveReportLogo(entryToBlobField(incomingSettings.logo));
-    logoAdded = true;
-  }
-
-  return {
-    added,
-    updated,
-    skipped,
-    total: incoming.length,
-    projectsAdded,
-    projectsUpdated,
-    projectsSkipped,
-    projectsTotal: incomingProjects.length,
-    logoAdded,
-  };
-}
-
 // ---------- Merging a single incoming record ----------
 //
-// One item at a time -- as read from a .report bundle or a local sync
-// folder, one file per report/project -- rather than a whole backup object.
-// Same "newer updatedAt wins" rule importReportsBackup uses in bulk, just
-// applied one at a time since that's how these arrive. Takes an
-// already-fully-formed record (real Blob/File objects, not the {data,type}
-// entry shape a JSON backup file carries) so it works the same regardless
-// of where the record came from -- see report-bundle.js and
-// local-folder-sync.js.
+// One item at a time -- as read from a .report bundle, one file per
+// report/project. "Newer updatedAt wins" per record. Takes an
+// already-fully-formed record (real Blob/File objects) so it works the
+// same regardless of where it came from -- see report-bundle.js.
 async function mergeReportRecord(report) {
   const existing = await getReport(report.id);
   if (!existing) {
@@ -496,9 +359,6 @@ async function mergeReportRecord(report) {
     return 'updated';
   }
   return 'skipped';
-}
-async function mergeIncomingReport(raw) {
-  return mergeReportRecord(deserializeImportedReport(raw));
 }
 
 async function mergeProjectRecord(project) {
@@ -512,7 +372,4 @@ async function mergeProjectRecord(project) {
     return 'updated';
   }
   return 'skipped';
-}
-async function mergeIncomingProject(raw) {
-  return mergeProjectRecord(deserializeImportedProject(raw));
 }

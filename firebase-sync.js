@@ -517,38 +517,6 @@ async function createCustomRole({ name, password, permissions, projectIds }) {
   return { id: roleId, password };
 }
 
-// Permissions/projects only -- the password (and therefore which pointer
-// doc addresses this role) can't be changed without recreating the setup,
-// same as the company password's rotation trade-off.
-async function updateCustomRole(roleId, { name, permissions, projectIds }) {
-  const room = await getCompanyRoom();
-  if (!room) throw new Error('Not connected to a company.');
-  if (!room.isAdmin) throw new Error('Only an admin can edit a custom setup.');
-
-  const { db, ensureSignedIn } = await waitForFirebaseCore();
-  const { doc, getDoc, updateDoc } = await import(FIRESTORE_SDK);
-  await ensureSignedIn();
-
-  const roleSnap = await getDoc(doc(db, 'companies', room.code, 'roles', roleId));
-  if (!roleSnap.exists()) throw new Error('That setup no longer exists.');
-  const role = roleSnap.data();
-
-  const mergedPermissions = { ...DEFAULT_PERMISSIONS, ...role.permissions, ...permissions };
-  const finalProjectIds = projectIds != null ? projectIds : role.projectIds || [];
-  const finalName = name != null ? name : role.name;
-
-  await updateDoc(doc(db, 'companies', room.code, 'roles', roleId), {
-    name: finalName,
-    permissions: mergedPermissions,
-    projectIds: finalProjectIds,
-  });
-  await updateDoc(doc(db, 'companies', role.pointerCode), {
-    name: finalName,
-    permissions: mergedPermissions,
-    projectIds: finalProjectIds,
-  });
-}
-
 async function deleteCustomRole(roleId) {
   const room = await getCompanyRoom();
   if (!room) throw new Error('Not connected to a company.');
@@ -731,8 +699,8 @@ async function deleteProjectFromCompany(code, project) {
 // Storage at deterministic per-report paths (companies/{code}/reports/{id}/
 // photo-N, .../signature), while the Firestore doc carries every other
 // field plus which of those slots are actually filled (photoSlots,
-// hasSignature), since slot position is meaningful (see local-folder-sync.js)
-// and a doc can't hold Storage refs directly.
+// hasSignature), since slot position is meaningful and a doc can't hold
+// Storage refs directly.
 
 function reportPhotoPath(code, reportId, i) {
   return `companies/${code}/reports/${reportId}/photo-${i}`;
