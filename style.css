@@ -415,6 +415,72 @@ main { max-width: 780px; margin: 0 auto; padding: 1rem; }
 }
 .step-body { padding: 1rem; }
 
+/* ---------- Required fields (admin-marked, per project) ---------- */
+
+/* Red-border cue on report-editor.html for a field the admin marked
+   required but this report hasn't filled in yet. Outline (not border) so it
+   never nudges layout, and survives on step containers that use
+   overflow:hidden for their own header/background effects. */
+.rf-missing {
+  outline: 2px solid var(--danger) !important;
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* The clickable field map on required-fields.html -- each box mirrors a
+   real report-editor field so the admin is looking at (a simplified copy
+   of) the actual form, not an abstract settings list. */
+.rf-field {
+  cursor: pointer;
+  border-radius: 6px;
+  outline: 2px solid transparent;
+  outline-offset: 3px;
+  transition: outline-color 0.12s, background 0.12s;
+  position: relative;
+}
+.rf-field:hover { background: var(--surface-2); }
+.rf-field.is-required { outline-color: var(--danger); background: var(--danger-bg); }
+.rf-field.is-required::after {
+  content: 'REQUIRED';
+  position: absolute; top: -0.55rem; right: 0.3rem;
+  font-size: 0.58rem; font-weight: 700; letter-spacing: 0.03em;
+  background: var(--danger); color: #fff; padding: 1px 6px; border-radius: 8px;
+}
+.rf-field input, .rf-field textarea { pointer-events: none; }
+.rf-field-block {
+  display: block;
+  padding: 0.75rem;
+  border: 1px dashed var(--border);
+  margin-bottom: 0.6rem;
+}
+.rf-field-block:last-child { margin-bottom: 0; }
+.rf-field-block .rf-field-title { display: block; font-weight: 700; color: var(--text); margin-bottom: 0.2rem; }
+.rf-field-block .hint { margin: 0; }
+
+/* Large, hard-to-miss blocker shown when Generate Report is clicked with
+   required fields still empty. */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(0,0,0,0.6);
+  display: flex; align-items: center; justify-content: center;
+  padding: 1rem;
+}
+.modal-overlay[hidden] { display: none; }
+.modal-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  max-width: 440px; width: 100%;
+  padding: 1.5rem;
+}
+.rf-warning-card { border: 2px solid var(--danger); text-align: center; }
+.rf-warning-card .rf-warning-icon { font-size: 2.4rem; line-height: 1; margin-bottom: 0.5rem; }
+.rf-warning-card h2 { color: var(--danger); margin: 0 0 0.5rem; font-size: 1.15rem; }
+.rf-warning-card p { margin: 0; color: var(--text-dim); font-size: 0.9rem; }
+.rf-warning-card ul { text-align: left; margin: 0.9rem 0 1.3rem; padding-left: 1.3rem; }
+.rf-warning-card li { font-weight: 700; margin-bottom: 0.3rem; }
+.rf-warning-card .btn-primary { width: 100%; }
+
 /* ---------- Forms ---------- */
 
 label {

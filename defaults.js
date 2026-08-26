@@ -213,6 +213,7 @@ function makeProjectFromParsedFile(parsed) {
     defaultContractors: parsed.contractors || [],
     defaultEquipmentLabels: parsed.equipmentLabels || [],
     payItemCatalog: parsed.payItemCatalog || [],
+    requiredFields: [],
     backgroundImage: null,
     backgroundImageFetched: true, // nothing to fetch -- this project was just created locally
     createdAt: Date.now(),
@@ -249,4 +250,47 @@ function applyProjectUpdate(existing, candidate) {
     defaultContractors: candidate.defaultContractors,
     defaultEquipmentLabels: candidate.defaultEquipmentLabels,
   };
+}
+
+// ---------- Required-field definitions ----------
+//
+// An admin marks a subset of these (per project, in project.requiredFields)
+// via the visual picker on required-fields.html. Shared here so that page,
+// report-editor.html's red-border highlighting, and its Generate Report gate
+// all agree on the same key -> label -> "is it actually filled in" logic.
+const REQUIRED_FIELD_DEFS = [
+  { key: 'activity', label: 'Activity', isEmpty: (r) => !String(r.activity || '').trim() },
+  { key: 'notes', label: 'Notes', isEmpty: (r) => !String(r.notes || '').trim() },
+  { key: 'representative', label: 'Representative', isEmpty: (r) => !String(r.representative || '').trim() },
+  { key: 'peName', label: 'PE Name', isEmpty: (r) => !String(r.peName || '').trim() },
+  { key: 'ntpDate', label: 'NTP Date', isEmpty: (r) => !String(r.ntpDate || '').trim() },
+  { key: 'contractors', label: 'Contractors (at least one named)', isEmpty: (r) => !Array.isArray(r.contractors) || r.contractors.every((c) => !c.name || !c.name.trim()) },
+  { key: 'equipmentRows', label: 'Equipment (at least one quantity entered)', isEmpty: (r) => !Array.isArray(r.equipmentRows) || r.equipmentRows.every((row) => !Array.isArray(row.qty) || row.qty.every((q) => !String(q || '').trim())) },
+  { key: 'workSummaryHeader', label: 'Work Summary (top line)', isEmpty: (r) => !String(r.workSummaryHeader || '').trim() },
+  { key: 'trafficControlNote', label: 'Short Work Summary', isEmpty: (r) => !String(r.trafficControlNote || '').trim() },
+  { key: 'workSummary', label: 'Summary of Work Performed', isEmpty: (r) => !String(r.workSummary || '').trim() },
+  { key: 'payItems', label: 'Pay Items (at least one entered)', isEmpty: (r) => !Array.isArray(r.payItems) || r.payItems.every((pi) => !((pi.itemNumber || pi.description) && String(pi.qty || '').trim())) },
+  { key: 'controllingItem', label: 'Controlling Item', isEmpty: (r) => !String(r.controllingItem || '').trim() },
+  { key: 'commentsOnTime', label: 'Comments on Time Charged', isEmpty: (r) => !String(r.commentsOnTime || '').trim() },
+  { key: 'controllingItemTimeFrom', label: 'Controlling Item Time From', isEmpty: (r) => !String(r.controllingItemTimeFrom || '').trim() },
+  { key: 'controllingItemTimeTo', label: 'Controlling Item Time To', isEmpty: (r) => !String(r.controllingItemTimeTo || '').trim() },
+  { key: 'workingConditions', label: 'Working Conditions', isEmpty: (r) => !String(r.workingConditions || '').trim() },
+  { key: 'trafficControlSelect', label: 'Traffic Control Status', isEmpty: (r) => !r.trafficControlSelect },
+  { key: 'workBegin', label: 'Work Begin', isEmpty: (r) => !String(r.workBegin || '').trim() },
+  { key: 'workEnd', label: 'Work End', isEmpty: (r) => !String(r.workEnd || '').trim() },
+  { key: 'repSignatureName', label: 'Representative Name (sign-off)', isEmpty: (r) => !String(r.repSignatureName || '').trim() },
+  { key: 'repSignatureImage', label: 'Representative Signature', isEmpty: (r) => !r.repSignatureImage },
+  { key: 'peSignatureName', label: 'Project Engineer Name', isEmpty: (r) => !String(r.peSignatureName || '').trim() },
+  { key: 'weatherDesc', label: 'Weather Description', isEmpty: (r) => !String(r.weatherDesc || '').trim() },
+  { key: 'tempHigh', label: 'High Temp', isEmpty: (r) => !String(r.tempHigh ?? '').trim() },
+  { key: 'tempLow', label: 'Low Temp', isEmpty: (r) => !String(r.tempLow ?? '').trim() },
+  { key: 'photos', label: 'Photos (at least one)', isEmpty: (r) => !Array.isArray(r.photos) || r.photos.every((p) => !p) },
+];
+
+// Which of a project's marked-required fields this particular report hasn't
+// filled in yet -- empty array means it's good to generate.
+function getMissingRequiredFields(report, project) {
+  const required = (project && project.requiredFields) || [];
+  if (!required.length || !report) return [];
+  return REQUIRED_FIELD_DEFS.filter((def) => required.includes(def.key) && def.isEmpty(report));
 }

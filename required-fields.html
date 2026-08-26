@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Required Fields</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1c3d5a">
+<link rel="stylesheet" href="style.css">
+<script src="theme.js"></script>
+</head>
+<body>
+
+<header class="app-header">
+  <div>
+    <h1>Required Fields</h1>
+    <div class="app-sub" id="project-name-sub"></div>
+  </div>
+  <span></span>
+</header>
+<div class="back-bar">
+  <a href="company-management.html" id="bb-back-link">&larr; Company Management</a>
+  <span class="bb-sep">//</span>
+  <span class="bb-cur">Required Fields</span>
+</div>
+
+<main>
+
+  <p class="hint" style="margin:0 0 0.75rem;">Tap any field below to mark it required for this project. A report can't be generated as a PDF until every marked field is filled in -- required fields also get a red outline right on the report form itself, so it's clear what's still missing while filling one out.</p>
+
+  <label style="max-width:360px;margin-bottom:1rem;">Project
+    <select id="rf-project-picker"></select>
+  </label>
+
+  <div class="step">
+    <div class="step-header"><span class="step-num">STEP 1</span><h2>Report Info</h2></div>
+    <div class="step-body">
+      <label class="rf-field" data-field-key="activity">Activity <input type="text" disabled></label>
+      <label class="rf-field" data-field-key="notes">Notes <textarea disabled rows="2"></textarea></label>
+      <div class="field-grid">
+        <label class="rf-field" data-field-key="representative">Representative <input type="text" disabled></label>
+        <label class="rf-field" data-field-key="peName">PE Name <input type="text" disabled></label>
+      </div>
+      <label class="rf-field" data-field-key="ntpDate">NTP Date <input type="date" disabled></label>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-header"><span class="step-num">STEP 2</span><h2>Contractors Force &amp; Equipment</h2></div>
+    <div class="step-body">
+      <label class="rf-field rf-field-block" data-field-key="contractors">
+        <span class="rf-field-title">Contractors</span>
+        <span class="hint">Requires at least one contractor name filled in.</span>
+      </label>
+      <label class="rf-field rf-field-block" data-field-key="equipmentRows">
+        <span class="rf-field-title">Equipment</span>
+        <span class="hint">Requires at least one equipment quantity filled in.</span>
+      </label>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-header"><span class="step-num">STEP 3</span><h2>Work Summary</h2></div>
+    <div class="step-body">
+      <label class="rf-field" data-field-key="workSummaryHeader">Work Summary (top line) <input type="text" disabled></label>
+      <label class="rf-field" data-field-key="trafficControlNote">Short Work Summary <input type="text" disabled></label>
+      <label class="rf-field" data-field-key="workSummary">Summary of Work Performed <textarea disabled rows="4"></textarea></label>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-header"><span class="step-num">STEP 4</span><h2>Pay Items</h2></div>
+    <div class="step-body">
+      <label class="rf-field rf-field-block" data-field-key="payItems">
+        <span class="rf-field-title">Pay Items</span>
+        <span class="hint">Requires at least one pay item with a quantity entered.</span>
+      </label>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-header"><span class="step-num">STEP 5</span><h2>Controlling Item</h2></div>
+    <div class="step-body">
+      <label class="rf-field" data-field-key="controllingItem">Controlling Item <input type="text" disabled></label>
+      <label class="rf-field" data-field-key="commentsOnTime">Comments on Time Charged <textarea disabled rows="2"></textarea></label>
+      <div class="field-grid">
+        <label class="rf-field" data-field-key="controllingItemTimeFrom">Time From <input type="text" disabled></label>
+        <label class="rf-field" data-field-key="controllingItemTimeTo">Time To <input type="text" disabled></label>
+      </div>
+      <label class="rf-field" data-field-key="workingConditions">Working Conditions <input type="text" disabled></label>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-header"><span class="step-num">STEP 6</span><h2>Traffic Control Status</h2></div>
+    <div class="step-body">
+      <label class="rf-field rf-field-block" data-field-key="trafficControlSelect">
+        <span class="rf-field-title">Traffic Control Status</span>
+        <span class="hint">Requires either "In Place" or "Attention Required" to be selected.</span>
+      </label>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-header"><span class="step-num">STEP 7</span><h2>Sign-off</h2></div>
+    <div class="step-body">
+      <div class="field-grid">
+        <label class="rf-field" data-field-key="workBegin">Work Begin <input type="text" disabled></label>
+        <label class="rf-field" data-field-key="workEnd">Work End <input type="text" disabled></label>
+      </div>
+      <label class="rf-field" data-field-key="repSignatureName">Representative Name <input type="text" disabled></label>
+      <label class="rf-field rf-field-block" data-field-key="repSignatureImage">
+        <span class="rf-field-title">Representative Signature</span>
+        <span class="hint">Requires an actual drawn signature, not just the typed name above.</span>
+      </label>
+      <label class="rf-field" data-field-key="peSignatureName">Project Engineer Name <input type="text" disabled></label>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-header"><span class="step-num">STEP 8</span><h2>Weather</h2></div>
+    <div class="step-body">
+      <label class="rf-field" data-field-key="weatherDesc">Description <input type="text" disabled></label>
+      <div class="field-grid">
+        <label class="rf-field" data-field-key="tempHigh">High &deg;F <input type="number" disabled></label>
+        <label class="rf-field" data-field-key="tempLow">Low &deg;F <input type="number" disabled></label>
+      </div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-header"><span class="step-num">STEP 9</span><h2>Photos (max 6)</h2></div>
+    <div class="step-body">
+      <label class="rf-field rf-field-block" data-field-key="photos">
+        <span class="rf-field-title">Photos</span>
+        <span class="hint">Requires at least one photo attached.</span>
+      </label>
+    </div>
+  </div>
+
+</main>
+
+<script src="common.js"></script>
+<script src="defaults.js"></script>
+<script src="storage.js"></script>
+<script type="module" src="firebase-init.js"></script>
+<script src="firebase-sync.js"></script>
+<script>
+const projectId = queryParam('project');
+let project = null;
+
+function applyRequiredState() {
+  const required = new Set(project.requiredFields || []);
+  $$('.rf-field').forEach((el) => {
+    el.classList.toggle('is-required', required.has(el.dataset.fieldKey));
+  });
+}
+
+async function toggleField(el) {
+  const key = el.dataset.fieldKey;
+  const set = new Set(project.requiredFields || []);
+  if (set.has(key)) set.delete(key);
+  else set.add(key);
+  project.requiredFields = Array.from(set);
+  project.updatedAt = Date.now();
+  await saveProject(project);
+  applyRequiredState();
+}
+
+async function init() {
+  project = projectId ? await getProject(projectId) : null;
+  const room = await getCompanyRoom();
+  if (!project || !room || !room.isAdmin) {
+    location.href = 'index.html';
+    return;
+  }
+  document.title = `Required Fields — ${project.name}`;
+  $('#project-name-sub').textContent = project.name;
+
+  const allProjects = await getAllProjects();
+  $('#rf-project-picker').innerHTML = allProjects
+    .map((p) => `<option value="${p.id}"${p.id === project.id ? ' selected' : ''}>${escapeHtml(p.name)}</option>`)
+    .join('');
+  $('#rf-project-picker').addEventListener('change', (e) => {
+    location.href = `required-fields.html?project=${e.target.value}`;
+  });
+
+  applyRequiredState();
+  $$('.rf-field').forEach((el) => {
+    el.addEventListener('click', async (e) => {
+      e.preventDefault();
+      await toggleField(el);
+    });
+  });
+}
+
+init();
+</script>
+</body>
+</html>

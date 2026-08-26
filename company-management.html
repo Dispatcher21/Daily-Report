@@ -122,6 +122,24 @@
 
   <div class="step">
     <div class="step-header">
+      <span class="step-num">FORM RULES</span>
+      <h2>Required Fields</h2>
+    </div>
+    <div class="step-body">
+      <details class="company-details" id="rf-details">
+        <summary>Configure Required Fields</summary>
+        <p class="hint" style="margin-top:0.6rem;">Pick a project, then mark which report fields must be filled in before that project's reports can be generated as a PDF. Configured per project -- different projects often need different things documented.</p>
+        <div class="empty-state" id="rf-projects-empty" hidden style="padding:1.25rem;">No projects yet.</div>
+        <label id="rf-project-label">Project
+          <select id="rf-project-select"></select>
+        </label>
+        <a class="btn-primary" id="rf-open-link" style="margin-top:0.6rem;display:inline-block;text-decoration:none;text-align:center;">Open Visual Field Editor</a>
+      </details>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-header">
       <span class="step-num">ACTIVITY</span>
       <h2>Who's Done What</h2>
     </div>
@@ -374,7 +392,24 @@ async function renderCmProjects() {
       </div>`
     )
     .join('');
+  await renderRequiredFieldsPicker(projects);
 }
+
+async function renderRequiredFieldsPicker(projects) {
+  const list = projects || (await getAllProjects());
+  $('#rf-projects-empty').hidden = list.length > 0;
+  $('#rf-project-label').hidden = list.length === 0;
+  $('#rf-open-link').hidden = list.length === 0;
+  if (list.length === 0) return;
+  const previouslySelected = $('#rf-project-select').value;
+  $('#rf-project-select').innerHTML = list.map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
+  if (list.some((p) => p.id === previouslySelected)) $('#rf-project-select').value = previouslySelected;
+  $('#rf-open-link').href = `required-fields.html?project=${$('#rf-project-select').value}`;
+}
+
+$('#rf-project-select').addEventListener('change', () => {
+  $('#rf-open-link').href = `required-fields.html?project=${$('#rf-project-select').value}`;
+});
 
 $('#cm-project-list').addEventListener('click', async (e) => {
   const deleteBtn = e.target.closest('[data-delete-project]');

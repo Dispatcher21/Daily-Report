@@ -62,7 +62,7 @@
     </div>
   </div>
 
-  <div class="step">
+  <div class="step" id="step-contractors">
     <div class="step-header"><span class="step-num">STEP 2</span><h2>Contractors Force &amp; Equipment</h2></div>
     <div class="step-body">
       <div id="contractor-tabs" class="tab-row"></div>
@@ -82,7 +82,7 @@
     </div>
   </div>
 
-  <div class="step">
+  <div class="step" id="step-pay-items">
     <div class="step-header">
       <span class="step-num">STEP 4</span>
       <h2>Pay Items</h2>
@@ -124,7 +124,7 @@
     </div>
   </div>
 
-  <div class="step">
+  <div class="step" id="step-traffic-control">
     <div class="step-header"><span class="step-num">STEP 6</span><h2>Traffic Control Status</h2></div>
     <div class="step-body">
       <div class="radio-row">
@@ -142,7 +142,7 @@
         <label>Work End <input type="text" id="f-workEnd" placeholder="3:30 PM"></label>
       </div>
 
-      <div class="sig-block">
+      <div class="sig-block" id="sig-block-rep">
         <label>Representative Name <input type="text" id="f-repSignatureName"></label>
         <span class="sig-label">Signature</span>
         <canvas id="sig-rep" class="sig-pad" width="600" height="150"></canvas>
@@ -167,7 +167,7 @@
     </div>
   </div>
 
-  <div class="step">
+  <div class="step" id="step-photos">
     <div class="step-header"><span class="step-num">STEP 9</span><h2>Photos (max 6)</h2></div>
     <div class="step-body">
       <div id="photo-grid" class="photo-grid"></div>
@@ -180,6 +180,16 @@
   </div>
 
 </main>
+
+<div class="modal-overlay" id="rf-warning-overlay" hidden>
+  <div class="modal-card rf-warning-card">
+    <div class="rf-warning-icon">&#9888;&#65039;</div>
+    <h2>Missing Required Fields</h2>
+    <p>This project requires the following before a report can be generated:</p>
+    <ul id="rf-warning-list"></ul>
+    <button type="button" class="btn-primary" id="rf-warning-close">Go Back &amp; Finish</button>
+  </div>
+</div>
 
 <script src="common.js"></script>
 <script src="defaults.js"></script>
@@ -198,9 +208,55 @@ let manualPayOpen = false;
 let editable = true;
 
 function scheduleSave() {
+  applyRequiredFieldHighlights();
   if (!report || !editable) return;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => saveReport(report).catch(console.error), 400);
+}
+
+// Maps a required-field key (see REQUIRED_FIELD_DEFS in defaults.js) to the
+// DOM element that should get the red outline when it's missing. Composite
+// fields (a table, the photo grid, the signature pad) highlight their whole
+// section since there's no single box to point at.
+const REQUIRED_FIELD_ELS = {
+  activity: () => $('#f-activity'),
+  notes: () => $('#f-notes'),
+  representative: () => $('#f-representative'),
+  peName: () => $('#f-peName'),
+  ntpDate: () => $('#f-ntpDate'),
+  contractors: () => $('#step-contractors'),
+  equipmentRows: () => $('#step-contractors'),
+  workSummaryHeader: () => $('#f-workSummaryHeader'),
+  trafficControlNote: () => $('#f-trafficControlNote'),
+  workSummary: () => $('#f-workSummary'),
+  payItems: () => $('#step-pay-items'),
+  controllingItem: () => $('#f-controllingItem'),
+  commentsOnTime: () => $('#f-commentsOnTime'),
+  controllingItemTimeFrom: () => $('#f-controllingItemTimeFrom'),
+  controllingItemTimeTo: () => $('#f-controllingItemTimeTo'),
+  workingConditions: () => $('#f-workingConditions'),
+  trafficControlSelect: () => $('#step-traffic-control'),
+  workBegin: () => $('#f-workBegin'),
+  workEnd: () => $('#f-workEnd'),
+  repSignatureName: () => $('#f-repSignatureName'),
+  repSignatureImage: () => $('#sig-block-rep'),
+  peSignatureName: () => $('#f-peSignatureName'),
+  weatherDesc: () => $('#f-weatherDesc'),
+  tempHigh: () => $('#f-tempHigh'),
+  tempLow: () => $('#f-tempLow'),
+  photos: () => $('#step-photos'),
+};
+
+function applyRequiredFieldHighlights() {
+  if (!report || !project) return [];
+  $$('.rf-missing').forEach((el) => el.classList.remove('rf-missing'));
+  const missing = getMissingRequiredFields(report, project);
+  missing.forEach((def) => {
+    const getEl = REQUIRED_FIELD_ELS[def.key];
+    const el = getEl && getEl();
+    if (el) el.classList.add('rf-missing');
+  });
+  return missing;
 }
 
 // Disables every form control except navigation/print, for a member who
@@ -327,10 +383,21 @@ function renderEditor() {
   renderPayItemsStep();
   renderPhotoGrid();
   setupSignaturePad('#sig-rep', 'repSignatureImage');
+  applyRequiredFieldHighlights();
 
   $('#btn-generate').onclick = () => {
+    const missing = applyRequiredFieldHighlights();
+    if (missing.length) {
+      $('#rf-warning-list').innerHTML = missing.map((def) => `<li>${escapeHtml(def.label)}</li>`).join('');
+      $('#rf-warning-overlay').hidden = false;
+      return;
+    }
     location.href = `download.html?project=${project.id}&report=${report.id}`;
   };
+
+  $('#rf-warning-close').addEventListener('click', () => {
+    $('#rf-warning-overlay').hidden = true;
+  });
 
   $('#btn-delete-report').onclick = async () => {
     if (!confirm('Delete this report? This cannot be undone.')) return;
