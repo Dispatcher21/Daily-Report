@@ -66,8 +66,19 @@
       </div>
       <div class="step-body">
         <div id="dash-status-summary"></div>
+        <div class="pi-controls" id="pi-controls" hidden>
+          <input type="text" id="pi-search" placeholder="Search item # or description...">
+          <select id="pi-sort">
+            <option value="default">Sort: Least Complete First</option>
+            <option value="most-complete">Sort: Most Complete First</option>
+            <option value="item-number">Sort: Item Number</option>
+            <option value="earned-desc">Sort: Highest $ Earned</option>
+            <option value="remaining-desc">Sort: Highest $ Remaining</option>
+          </select>
+        </div>
         <div class="bar-list" id="dash-bars"></div>
         <p class="hint" id="dash-bars-empty" hidden style="margin:0;">This project's pay item catalog is empty &mdash; add items to the project's data file to see them here.</p>
+        <p class="hint" id="dash-bars-no-match" hidden style="margin:0;">No pay items match the current search/filter.</p>
       </div>
     </div>
 
@@ -365,38 +376,83 @@ function renderDashboard(reports, project) {
 
 // ---------- Pay item completion (color-coded list + summary strip) ----------
 
+const PI_BAND_ORDER = ['status-notstarted', 'status-early', 'status-progress', 'status-near', 'status-over', 'status-none'];
+const PI_BAND_LABELS = {
+  'status-notstarted': 'Not Started', 'status-early': 'Early', 'status-progress': 'In Progress',
+  'status-near': 'Near/Complete', 'status-over': 'Over Plan', 'status-none': 'No Target',
+};
+
+let allPayItems = [];
+// Search/sort/band-filter are presentation-only, kept in memory rather than
+// re-fetched -- switching sort order shouldn't need to recompute totals.
+const payItemFilterState = { search: '', sort: 'default', hiddenBands: new Set() };
+
+function sortPayItems(items, mode) {
+  const byItemNumber = (a, b) => a.itemNumber.localeCompare(b.itemNumber, undefined, { numeric: true });
+  if (mode === 'item-number') return items.slice().sort(byItemNumber);
+  if (mode === 'earned-desc') return items.slice().sort((a, b) => (b.earnedTotal ?? -1) - (a.earnedTotal ?? -1));
+  if (mode === 'remaining-desc') {
+    const remaining = (it) => (it.contractTotal != null && it.earnedTotal != null ? it.contractTotal - it.earnedTotal : -Infinity);
+    return items.slice().sort((a, b) => remaining(b) - remaining(a));
+  }
+  // 'most-complete' and the default 'least complete first' both rank items
+  // with a real target by pct, and group untargeted items (no ranking to
+  // give them) at the end by item number.
+  const withTarget = items.filter((it) => it.pct != null).sort((a, b) => (mode === 'most-complete' ? b.pct - a.pct : a.pct - b.pct));
+  const noTarget = items.filter((it) => it.pct == null).sort(byItemNumber);
+  return withTarget.concat(noTarget);
+}
+
 function renderPayItems(items) {
+  allPayItems = items;
+  $('#pi-controls').hidden = items.length === 0;
+  renderFilteredPayItems();
+}
+
+function renderFilteredPayItems() {
+  const items = allPayItems;
   $('#dash-bars-empty').hidden = items.length > 0;
   if (items.length === 0) {
+    $('#dash-bars-no-match').hidden = true;
     $('#dash-status-summary').innerHTML = '';
     $('#dash-bars').innerHTML = '';
     return;
   }
 
-  // Items with a real target sort least-complete-first, so whatever needs
-  // attention floats to the top; items with no Per Plans Total at all follow,
-  // grouped at the bottom since there's no completion to rank them by.
-  const withTarget = items.filter((it) => it.pct != null).sort((a, b) => a.pct - b.pct);
-  const noTarget = items
-    .filter((it) => it.pct == null)
-    .sort((a, b) => a.itemNumber.localeCompare(b.itemNumber, undefined, { numeric: true }));
-  const sorted = withTarget.concat(noTarget);
+  // The status bar/legend always reflects the FULL catalog, not the current
+  // filter -- it's the stable "big picture" a legend chip filters down from,
+  // not something that would make sense shrinking to match its own filter.
+  const counts = Object.fromEntries(PI_BAND_ORDER.map((b) => [b, 0]));
+  items.forEach((it) => counts[completionBand(it.pct).cls]++);
+  const total = items.length;
 
-  const bandOrder = ['status-notstarted', 'status-early', 'status-progress', 'status-near', 'status-over', 'status-none'];
-  const bandLabels = {
-    'status-notstarted': 'Not Started', 'status-early': 'Early', 'status-progress': 'In Progress',
-    'status-near': 'Near/Complete', 'status-over': 'Over Plan', 'status-none': 'No Target',
-  };
-  const counts = Object.fromEntries(bandOrder.map((b) => [b, 0]));
-  sorted.forEach((it) => counts[completionBand(it.pct).cls]++);
-  const total = sorted.length;
-
-  const segments = bandOrder.filter((b) => counts[b] > 0)
+  const segments = PI_BAND_ORDER.filter((b) => counts[b] > 0)
     .map((b) => `<span class="${b}" style="width:${(counts[b] / total) * 100}%"></span>`).join('');
-  const legend = bandOrder.filter((b) => counts[b] > 0)
-    .map((b) => `<span class="sl-item"><span class="sl-dot ${b}"></span>${bandLabels[b]} (${counts[b]})</span>`).join('');
+  const legend = PI_BAND_ORDER.filter((b) => counts[b] > 0)
+    .map((b) => {
+      const off = payItemFilterState.hiddenBands.has(b);
+      return `<span class="sl-item${off ? ' sl-off' : ''}" data-band="${b}" title="Click to ${off ? 'show' : 'hide'} ${PI_BAND_LABELS[b]}"><span class="sl-dot ${b}"></span>${PI_BAND_LABELS[b]} (${counts[b]})</span>`;
+    }).join('');
   $('#dash-status-summary').innerHTML = `<div class="status-bar">${segments}</div><div class="status-legend">${legend}</div>`;
+  $$('.sl-item', $('#dash-status-summary')).forEach((el) => {
+    el.addEventListener('click', () => {
+      const band = el.dataset.band;
+      if (payItemFilterState.hiddenBands.has(band)) payItemFilterState.hiddenBands.delete(band);
+      else payItemFilterState.hiddenBands.add(band);
+      renderFilteredPayItems();
+    });
+  });
 
+  const q = payItemFilterState.search.trim().toLowerCase();
+  let filtered = q
+    ? items.filter((it) => it.itemNumber.toLowerCase().includes(q) || (it.description || '').toLowerCase().includes(q))
+    : items.slice();
+  if (payItemFilterState.hiddenBands.size) {
+    filtered = filtered.filter((it) => !payItemFilterState.hiddenBands.has(completionBand(it.pct).cls));
+  }
+  const sorted = sortPayItems(filtered, payItemFilterState.sort);
+
+  $('#dash-bars-no-match').hidden = sorted.length > 0;
   $('#dash-bars').innerHTML = sorted.map((it) => {
     const band = completionBand(it.pct);
     const widthPct = it.pct == null ? 0 : Math.min(Math.max(it.pct, 0) * 100, 100);
@@ -423,6 +479,15 @@ function renderPayItems(items) {
       </div>`;
   }).join('');
 }
+
+$('#pi-search').addEventListener('input', (e) => {
+  payItemFilterState.search = e.target.value;
+  renderFilteredPayItems();
+});
+$('#pi-sort').addEventListener('change', (e) => {
+  payItemFilterState.sort = e.target.value;
+  renderFilteredPayItems();
+});
 
 // ---------- Progress over time (hand-rolled SVG line chart) ----------
 
