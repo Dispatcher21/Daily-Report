@@ -250,9 +250,17 @@ async function ensureThumbnails(list) {
   const sandbox = $('#render-sandbox');
   const [layout, logoBlob] = await Promise.all([loadPrintLayout(), getReportLogo()]);
 
-  for (const r of stale) {
-    thumbnailInFlight.add(r.id);
+  for (const r0 of stale) {
+    thumbnailInFlight.add(r0.id);
     try {
+      // The photo log page needs the actual photo bytes, not just knowing a
+      // slot is filled -- a report synced from the company but never opened
+      // on this device still has photosFetched[i] === false and blank
+      // photos[i] until something asks for them. Worth pulling here (a
+      // one-time cost, same lazy-fetch report-editor.html/download.html
+      // already do on open) rather than generating a photo log thumbnail
+      // that's permanently missing every image.
+      const r = await fetchReportMedia(r0);
       const { front, back } = await generateReportThumbnailBlobs(sandbox, layout, r, logoBlob);
       r.thumbnail = front;
       r.thumbnailBack = back;
@@ -261,11 +269,18 @@ async function ensureThumbnails(list) {
       // the list isn't an edit, so it shouldn't bump updatedAt/lastEditedBy
       // (which would just invalidate the thumbnail it's trying to cache).
       await putReportRaw(r);
+      // fetchReportMedia returns a new object rather than mutating r0 --
+      // swap it into allReports too, so the now-fetched photos don't need
+      // pulling again next time (a re-render, a mass edit, opening the
+      // report) just because the in-memory list still pointed at the old,
+      // photo-less one.
+      const idx = allReports.indexOf(r0);
+      if (idx !== -1) allReports[idx] = r;
       showThumb(r.id, front, back);
     } catch (err) {
-      console.error('Thumbnail generation failed for report', r.id, err);
+      console.error('Thumbnail generation failed for report', r0.id, err);
     } finally {
-      thumbnailInFlight.delete(r.id);
+      thumbnailInFlight.delete(r0.id);
     }
     // setTimeout, not requestAnimationFrame -- rAF is throttled/suspended
     // on a backgrounded tab and would hang the whole loop (see the same
