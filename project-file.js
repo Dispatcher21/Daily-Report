@@ -21,6 +21,7 @@ const PROJECT_INFO_FIELDS = [
   { key: 'projectNo', label: 'PROJECT NO.' },
   { key: 'projectName', label: 'PROJECT NAME' },
   { key: 'ntpDate', label: 'NTP DATE' },
+  { key: 'contractLength', label: 'TOTAL CONTRACT LENGTH (DAYS)' },
   { key: 'representative', label: 'REPRESENTATIVE' },
   { key: 'peName', label: 'PE NAME' },
   { key: 'activity', label: 'DEFAULT ACTIVITY' },
@@ -294,6 +295,7 @@ function downloadProjectDataTemplate() {
       projectNo: '###',
       projectName: '',
       ntpDate: '6/22/2026', // any of 6/22/2026, 06-22-2026 or 2026-06-22 parses fine
+      contractLength: '180', // calendar days allowed by the contract, from NTP
       representative: 'JOHN JACOB JINGLHIMER SMITH',
       peName: 'NOTTA RE-AL ENJINIR',
     },

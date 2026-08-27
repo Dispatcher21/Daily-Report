@@ -314,6 +314,9 @@ function renderDashboard(reports, project) {
     const d = daysBetween(ntpDate, todayIso());
     if (Number.isFinite(d)) daysSinceNtp = d;
   }
+  const contractLength = parseInt((project.meta || {}).contractLength, 10);
+  const hasContractLength = Number.isFinite(contractLength) && contractLength > 0;
+  const daysRemaining = hasContractLength && daysSinceNtp != null ? contractLength - daysSinceNtp : null;
 
   // Every pay item in the catalog, not just ones that have shown up on a
   // report yet -- an item nobody's touched still counts toward the
@@ -341,8 +344,17 @@ function renderDashboard(reports, project) {
       'Days Since NTP',
       daysSinceNtp == null ? 'No NTP date on file' : '',
       daysSinceNtp != null
-        ? `Calendar days from the NTP Date (${ntpDate}) to today. Not a days-remaining-in-contract figure -- there's no total contract length on file.`
+        ? `Calendar days from the NTP Date (${ntpDate}) to today.` +
+          (hasContractLength ? '' : ' Not a days-remaining-in-contract figure -- there\'s no total contract length on file.')
         : 'No usable NTP Date is set in this project\'s data file, so elapsed days can\'t be calculated.'
+    ) +
+    statCard(
+      daysRemaining != null ? daysRemaining : '—',
+      'Days Remaining (Contract)',
+      daysRemaining == null ? 'No total contract length on file' : (daysRemaining < 0 ? 'Past contract length' : ''),
+      daysRemaining != null
+        ? `Total Contract Length (${contractLength} days) minus Days Since NTP. Negative means the contract's allotted days have been exceeded.`
+        : 'Add "TOTAL CONTRACT LENGTH (DAYS)" to the PROJECT INFO sheet in this project\'s data file, alongside an NTP Date, to see days remaining.'
     ) +
     statCard(
       totalHours.toFixed(1), 'Total Hours Worked', '',
