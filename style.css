@@ -1065,6 +1065,10 @@ input[type="file"] { min-height: 0; }
   font-size: 1.05rem; font-weight: 800; color: var(--text);
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .ring-fill, .dc-bar-fill { transition: none; }
+}
+
 .dash-empty {
   text-align: center; color: var(--text-dim); padding: 2rem 1rem;
   background: var(--surface); border: 1.5px dashed var(--border); border-radius: var(--radius);
