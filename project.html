@@ -125,7 +125,7 @@
         <h2>Project Data File</h2>
       </div>
       <div class="step-body">
-        <p class="hint">Download this project's current data as an Excel file &mdash; edit it, keep it as a backup, or carry it to another device. Uploading a file replaces this project's info and pay item catalog. Existing reports are not affected.</p>
+        <p class="hint" style="margin-top:0;">Fallback option: download this project's current data as an Excel file &mdash; edit it, keep it as a backup, or carry it to another device. Uploading a file replaces this project's info and pay item catalog. Existing reports are not affected. Project Setup (above) is the easier way to make most changes.</p>
         <button type="button" class="btn-secondary" id="btn-download-project-file" style="margin-bottom:0.75rem;">&#8681; Download Project File</button>
         <div class="uz" id="uz-reupload">
           <input type="file" id="f-reupload" accept=".xlsx,.xls">
@@ -202,7 +202,8 @@ async function init() {
 
   // Renaming/re-uploading/deleting the project itself may be restricted to
   // admins -- viewing the dashboard and filing reports never is.
-  if (!(await companyCan('editProjects'))) {
+  const canEditProject = await companyCan('editProjects');
+  if (!canEditProject) {
     $('#uz-reupload').hidden = true;
     $('#btn-delete-project').hidden = true;
   }
@@ -222,6 +223,7 @@ async function init() {
   const equipmentLabelCount = (project.defaultEquipmentLabels || []).length;
 
   $('#project-details-body').innerHTML = `
+    ${canEditProject ? `<a class="btn-primary" href="project-setup.html?id=${project.id}" style="display:block;text-align:center;text-decoration:none;margin-bottom:1rem;">&#9998; Edit Project Setup</a>` : ''}
     <div class="field-grid">
       <label>Project No. <input type="text" value="${escapeHtml(m.projectNo)}" disabled></label>
       <label>NTP Date <input type="text" value="${escapeHtml(m.ntpDate)}" disabled></label>
@@ -233,7 +235,6 @@ async function init() {
     </div>
     <p class="hint">Pay item catalog: ${project.payItemCatalog.length} item(s).</p>
     <p class="hint">Default contractors: ${contractorCount || 'none set'}. Default equipment/personnel labels: ${equipmentLabelCount || 'using standard list'}. Other report field defaults set: ${extraDefaultsSet}.</p>
-    <p class="hint">To change these values, upload a replacement data file below.</p>
   `;
 }
 

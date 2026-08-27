@@ -204,6 +204,7 @@ function makeProjectFromParsedFile(parsed) {
       projectNo: meta.projectNo || '',
       projectName: meta.projectName || '',
       ntpDate: meta.ntpDate || '',
+      contractLength: meta.contractLength || '',
       representative: meta.representative || '',
       peName: meta.peName || '',
       activity: meta.activity || '',

@@ -1,0 +1,443 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Project Setup</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1c3d5a">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="print-sheet.css">
+<script src="theme.js"></script>
+<style>
+  main { padding-bottom: 2rem; }
+  .ps-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; align-items: start; }
+  .ps-left { min-width: 0; }
+  .ps-right { min-width: 0; display: flex; flex-direction: column; gap: 1rem; position: sticky; top: 1rem; }
+  .ps-preview-block {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.9rem;
+  }
+  .ps-preview-block h3 {
+    margin: 0 0 0.6rem; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-dim);
+  }
+  #ps-report-preview { display: flex; justify-content: center; }
+  .ps-report-preview-wrap { position: relative; overflow: hidden; border: 1px solid var(--border); margin: 0 auto; }
+  .ps-dash-wrap {
+    border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden;
+    height: 260px; position: relative; background: var(--surface-2);
+  }
+  .ps-dash-wrap iframe {
+    border: 0; position: absolute; top: 0; left: 0; width: 480px; height: 1500px;
+    transform-origin: top left; pointer-events: none;
+  }
+  .ps-item-row {
+    border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.8rem 0.8rem 0.3rem; margin-bottom: 0.8rem;
+    background: var(--surface-2);
+  }
+  .ps-checkbox-label { flex-direction: row !important; align-items: center; gap: 0.5rem !important; }
+  .ps-checkbox-label input { width: 1.35rem; flex-shrink: 0; }
+  #ps-add-item { margin-bottom: 0.5rem; }
+  .ps-mobile-preview-btn {
+    display: none; position: fixed; right: 1rem; bottom: 5.5rem; z-index: 40;
+    background: var(--brand); color: var(--on-brand); border: none; border-radius: 999px;
+    padding: 0.75rem 1.1rem; font-weight: 700; box-shadow: var(--shadow-lg); cursor: pointer;
+  }
+  .ps-preview-modal-card { max-width: 460px; width: 92vw; max-height: 88vh; overflow-y: auto; position: relative; }
+  .ps-preview-modal-close {
+    position: absolute; top: 0.4rem; right: 0.6rem; background: none; border: none;
+    font-size: 1.4rem; line-height: 1; cursor: pointer; color: var(--text-dim);
+  }
+
+  @media (max-width: 900px) {
+    .ps-layout { grid-template-columns: 1fr; }
+    .ps-right { display: none; }
+    .ps-mobile-preview-btn { display: block; }
+  }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div>
+    <h1>Project Setup</h1>
+    <div class="app-sub" id="project-name-sub"></div>
+  </div>
+  <span></span>
+</header>
+<div class="back-bar">
+  <a href="index.html" id="bb-back-link">&larr; Project</a>
+  <span class="bb-sep">//</span>
+  <span class="bb-cur">Project Setup</span>
+</div>
+
+<main>
+  <p class="hint" style="margin-top:0;">Fill this out instead of the Excel file &mdash; changes save automatically. The report preview and dashboard preview on the right update as you type. (The Excel upload/download on the Project page still works too, as a fallback.)</p>
+
+  <div class="ps-layout" id="ps-layout">
+    <div class="ps-left">
+      <div class="tab-row" id="ps-tabs"></div>
+      <div id="ps-panel"></div>
+    </div>
+
+    <div class="ps-right" id="ps-right">
+      <div class="ps-preview-block">
+        <h3>Report Preview</h3>
+        <div id="ps-report-preview"><p class="hint">Loading preview&hellip;</p></div>
+      </div>
+      <div class="ps-preview-block">
+        <h3>Dashboard Preview</h3>
+        <div class="ps-dash-wrap" id="ps-dash-wrap">
+          <iframe id="ps-dash-frame" title="Dashboard preview"></iframe>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<button type="button" class="ps-mobile-preview-btn" id="ps-mobile-preview-btn">&#128065; Preview</button>
+<div class="modal-overlay" id="ps-preview-modal" hidden>
+  <div class="modal-card ps-preview-modal-card">
+    <button type="button" class="ps-preview-modal-close" id="ps-preview-modal-close">&times;</button>
+    <div id="ps-preview-modal-body"></div>
+  </div>
+</div>
+
+<script src="common.js"></script>
+<script src="defaults.js"></script>
+<script src="storage.js"></script>
+<script src="project-file.js"></script>
+<script src="render-report.js"></script>
+<script type="module" src="firebase-init.js"></script>
+<script src="firebase-sync.js"></script>
+<script>
+const PS_DASH_FRAME_W = 480;
+
+const PS_FIELD_TYPES = {
+  ntpDate: 'date',
+  contractLength: 'number',
+  trafficControlSelect: 'select',
+  workSummary: 'textarea',
+};
+const TRAFFIC_CONTROL_OPTIONS = [
+  { value: '', label: '(none)' },
+  { value: 'IN_PLACE', label: 'In Place' },
+  { value: 'ATTENTION_REQUIRED', label: 'Attention Required' },
+];
+
+const PS_TABS = [
+  { key: 'info', label: 'Project Info', render: renderInfoTab },
+  { key: 'payItems', label: 'Pay Items', render: renderPayItemsTab },
+  { key: 'contractors', label: 'Contractors', render: renderContractorsTab },
+  { key: 'equipment', label: 'Equipment', render: renderEquipmentTab },
+];
+
+let project = null;
+let layout = null;
+let logoBlob = null;
+let activeTab = 'info';
+let saveTimer = null;
+let previewTimer = null;
+
+function trimTrailingBlanks(arr) {
+  const out = arr.slice();
+  while (out.length && !out[out.length - 1]) out.pop();
+  return out;
+}
+
+function scheduleSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    project.defaultContractors = trimTrailingBlanks(project.defaultContractors || []);
+    project.defaultEquipmentLabels = trimTrailingBlanks(project.defaultEquipmentLabels || []);
+    await saveProject(project);
+    $('#project-name-sub').textContent = project.name;
+    refreshDashboardPreview();
+  }, 500);
+}
+
+function schedulePreviewRefresh() {
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(refreshReportPreview, 250);
+}
+
+// ---------- Tabs ----------
+
+function renderTabs() {
+  $('#ps-tabs').innerHTML = PS_TABS
+    .map((t) => `<button type="button" class="tab-btn${t.key === activeTab ? ' active' : ''}" data-tab="${t.key}">${t.label}</button>`)
+    .join('');
+  $$('#ps-tabs .tab-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      activeTab = btn.dataset.tab;
+      renderTabs();
+      renderActivePanel();
+    });
+  });
+}
+
+function renderActivePanel() {
+  const tab = PS_TABS.find((t) => t.key === activeTab);
+  if (tab) tab.render();
+}
+
+// ---------- Project Info tab ----------
+
+function renderInfoTab() {
+  const m = project.meta || (project.meta = {});
+  const fieldsHtml = PROJECT_INFO_FIELDS.filter((f) => f.key !== 'name')
+    .map((f) => {
+      const type = PS_FIELD_TYPES[f.key] || 'text';
+      const val = m[f.key] || '';
+      let control;
+      if (type === 'select') {
+        control = `<select data-meta-key="${f.key}">${TRAFFIC_CONTROL_OPTIONS
+          .map((o) => `<option value="${o.value}"${o.value === val ? ' selected' : ''}>${o.label}</option>`)
+          .join('')}</select>`;
+      } else if (type === 'textarea') {
+        control = `<textarea data-meta-key="${f.key}" rows="4">${escapeHtml(val)}</textarea>`;
+      } else {
+        control = `<input type="${type}" data-meta-key="${f.key}" value="${escapeHtml(val)}">`;
+      }
+      const full = type === 'textarea';
+      return `<label${full ? ' style="grid-column:1/-1;"' : ''}>${escapeHtml(f.label)}${control}</label>`;
+    })
+    .join('');
+
+  $('#ps-panel').innerHTML = `
+    <p class="hint" style="margin-top:0;">These match the PROJECT INFO sheet in the Excel file &mdash; editing here or there keeps both in sync on save.</p>
+    <label>Project Display Name <input type="text" id="ps-name" value="${escapeHtml(project.name || '')}" placeholder="Shown on the project list"></label>
+    <div class="field-grid">${fieldsHtml}</div>
+  `;
+
+  $('#ps-name').addEventListener('input', (e) => {
+    project.name = e.target.value;
+    scheduleSave();
+  });
+  $$('[data-meta-key]', $('#ps-panel')).forEach((el) => {
+    const evt = el.tagName === 'SELECT' ? 'change' : 'input';
+    el.addEventListener(evt, () => {
+      project.meta[el.dataset.metaKey] = el.value;
+      scheduleSave();
+      schedulePreviewRefresh();
+    });
+  });
+}
+
+// ---------- Pay Items tab ----------
+
+function renderPayItemsTab() {
+  const items = project.payItemCatalog || (project.payItemCatalog = []);
+  const rowsHtml = items
+    .map(
+      (it, i) => `
+    <div class="ps-item-row" data-idx="${i}">
+      <div class="field-grid">
+        <label>Item Number <input type="text" data-idx="${i}" data-field="itemNumber" value="${escapeHtml(it.itemNumber || '')}"></label>
+        <label>Unit <input type="text" data-idx="${i}" data-field="unit" value="${escapeHtml(it.unit || '')}"></label>
+      </div>
+      <label>Description <input type="text" data-idx="${i}" data-field="description" value="${escapeHtml(it.description || '')}"></label>
+      <div class="field-grid">
+        <label>Per Plans Total <input type="number" data-idx="${i}" data-field="plannedQty" value="${escapeHtml(it.plannedQty || '')}"></label>
+        <label>Unit Price <input type="number" step="0.01" data-idx="${i}" data-field="unitPrice" value="${escapeHtml(it.unitPrice || '')}"></label>
+      </div>
+      <label class="ps-checkbox-label"><input type="checkbox" data-idx="${i}" data-field="stations" ${it.stations ? 'checked' : ''}> Track Start/Stop Station on this item</label>
+      <label>Locations (one per line, leave blank if not used)<textarea data-idx="${i}" data-field="locations" rows="2">${escapeHtml((it.locations || []).join('\n'))}</textarea></label>
+      <button type="button" class="text-btn ps-remove-item" data-idx="${i}" style="color:var(--danger);">&times; Remove This Pay Item</button>
+    </div>`
+    )
+    .join('');
+
+  $('#ps-panel').innerHTML = `
+    <p class="hint" style="margin-top:0;">Same fields as the PAY ITEMS sheet. Enabling Stations and/or Locations lets this item be logged more than once per report (different segments the same day).</p>
+    ${rowsHtml || '<p class="hint">No pay items yet.</p>'}
+    <button type="button" class="btn-secondary" id="ps-add-item">+ Add Pay Item</button>
+  `;
+
+  const panel = $('#ps-panel');
+  $$('[data-field]', panel).forEach((el) => {
+    const evt = el.type === 'checkbox' ? 'change' : 'input';
+    el.addEventListener(evt, () => {
+      const idx = Number(el.dataset.idx);
+      const field = el.dataset.field;
+      const item = items[idx];
+      if (field === 'stations') item.stations = el.checked;
+      else if (field === 'locations') item.locations = el.value.split('\n').map((s) => s.trim()).filter(Boolean);
+      else item[field] = el.value;
+      scheduleSave();
+      schedulePreviewRefresh();
+    });
+  });
+  $$('.ps-remove-item', panel).forEach((btn) => {
+    btn.addEventListener('click', () => {
+      items.splice(Number(btn.dataset.idx), 1);
+      renderPayItemsTab();
+      scheduleSave();
+      schedulePreviewRefresh();
+    });
+  });
+  $('#ps-add-item').addEventListener('click', () => {
+    items.push({ itemNumber: '', description: '', unit: '', plannedQty: '', unitPrice: '', stations: false, locations: [] });
+    renderPayItemsTab();
+  });
+}
+
+// ---------- Contractors tab ----------
+
+function renderContractorsTab() {
+  const arr = project.defaultContractors || (project.defaultContractors = []);
+  const rowsHtml = Array.from(
+    { length: CONTRACTOR_COUNT },
+    (_, i) => `<label>Contractor ${i + 1} <input type="text" data-idx="${i}" value="${escapeHtml(arr[i] || '')}"></label>`
+  ).join('');
+
+  $('#ps-panel').innerHTML = `
+    <p class="hint" style="margin-top:0;">Up to ${CONTRACTOR_COUNT} contractor columns, fixed by the report template. Leave any blank &mdash; they're just typed fresh on each report if left empty here.</p>
+    <div class="field-grid">${rowsHtml}</div>
+  `;
+  $$('#ps-panel [data-idx]').forEach((el) => {
+    el.addEventListener('input', () => {
+      const i = Number(el.dataset.idx);
+      while (arr.length <= i) arr.push('');
+      arr[i] = el.value;
+      scheduleSave();
+      schedulePreviewRefresh();
+    });
+  });
+}
+
+// ---------- Equipment tab ----------
+
+function renderEquipmentTab() {
+  const arr = project.defaultEquipmentLabels || (project.defaultEquipmentLabels = []);
+  const rowsHtml = Array.from(
+    { length: EQUIPMENT_ROW_COUNT },
+    (_, i) =>
+      `<label>Row ${i + 1} <input type="text" data-idx="${i}" value="${escapeHtml(arr[i] || '')}" placeholder="${escapeHtml(DEFAULT_EQUIPMENT_LABELS[i] || '(blank)')}"></label>`
+  ).join('');
+
+  $('#ps-panel').innerHTML = `
+    <p class="hint" style="margin-top:0;">${EQUIPMENT_ROW_COUNT} personnel/equipment rows, fixed by the template. Leave every row blank to use the app's standard list (shown as placeholder text) &mdash; typing in any row switches every row to only what's entered here.</p>
+    <div class="field-grid">${rowsHtml}</div>
+  `;
+  $$('#ps-panel [data-idx]').forEach((el) => {
+    el.addEventListener('input', () => {
+      const i = Number(el.dataset.idx);
+      while (arr.length <= i) arr.push('');
+      arr[i] = el.value;
+      scheduleSave();
+      schedulePreviewRefresh();
+    });
+  });
+}
+
+// ---------- Live previews ----------
+
+function scalePreviewPage(pageEl, targetWidthPx) {
+  const rect = pageEl.getBoundingClientRect();
+  const scale = targetWidthPx / Math.max(rect.width, 1);
+  const wrap = document.createElement('div');
+  wrap.className = 'ps-report-preview-wrap';
+  wrap.style.width = targetWidthPx + 'px';
+  wrap.style.height = Math.round(rect.height * scale) + 'px';
+  pageEl.style.transform = `scale(${scale})`;
+  pageEl.style.transformOrigin = 'top left';
+  wrap.appendChild(pageEl);
+  return wrap;
+}
+
+async function refreshReportPreview() {
+  const container = $('#ps-report-preview');
+  if (!container || !layout) return;
+  try {
+    const scratch = document.createElement('div');
+    const sample = await makeBlankReport(1, project, null);
+    const pages = renderReportPages(scratch, layout, sample, logoBlob);
+    pages[1].el.remove();
+    await waitForImages(scratch);
+    const targetWidth = Math.min(container.clientWidth || 360, 460);
+    const wrap = scalePreviewPage(pages[0].el, targetWidth);
+    container.innerHTML = '';
+    container.appendChild(wrap);
+  } catch (err) {
+    console.error(err);
+    container.innerHTML = '<p class="hint">Preview unavailable.</p>';
+  }
+}
+
+function refreshDashboardPreview() {
+  const frame = $('#ps-dash-frame');
+  if (!frame) return;
+  if (!frame.dataset.loaded) {
+    frame.dataset.loaded = '1';
+    frame.src = `project.html?id=${project.id}`;
+  } else {
+    try { frame.contentWindow.location.reload(); } catch (err) { frame.src = `project.html?id=${project.id}`; }
+  }
+}
+
+function sizeDashboardFrame() {
+  const wrap = $('#ps-dash-wrap');
+  const frame = $('#ps-dash-frame');
+  if (!wrap || !frame) return;
+  const scale = (wrap.clientWidth || 300) / PS_DASH_FRAME_W;
+  frame.style.transform = `scale(${scale})`;
+}
+
+// ---------- Mobile preview modal ----------
+
+$('#ps-mobile-preview-btn').addEventListener('click', () => {
+  $('#ps-preview-modal').hidden = false;
+  $('#ps-preview-modal-body').appendChild($('#ps-right'));
+  sizeDashboardFrame();
+});
+$('#ps-preview-modal-close').addEventListener('click', () => {
+  $('#ps-preview-modal').hidden = true;
+  $('#ps-layout').appendChild($('#ps-right'));
+});
+
+window.addEventListener('resize', sizeDashboardFrame);
+
+// ---------- Init ----------
+
+async function init() {
+  const idParam = queryParam('id');
+  if (!idParam || idParam === 'new') {
+    if (!(await companyCan('createProjects'))) {
+      alert("You don't have permission to create projects.");
+      location.href = 'index.html';
+      return;
+    }
+    project = makeProjectFromParsedFile({ meta: {}, payItemCatalog: [], contractors: [], equipmentLabels: [] });
+    await saveProject(project);
+    history.replaceState(null, '', `project-setup.html?id=${project.id}`);
+  } else {
+    project = await getProject(idParam);
+    if (!project || !projectInScope(project.id, await getCompanyRoom())) {
+      location.href = 'index.html';
+      return;
+    }
+    if (!(await companyCan('editProjects'))) {
+      alert("You don't have permission to edit this project's setup.");
+      location.href = `project.html?id=${project.id}`;
+      return;
+    }
+  }
+  if (!project.meta) project.meta = {};
+
+  $('#project-name-sub').textContent = project.name;
+  $('#bb-back-link').href = `project.html?id=${project.id}`;
+
+  [layout, logoBlob] = await Promise.all([loadPrintLayout(), getReportLogo()]);
+
+  renderTabs();
+  renderActivePanel();
+  await refreshReportPreview();
+  refreshDashboardPreview();
+  sizeDashboardFrame();
+}
+
+init();
+</script>
+</body>
+</html>

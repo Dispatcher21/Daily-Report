@@ -41,8 +41,11 @@
       <h2>Add a Project</h2>
     </div>
     <div class="step-body">
+      <button type="button" class="btn-primary" id="btn-setup-manually" style="margin-bottom:1rem;">&#9998; Set Up Manually</button>
+      <p class="hint" style="margin:0 0 1rem;">Fill out project info, pay items, contractors, and equipment right here, with a live preview &mdash; no spreadsheet needed.</p>
+
       <div style="display:flex;align-items:center;gap:1rem;margin-bottom:0.75rem;flex-wrap:wrap;">
-        <span class="hint" style="margin:0;">Upload an Excel file with this project's info and pay items.</span>
+        <span class="hint" style="margin:0;">Or, as a fallback, upload an Excel file with this project's info and pay items.</span>
         <button type="button" class="text-btn" id="btn-download-project-template" style="color:var(--brand);text-decoration:underline;padding:0;">&#8681; Download Template</button>
       </div>
 
@@ -159,6 +162,10 @@ function resetAddProjectPanel() {
   $('#f-project-data').value = '';
   $('#btn-save-new-project').disabled = true;
 }
+
+$('#btn-setup-manually').addEventListener('click', () => {
+  location.href = 'project-setup.html?id=new';
+});
 
 $('#btn-download-project-template').addEventListener('click', downloadProjectDataTemplate);
 
