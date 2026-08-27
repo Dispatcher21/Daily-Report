@@ -879,6 +879,17 @@ input[type="file"] { min-height: 0; }
   background: var(--brand-light); padding: 0.25rem 0.65rem; border-radius: 12px;
 }
 
+/* A data-quality nudge (duplicate date, hours far from the project average,
+   hours logged with no Work Summary) -- never blocking, just tappable for
+   the reason(s) why. Plain button + title, not the app's usual [data-tip]
+   hover tooltip, since that's explicitly inert on a touch device and this
+   needs to work on the phone this app mostly runs on. */
+.report-warn-btn {
+  all: unset; cursor: pointer; font-size: 1.05rem; line-height: 1;
+  flex-shrink: 0; min-width: 1.6rem; min-height: 1.6rem;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+
 /* ---------- Report grid (thumbnail/icon view, like a Windows folder) ---------- */
 
 .report-grid {

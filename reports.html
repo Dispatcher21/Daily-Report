@@ -424,6 +424,66 @@ function reportCheckboxHtml(r) {
     : `<span class="report-row-check-spacer"></span>`;
 }
 
+// ---------- Data-quality warnings ----------
+//
+// Flags things worth a human double-checking -- never blocking, just a
+// heads-up. Computed across every report for the project (not just the
+// currently filtered/visible list), so e.g. a duplicate date hiding behind
+// an active filter still gets caught. Returns id -> string[] of reasons.
+function computeReportWarnings(reports) {
+  const warnings = new Map();
+  const flag = (id, msg) => {
+    if (!warnings.has(id)) warnings.set(id, []);
+    warnings.get(id).push(msg);
+  };
+
+  const byDate = new Map();
+  reports.forEach((r) => {
+    if (!r.date) return;
+    if (!byDate.has(r.date)) byDate.set(r.date, []);
+    byDate.get(r.date).push(r);
+  });
+  byDate.forEach((list) => {
+    if (list.length < 2) return;
+    list.forEach((r) => {
+      const others = list.filter((x) => x !== r).map((x) => `#${x.reportNo}`).join(', ');
+      flag(r.id, `Same date as ${others}`);
+    });
+  });
+
+  // Hours well off the average of days actually worked -- excludes No Work
+  // Days (0 is correct there, not an anomaly) and reports with no hours
+  // entered at all. Needs a handful of real data points before "average"
+  // means anything, so this stays quiet on a brand-new project.
+  const worked = reports.filter(
+    (r) => !isNoWorkDayReport(r) && r.hours !== '' && r.hours != null && Number.isFinite(Number(r.hours))
+  );
+  if (worked.length >= 3) {
+    const avg = worked.reduce((sum, r) => sum + Number(r.hours), 0) / worked.length;
+    worked.forEach((r) => {
+      const h = Number(r.hours);
+      if (h > avg * 1.5) flag(r.id, `${h} hours is well above the project average (${avg.toFixed(1)})`);
+      else if (h < avg * 0.5) flag(r.id, `${h} hours is well below the project average (${avg.toFixed(1)})`);
+    });
+  }
+
+  reports.forEach((r) => {
+    if (Number(r.hours) > 0 && !(r.workSummary || '').trim()) {
+      flag(r.id, 'Hours logged but Work Summary is blank');
+    }
+  });
+
+  return warnings;
+}
+
+let reportWarnings = new Map();
+
+function reportWarningHtml(r) {
+  const reasons = reportWarnings.get(r.id);
+  if (!reasons || reasons.length === 0) return '';
+  return `<button type="button" class="report-warn-btn" data-warn="${r.id}" title="${escapeHtml(reasons.join(' • '))}" aria-label="Warning: ${escapeHtml(reasons.join(' • '))}">⚠️</button>`;
+}
+
 function renderRow(r) {
   const badges = reportBadgesHtml(r);
   return `
@@ -435,6 +495,7 @@ function renderRow(r) {
         <span class="report-row-sub">${escapeHtml(r.activity || 'No activity noted')}</span>
       </div>
       <div class="report-row-actions">
+        ${reportWarningHtml(r)}
         <a class="btn-sm" href="report-editor.html?project=${project.id}&report=${r.id}">Edit</a>
         <span class="report-row-no">#${r.reportNo}</span>
       </div>
@@ -456,6 +517,7 @@ function renderCard(r) {
     <div class="report-card" data-id="${r.id}">
       <div class="report-card-top">
         ${reportCheckboxHtml(r)}
+        ${reportWarningHtml(r)}
         <span class="report-row-no">#${r.reportNo}</span>
       </div>
       <div class="report-card-body" data-open="${r.id}">
@@ -471,6 +533,7 @@ function render() {
   const list = getFilteredSorted();
   const container = $('#report-list');
   container.className = viewMode === 'grid' ? 'report-grid' : 'report-list';
+  reportWarnings = computeReportWarnings(allReports);
 
   if (allReports.length === 0) {
     container.innerHTML = '<div class="empty-state">No reports yet. Tap "+ New Report" to start today\'s.</div>';
@@ -480,6 +543,14 @@ function render() {
     container.innerHTML = list.map(viewMode === 'grid' ? renderCard : renderRow).join('');
   }
 
+  $$('.report-warn-btn', container).forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const reasons = reportWarnings.get(btn.dataset.warn) || [];
+      alert('Worth a look:\n\n' + reasons.map((r) => '• ' + r).join('\n'));
+    });
+  });
   $$('.report-row-check', container).forEach((cb) => {
     cb.addEventListener('change', (e) => {
       const id = e.target.closest('.report-row, .report-card').dataset.id;
