@@ -62,6 +62,7 @@
   <div class="select-all-row">
     <button type="button" class="text-btn" id="btn-select-all">Select all</button>
     <span id="select-count-label"></span>
+    <button type="button" class="view-toggle-btn" id="btn-refresh" title="Refresh reports and thumbnails" aria-label="Refresh reports and thumbnails">&#8635;</button>
     <div class="view-toggle" id="view-toggle" role="group" aria-label="View as">
       <button type="button" class="view-toggle-btn" data-view="list" title="List view" aria-label="List view">&#9776;</button>
       <button type="button" class="view-toggle-btn" data-view="grid" title="Thumbnail view" aria-label="Thumbnail view">&#9638;</button>
@@ -300,12 +301,16 @@ let viewMode = 'list';
 
 function setViewMode(mode) {
   viewMode = mode;
-  $$('.view-toggle-btn').forEach((btn) => btn.classList.toggle('active', btn.dataset.view === mode));
+  $$('#view-toggle .view-toggle-btn').forEach((btn) => btn.classList.toggle('active', btn.dataset.view === mode));
   saveSetting(VIEW_MODE_SETTING, mode).catch((err) => console.error(err));
   render();
 }
 
-$$('.view-toggle-btn').forEach((btn) => {
+// Scoped to #view-toggle specifically -- #btn-refresh reuses .view-toggle-btn
+// purely for its square-icon-button look, and isn't part of the list/grid
+// toggle group, so a bare .view-toggle-btn selector here would wire it up
+// to call setViewMode(undefined) on click and quietly corrupt the view mode.
+$$('#view-toggle .view-toggle-btn').forEach((btn) => {
   btn.addEventListener('click', () => setViewMode(btn.dataset.view));
 });
 
@@ -332,11 +337,48 @@ async function init() {
 
   const savedViewMode = await getSetting(VIEW_MODE_SETTING);
   viewMode = savedViewMode === 'grid' ? 'grid' : 'list';
-  $$('.view-toggle-btn').forEach((btn) => btn.classList.toggle('active', btn.dataset.view === viewMode));
+  $$('#view-toggle .view-toggle-btn').forEach((btn) => btn.classList.toggle('active', btn.dataset.view === viewMode));
 
   allReports = await getReportsForProject(project.id);
   render();
 }
+
+// Manual "Refresh" -- pulls the latest company data (bypassing the usual
+// throttle, since someone explicitly asked) and force-regenerates every
+// visible thumbnail, not just the ones ensureThumbnails would otherwise
+// consider stale. Uses the shared progress banner so a slow pull on a bad
+// connection is visibly working rather than looking hung.
+$('#btn-refresh').addEventListener('click', async () => {
+  const btn = $('#btn-refresh');
+  btn.disabled = true;
+  btn.classList.add('spinning');
+  startProgressBanner();
+  try {
+    if (await getCompanyRoom()) {
+      progressStep('pulling', 'Getting the latest reports');
+      await autoPullCompanyData(true);
+      allReports = await getReportsForProject(project.id);
+    }
+    progressStep('thumbnails', 'Rebuilding thumbnails');
+    thumbnailUrls.forEach(({ front, back }) => {
+      URL.revokeObjectURL(front);
+      URL.revokeObjectURL(back);
+    });
+    thumbnailUrls.clear();
+    // In-memory only, not persisted -- ensureThumbnails treats a mismatched
+    // thumbnailAt as stale and regenerates, then writes the real value back
+    // via putReportRaw once it does.
+    allReports.forEach((r) => { r.thumbnailAt = null; });
+    render();
+    finishProgressBanner('Refreshed!');
+  } catch (err) {
+    console.error(err);
+    progressBannerError(userError("Couldn't refresh: " + err.message, 'REFRESH_REPORTS'));
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove('spinning');
+  }
+});
 
 function getFilteredSorted() {
   const from = $('#f-date-from').value;

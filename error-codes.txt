@@ -39,6 +39,7 @@ it on the Welcome screen or in Settings).
   LONGHAUL        Couldn't build the quantity sheet
   ARCEE           Couldn't save pay item quantities
   MEGATRON        Couldn't build the PDF
+  BLURR           Couldn't refresh the reports list
   SPARKPLUG       Something failed that doesn't have its own code yet --
                   note exactly what you were doing when this showed up
 

@@ -644,11 +644,17 @@ const AUTO_PULL_SETTING = 'companyAutoPullAt';
 // 'company-data-pulled' on success, same pattern as
 // pullCompanyMediaInBackground's 'company-media-updated', so any open page
 // can refresh itself without a full reload.
-async function autoPullCompanyData() {
+// `force` skips the throttle (for an explicit "Refresh" button someone
+// actually clicked) and re-throws instead of swallowing a failure -- a
+// silent background pull failing is fine to just log, but a manual refresh
+// should tell the person who asked for it that it didn't work.
+async function autoPullCompanyData(force) {
   const room = await getCompanyRoom();
   if (!room) return;
-  const last = (await getSetting(AUTO_PULL_SETTING)) || 0;
-  if (Date.now() - last < AUTO_PULL_THROTTLE_MS) return;
+  if (!force) {
+    const last = (await getSetting(AUTO_PULL_SETTING)) || 0;
+    if (Date.now() - last < AUTO_PULL_THROTTLE_MS) return;
+  }
   try {
     await pullAllCompanyData(room.code);
     await saveSetting(AUTO_PULL_SETTING, Date.now());
@@ -656,6 +662,7 @@ async function autoPullCompanyData() {
     window.dispatchEvent(new CustomEvent('company-data-pulled'));
   } catch (err) {
     console.error('auto pull:', err);
+    if (force) throw err;
   }
 }
 

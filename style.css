@@ -904,6 +904,12 @@ input[type="file"] { min-height: 0; }
   display: flex; align-items: center; justify-content: center;
 }
 .view-toggle-btn.active { background: var(--brand); color: var(--on-brand); border-color: var(--brand); }
+.view-toggle-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.view-toggle-btn.spinning { animation: view-toggle-spin 0.8s linear infinite; }
+@keyframes view-toggle-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .view-toggle-btn.spinning { animation: none; }
+}
 
 .select-all-row {
   display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;

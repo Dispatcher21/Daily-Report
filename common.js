@@ -205,6 +205,7 @@ const ERROR_CODES = {
   QUANTITY_SHEET: 'LONGHAUL',
   SAVE_QUANTITIES: 'ARCEE',
   BUILD_PDF: 'MEGATRON',
+  REFRESH_REPORTS: 'BLURR',
 };
 
 // Appends a reference code to a user-facing error message -- use for every
