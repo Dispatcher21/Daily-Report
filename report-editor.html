@@ -330,6 +330,7 @@ function bindDynamicFields() {
       $('#manual-pay-fields').classList.toggle('show', manualPayOpen);
       $('#manual-pay-toggle-icon').textContent = manualPayOpen ? '▾' : '▸';
     });
+    onEnterSubmit($('#manual-pay-fields'), $('#btn-add-manual-pay'));
     $('#btn-add-manual-pay').addEventListener('click', () => {
       const itemNumber = $('#mp-num').value.trim();
       const description = $('#mp-desc').value.trim();

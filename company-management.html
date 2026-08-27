@@ -318,6 +318,8 @@ function showCmLogo(blob) {
 
 // ---------- Name ----------
 
+onEnterSubmit($('#cm-name').closest('.step-body'), $('#btn-save-name'));
+
 $('#btn-save-name').addEventListener('click', async () => {
   const btn = $('#btn-save-name');
   cmError('');
@@ -605,6 +607,8 @@ $('#cs-list').addEventListener('click', async (e) => {
   await renderCsList();
 });
 
+onEnterSubmit($('#cs-details'), $('#btn-create-setup'));
+
 $('#btn-create-setup').addEventListener('click', async () => {
   const btn = $('#btn-create-setup');
   cmError('');
@@ -652,6 +656,8 @@ $('#btn-create-setup').addEventListener('click', async () => {
 
 // ---------- Admin password ----------
 
+onEnterSubmit($('#cm-admin-password').closest('.step-body'), $('#btn-change-admin-password'));
+
 $('#btn-change-admin-password').addEventListener('click', async () => {
   const btn = $('#btn-change-admin-password');
   cmError('');
@@ -681,6 +687,8 @@ function ccpProgressText(progress) {
   if (progress.phase === 'reports') return `Copying reports… (${progress.index}/${progress.total})`;
   return 'Working…';
 }
+
+onEnterSubmit($('#cm-company-password').closest('.step-body'), $('#btn-change-company-password'));
 
 $('#btn-change-company-password').addEventListener('click', async () => {
   const btn = $('#btn-change-company-password');

@@ -9,6 +9,21 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+// Nothing in this app uses a real <form>, so Enter does nothing by default
+// in any single-button input group (name/password entry, join/create company,
+// search-and-go, etc.) -- this wires Enter (pressed in a text/password/number/
+// date input, never a textarea) under `container` to trigger the same action
+// as clicking `button`. Uses button.click() rather than calling the handler
+// directly so a disabled button (e.g. required fields still blank) correctly
+// still does nothing on Enter, exactly like it does on a real click.
+function onEnterSubmit(container, button) {
+  container.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || e.target.tagName !== 'INPUT') return;
+    e.preventDefault();
+    button.click();
+  });
+}
+
 function triggerDownload(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

@@ -235,6 +235,8 @@ function buildQuantitySheetWorkbook(reports, project) {
   return { wb, dates };
 }
 
+onEnterSubmit($('#range-fields'), $('#btn-generate'));
+
 $('#btn-generate').addEventListener('click', () => {
   const selected = selectedReports();
   if (selected.length === 0) return;

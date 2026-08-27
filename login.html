@@ -73,6 +73,8 @@ function loginProgressText(progress) {
   return 'Working…';
 }
 
+onEnterSubmit($('.step-body'), $('#btn-continue'));
+
 $('#btn-continue').addEventListener('click', async () => {
   const btn = $('#btn-continue');
   const progressEl = $('#login-progress');

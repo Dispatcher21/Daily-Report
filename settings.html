@@ -201,7 +201,7 @@
           </div>
         </details>
 
-        <details class="company-details" style="margin-top:0.75rem;">
+        <details class="company-details" id="jc-details" style="margin-top:0.75rem;">
           <summary>Join Company</summary>
           <label>Company Password
             <input type="password" id="jc-password" autocomplete="current-password">
@@ -515,6 +515,8 @@ function ccProgressText(progress) {
   return 'Creating company…';
 }
 
+onEnterSubmit($('#cc-details'), $('#btn-create-company'));
+
 $('#btn-create-company').addEventListener('click', async () => {
   const btn = $('#btn-create-company');
   const progressEl = $('#cc-progress');
@@ -575,6 +577,8 @@ function companyProgressText(progress) {
   if (progress.phase === 'reports') return `${progress.total ? 'Syncing' : 'Pulling'} reports… (${progress.index}/${progress.total})`;
   return 'Working…';
 }
+
+onEnterSubmit($('#jc-details'), $('#btn-join-company'));
 
 $('#btn-join-company').addEventListener('click', async () => {
   const btn = $('#btn-join-company');
@@ -668,6 +672,8 @@ $('#f-company-projects').addEventListener('change', async (e) => {
 
 // -- Connected: unlock admin --
 
+onEnterSubmit($('#company-unlock-admin'), $('#btn-unlock-admin'));
+
 $('#btn-unlock-admin').addEventListener('click', async () => {
   const btn = $('#btn-unlock-admin');
   companyError('');
@@ -715,6 +721,8 @@ $('#btn-leave-company').addEventListener('click', async () => {
 });
 
 // ---------- Your Name ----------
+
+onEnterSubmit($('#f-user-name').closest('.step-body'), $('#btn-save-user-name'));
 
 $('#btn-save-user-name').addEventListener('click', async () => {
   const name = $('#f-user-name').value.trim();
