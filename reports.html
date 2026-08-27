@@ -447,7 +447,16 @@ function renderRow(r) {
 }
 
 function renderCard(r) {
-  const badges = reportBadgesHtml(r);
+  // Activity leads the card -- it's the thing actually worth scanning for.
+  // A true No Work Day report has nothing there by design (the button that
+  // makes one only touches Notes, never Activity), so its badge takes over
+  // that slot instead of every one just saying "No activity noted".
+  const activityHtml = !r.activity && isNoWorkDayReport(r)
+    ? '<span class="report-row-nwd">NO WORK DAY</span>'
+    : escapeHtml(r.activity || 'No activity noted');
+  const authorBadge = (r.createdBy || r.representative)
+    ? ` <span class="report-row-author">${escapeHtml(r.createdBy || r.representative)}</span>`
+    : '';
   return `
     <div class="report-card" data-id="${r.id}">
       <div class="report-card-top">
@@ -455,10 +464,9 @@ function renderCard(r) {
         <span class="report-row-no">#${r.reportNo}</span>
       </div>
       <div class="report-card-body" data-open="${r.id}">
+        <span class="report-card-activity">${activityHtml}</span>
         ${reportThumbsHtml(r)}
-        <span class="report-row-date">${r.date || '(no date)'}</span>
-        ${badges ? `<div class="report-card-badges">${badges}</div>` : ''}
-        <span class="report-row-sub">${escapeHtml(r.activity || 'No activity noted')}</span>
+        <span class="report-row-date">${r.date || '(no date)'}${authorBadge}</span>
       </div>
       <a class="btn-sm report-card-edit" href="report-editor.html?project=${project.id}&report=${r.id}">Edit</a>
     </div>`;

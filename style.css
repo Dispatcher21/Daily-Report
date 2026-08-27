@@ -885,14 +885,18 @@ input[type="file"] { min-height: 0; }
 }
 .report-card-top { display: flex; align-items: center; justify-content: space-between; }
 .report-card-body { cursor: pointer; display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; }
+/* Activity leads the card -- it's what an inspector's actually scanning
+   for, above even the thumbnails. A No Work Day report has nothing there
+   (see renderCard in reports.html), so its badge fills the same slot
+   instead of leaving "No activity noted" sitting at the top of every one. */
+.report-card-activity {
+  font-weight: 700; font-size: 0.85rem; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; white-space: normal;
+}
 .report-card-body .report-thumbs { justify-content: center; }
 .report-card-body .thumb-page { width: 64px; height: 51px; }
 .report-card-body .report-row-date { font-weight: 700; font-size: 0.9rem; }
-.report-card-badges { display: flex; flex-wrap: wrap; gap: 0.3rem; }
-.report-card-body .report-row-sub {
-  font-size: 0.78rem; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis;
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; white-space: normal;
-}
 .report-card-edit { text-align: center; text-decoration: none; }
 
 /* ---------- List/grid toggle ---------- */
