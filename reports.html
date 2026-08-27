@@ -336,7 +336,7 @@ function render() {
           ${checkbox}
           <div class="report-row-thumb-wrap" data-thumb="${r.id}">${thumbSrc ? `<img src="${thumbSrc}" alt="">` : '<span class="report-row-thumb-placeholder">&#128196;</span>'}</div>
           <div class="report-row-main" data-open="${r.id}">
-            <span class="report-row-date">${r.date || '(no date)'}${r.createdBy || r.representative ? ` <span class="report-row-author">${escapeHtml(r.createdBy || r.representative)}</span>` : ''}</span>
+            <span class="report-row-date">${r.date || '(no date)'}${isNoWorkDayReport(r) ? ' <span class="report-row-nwd">NO WORK DAY</span>' : ''}${r.createdBy || r.representative ? ` <span class="report-row-author">${escapeHtml(r.createdBy || r.representative)}</span>` : ''}</span>
             <span class="report-row-sub">${escapeHtml(r.activity || 'No activity noted')}</span>
           </div>
           <div class="report-row-actions">

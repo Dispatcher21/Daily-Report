@@ -782,6 +782,11 @@ input[type="file"] { min-height: 0; }
   background: var(--brand-dim); padding: 2px 8px; border-radius: 10px;
   vertical-align: middle; white-space: nowrap;
 }
+.report-row .report-row-nwd {
+  font-size: 0.68rem; font-weight: 700; letter-spacing: 0.02em; color: #fff;
+  background: var(--danger); padding: 2px 8px; border-radius: 10px;
+  vertical-align: middle; white-space: nowrap;
+}
 .report-row .report-row-sub { font-size: 0.83rem; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .report-row .report-row-actions { display: flex; align-items: center; gap: 0.5rem; }
 .report-row .report-row-no {
