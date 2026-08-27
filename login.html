@@ -9,15 +9,6 @@
 <meta name="theme-color" content="#1c3d5a">
 <link rel="stylesheet" href="style.css">
 <script src="theme.js"></script>
-<style>
-  .spinner {
-    display: inline-block; width: 1em; height: 1em;
-    border: 2px solid rgba(255,255,255,0.4); border-top-color: #fff;
-    border-radius: 50%; animation: spin 0.7s linear infinite;
-    vertical-align: -0.15em; margin-right: 0.5rem;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-</style>
 </head>
 <body>
 
@@ -48,10 +39,6 @@
       </label>
 
       <button type="button" class="btn-primary" id="btn-continue" style="margin-top:0.75rem;">Continue</button>
-      <div class="cc-progress" id="login-progress" hidden style="display:flex;align-items:center;margin-top:0.6rem;font-size:0.85rem;color:var(--text-dim);">
-        <span class="spinner"></span>
-        <span id="login-progress-text"></span>
-      </div>
       <div class="err" id="login-error" hidden></div>
     </div>
   </div>
@@ -64,21 +51,10 @@
 <script src="firebase-sync.js"></script>
 <script>
 
-function loginProgressText(progress) {
-  if (progress.phase === 'signing-in') return 'Signing in…';
-  if (progress.phase === 'looking-up') return 'Looking up company…';
-  if (progress.phase === 'logo') return 'Pulling company logo…';
-  if (progress.phase === 'projects') return 'Pulling projects…';
-  if (progress.phase === 'reports') return `Pulling reports… (${progress.index}/${progress.total})`;
-  return 'Working…';
-}
-
 onEnterSubmit($('.step-body'), $('#btn-continue'));
 
 $('#btn-continue').addEventListener('click', async () => {
   const btn = $('#btn-continue');
-  const progressEl = $('#login-progress');
-  const progressText = $('#login-progress-text');
   const errorEl = $('#login-error');
   errorEl.hidden = true;
 
@@ -91,25 +67,22 @@ $('#btn-continue').addEventListener('click', async () => {
   }
 
   btn.disabled = true;
-  progressEl.hidden = false;
-  progressText.textContent = password ? 'Signing in…' : 'Saving…';
+  startProgressBanner();
+  progressStep('saving', password ? 'Signing you in' : 'Saving your name');
   try {
     await saveUserName(name);
     if (password) {
-      await joinCompanyRoom(password, (progress) => {
-        progressText.textContent = loginProgressText(progress);
-      });
+      await joinCompanyRoom(password, reportCompanyProgress);
     }
+    finishProgressBanner("You're all set!");
     location.href = 'index.html';
   } catch (err) {
     console.error(err);
-    errorEl.textContent = password
-      ? 'Could not join with that company password: ' + err.message + ' Your name is saved -- clear the password and continue if you want to join later instead.'
-      : 'Could not continue: ' + err.message;
-    errorEl.hidden = false;
-  } finally {
+    const msg = password
+      ? "Couldn't join with that company password: " + err.message + ' Your name is saved, though -- clear the password and continue if you want to join later instead.'
+      : "Couldn't continue: " + err.message;
+    progressBannerError(userError(msg, password ? 'JOIN_COMPANY' : 'CONTINUE_LOCAL'));
     btn.disabled = false;
-    progressEl.hidden = true;
   }
 });
 

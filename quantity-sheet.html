@@ -267,7 +267,7 @@ $('#btn-generate').addEventListener('click', () => {
     );
   } catch (err) {
     console.error(err);
-    alert('Could not build the quantity sheet: ' + err.message);
+    alert(userError("Couldn't build the quantity sheet: " + err.message, 'QUANTITY_SHEET'));
   } finally {
     btn.textContent = original;
     btn.disabled = false;

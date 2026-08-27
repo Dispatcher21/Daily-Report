@@ -24,6 +24,199 @@ function onEnterSubmit(container, button) {
   });
 }
 
+// ---------- Shared progress banner ----------
+//
+// One banner, injected once per page directly under the header, used by
+// every multi-step background job (join/create/sync a company, change its
+// password, build a PDF) -- replaces each page's own spinner+text copy so
+// they all look and behave the same way. Not modal: it never blocks the
+// rest of the page.
+let pbCurrentStepEl = null;
+let pbCurrentStepKey = null;
+
+function ensureProgressBanner() {
+  let el = document.getElementById('global-progress-banner');
+  if (el) return el;
+  el = document.createElement('div');
+  el.id = 'global-progress-banner';
+  el.className = 'progress-banner';
+  el.hidden = true;
+  el.innerHTML = `
+    <div class="pb-bar-track"><div class="pb-bar-fill" id="pb-bar-fill"></div></div>
+    <div class="pb-steps" id="pb-steps"></div>
+    <div class="pb-error-row" id="pb-error-row" hidden>
+      <span id="pb-error-text"></span>
+      <button type="button" id="pb-dismiss" aria-label="Dismiss">&times;</button>
+    </div>`;
+  const header = document.querySelector('.app-header');
+  if (header && header.parentNode) header.parentNode.insertBefore(el, header.nextSibling);
+  else document.body.insertBefore(el, document.body.firstChild);
+  el.querySelector('#pb-dismiss').addEventListener('click', hideProgressBanner);
+  return el;
+}
+
+function startProgressBanner() {
+  const el = ensureProgressBanner();
+  el.hidden = false;
+  el.classList.remove('pb-error', 'pb-done');
+  el.querySelector('#pb-steps').innerHTML = '';
+  el.querySelector('#pb-error-row').hidden = true;
+  const bar = el.querySelector('#pb-bar-fill');
+  bar.style.width = '6%';
+  bar.classList.add('pb-indeterminate');
+  pbCurrentStepEl = null;
+  pbCurrentStepKey = null;
+}
+
+// Call once per distinct thing happening, in plain everyday words -- e.g.
+// progressStep('reports', 'Getting your reports', '3 of 50'). Calling again
+// with the same `key` updates that same line (the running count) instead of
+// adding a new one; a new `key` checks off the previous line and starts a
+// fresh one. `detail` in the exact shape "X of Y" switches the bar from an
+// indeterminate shimmer to a real, accurate fill -- everything else keeps
+// the shimmer, since there's no honest way to know how far through an
+// unknown-length step this is.
+function progressStep(key, label, detail) {
+  const el = ensureProgressBanner();
+  if (el.hidden) startProgressBanner();
+  const steps = el.querySelector('#pb-steps');
+  const bar = el.querySelector('#pb-bar-fill');
+
+  if (key !== pbCurrentStepKey) {
+    if (pbCurrentStepEl) pbCurrentStepEl.classList.replace('pb-step-active', 'pb-step-done');
+    const row = document.createElement('div');
+    row.className = 'pb-step pb-step-active';
+    row.innerHTML = `<span class="pb-step-mark"></span><span class="pb-step-text"></span>`;
+    steps.appendChild(row);
+    pbCurrentStepEl = row;
+    pbCurrentStepKey = key;
+  }
+  pbCurrentStepEl.querySelector('.pb-step-text').textContent = detail ? `${label} — ${detail}` : label;
+
+  const frac = detail && /^(\d+) of (\d+)$/.exec(detail);
+  if (frac) {
+    bar.classList.remove('pb-indeterminate');
+    bar.style.width = Math.min(96, Math.round((Number(frac[1]) / Number(frac[2])) * 100)) + '%';
+  }
+}
+
+// Checks off the last step, fills the bar, and fades the banner out after a
+// beat -- `label`, if given, is one last friendly line (e.g. "You're all
+// caught up!").
+function finishProgressBanner(label) {
+  const el = document.getElementById('global-progress-banner');
+  if (!el) return;
+  if (pbCurrentStepEl) pbCurrentStepEl.classList.replace('pb-step-active', 'pb-step-done');
+  const bar = el.querySelector('#pb-bar-fill');
+  bar.classList.remove('pb-indeterminate');
+  bar.style.width = '100%';
+  el.classList.add('pb-done');
+  if (label) {
+    const row = document.createElement('div');
+    row.className = 'pb-step pb-step-done';
+    row.innerHTML = `<span class="pb-step-mark">&#10003;</span><span class="pb-step-text"></span>`;
+    row.querySelector('.pb-step-text').textContent = label;
+    el.querySelector('#pb-steps').appendChild(row);
+  }
+  setTimeout(() => {
+    if (!el.classList.contains('pb-error')) el.hidden = true;
+  }, 1400);
+}
+
+// Marks the banner failed and keeps it on screen (with a dismiss button)
+// rather than auto-hiding -- see userError() for how `message` gets its
+// reference code appended.
+function progressBannerError(message) {
+  const el = ensureProgressBanner();
+  el.hidden = false;
+  el.classList.add('pb-error');
+  if (pbCurrentStepEl) pbCurrentStepEl.classList.replace('pb-step-active', 'pb-step-error');
+  el.querySelector('#pb-bar-fill').classList.remove('pb-indeterminate');
+  const errRow = el.querySelector('#pb-error-row');
+  errRow.hidden = false;
+  el.querySelector('#pb-error-text').textContent = message;
+}
+
+function hideProgressBanner() {
+  const el = document.getElementById('global-progress-banner');
+  if (el) el.hidden = true;
+}
+
+// Feeds firebase-sync.js's {phase, index, total, count} progress shape
+// (used by join/create/sync/change-company-password) into the banner --
+// one mapping, reused by every flow that reports progress this way, so
+// they all show the same plain-language wording instead of four slightly
+// different copies of the same table.
+function reportCompanyProgress(progress) {
+  const p = progress || {};
+  switch (p.phase) {
+    case 'signing-in': progressStep('signing-in', 'Signing you in'); break;
+    case 'looking-up': progressStep('looking-up', 'Finding your company'); break;
+    case 'pulling': progressStep('pulling', 'Getting the latest company data'); break;
+    case 'creating': progressStep('creating', 'Setting up your new address'); break;
+    case 'logo': progressStep('logo', 'Getting your company logo'); break;
+    case 'projects':
+      progressStep(
+        'projects',
+        p.count != null ? 'Sending your projects' : 'Getting your projects',
+        p.count != null ? `${p.count} sent` : null
+      );
+      break;
+    case 'reports':
+      progressStep('reports', 'Syncing your reports', p.total ? `${p.index} of ${p.total}` : null);
+      break;
+    default:
+      progressStep('working', 'Working on it');
+  }
+}
+
+// ---------- Fun error reference codes ----------
+//
+// Every user-facing error gets a short code from this list so a report like
+// "I got BUMBLEBEE" can be matched straight back to exactly which catch
+// block fired, without a screenshot or a stack trace. See error-codes.txt
+// (repo root) for the full table -- codes never get reassigned, even if the
+// wording of the message they're attached to changes later, so an old
+// report stays lookup-able. The same underlying operation (e.g. joining a
+// company, or reading an uploaded Excel file) keeps the same code no
+// matter which page it was triggered from.
+const ERROR_CODES = {
+  JOIN_COMPANY: 'BUMBLEBEE',
+  CONTINUE_LOCAL: 'CLIFFJUMPER',
+  CREATE_COMPANY: 'OPTIMUS',
+  COMPANY_LOGO: 'IRONHIDE',
+  UNLOCK_ADMIN: 'RATCHET',
+  SYNC_NOW: 'JAZZ',
+  PARSE_EXCEL: 'WHEELJACK',
+  SAVE_COMPANY_NAME: 'HOUND',
+  PERMISSION_TOGGLE: 'PROWL',
+  CUSTOM_SETUP: 'MIRAGE',
+  ADMIN_PASSWORD: 'GRIMLOCK',
+  COMPANY_PASSWORD: 'SOUNDWAVE',
+  REFRESH_ACTIVITY: 'COSMOS',
+  PROJECT_BACKGROUND: 'TRAILBREAKER',
+  SAVE_PROJECT: 'STARSCREAM',
+  SHARED_SETUP_READ: 'SKYWARP',
+  SHARED_SETUP_APPLY: 'THUNDERCRACKER',
+  DOWNLOAD_PROJECT_FILE: 'WHEELIE',
+  IMPORT_REPORT_BUNDLES: 'BLASTER',
+  SHARE_REPORTS: 'HOTROD',
+  DELETE_REPORTS: 'SIDESWIPE',
+  MASS_EDIT: 'SUNSTREAKER',
+  QUANTITY_SHEET: 'LONGHAUL',
+  SAVE_QUANTITIES: 'ARCEE',
+  BUILD_PDF: 'MEGATRON',
+};
+
+// Appends a reference code to a user-facing error message -- use for every
+// alert()/error-div that shows a caught error. `key` should be one of
+// ERROR_CODES above; an unrecognized or missing key falls back to a generic
+// code rather than showing no code at all.
+function userError(message, key) {
+  const code = ERROR_CODES[key] || 'SPARKPLUG';
+  return `${message}\n\nReference code: ${code} (see error-codes.txt if you need to report this)`;
+}
+
 function triggerDownload(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

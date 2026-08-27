@@ -454,7 +454,7 @@ $('#btn-sync-selected').addEventListener('click', async () => {
   } catch (err) {
     if (err && err.name === 'AbortError') return; // user dismissed the share sheet
     console.error(err);
-    alert('Could not prepare the sync files: ' + err.message);
+    alert(userError("Couldn't prepare the files to share: " + err.message, 'SHARE_REPORTS'));
   } finally {
     btn.textContent = original;
     btn.disabled = false;
@@ -495,7 +495,7 @@ $('#btn-delete-selected').addEventListener('click', async () => {
     render();
   } catch (err) {
     console.error(err);
-    alert('Could not delete: ' + err.message);
+    alert(userError("Couldn't delete: " + err.message, 'DELETE_REPORTS'));
   } finally {
     btn.textContent = original;
     btn.disabled = false;
@@ -538,7 +538,7 @@ $('#btn-apply-mass-edit').addEventListener('click', async () => {
     alert(`Updated ${selected.length} report(s).`);
   } catch (err) {
     console.error(err);
-    alert('Could not apply the edit: ' + err.message);
+    alert(userError("Couldn't apply the edit: " + err.message, 'MASS_EDIT'));
   } finally {
     btn.disabled = false;
   }

@@ -1,7 +1,7 @@
 // Caches the app shell so it keeps working with no signal in the field.
 // Bump CACHE_NAME whenever any of these files change so the new version
 // actually gets picked up.
-const CACHE_NAME = 'daily-report-app-v73';
+const CACHE_NAME = 'daily-report-app-v74';
 const ASSETS = [
   './',
   './login.html',
@@ -17,6 +17,7 @@ const ASSETS = [
   './quick-quantity.html',
   './required-fields.html',
   './print-layout.json',
+  './error-codes.txt',
   './render-report.js',
   './pdf-export.js',
   './report-bundle.js',

@@ -158,6 +158,60 @@ body {
 .app-header .app-sub { font-size: 0.72rem; color: var(--on-brand-dim); margin-top: 2px; }
 .app-header a.home-link { color: var(--on-brand); text-decoration: none; display: flex; flex-direction: column; }
 
+/* ---------- Shared progress banner (see common.js) ---------- */
+.progress-banner {
+  background: var(--surface);
+  border-bottom: 1.5px solid var(--border);
+  padding: 0.7rem 1rem 0.8rem;
+}
+.progress-banner[hidden] { display: none; }
+
+.pb-bar-track {
+  height: 5px; border-radius: 3px; background: var(--surface-3);
+  overflow: hidden; margin-bottom: 0.6rem; position: relative;
+}
+.pb-bar-fill {
+  height: 100%; width: 6%; background: var(--brand); border-radius: 3px;
+  transition: width 0.35s ease, background 0.25s ease;
+}
+.pb-bar-fill.pb-indeterminate {
+  width: 32% !important;
+  position: absolute; left: 0; top: 0;
+  animation: pb-shimmer 1.15s ease-in-out infinite;
+}
+@keyframes pb-shimmer {
+  0% { left: -35%; }
+  100% { left: 100%; }
+}
+.progress-banner.pb-done .pb-bar-fill { background: var(--ok); }
+.progress-banner.pb-error .pb-bar-fill { background: var(--danger); }
+
+.pb-steps { display: flex; flex-direction: column; gap: 0.32rem; }
+.pb-step { display: flex; align-items: center; gap: 0.55rem; font-size: 0.85rem; color: var(--text-dim); }
+.pb-step-mark { width: 1.1rem; text-align: center; flex-shrink: 0; }
+.pb-step-done { color: var(--text); }
+.pb-step-done .pb-step-mark { color: var(--ok); font-weight: 700; }
+.pb-step-active { color: var(--text); font-weight: 600; }
+.pb-step-active .pb-step-mark::before {
+  content: ''; display: inline-block; width: 0.7rem; height: 0.7rem; border-radius: 50%;
+  border: 2px solid var(--border); border-top-color: var(--brand);
+  animation: pb-spin 0.7s linear infinite;
+}
+@keyframes pb-spin { to { transform: rotate(360deg); } }
+.pb-step-error { color: var(--danger); }
+.pb-step-error .pb-step-mark { color: var(--danger); font-weight: 700; }
+
+.pb-error-row {
+  margin-top: 0.6rem; padding: 0.6rem 0.75rem;
+  background: var(--danger-bg); border: 1.5px solid var(--danger); border-radius: var(--radius-sm);
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem;
+  color: var(--danger); font-size: 0.85rem; white-space: pre-line;
+}
+.pb-error-row #pb-dismiss {
+  background: none; border: none; color: inherit; font-size: 1.2rem; line-height: 1;
+  cursor: pointer; padding: 0 0.1rem; flex-shrink: 0;
+}
+
 /* Company logo, shown in the header only once the app is installed (added to
    the home screen) -- a browser tab already has its own favicon, so this is
    reserved for the "feels like a real app" moment. */

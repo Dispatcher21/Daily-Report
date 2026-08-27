@@ -1,0 +1,49 @@
+DAILY WORK REPORTS -- ERROR CODES
+==================================
+
+When something goes wrong, the app shows a short code (an old Transformers
+name) after the error message. That code always points to the exact same
+place in the app -- so if you run into a problem, tell whoever's helping you
+the code (and what you were doing at the time) and they can go straight to
+it instead of guessing.
+
+Codes never get reused for something else and never change meaning, even if
+the wording of the on-screen message is later reworded. The same code shows
+up no matter which page the failure happened on, as long as it's the same
+underlying operation (e.g. joining a company shows BUMBLEBEE whether you hit
+it on the Welcome screen or in Settings).
+
+  CODE            WHAT IT MEANS
+  --------------- --------------------------------------------------------
+  BUMBLEBEE       Couldn't join a company with that password
+  CLIFFJUMPER     Your name saved, but the app couldn't finish setting up
+  OPTIMUS         Couldn't create a new company
+  IRONHIDE        Couldn't save the company logo
+  RATCHET         Couldn't unlock admin access with that password
+  JAZZ            Sync Now failed
+  WHEELJACK       Couldn't read an uploaded Excel file
+  HOUND           Couldn't save the company name
+  PROWL           A permission switch didn't save
+  MIRAGE          Couldn't create a custom setup (project-scoped login)
+  GRIMLOCK        Couldn't change the admin password
+  SOUNDWAVE       Couldn't change the company password
+  COSMOS          Couldn't refresh the activity list
+  TRAILBREAKER    Couldn't save a project's background image
+  STARSCREAM      Couldn't save a new project
+  SKYWARP         A shared setup link couldn't be read
+  THUNDERCRACKER  Couldn't add a shared setup
+  WHEELIE         Couldn't build the downloadable project data file
+  BLASTER         Couldn't import .report files into a project
+  HOTROD          Couldn't prepare reports to share/sync
+  SIDESWIPE       Couldn't delete the selected reports
+  SUNSTREAKER     Couldn't apply a mass edit to reports
+  LONGHAUL        Couldn't build the quantity sheet
+  ARCEE           Couldn't save pay item quantities
+  MEGATRON        Couldn't build the PDF
+  SPARKPLUG       Something failed that doesn't have its own code yet --
+                  note exactly what you were doing when this showed up
+
+Not seeing your code here, or the message doesn't match what this table
+says? The app itself is more up to date than this file could ever be kept
+by hand -- trust the on-screen message first, and treat the code as a
+pointer for whoever's debugging it, not the full explanation.

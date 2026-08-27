@@ -618,7 +618,7 @@ $('#btn-download-project-file').addEventListener('click', () => {
     downloadProjectDataFile(project);
   } catch (err) {
     console.error(err);
-    alert('Could not build the project file: ' + err.message);
+    alert(userError("Couldn't build the project file: " + err.message, 'DOWNLOAD_PROJECT_FILE'));
   }
 });
 
@@ -637,7 +637,7 @@ $('#f-reupload').addEventListener('change', async (e) => {
     alert('Project data updated.');
   } catch (err) {
     console.error(err);
-    alert('Could not read that file: ' + err.message);
+    alert(userError("Couldn't read that file: " + err.message, 'PARSE_EXCEL'));
   }
 });
 
@@ -714,7 +714,7 @@ $('#f-import-reports').addEventListener('change', async (e) => {
   await init();
 
   let msg = `Import complete.\n${added} report(s) added, ${overwritten} overwritten, ${skipped} skipped.`;
-  if (errors.length > 0) msg += `\n\nIssues:\n${errors.join('\n')}`;
+  if (errors.length > 0) msg = userError(msg + `\n\nIssues:\n${errors.join('\n')}`, 'IMPORT_REPORT_BUNDLES');
   alert(msg);
 });
 

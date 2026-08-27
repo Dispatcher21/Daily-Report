@@ -58,22 +58,6 @@
     color: var(--text-dim); padding: 0 0.15rem;
   }
   .cc-chip button:hover { color: var(--danger); }
-
-  .spinner {
-    display: inline-block; width: 1em; height: 1em;
-    border: 2px solid rgba(255,255,255,0.4); border-top-color: #fff;
-    border-radius: 50%; animation: spin 0.7s linear infinite;
-    vertical-align: -0.15em; margin-right: 0.5rem;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  .cc-progress {
-    display: flex; align-items: center; margin-top: 0.6rem;
-    font-size: 0.85rem; color: var(--text-dim);
-  }
-  .cc-progress .spinner {
-    border-color: var(--border-strong); border-top-color: var(--brand-light);
-  }
 </style>
 </head>
 <body>
@@ -195,10 +179,6 @@
           </label>
 
           <button type="button" class="btn-primary" id="btn-create-company" style="margin-top:0.5rem;">Create Company</button>
-          <div class="cc-progress" id="cc-progress" hidden>
-            <span class="spinner"></span>
-            <span id="cc-progress-text"></span>
-          </div>
         </details>
 
         <details class="company-details" id="jc-details" style="margin-top:0.75rem;">
@@ -496,7 +476,7 @@ $('#cc-f-projects').addEventListener('change', async (e) => {
       }
       ccPendingProjects.push(candidate);
     } catch (err) {
-      alert(`Could not read ${file.name}: ${err.message}`);
+      alert(userError(`Couldn't read ${file.name}: ${err.message}`, 'PARSE_EXCEL'));
     }
   }
   renderCcProjectChips();
@@ -508,19 +488,10 @@ function setCcFormDisabled(disabled) {
   });
 }
 
-function ccProgressText(progress) {
-  if (progress.phase === 'logo') return 'Uploading logo…';
-  if (progress.phase === 'projects') return progress.count ? `Saved ${progress.count} project(s)…` : 'Creating company…';
-  if (progress.phase === 'reports') return `Syncing reports… (${progress.index}/${progress.total})`;
-  return 'Creating company…';
-}
-
 onEnterSubmit($('#cc-details'), $('#btn-create-company'));
 
 $('#btn-create-company').addEventListener('click', async () => {
   const btn = $('#btn-create-company');
-  const progressEl = $('#cc-progress');
-  const progressText = $('#cc-progress-text');
   companyError('');
   const name = $('#cc-name').value.trim();
   const password = $('#cc-password').value;
@@ -533,16 +504,14 @@ $('#btn-create-company').addEventListener('click', async () => {
   if (adminPassword === password) return companyError('Admin password must be different from the company password.');
 
   setCcFormDisabled(true);
-  progressEl.hidden = false;
-  progressText.textContent = 'Saving locally…';
+  startProgressBanner();
+  progressStep('local', 'Saving your logo and projects locally');
   try {
     if (ccPendingLogo) await saveReportLogo(ccPendingLogo);
     for (const project of ccPendingProjects) await saveProject(project);
 
-    progressText.textContent = 'Creating company…';
-    await createCompanyRoom({ name, password, adminPassword }, (progress) => {
-      progressText.textContent = ccProgressText(progress);
-    });
+    progressStep('creating', 'Creating your company');
+    await createCompanyRoom({ name, password, adminPassword }, reportCompanyProgress);
 
     ccPendingLogo = null;
     ccPendingProjects = [];
@@ -556,27 +525,16 @@ $('#btn-create-company').addEventListener('click', async () => {
 
     await refreshCompanySection();
     applyHeaderLogo();
+    finishProgressBanner('Your company is ready!');
   } catch (err) {
     console.error(err);
-    companyError('Could not create company: ' + err.message);
+    progressBannerError(userError("Couldn't create the company: " + err.message, 'CREATE_COMPANY'));
   } finally {
     setCcFormDisabled(false);
-    progressEl.hidden = true;
   }
 });
 
 // -- Join Company --
-
-function companyProgressText(progress) {
-  if (progress.phase === 'signing-in') return 'Signing in…';
-  if (progress.phase === 'looking-up') return 'Looking up company…';
-  if (progress.phase === 'pulling') return 'Pulling latest data…';
-  if (progress.phase === 'creating') return 'Creating new company address…';
-  if (progress.phase === 'logo') return 'Pulling company logo…';
-  if (progress.phase === 'projects') return progress.count != null ? `Pushed ${progress.count} project(s)…` : 'Pulling projects…';
-  if (progress.phase === 'reports') return `${progress.total ? 'Syncing' : 'Pulling'} reports… (${progress.index}/${progress.total})`;
-  return 'Working…';
-}
 
 onEnterSubmit($('#jc-details'), $('#btn-join-company'));
 
@@ -586,17 +544,16 @@ $('#btn-join-company').addEventListener('click', async () => {
   const password = $('#jc-password').value;
   btn.disabled = true;
   btn.textContent = 'Joining...';
+  startProgressBanner();
   try {
-    const result = await joinCompanyRoom(password, (progress) => {
-      companyStatus(companyProgressText(progress));
-    });
+    const result = await joinCompanyRoom(password, reportCompanyProgress);
     $('#jc-password').value = '';
     await refreshCompanySection();
     applyHeaderLogo();
-    companyStatus(`Joined — pulled ${result.projectsPulled} project(s), ${result.reportsPulled} report(s).`);
+    finishProgressBanner(`You're connected! Got ${result.projectsPulled} project(s) and ${result.reportsPulled} report(s).`);
   } catch (err) {
     console.error(err);
-    companyError(err.message);
+    progressBannerError(userError("Couldn't join with that company password: " + err.message, 'JOIN_COMPANY'));
   } finally {
     btn.disabled = false;
     btn.textContent = 'Join Company';
@@ -623,7 +580,7 @@ $('#f-company-logo').addEventListener('change', async (e) => {
     companyStatus('Logo updated.');
   } catch (err) {
     console.error(err);
-    companyError('Could not save the logo: ' + err.message);
+    companyError(userError("Couldn't save the logo: " + err.message, 'COMPANY_LOGO'));
   } finally {
     e.target.value = '';
   }
@@ -667,7 +624,7 @@ $('#f-company-projects').addEventListener('change', async (e) => {
     }
   }
   if (names.length) companyStatus(`Added/updated: ${names.join(', ')}`);
-  if (errors.length) companyError(errors.join('\n'));
+  if (errors.length) companyError(userError(errors.join('\n'), 'PARSE_EXCEL'));
 });
 
 // -- Connected: unlock admin --
@@ -685,7 +642,7 @@ $('#btn-unlock-admin').addEventListener('click', async () => {
     await refreshCompanySection();
     companyStatus('Admin access unlocked.');
   } catch (err) {
-    companyError(err.message);
+    companyError(userError(err.message, 'UNLOCK_ADMIN'));
   } finally {
     btn.disabled = false;
   }
@@ -698,16 +655,15 @@ $('#btn-sync-company-now').addEventListener('click', async () => {
   companyError('');
   btn.disabled = true;
   btn.textContent = 'Syncing...';
+  startProgressBanner();
   try {
-    const result = await syncCompanyRoomNow((progress) => {
-      companyStatus(companyProgressText(progress));
-    });
+    const result = await syncCompanyRoomNow(reportCompanyProgress);
     showCompanyLogo(await getReportLogo());
     applyHeaderLogo();
-    companyStatus(`Sync complete — pulled ${result.projectsPulled} project(s), ${result.reportsPulled} report(s).`);
+    finishProgressBanner(`You're all caught up! Got ${result.projectsPulled} project(s) and ${result.reportsPulled} report(s).`);
   } catch (err) {
     console.error(err);
-    companyError('Sync failed: ' + err.message);
+    progressBannerError(userError("Sync didn't finish: " + err.message, 'SYNC_NOW'));
   } finally {
     btn.disabled = false;
     btn.textContent = 'Sync Now';

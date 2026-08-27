@@ -187,7 +187,7 @@ $('#f-project-data').addEventListener('change', async (e) => {
     $('#btn-save-new-project').disabled = false;
   } catch (err) {
     console.error(err);
-    alert('Could not read that file: ' + err.message);
+    alert(userError("Couldn't read that file: " + err.message, 'PARSE_EXCEL'));
   }
 });
 
@@ -205,7 +205,7 @@ $('#btn-save-new-project').addEventListener('click', async () => {
     await renderProjectCards();
   } catch (err) {
     console.error(err);
-    alert('Could not save the project: ' + err.message);
+    alert(userError("Couldn't save the project: " + err.message, 'SAVE_PROJECT'));
   } finally {
     btn.textContent = 'Save Project';
     btn.disabled = false;
@@ -231,7 +231,7 @@ async function handleIncomingSetup() {
     payload = await decodeSetupPayload(match[1]);
   } catch (err) {
     console.error(err);
-    alert("That setup link couldn't be read. It may have been truncated in transit.");
+    alert(userError("That setup link couldn't be read. It may have been truncated in transit.", 'SHARED_SETUP_READ'));
     return false;
   }
 
@@ -255,7 +255,7 @@ async function handleIncomingSetup() {
     return true;
   } catch (err) {
     console.error(err);
-    alert('Could not apply that setup: ' + err.message);
+    alert(userError("Couldn't apply that setup: " + err.message, 'SHARED_SETUP_APPLY'));
     return false;
   }
 }

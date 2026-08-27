@@ -127,7 +127,8 @@ function isMobileDevice() {
     // generating a PDF isn't an edit, so it shouldn't bump updatedAt or
     // restamp lastEditedBy.
     if ((r.photosFetched || []).some((f) => !f) || r.signatureFetched === false) {
-      $('#pdf-status').textContent = 'Loading photos…';
+      startProgressBanner();
+      progressStep('photos', 'Getting your photos');
       r = await fetchReportMedia(r);
       await putReportRaw(r);
     }
@@ -150,11 +151,12 @@ function isMobileDevice() {
   let pdfBlob, captures;
   try {
     ({ blob: pdfBlob, captures } = await buildPdfBlob(sandbox, layout, reports, logoBlob, (done, total) => {
-      $('#pdf-status').textContent = `Rendering page ${done} of ${total}…`;
+      progressStep('rendering', 'Building your PDF', `${done} of ${total}`);
     }));
+    finishProgressBanner('Your PDF is ready!');
   } catch (err) {
     console.error(err);
-    $('#pdf-status').textContent = 'Could not generate the PDF: ' + err.message;
+    progressBannerError(userError("Couldn't generate the PDF: " + err.message, 'BUILD_PDF'));
     return;
   }
 

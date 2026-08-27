@@ -38,19 +38,6 @@
   }
   .cc-chip button { all: unset; cursor: pointer; line-height: 1; font-size: 0.95rem; color: var(--text-dim); padding: 0 0.15rem; }
   .cc-chip button:hover { color: var(--danger); }
-
-  .spinner {
-    display: inline-block; width: 1em; height: 1em;
-    border: 2px solid var(--border-strong); border-top-color: var(--brand-light);
-    border-radius: 50%; animation: spin 0.7s linear infinite;
-    vertical-align: -0.15em; margin-right: 0.5rem;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  .cc-progress {
-    display: flex; align-items: center; margin-top: 0.6rem;
-    font-size: 0.85rem; color: var(--text-dim);
-  }
 </style>
 </head>
 <body>
@@ -267,10 +254,6 @@
         <input type="password" id="cm-company-password-confirm" autocomplete="new-password">
       </label>
       <button type="button" class="btn-primary" id="btn-change-company-password" style="margin-top:0.5rem;">Change Company Password</button>
-      <div class="cc-progress" id="ccp-progress" hidden>
-        <span class="spinner"></span>
-        <span id="ccp-progress-text"></span>
-      </div>
     </div>
   </div>
 
@@ -330,7 +313,7 @@ $('#btn-save-name').addEventListener('click', async () => {
     cmStatus('Company name saved.');
   } catch (err) {
     console.error(err);
-    cmError('Could not save name: ' + err.message);
+    cmError(userError("Couldn't save the name: " + err.message, 'SAVE_COMPANY_NAME'));
   } finally {
     btn.disabled = false;
   }
@@ -356,7 +339,7 @@ $('#cm-f-logo').addEventListener('change', async (e) => {
     cmStatus('Logo updated.');
   } catch (err) {
     console.error(err);
-    cmError('Could not save the logo: ' + err.message);
+    cmError(userError("Couldn't save the logo: " + err.message, 'COMPANY_LOGO'));
   } finally {
     e.target.value = '';
   }
@@ -459,7 +442,7 @@ $('#cm-project-list').addEventListener('change', async (e) => {
     await renderCmProjects();
   } catch (err) {
     console.error(err);
-    alert('Could not save the background image: ' + err.message);
+    alert(userError("Couldn't save the background image: " + err.message, 'PROJECT_BACKGROUND'));
   }
 });
 
@@ -494,7 +477,7 @@ $('#cm-f-projects').addEventListener('change', async (e) => {
     }
   }
   if (names.length) cmStatus(`Added/updated: ${names.join(', ')}`);
-  if (errors.length) cmError(errors.join('\n'));
+  if (errors.length) cmError(userError(errors.join('\n'), 'PARSE_EXCEL'));
   await renderCmProjects();
   await renderCsList();
 });
@@ -509,7 +492,7 @@ $('#cm-perm-reports-own').addEventListener('change', async (e) => {
   } catch (err) {
     console.error(err);
     e.target.checked = !e.target.checked;
-    cmError('Could not save permission: ' + err.message);
+    cmError(userError("Couldn't save that permission: " + err.message, 'PERMISSION_TOGGLE'));
   }
 });
 $('#cm-perm-reports-any').addEventListener('change', async (e) => {
@@ -520,7 +503,7 @@ $('#cm-perm-reports-any').addEventListener('change', async (e) => {
   } catch (err) {
     console.error(err);
     e.target.checked = !e.target.checked;
-    cmError('Could not save permission: ' + err.message);
+    cmError(userError("Couldn't save that permission: " + err.message, 'PERMISSION_TOGGLE'));
   }
 });
 $('#cm-perm-projects').addEventListener('change', async (e) => {
@@ -531,7 +514,7 @@ $('#cm-perm-projects').addEventListener('change', async (e) => {
   } catch (err) {
     console.error(err);
     e.target.checked = !e.target.checked;
-    cmError('Could not save permission: ' + err.message);
+    cmError(userError("Couldn't save that permission: " + err.message, 'PERMISSION_TOGGLE'));
   }
 });
 $('#cm-perm-create-projects').addEventListener('change', async (e) => {
@@ -542,7 +525,7 @@ $('#cm-perm-create-projects').addEventListener('change', async (e) => {
   } catch (err) {
     console.error(err);
     e.target.checked = !e.target.checked;
-    cmError('Could not save permission: ' + err.message);
+    cmError(userError("Couldn't save that permission: " + err.message, 'PERMISSION_TOGGLE'));
   }
 });
 
@@ -648,7 +631,7 @@ $('#btn-create-setup').addEventListener('click', async () => {
     await renderCsList();
   } catch (err) {
     console.error(err);
-    cmError('Could not create setup: ' + err.message);
+    cmError(userError("Couldn't create the setup: " + err.message, 'CUSTOM_SETUP'));
   } finally {
     btn.disabled = false;
   }
@@ -673,27 +656,16 @@ $('#btn-change-admin-password').addEventListener('click', async () => {
     cmStatus('Admin password changed.');
   } catch (err) {
     console.error(err);
-    cmError('Could not change admin password: ' + err.message);
+    cmError(userError("Couldn't change the admin password: " + err.message, 'ADMIN_PASSWORD'));
   } finally {
     btn.disabled = false;
   }
 });
 
-function ccpProgressText(progress) {
-  if (progress.phase === 'pulling') return 'Pulling latest data first…';
-  if (progress.phase === 'creating') return 'Creating new company address…';
-  if (progress.phase === 'logo') return 'Uploading logo…';
-  if (progress.phase === 'projects') return progress.count ? `Copied ${progress.count} project(s)…` : 'Copying projects…';
-  if (progress.phase === 'reports') return `Copying reports… (${progress.index}/${progress.total})`;
-  return 'Working…';
-}
-
 onEnterSubmit($('#cm-company-password').closest('.step-body'), $('#btn-change-company-password'));
 
 $('#btn-change-company-password').addEventListener('click', async () => {
   const btn = $('#btn-change-company-password');
-  const progressEl = $('#ccp-progress');
-  const progressText = $('#ccp-progress-text');
   cmError('');
   const pw = $('#cm-company-password').value;
   const confirmPw = $('#cm-company-password-confirm').value;
@@ -707,21 +679,18 @@ $('#btn-change-company-password').addEventListener('click', async () => {
   )) return;
 
   btn.disabled = true;
-  progressEl.hidden = false;
-  progressText.textContent = 'Starting…';
+  startProgressBanner();
+  progressStep('starting', 'Getting ready');
   try {
-    await changeCompanyPassword(pw, (progress) => {
-      progressText.textContent = ccpProgressText(progress);
-    });
+    await changeCompanyPassword(pw, reportCompanyProgress);
     $('#cm-company-password').value = '';
     $('#cm-company-password-confirm').value = '';
-    cmStatus('Company password changed on this device. Tell your team to rejoin with the new password.');
+    finishProgressBanner('Your new address is ready! Tell your team to rejoin with the new password.');
   } catch (err) {
     console.error(err);
-    cmError('Could not change company password: ' + err.message);
+    progressBannerError(userError("Couldn't change the company password: " + err.message, 'COMPANY_PASSWORD'));
   } finally {
     btn.disabled = false;
-    progressEl.hidden = true;
   }
 });
 
@@ -766,14 +735,15 @@ $('#btn-refresh-activity').addEventListener('click', async () => {
   cmError('');
   btn.disabled = true;
   btn.textContent = 'Refreshing...';
+  startProgressBanner();
   try {
-    await syncCompanyRoomNow((progress) => cmStatus(ccpProgressText(progress)));
+    await syncCompanyRoomNow(reportCompanyProgress);
     await renderCmProjects();
     await renderCmActivity();
-    cmStatus('Refreshed.');
+    finishProgressBanner('Refreshed!');
   } catch (err) {
     console.error(err);
-    cmError('Could not refresh: ' + err.message);
+    progressBannerError(userError("Couldn't refresh: " + err.message, 'REFRESH_ACTIVITY'));
   } finally {
     btn.disabled = false;
     btn.textContent = 'Refresh';

@@ -434,7 +434,7 @@ $('#btn-save-quantities').addEventListener('click', async () => {
     await updateDateContext();
   } catch (err) {
     console.error(err);
-    $('#save-error').textContent = 'Could not save: ' + err.message;
+    $('#save-error').textContent = userError("Couldn't save: " + err.message, 'SAVE_QUANTITIES');
     $('#save-error').hidden = false;
   } finally {
     btn.disabled = false;
