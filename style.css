@@ -638,11 +638,27 @@ input[type="file"] { min-height: 0; }
 .check-item .ci-unit { font-size: 0.74rem; color: var(--text-dim); }
 .empty-list { font-size: 0.82rem; color: var(--text-dim); text-align: center; padding: 1.25rem; }
 
+/* A catalog item with Stations/Locations enabled (see project-file.js) can
+   be logged more than once a day, so it gets a "+" tap-to-add row instead
+   of the plain on/off checkbox everything else uses. */
+.check-item.check-item-multi .ci-add-icon {
+  flex: 0 0 auto; width: 1.35rem; height: 1.35rem; display: flex; align-items: center; justify-content: center;
+  font-size: 1.1rem; font-weight: 700; color: var(--link); border: 1.5px dashed var(--link); border-radius: 50%;
+}
+.check-item .ci-flag {
+  font-size: 0.6rem; font-weight: 700; letter-spacing: 0.03em;
+  background: var(--brand-dim); color: var(--link); padding: 1px 6px; border-radius: 8px;
+  vertical-align: middle;
+}
+
 .selected-items { margin-top: 0.85rem; }
+.selected-item-row-wrap {
+  border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+  margin-bottom: 0.5rem; background: var(--surface); overflow: hidden;
+}
 .selected-item-row {
   display: grid; grid-template-columns: 1fr 90px auto; gap: 0.5rem; align-items: center;
-  border: 1.5px solid var(--border); border-radius: var(--radius-sm);
-  padding: 0.6rem; margin-bottom: 0.5rem; background: var(--surface);
+  padding: 0.6rem;
 }
 .selected-item-row .si-desc { font-size: 0.85rem; line-height: 1.35; color: var(--text); }
 .selected-item-row .si-desc .si-num { font-weight: 700; }
@@ -651,6 +667,12 @@ input[type="file"] { min-height: 0; }
   background: none; border: none; color: var(--danger); font-size: 1.3rem;
   cursor: pointer; padding: 0 0.35rem; min-width: var(--tap); min-height: var(--tap);
 }
+.si-extra {
+  display: flex; flex-wrap: wrap; gap: 0.5rem;
+  padding: 0 0.6rem 0.6rem; border-top: 1px dashed var(--border); margin-top: -1px; padding-top: 0.5rem;
+}
+.si-extra .si-station { flex: 1 1 120px; min-width: 0; }
+.si-extra .si-location { flex: 1 1 160px; min-width: 0; }
 
 .add-manual {
   background: var(--surface-2); border: 1.5px dashed var(--border);

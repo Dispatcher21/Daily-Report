@@ -47,6 +47,16 @@ function isNoWorkDayReport(report) {
   return !!report && (report.notes || '').trim().toUpperCase() === NO_WORK_DAY_NOTE;
 }
 
+// True for a catalog item that tracks Start/Stop Station and/or has a
+// Locations list (see the STATIONS/LOCATIONS columns in project-file.js).
+// These can legitimately show up more than once on the same report --
+// different segments/spots worked the same day -- so report-editor.html and
+// quick-quantity.html both give them a repeatable "add another entry" UI
+// instead of the plain single-quantity-per-item model everything else uses.
+function payItemNeedsMultiple(catalogItem) {
+  return !!catalogItem && (catalogItem.stations || (catalogItem.locations && catalogItem.locations.length > 0));
+}
+
 // `project` supplies the project-level starting values (from its uploaded
 // data file -- Project No./Contract Co./etc, plus optional "default" values
 // for most other fields) and `previous` is the most recent report already
@@ -111,6 +121,11 @@ async function makeBlankReport(nextReportNo, project, previous) {
       description: '',
       qty: '',
       unit: '',
+      // Only meaningful for a catalog item with Stations/Locations enabled
+      // (see project-file.js) -- blank and unused otherwise.
+      startStation: '',
+      endStation: '',
+      location: '',
     })),
     controllingItem: meta.controllingItem || '',
     commentsOnTime: meta.commentsOnTime || '',

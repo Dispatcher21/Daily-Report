@@ -23,6 +23,23 @@
   .qq-unit { font-size: 0.8rem; color: var(--text-dim); width: 2.5rem; }
   .qq-manual-row .qq-item-num { font-weight: 400; }
   .qq-manual-remove { flex: 0 0 auto; }
+
+  /* Items with Stations/Locations enabled can be logged more than once a
+     day (different segments), so instead of one inline qty field they get
+     a small repeatable list of their own. */
+  .qq-multi-row { display: block; padding: 0.6rem 0; border-bottom: 1px solid var(--border); }
+  .qq-multi-row:last-child { border-bottom: none; }
+  .qq-multi-header { display: flex; align-items: center; gap: 0.75rem; }
+  .qq-multi-entries { margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.5rem; }
+  .qq-multi-entry {
+    border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+    padding: 0.5rem; display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center;
+  }
+  .qq-multi-entry .qq-qty { width: 5.5rem; }
+  .qq-multi-entry input[type="text"] { flex: 1 1 100px; min-width: 0; }
+  .qq-multi-entry select { flex: 1 1 140px; min-width: 0; }
+  .qq-multi-remove { flex: 0 0 auto; color: var(--danger); background: none; border: none; font-size: 1.2rem; cursor: pointer; min-height: 0; padding: 0 0.3rem; }
+  .qq-multi-add { margin-top: 0.5rem; }
 </style>
 </head>
 <body>
@@ -101,6 +118,11 @@ let project = null;
 let allReports = [];
 let manualItems = []; // ad-hoc items not in the catalog: {itemNumber, description, unit}
 let currentReport = null; // the report the date currently resolves to, or null if it'll be created
+// Items with Stations/Locations enabled can have more than one entry per
+// day -- itemNumber -> array of {qty, startStation, endStation, location}.
+// Replaces that item's entries on the report wholesale on save, unlike the
+// plain catalog inputs below which just edit a single existing qty in place.
+let multiEntries = {};
 
 async function init() {
   project = projectId ? await getProject(projectId) : null;
@@ -123,8 +145,21 @@ function renderCatalogList() {
   const catalog = project.payItemCatalog || [];
   $('#catalog-empty').hidden = catalog.length > 0;
   $('#catalog-list').innerHTML = catalog
-    .map(
-      (it, i) => `
+    .map((it, i) => {
+      if (payItemNeedsMultiple(it)) {
+        return `
+        <div class="qq-multi-row" data-multi-item="${escapeHtml(it.itemNumber)}">
+          <div class="qq-multi-header">
+            <div class="qq-item-info">
+              <div class="qq-item-num">${escapeHtml(it.itemNumber)}</div>
+              <div class="qq-item-desc">${escapeHtml(it.description || '')}${it.unit ? ' &middot; ' + escapeHtml(it.unit) : ''}</div>
+            </div>
+          </div>
+          <div class="qq-multi-entries" id="multi-entries-${i}" data-multi-idx="${i}"></div>
+          <button type="button" class="btn-sm qq-multi-add" data-add-entry="${i}">+ Add Entry</button>
+        </div>`;
+      }
+      return `
       <div class="qq-row" data-item-number="${escapeHtml(it.itemNumber)}">
         <div class="qq-item-info">
           <div class="qq-item-num">${escapeHtml(it.itemNumber)}</div>
@@ -134,9 +169,60 @@ function renderCatalogList() {
           <input type="number" step="any" class="qq-qty" id="qty-${i}" data-item-number="${escapeHtml(it.itemNumber)}">
           <span class="qq-unit">${escapeHtml(it.unit || '')}</span>
         </div>
-      </div>`
-    )
+      </div>`;
+    })
     .join('');
+
+  catalog.forEach((it, i) => {
+    if (!payItemNeedsMultiple(it)) return;
+    renderMultiEntries(it, i);
+  });
+  $$('[data-add-entry]', $('#catalog-list')).forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const it = catalog[Number(btn.dataset.addEntry)];
+      if (!multiEntries[it.itemNumber]) multiEntries[it.itemNumber] = [];
+      multiEntries[it.itemNumber].push({ qty: '', startStation: '', endStation: '', location: '' });
+      renderMultiEntries(it, Number(btn.dataset.addEntry));
+    });
+  });
+}
+
+function renderMultiEntries(catalogItem, idx) {
+  const container = $(`#multi-entries-${idx}`);
+  if (!container) return;
+  const entries = multiEntries[catalogItem.itemNumber] || [];
+  container.innerHTML = entries
+    .map((entry, ei) => `
+      <div class="qq-multi-entry" data-entry-idx="${ei}">
+        <input type="number" step="any" class="qq-qty me-field" data-field="qty" placeholder="Qty" value="${escapeHtml(entry.qty || '')}">
+        <span class="qq-unit">${escapeHtml(catalogItem.unit || '')}</span>
+        ${catalogItem.stations ? `
+          <input type="text" class="me-field" data-field="startStation" placeholder="Start Station" value="${escapeHtml(entry.startStation || '')}">
+          <input type="text" class="me-field" data-field="endStation" placeholder="Stop Station" value="${escapeHtml(entry.endStation || '')}">
+        ` : ''}
+        ${(catalogItem.locations || []).length ? `
+          <select class="me-field" data-field="location">
+            <option value="">Location&hellip;</option>
+            ${catalogItem.locations.map((loc) => `<option value="${escapeHtml(loc)}"${entry.location === loc ? ' selected' : ''}>${escapeHtml(loc)}</option>`).join('')}
+          </select>
+        ` : ''}
+        <button type="button" class="qq-multi-remove" data-remove-entry="${ei}" title="Remove">&times;</button>
+      </div>`)
+    .join('');
+
+  $$('.me-field', container).forEach((el) => {
+    const evt = el.tagName === 'SELECT' ? 'change' : 'input';
+    el.addEventListener(evt, () => {
+      const ei = Number(el.closest('.qq-multi-entry').dataset.entryIdx);
+      multiEntries[catalogItem.itemNumber][ei][el.dataset.field] = el.value;
+    });
+  });
+  $$('[data-remove-entry]', container).forEach((btn) => {
+    btn.addEventListener('click', () => {
+      multiEntries[catalogItem.itemNumber].splice(Number(btn.dataset.removeEntry), 1);
+      renderMultiEntries(catalogItem, idx);
+    });
+  });
 }
 
 function renderManualList() {
@@ -169,21 +255,30 @@ function renderManualList() {
 // of blank fields that would otherwise look like a fresh entry.
 function prefillFromReport(report) {
   manualItems = [];
-  const catalogNumbers = new Set((project.payItemCatalog || []).map((it) => it.itemNumber));
+  multiEntries = {};
+  const catalog = project.payItemCatalog || [];
+  const catalogByNumber = new Map(catalog.map((it) => [it.itemNumber, it]));
   $$('.qq-qty', $('#catalog-list')).forEach((input) => { input.value = ''; });
-  if (!report) {
-    renderManualList();
-    return;
-  }
-  for (const pi of report.payItems || []) {
-    if (!pi.itemNumber && !pi.description) continue;
-    if (catalogNumbers.has(pi.itemNumber)) {
-      const input = document.querySelector(`.qq-qty[data-item-number="${CSS.escape(pi.itemNumber)}"]`);
-      if (input) input.value = pi.qty || '';
-    } else {
-      manualItems.push({ itemNumber: pi.itemNumber, description: pi.description, unit: pi.unit, qty: pi.qty });
+  if (report) {
+    for (const pi of report.payItems || []) {
+      if (!pi.itemNumber && !pi.description) continue;
+      const cat = catalogByNumber.get(pi.itemNumber);
+      if (cat && payItemNeedsMultiple(cat)) {
+        if (!multiEntries[pi.itemNumber]) multiEntries[pi.itemNumber] = [];
+        multiEntries[pi.itemNumber].push({
+          qty: pi.qty || '', startStation: pi.startStation || '', endStation: pi.endStation || '', location: pi.location || '',
+        });
+      } else if (cat) {
+        const input = document.querySelector(`.qq-qty[data-item-number="${CSS.escape(pi.itemNumber)}"]`);
+        if (input) input.value = pi.qty || '';
+      } else {
+        manualItems.push({ itemNumber: pi.itemNumber, description: pi.description, unit: pi.unit, qty: pi.qty });
+      }
     }
   }
+  catalog.forEach((it, i) => {
+    if (payItemNeedsMultiple(it)) renderMultiEntries(it, i);
+  });
   renderManualList();
   // Re-show whatever qty the just-added manual rows carried in.
   manualItems.forEach((it, i) => {
@@ -251,6 +346,10 @@ $('#btn-add-manual-pay').addEventListener('click', () => {
 
 // ---------- Save ----------
 
+// `entries` are plain single-value items (catalog or manual) -- merged into
+// whatever's already on the report by itemNumber, same as before.
+// `multiByItem` is itemNumber -> the full replacement entry list for a
+// Stations/Locations item, since those can't be represented as one qty.
 function collectEntries() {
   const entries = [];
   $$('.qq-qty', $('#catalog-list')).forEach((input) => {
@@ -265,7 +364,22 @@ function collectEntries() {
     if (!qty) return;
     entries.push({ itemNumber: it.itemNumber, description: it.description, unit: it.unit, qty });
   });
-  return entries;
+
+  const multiByItem = {};
+  const catalog = project.payItemCatalog || [];
+  Object.keys(multiEntries).forEach((itemNumber) => {
+    const cat = catalog.find((c) => c.itemNumber === itemNumber);
+    if (!cat) return;
+    const filled = (multiEntries[itemNumber] || [])
+      .filter((e) => String(e.qty || '').trim())
+      .map((e) => ({
+        itemNumber, description: cat.description, unit: cat.unit, qty: e.qty,
+        startStation: e.startStation || '', endStation: e.endStation || '', location: e.location || '',
+      }));
+    multiByItem[itemNumber] = filled;
+  });
+
+  return { entries, multiByItem };
 }
 
 $('#btn-save-quantities').addEventListener('click', async () => {
@@ -275,8 +389,9 @@ $('#btn-save-quantities').addEventListener('click', async () => {
 
   const date = $('#f-date').value;
   if (!date) return;
-  const entries = collectEntries();
-  if (entries.length === 0) {
+  const { entries, multiByItem } = collectEntries();
+  const multiCount = Object.values(multiByItem).reduce((sum, list) => sum + list.length, 0);
+  if (entries.length === 0 && multiCount === 0) {
     $('#save-error').textContent = 'Enter at least one quantity.';
     $('#save-error').hidden = false;
     return;
@@ -294,12 +409,19 @@ $('#btn-save-quantities').addEventListener('click', async () => {
         if (idx === -1) report.payItems.push({ ...entry });
         else report.payItems[idx] = { ...report.payItems[idx], ...entry };
       }
+      // Stations/Locations items: wholesale-replace that item's entries with
+      // whatever's currently in the multi-entry list (additions, edits, and
+      // removals all land this way, unlike the merge-by-itemNumber above).
+      Object.keys(multiByItem).forEach((itemNumber) => {
+        report.payItems = report.payItems.filter((pi) => pi.itemNumber !== itemNumber);
+        report.payItems.push(...multiByItem[itemNumber]);
+      });
     } else {
       const nextNo = await getNextReportNo(project.id);
       const previous = allReports[0]; // most recently updated -- carries forward representative/contractors/etc, same as a normal new report
       report = await makeBlankReport(nextNo, project, previous);
       report.date = date;
-      report.payItems = entries;
+      report.payItems = entries.concat(...Object.values(multiByItem));
     }
     await saveReport(report);
 

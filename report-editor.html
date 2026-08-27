@@ -546,6 +546,11 @@ function renderPayItemsStep() {
     : catalog;
 
   const selectedNumbers = new Set(report.payItems.filter((pi) => pi.itemNumber).map((pi) => pi.itemNumber));
+  const countByNumber = new Map();
+  report.payItems.forEach((pi) => {
+    if (!pi.itemNumber) return;
+    countByNumber.set(pi.itemNumber, (countByNumber.get(pi.itemNumber) || 0) + 1);
+  });
 
   const list = $('#pay-catalog-list');
   if (catalog.length === 0) {
@@ -554,17 +559,33 @@ function renderPayItemsStep() {
     list.innerHTML = '<div class="empty-list">No catalog items match your search.</div>';
   } else {
     list.innerHTML = filtered
-      .map(
-        (item) => `
-        <div class="check-item ${selectedNumbers.has(item.itemNumber) ? 'selected' : ''}" data-num="${escapeHtml(item.itemNumber)}">
-          <input type="checkbox" ${selectedNumbers.has(item.itemNumber) ? 'checked' : ''}>
-          <div class="ci-main">
-            <div class="ci-num">${escapeHtml(item.itemNumber)}</div>
-            <div class="ci-desc">${escapeHtml(item.description)}</div>
-          </div>
-          <span class="ci-unit">${escapeHtml(item.unit)}</span>
-        </div>`
-      )
+      .map((item) => {
+        if (payItemNeedsMultiple(item)) {
+          const count = countByNumber.get(item.itemNumber) || 0;
+          const flags = [
+            item.stations ? '<span class="ci-flag" title="Tracks Start/Stop Station">STA</span>' : '',
+            (item.locations || []).length ? '<span class="ci-flag" title="Has Location options">LOC</span>' : '',
+          ].join(' ');
+          return `
+            <div class="check-item check-item-multi" data-num="${escapeHtml(item.itemNumber)}" title="Tap to add another entry -- this item can be logged more than once per report">
+              <span class="ci-add-icon">+</span>
+              <div class="ci-main">
+                <div class="ci-num">${escapeHtml(item.itemNumber)} ${flags}</div>
+                <div class="ci-desc">${escapeHtml(item.description)}</div>
+              </div>
+              <span class="ci-unit">${count > 0 ? count + ' added' : escapeHtml(item.unit)}</span>
+            </div>`;
+        }
+        return `
+          <div class="check-item ${selectedNumbers.has(item.itemNumber) ? 'selected' : ''}" data-num="${escapeHtml(item.itemNumber)}">
+            <input type="checkbox" ${selectedNumbers.has(item.itemNumber) ? 'checked' : ''}>
+            <div class="ci-main">
+              <div class="ci-num">${escapeHtml(item.itemNumber)}</div>
+              <div class="ci-desc">${escapeHtml(item.description)}</div>
+            </div>
+            <span class="ci-unit">${escapeHtml(item.unit)}</span>
+          </div>`;
+      })
       .join('');
     $$('.check-item', list).forEach((row) => {
       row.addEventListener('click', (e) => {
@@ -590,15 +611,28 @@ function renderPayItemsStep() {
 // day's list doesn't fit.
 function togglePayItem(catalogItem) {
   const items = report.payItems;
-  const existingIdx = items.findIndex((pi) => pi.itemNumber && pi.itemNumber === catalogItem.itemNumber);
-  if (existingIdx !== -1) {
-    items.splice(existingIdx, 1);
-  } else {
+  if (payItemNeedsMultiple(catalogItem)) {
+    // Always adds a fresh entry -- removal only happens via that entry's
+    // own X button in the list below, since tapping the catalog row again
+    // is how you log a second segment, not how you undo the first one.
+    const entry = {
+      itemNumber: catalogItem.itemNumber, description: catalogItem.description, qty: '', unit: catalogItem.unit,
+      startStation: '', endStation: '', location: '',
+    };
     const emptyIdx = items.findIndex((pi) => !pi.itemNumber && !pi.description);
-    if (emptyIdx === -1) {
-      items.push({ itemNumber: catalogItem.itemNumber, description: catalogItem.description, qty: '', unit: catalogItem.unit });
+    if (emptyIdx === -1) items.push(entry);
+    else items[emptyIdx] = entry;
+  } else {
+    const existingIdx = items.findIndex((pi) => pi.itemNumber && pi.itemNumber === catalogItem.itemNumber);
+    if (existingIdx !== -1) {
+      items.splice(existingIdx, 1);
     } else {
-      items[emptyIdx] = { itemNumber: catalogItem.itemNumber, description: catalogItem.description, qty: '', unit: catalogItem.unit };
+      const emptyIdx = items.findIndex((pi) => !pi.itemNumber && !pi.description);
+      if (emptyIdx === -1) {
+        items.push({ itemNumber: catalogItem.itemNumber, description: catalogItem.description, qty: '', unit: catalogItem.unit });
+      } else {
+        items[emptyIdx] = { itemNumber: catalogItem.itemNumber, description: catalogItem.description, qty: '', unit: catalogItem.unit };
+      }
     }
   }
   scheduleSave();
@@ -614,20 +648,55 @@ function renderSelectedPayItems() {
     return;
   }
 
+  const catalogByNumber = new Map((project.payItemCatalog || []).map((c) => [c.itemNumber, c]));
+
   container.innerHTML = rows
-    .map(
-      ({ item, i }) => `
-      <div class="selected-item-row">
-        <div class="si-desc"><span class="si-num">${escapeHtml(item.itemNumber)}</span> ${escapeHtml(item.description)}${item.unit ? ` <span style="color:var(--text-dim);">(${escapeHtml(item.unit)})</span>` : ''}</div>
-        <input type="number" class="si-qty" data-idx="${i}" value="${item.qty}" placeholder="Qty">
-        <button type="button" class="si-remove" data-idx="${i}" title="Remove">&times;</button>
-      </div>`
-    )
+    .map(({ item, i }) => {
+      const cat = catalogByNumber.get(item.itemNumber);
+      const hasStations = !!(cat && cat.stations);
+      const hasLocations = !!(cat && cat.locations && cat.locations.length > 0);
+      const extra = hasStations || hasLocations
+        ? `
+        <div class="si-extra">
+          ${hasStations ? `
+            <input type="text" class="si-station" data-idx="${i}" data-field="startStation" value="${escapeHtml(item.startStation || '')}" placeholder="Start Station">
+            <input type="text" class="si-station" data-idx="${i}" data-field="endStation" value="${escapeHtml(item.endStation || '')}" placeholder="Stop Station">
+          ` : ''}
+          ${hasLocations ? `
+            <select class="si-location" data-idx="${i}">
+              <option value="">Location&hellip;</option>
+              ${cat.locations.map((loc) => `<option value="${escapeHtml(loc)}"${item.location === loc ? ' selected' : ''}>${escapeHtml(loc)}</option>`).join('')}
+            </select>
+          ` : ''}
+        </div>`
+        : '';
+      return `
+      <div class="selected-item-row-wrap">
+        <div class="selected-item-row">
+          <div class="si-desc"><span class="si-num">${escapeHtml(item.itemNumber)}</span> ${escapeHtml(item.description)}${item.unit ? ` <span style="color:var(--text-dim);">(${escapeHtml(item.unit)})</span>` : ''}</div>
+          <input type="number" class="si-qty" data-idx="${i}" value="${item.qty}" placeholder="Qty">
+          <button type="button" class="si-remove" data-idx="${i}" title="Remove">&times;</button>
+        </div>
+        ${extra}
+      </div>`;
+    })
     .join('');
 
   $$('.si-qty', container).forEach((el) => {
     el.addEventListener('input', () => {
       report.payItems[Number(el.dataset.idx)].qty = el.value;
+      scheduleSave();
+    });
+  });
+  $$('.si-station', container).forEach((el) => {
+    el.addEventListener('input', () => {
+      report.payItems[Number(el.dataset.idx)][el.dataset.field] = el.value;
+      scheduleSave();
+    });
+  });
+  $$('.si-location', container).forEach((el) => {
+    el.addEventListener('change', () => {
+      report.payItems[Number(el.dataset.idx)].location = el.value;
       scheduleSave();
     });
   });
