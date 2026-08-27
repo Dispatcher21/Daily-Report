@@ -1020,6 +1020,18 @@ input[type="file"] { min-height: 0; }
   color: var(--text-dim);
   margin-top: 0.15rem;
 }
+.dc-bar-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-3);
+  overflow: hidden;
+  margin-top: 0.5rem;
+}
+.dc-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
 
 /* The headline card pairs an SVG ring with its own number/label -- it earns
    the extra width so the ring + two lines of text have room to sit side by
@@ -1041,7 +1053,11 @@ input[type="file"] { min-height: 0; }
 .ring-wrap svg { width: 100%; height: 100%; transform: rotate(-90deg); }
 .ring-track { fill: none; stroke: var(--surface-3); stroke-width: 10; }
 .ring-fill {
-  fill: none; stroke: var(--brand); stroke-width: 10; stroke-linecap: round;
+  /* No stroke here on purpose -- every ring sets its own color via the
+     inline stroke="" attribute (ringSvg in project.html), which a
+     stylesheet rule would otherwise always win over and silently override,
+     regardless of what color the caller actually asked for. */
+  fill: none; stroke-width: 10; stroke-linecap: round;
   transition: stroke-dashoffset 0.6s ease, stroke 0.3s ease;
 }
 .ring-wrap .ring-pct {

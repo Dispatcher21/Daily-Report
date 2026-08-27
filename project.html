@@ -247,12 +247,15 @@ function daysBetween(isoA, isoB) {
   return Math.round((b - a) / 86400000);
 }
 
-function ringSvg(pct) {
+// `strokeColorOverride` lets a caller encode its own health judgement (e.g.
+// the schedule ring: more elapsed isn't "good" the way more complete is, so
+// it can't reuse this function's default green-at-100% logic).
+function ringSvg(pct, strokeColorOverride) {
   const r = 36;
   const c = 2 * Math.PI * r;
   const frac = pct == null ? 0 : Math.max(0, Math.min(1, pct));
   const offset = c * (1 - frac);
-  const strokeColor = pct == null ? 'var(--border-strong)' : pct >= 1 ? 'var(--ok)' : 'var(--brand)';
+  const strokeColor = strokeColorOverride || (pct == null ? 'var(--border-strong)' : pct >= 1 ? 'var(--ok)' : 'var(--brand)');
   return `
     <div class="ring-wrap">
       <svg viewBox="0 0 90 90">
@@ -264,13 +267,20 @@ function ringSvg(pct) {
     </div>`;
 }
 
-function statCard(value, label, sub, tip) {
+// `barPct`, if given, draws a slim fill bar under the value -- for a stat
+// that's naturally "some amount of a known total" (Earned to Date against
+// Total Contract Value) rather than a standalone number.
+function statCard(value, label, sub, tip, barPct) {
   const tipAttrs = tip ? ` data-tip="${escapeHtml(tip)}" tabindex="0"` : '';
+  const barHtml = barPct != null
+    ? `<div class="dc-bar-track"><div class="dc-bar-fill" style="width:${Math.max(0, Math.min(100, barPct * 100))}%;background:${barPct >= 1 ? 'var(--ok)' : 'var(--brand)'};"></div></div>`
+    : '';
   return `
     <div class="dash-card"${tipAttrs}>
       <span class="dc-value">${escapeHtml(String(value))}</span>
       <span class="dc-label">${escapeHtml(label)}</span>
       ${sub ? `<span class="dc-sub">${escapeHtml(sub)}</span>` : ''}
+      ${barHtml}
     </div>`;
 }
 
@@ -331,6 +341,33 @@ function renderDashboard(reports, project) {
     ? 'No pay item on this project has both a Per Plans Total and any usage yet, so there\'s nothing to weight.'
     : `Total quantity used across every pay item that has a Per Plans Total on file, divided by their combined planned quantity. Items with no Per Plans Total aren't counted either way, and neither are Lump Sum items, which aren't measured on a comparable scale.`;
 
+  // A second ring, next to Overall % Complete, for the natural comparison a
+  // PM actually wants: is the % of the contract's days used running ahead
+  // of or behind the % of work actually done? Only shown once there's a
+  // total contract length to measure against -- see the Days Remaining
+  // card's own note about that same missing-data case.
+  let scheduleCardHtml = '';
+  if (hasContractLength && daysSinceNtp != null) {
+    const timeFrac = daysSinceNtp / contractLength;
+    let scheduleColor = null; // null = ringSvg's own neutral default
+    if (overall != null) {
+      if (overall + 0.05 >= timeFrac) scheduleColor = 'var(--ok)';
+      else if (overall + 0.2 >= timeFrac) scheduleColor = 'var(--warn)';
+      else scheduleColor = 'var(--danger)';
+    }
+    const scheduleTip = overall != null
+      ? `${Math.round(timeFrac * 100)}% of the contract's ${contractLength} days have elapsed, versus ${Math.round(overall * 100)}% of planned work complete. ` +
+        (overall + 0.05 >= timeFrac ? 'On pace or ahead of schedule.' : 'Behind schedule -- more time used than work done.')
+      : `${Math.round(timeFrac * 100)}% of the contract's ${contractLength} days have elapsed. Add a Per Plans Total to pay items to compare this against % complete.`;
+    scheduleCardHtml = `<div class="dash-card dc-headline" data-tip="${escapeHtml(scheduleTip)}" tabindex="0">
+      ${ringSvg(timeFrac, scheduleColor)}
+      <div>
+        <span class="dc-label">Schedule Used</span>
+        <span class="dc-sub">${daysRemaining >= 0 ? `${daysRemaining} day(s) left` : `${Math.abs(daysRemaining)} day(s) over`}</span>
+      </div>
+    </div>`;
+  }
+
   $('#dash-stats').innerHTML =
     `<div class="dash-card dc-headline" data-tip="${escapeHtml(overallTip)}" tabindex="0">
       ${ringSvg(overall)}
@@ -339,6 +376,7 @@ function renderDashboard(reports, project) {
         <span class="dc-sub">${overall == null ? 'No pay items with a Per Plans Total yet' : 'Weighted by planned quantity'}</span>
       </div>
     </div>` +
+    scheduleCardHtml +
     statCard(reports.length, 'Reports Filed', '', 'Number of daily reports saved for this project.') +
     statCard(
       daysSinceNtp != null ? daysSinceNtp : '—',
@@ -379,7 +417,8 @@ function renderDashboard(reports, project) {
       fmtMoney(totalEarned),
       'Earned to Date',
       pctByValue != null ? `${(pctByValue * 100).toFixed(1)}% of contract value` : '',
-      'Sum of quantity used × Unit Price across every pay item that has a Unit Price on file.'
+      'Sum of quantity used × Unit Price across every pay item that has a Unit Price on file.',
+      pctByValue
     );
 
   renderPayItems(items);
