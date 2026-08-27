@@ -628,6 +628,49 @@ function pullCompanyMediaInBackground(code) {
   });
 }
 
+// How often an automatic background pull is allowed to run per device --
+// keeps rapid page navigation, or repeated tab-focus events, from re-pulling
+// every project and report in the company each time. Independent of Sync
+// Now, which always runs regardless of this.
+const AUTO_PULL_THROTTLE_MS = 3 * 60 * 1000;
+const AUTO_PULL_SETTING = 'companyAutoPullAt';
+
+// Pulls fresh project/report data in the background -- see wireAutoPull for
+// when this actually runs -- so a teammate's change shows up without anyone
+// having to remember Sync Now. Throttled per device (a Firestore read per
+// project/report adds up over a field day on cellular), a no-op with no
+// company joined, and silent on failure (e.g. offline) since this runs
+// unprompted and shouldn't surface an error nobody asked for. Dispatches
+// 'company-data-pulled' on success, same pattern as
+// pullCompanyMediaInBackground's 'company-media-updated', so any open page
+// can refresh itself without a full reload.
+async function autoPullCompanyData() {
+  const room = await getCompanyRoom();
+  if (!room) return;
+  const last = (await getSetting(AUTO_PULL_SETTING)) || 0;
+  if (Date.now() - last < AUTO_PULL_THROTTLE_MS) return;
+  try {
+    await pullAllCompanyData(room.code);
+    await saveSetting(AUTO_PULL_SETTING, Date.now());
+    pullCompanyMediaInBackground(room.code);
+    window.dispatchEvent(new CustomEvent('company-data-pulled'));
+  } catch (err) {
+    console.error('auto pull:', err);
+  }
+}
+
+// Fires autoPullCompanyData on page load and every time the tab regains
+// focus (switching back from another app, or back to this tab) -- the two
+// moments a field device is most likely to have missed a teammate's change.
+// Call once per page; the throttle above is shared across all of them, so
+// it doesn't matter which page happens to trigger a given pull.
+function wireAutoPull() {
+  autoPullCompanyData();
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') autoPullCompanyData();
+  });
+}
+
 // ---------- Project sync ----------
 //
 // Projects carry no blob fields (see storage.js -- the old templateBlob was

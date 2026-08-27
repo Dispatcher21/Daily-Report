@@ -816,7 +816,11 @@ function setupSignaturePad(canvasSel, field) {
   };
 }
 
-init();
+// No 'company-data-pulled' listener here on purpose -- re-rendering this
+// page's form out from under someone mid-edit would be worse than the data
+// staying a few minutes stale. The pull still runs and updates local
+// storage silently for whenever this report is next opened.
+init().then(wireAutoPull);
 </script>
 </body>
 </html>

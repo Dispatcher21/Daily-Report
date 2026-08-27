@@ -739,7 +739,12 @@ window.addEventListener('company-media-updated', async () => {
   if (fresh) { project = fresh; showPageBackground(project); }
 });
 
-init();
+init().then(wireAutoPull);
+
+// A background auto-pull landed new project/report data -- re-run init so
+// the dashboard and pay item stats reflect a teammate's change without a
+// manual reload. init() itself is idempotent (see its own redirect guard).
+window.addEventListener('company-data-pulled', init);
 </script>
 </body>
 </html>

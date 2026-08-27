@@ -284,7 +284,13 @@ async function handleIncomingSetup() {
   await handleIncomingSetup();
   await adoptOrphanReportsIfAny();
   await renderProjectCards();
+  wireAutoPull();
 })();
+
+// A background auto-pull (see wireAutoPull/autoPullCompanyData in
+// firebase-sync.js) landed new project/report data -- refresh the list so a
+// teammate's new project shows up without a manual reload.
+window.addEventListener('company-data-pulled', renderProjectCards);
 
 // The logo and project background photos sync in the background (see
 // pullCompanyMediaInBackground above and after Join/Sync Now elsewhere) --

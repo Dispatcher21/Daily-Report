@@ -438,7 +438,10 @@ async function init() {
   sizeDashboardFrame();
 }
 
-init();
+// No 'company-data-pulled' listener here on purpose -- see the same note in
+// report-editor.html. The pull still runs and updates local storage
+// silently.
+init().then(wireAutoPull);
 </script>
 </body>
 </html>

@@ -544,7 +544,14 @@ $('#btn-apply-mass-edit').addEventListener('click', async () => {
   }
 });
 
-init();
+init().then(wireAutoPull);
+
+// A background auto-pull landed new report data -- re-fetch and re-render
+// so a teammate's new/changed report shows up without a manual reload.
+window.addEventListener('company-data-pulled', async () => {
+  allReports = await getReportsForProject(project.id);
+  render();
+});
 </script>
 </body>
 </html>
