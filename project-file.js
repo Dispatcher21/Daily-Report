@@ -167,14 +167,18 @@ function parsePayItemsSheet(ws) {
   // contract value (planned qty x price) and $ earned to date (used qty x
   // price). Optional, same as above -- dollar figures just stay blank.
   const cPrice = findCol(['UNIT PRICE', 'BID UNIT PRICE', 'PRICE']);
-  // Both optional, sit after pricing in the sheet. STATIONS: a bare "Y"
-  // turns on Start/Stop Station fields for this item when logging a
+  // All three optional, sit after pricing in the sheet. STATIONS: a bare
+  // "Y" turns on Start/Stop Station fields for this item when logging a
   // quantity. LOCATIONS: one location name per line in the cell (Alt+Enter
   // in Excel) populates a dropdown for assigning that day's quantity to a
-  // spot, and also enables logging the same item more than once per report
-  // (different segments/locations the same day).
+  // spot. SIDE: a bare "Y" turns on a fixed Lt/Rt/Ctr dropdown, the same
+  // way STATIONS does -- unlike Locations, the side of the road isn't a
+  // per-project custom list, so there's nothing to read beyond the toggle.
+  // Any of the three enables logging the same item more than once per
+  // report (different segments/locations/sides the same day).
   const cStations = findCol(['STATIONS', 'STATION', 'TRACK STATIONS']);
   const cLocations = findCol(['LOCATIONS', 'LOCATION']);
+  const cSide = findCol(['SIDE', 'TRACK SIDE']);
 
   const items = [];
   for (let i = headerIdx + 1; i < rows.length; i++) {
@@ -189,8 +193,9 @@ function parsePayItemsSheet(ws) {
     const locations = cLocations !== -1 && row[cLocations] != null
       ? String(row[cLocations]).split(/\r?\n/).map((s) => s.trim()).filter(Boolean)
       : [];
+    const side = cSide !== -1 && row[cSide] != null && /^y(es)?$/i.test(String(row[cSide]).trim());
     if (!itemNumber && !description) continue;
-    items.push({ itemNumber, description, unit, plannedQty, unitPrice, stations, locations });
+    items.push({ itemNumber, description, unit, plannedQty, unitPrice, stations, locations, side });
   }
   return items;
 }
@@ -253,15 +258,15 @@ function buildProjectDataWorkbook({ meta, payItemCatalog, contractors, equipment
   infoWs['!cols'] = [{ wch: 34 }, { wch: 32 }];
   XLSX.utils.book_append_sheet(wb, infoWs, PROJECT_INFO_SHEET);
 
-  const itemRows = [['ITEM NUMBER', 'DESCRIPTION', 'UNIT', 'PER PLANS TOTAL', 'UNIT PRICE', 'STATIONS', 'LOCATIONS']];
+  const itemRows = [['ITEM NUMBER', 'DESCRIPTION', 'UNIT', 'PER PLANS TOTAL', 'UNIT PRICE', 'STATIONS', 'LOCATIONS', 'SIDE']];
   (payItemCatalog || []).forEach((it) => {
     itemRows.push([
       it.itemNumber || '', it.description || '', it.unit || '', it.plannedQty || '', it.unitPrice || '',
-      it.stations ? 'Y' : '', (it.locations || []).join('\n'),
+      it.stations ? 'Y' : '', (it.locations || []).join('\n'), it.side ? 'Y' : '',
     ]);
   });
   const itemsWs = XLSX.utils.aoa_to_sheet(itemRows);
-  itemsWs['!cols'] = [{ wch: 14 }, { wch: 38 }, { wch: 8 }, { wch: 16 }, { wch: 12 }, { wch: 10 }, { wch: 24 }];
+  itemsWs['!cols'] = [{ wch: 14 }, { wch: 38 }, { wch: 8 }, { wch: 16 }, { wch: 12 }, { wch: 10 }, { wch: 24 }, { wch: 8 }];
   XLSX.utils.book_append_sheet(wb, itemsWs, PAY_ITEMS_SHEET);
 
   const contractorRows = [['CONTRACTOR NAME']];
@@ -300,9 +305,9 @@ function downloadProjectDataTemplate() {
       peName: 'NOTTA RE-AL ENJINIR',
     },
     payItemCatalog: [
-      { itemNumber: '618-01', description: 'Thermoplastic Pavement Marking 4in', unit: 'LF', plannedQty: '12000', unitPrice: '1.10', stations: true, locations: [] },
-      { itemNumber: '618-02', description: 'Thermoplastic Pavement Marking 24in', unit: 'LF', plannedQty: '3500', unitPrice: '4.50', stations: false, locations: ['North Approach', 'Mid Span', 'South Approach'] },
-      { itemNumber: '619-01', description: 'Raised Pavement Markers', unit: 'EA', plannedQty: '450', unitPrice: '3.25', stations: false, locations: [] },
+      { itemNumber: '618-01', description: 'Thermoplastic Pavement Marking 4in', unit: 'LF', plannedQty: '12000', unitPrice: '1.10', stations: true, locations: [], side: true },
+      { itemNumber: '618-02', description: 'Thermoplastic Pavement Marking 24in', unit: 'LF', plannedQty: '3500', unitPrice: '4.50', stations: false, locations: ['North Approach', 'Mid Span', 'South Approach'], side: false },
+      { itemNumber: '619-01', description: 'Raised Pavement Markers', unit: 'EA', plannedQty: '450', unitPrice: '3.25', stations: false, locations: [], side: false },
     ],
     contractors: ['ABC Trucking', 'XYZ Barricades'],
     equipmentLabels: DEFAULT_EQUIPMENT_LABELS,

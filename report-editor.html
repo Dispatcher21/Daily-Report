@@ -571,6 +571,7 @@ function renderPayItemsStep() {
           const count = countByNumber.get(item.itemNumber) || 0;
           const flags = [
             item.stations ? '<span class="ci-flag" title="Tracks Start/Stop Station">STA</span>' : '',
+            item.side ? '<span class="ci-flag" title="Tracks Side (Lt/Rt/Ctr)">SIDE</span>' : '',
             (item.locations || []).length ? '<span class="ci-flag" title="Has Location options">LOC</span>' : '',
           ].join(' ');
           return `
@@ -624,7 +625,7 @@ function togglePayItem(catalogItem) {
     // is how you log a second segment, not how you undo the first one.
     const entry = {
       itemNumber: catalogItem.itemNumber, description: catalogItem.description, qty: '', unit: catalogItem.unit,
-      startStation: '', endStation: '', location: '',
+      startStation: '', endStation: '', location: '', side: '',
     };
     const emptyIdx = items.findIndex((pi) => !pi.itemNumber && !pi.description);
     if (emptyIdx === -1) items.push(entry);
@@ -662,7 +663,8 @@ function renderSelectedPayItems() {
       const cat = catalogByNumber.get(item.itemNumber);
       const hasStations = !!(cat && cat.stations);
       const hasLocations = !!(cat && cat.locations && cat.locations.length > 0);
-      const extra = hasStations || hasLocations
+      const hasSide = !!(cat && cat.side);
+      const extra = hasStations || hasLocations || hasSide
         ? `
         <div class="si-extra">
           ${hasStations ? `
@@ -673,6 +675,12 @@ function renderSelectedPayItems() {
             <select class="si-location" data-idx="${i}">
               <option value="">Location&hellip;</option>
               ${cat.locations.map((loc) => `<option value="${escapeHtml(loc)}"${item.location === loc ? ' selected' : ''}>${escapeHtml(loc)}</option>`).join('')}
+            </select>
+          ` : ''}
+          ${hasSide ? `
+            <select class="si-side" data-idx="${i}">
+              <option value="">Side&hellip;</option>
+              ${PAY_ITEM_SIDE_OPTIONS.map((s) => `<option value="${s}"${item.side === s ? ' selected' : ''}>${s}</option>`).join('')}
             </select>
           ` : ''}
         </div>`
@@ -704,6 +712,12 @@ function renderSelectedPayItems() {
   $$('.si-location', container).forEach((el) => {
     el.addEventListener('change', () => {
       report.payItems[Number(el.dataset.idx)].location = el.value;
+      scheduleSave();
+    });
+  });
+  $$('.si-side', container).forEach((el) => {
+    el.addEventListener('change', () => {
+      report.payItems[Number(el.dataset.idx)].side = el.value;
       scheduleSave();
     });
   });

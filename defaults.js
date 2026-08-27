@@ -47,14 +47,19 @@ function isNoWorkDayReport(report) {
   return !!report && (report.notes || '').trim().toUpperCase() === NO_WORK_DAY_NOTE;
 }
 
-// True for a catalog item that tracks Start/Stop Station and/or has a
-// Locations list (see the STATIONS/LOCATIONS columns in project-file.js).
+// True for a catalog item that tracks Start/Stop Station, Side, and/or has a
+// Locations list (see the STATIONS/LOCATIONS/SIDE columns in project-file.js).
 // These can legitimately show up more than once on the same report --
-// different segments/spots worked the same day -- so report-editor.html and
-// quick-quantity.html both give them a repeatable "add another entry" UI
+// different segments/spots/sides worked the same day -- so report-editor.html
+// and quick-quantity.html both give them a repeatable "add another entry" UI
 // instead of the plain single-quantity-per-item model everything else uses.
+// Fixed set, unlike Locations -- which side of the road isn't a per-project
+// custom list, so report-editor.html and quick-quantity.html both just
+// offer these three rather than reading a list from the project file.
+const PAY_ITEM_SIDE_OPTIONS = ['Lt', 'Rt', 'Ctr'];
+
 function payItemNeedsMultiple(catalogItem) {
-  return !!catalogItem && (catalogItem.stations || (catalogItem.locations && catalogItem.locations.length > 0));
+  return !!catalogItem && (catalogItem.stations || catalogItem.side || (catalogItem.locations && catalogItem.locations.length > 0));
 }
 
 // `project` supplies the project-level starting values (from its uploaded
@@ -121,11 +126,12 @@ async function makeBlankReport(nextReportNo, project, previous) {
       description: '',
       qty: '',
       unit: '',
-      // Only meaningful for a catalog item with Stations/Locations enabled
-      // (see project-file.js) -- blank and unused otherwise.
+      // Only meaningful for a catalog item with Stations/Locations/Side
+      // enabled (see project-file.js) -- blank and unused otherwise.
       startStation: '',
       endStation: '',
       location: '',
+      side: '',
     })),
     controllingItem: meta.controllingItem || '',
     commentsOnTime: meta.commentsOnTime || '',

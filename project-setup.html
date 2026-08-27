@@ -250,6 +250,7 @@ function renderPayItemsTab() {
         <label>Unit Price <input type="number" step="0.01" data-idx="${i}" data-field="unitPrice" value="${escapeHtml(it.unitPrice || '')}"></label>
       </div>
       <label class="ps-checkbox-label"><input type="checkbox" data-idx="${i}" data-field="stations" ${it.stations ? 'checked' : ''}> Track Start/Stop Station on this item</label>
+      <label class="ps-checkbox-label"><input type="checkbox" data-idx="${i}" data-field="side" ${it.side ? 'checked' : ''}> Track Side (Lt/Rt/Ctr) on this item</label>
       <label>Locations (one per line, leave blank if not used)<textarea data-idx="${i}" data-field="locations" rows="2">${escapeHtml((it.locations || []).join('\n'))}</textarea></label>
       <button type="button" class="text-btn ps-remove-item" data-idx="${i}" style="color:var(--danger);">&times; Remove This Pay Item</button>
     </div>`
@@ -257,7 +258,7 @@ function renderPayItemsTab() {
     .join('');
 
   $('#ps-panel').innerHTML = `
-    <p class="hint" style="margin-top:0;">Same fields as the PAY ITEMS sheet. Enabling Stations and/or Locations lets this item be logged more than once per report (different segments the same day).</p>
+    <p class="hint" style="margin-top:0;">Same fields as the PAY ITEMS sheet. Enabling Stations, Side, and/or Locations lets this item be logged more than once per report (different segments/sides the same day).</p>
     ${rowsHtml || '<p class="hint">No pay items yet.</p>'}
     <button type="button" class="btn-secondary" id="ps-add-item">+ Add Pay Item</button>
   `;
@@ -269,7 +270,7 @@ function renderPayItemsTab() {
       const idx = Number(el.dataset.idx);
       const field = el.dataset.field;
       const item = items[idx];
-      if (field === 'stations') item.stations = el.checked;
+      if (el.type === 'checkbox') item[field] = el.checked; // stations, side
       else if (field === 'locations') item.locations = el.value.split('\n').map((s) => s.trim()).filter(Boolean);
       else item[field] = el.value;
       markDirty();
@@ -285,7 +286,7 @@ function renderPayItemsTab() {
     });
   });
   $('#ps-add-item').addEventListener('click', () => {
-    items.push({ itemNumber: '', description: '', unit: '', plannedQty: '', unitPrice: '', stations: false, locations: [] });
+    items.push({ itemNumber: '', description: '', unit: '', plannedQty: '', unitPrice: '', stations: false, locations: [], side: false });
     renderPayItemsTab();
   });
 }

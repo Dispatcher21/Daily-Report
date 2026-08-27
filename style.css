@@ -733,6 +733,7 @@ input[type="file"] { min-height: 0; }
 }
 .si-extra .si-station { flex: 1 1 120px; min-width: 0; }
 .si-extra .si-location { flex: 1 1 160px; min-width: 0; }
+.si-extra .si-side { flex: 1 1 90px; min-width: 0; }
 
 .add-manual {
   background: var(--surface-2); border: 1.5px dashed var(--border);

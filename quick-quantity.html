@@ -181,7 +181,7 @@ function renderCatalogList() {
     btn.addEventListener('click', () => {
       const it = catalog[Number(btn.dataset.addEntry)];
       if (!multiEntries[it.itemNumber]) multiEntries[it.itemNumber] = [];
-      multiEntries[it.itemNumber].push({ qty: '', startStation: '', endStation: '', location: '' });
+      multiEntries[it.itemNumber].push({ qty: '', startStation: '', endStation: '', location: '', side: '' });
       renderMultiEntries(it, Number(btn.dataset.addEntry));
     });
   });
@@ -204,6 +204,12 @@ function renderMultiEntries(catalogItem, idx) {
           <select class="me-field" data-field="location">
             <option value="">Location&hellip;</option>
             ${catalogItem.locations.map((loc) => `<option value="${escapeHtml(loc)}"${entry.location === loc ? ' selected' : ''}>${escapeHtml(loc)}</option>`).join('')}
+          </select>
+        ` : ''}
+        ${catalogItem.side ? `
+          <select class="me-field" data-field="side">
+            <option value="">Side&hellip;</option>
+            ${PAY_ITEM_SIDE_OPTIONS.map((s) => `<option value="${s}"${entry.side === s ? ' selected' : ''}>${s}</option>`).join('')}
           </select>
         ` : ''}
         <button type="button" class="qq-multi-remove" data-remove-entry="${ei}" title="Remove">&times;</button>
@@ -266,7 +272,7 @@ function prefillFromReport(report) {
       if (cat && payItemNeedsMultiple(cat)) {
         if (!multiEntries[pi.itemNumber]) multiEntries[pi.itemNumber] = [];
         multiEntries[pi.itemNumber].push({
-          qty: pi.qty || '', startStation: pi.startStation || '', endStation: pi.endStation || '', location: pi.location || '',
+          qty: pi.qty || '', startStation: pi.startStation || '', endStation: pi.endStation || '', location: pi.location || '', side: pi.side || '',
         });
       } else if (cat) {
         const input = document.querySelector(`.qq-qty[data-item-number="${CSS.escape(pi.itemNumber)}"]`);
@@ -376,7 +382,7 @@ function collectEntries() {
       .filter((e) => String(e.qty || '').trim())
       .map((e) => ({
         itemNumber, description: cat.description, unit: cat.unit, qty: e.qty,
-        startStation: e.startStation || '', endStation: e.endStation || '', location: e.location || '',
+        startStation: e.startStation || '', endStation: e.endStation || '', location: e.location || '', side: e.side || '',
       }));
     multiByItem[itemNumber] = filled;
   });
