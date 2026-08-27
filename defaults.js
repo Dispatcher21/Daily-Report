@@ -38,6 +38,15 @@ function todayIso() {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+// A "No Work Day" is just an otherwise-blank report whose Notes says so --
+// there's no separate flag, so a report only counts as one if this is the
+// entirety of its Notes (trimmed, case-insensitive), not merely mentioned
+// inside other notes text.
+const NO_WORK_DAY_NOTE = 'NO WORK DAY';
+function isNoWorkDayReport(report) {
+  return !!report && (report.notes || '').trim().toUpperCase() === NO_WORK_DAY_NOTE;
+}
+
 // `project` supplies the project-level starting values (from its uploaded
 // data file -- Project No./Contract Co./etc, plus optional "default" values
 // for most other fields) and `previous` is the most recent report already

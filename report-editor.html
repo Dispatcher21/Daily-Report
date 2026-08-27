@@ -31,6 +31,11 @@
     You don't have permission to edit reports for this company &mdash; ask an admin to unlock this, or open Company Management to change it.
   </div>
 
+  <div class="no-work-day-bar">
+    <button type="button" class="btn-secondary" id="btn-no-work-day">&#128683; Mark as No Work Day</button>
+    <p class="hint" style="margin:0.4rem 0 0;">Sets Notes to "NO WORK DAY" and leaves everything else as-is -- counted on the project dashboard.</p>
+  </div>
+
   <div class="step">
     <div class="step-header"><span class="step-num">STEP 1</span><h2>Report Info</h2></div>
     <div class="step-body">
@@ -383,6 +388,17 @@ function renderEditor() {
     if (!confirm('Delete this report? This cannot be undone.')) return;
     await deleteReport(report.id);
     location.href = `reports.html?project=${project.id}`;
+  };
+
+  $('#btn-no-work-day').onclick = () => {
+    const existing = (report.notes || '').trim();
+    if (existing && existing.toUpperCase() !== NO_WORK_DAY_NOTE) {
+      if (!confirm('This report already has notes. Replace them with "NO WORK DAY"?')) return;
+    }
+    report.notes = NO_WORK_DAY_NOTE;
+    const notesEl = $('#f-notes'); // may not exist -- Notes could be hidden/reordered for this project
+    if (notesEl) notesEl.value = NO_WORK_DAY_NOTE;
+    scheduleSave();
   };
 }
 

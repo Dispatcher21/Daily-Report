@@ -581,6 +581,12 @@ input[type="file"] { min-height: 0; }
   color: var(--warn); margin-bottom: 0.75rem;
 }
 
+.no-work-day-bar {
+  background: var(--surface); border: 1.5px dashed var(--border);
+  border-radius: var(--radius); padding: 0.85rem 1rem; margin-bottom: 1rem;
+}
+.no-work-day-bar .btn-secondary { margin-top: 0; }
+
 /* ---------- Upload zones ---------- */
 
 .uz {

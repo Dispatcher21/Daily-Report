@@ -552,15 +552,21 @@ function renderWeatherSchedule(dated) {
   const loggable = dated.filter((r) =>
     r.weatherDesc || r.tempHigh || r.tempLow || r.trafficControlSelect || r.controllingItem || r.commentsOnTime
   );
-  step.hidden = loggable.length === 0;
-  if (loggable.length === 0) return;
+  const noWorkDays = dated.filter(isNoWorkDayReport).length;
+  // A project with nothing but No Work Day reports still deserves this
+  // section for that stat alone -- it just won't have anything to show in
+  // the weather/schedule log below, since a No Work Day report is blank
+  // apart from its Notes by design (see the report-editor.html button).
+  step.hidden = loggable.length === 0 && noWorkDays === 0;
+  if (step.hidden) return;
 
   const weatherFlagged = dated.filter((r) => ADVERSE_WEATHER_RE.test(r.weatherDesc || '')).length;
   const attentionDays = dated.filter((r) => r.trafficControlSelect === 'ATTENTION_REQUIRED').length;
 
   $('#dash-weather-stats').innerHTML =
     statCard(weatherFlagged, 'Weather-Flagged Days', '', 'Dated reports whose Weather Description mentions rain, snow, wind, or similar adverse conditions.') +
-    statCard(attentionDays, 'Traffic Control Attention Days', '', 'Dated reports where Traffic Control Status was set to "Attention Required".');
+    statCard(attentionDays, 'Traffic Control Attention Days', '', 'Dated reports where Traffic Control Status was set to "Attention Required".') +
+    statCard(noWorkDays, 'No Work Days', '', 'Dated reports marked "NO WORK DAY" via the button at the top of the report editor.');
 
   $('#dash-weather-log').innerHTML = loggable
     .slice()
