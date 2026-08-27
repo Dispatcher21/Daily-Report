@@ -59,7 +59,21 @@ function isNoWorkDayReport(report) {
 const PAY_ITEM_SIDE_OPTIONS = ['Lt', 'Rt', 'Ctr'];
 
 function payItemNeedsMultiple(catalogItem) {
-  return !!catalogItem && (catalogItem.stations || catalogItem.side || (catalogItem.locations && catalogItem.locations.length > 0));
+  return !!catalogItem && (catalogItem.stations || catalogItem.side || catalogItem.computed || (catalogItem.locations && catalogItem.locations.length > 0));
+}
+
+// Length x Width area math for a Computed Quantity pay item, converted to
+// match the item's own unit -- everything else (Sq Ft, linear units, etc.)
+// is left as a plain Length x Width product since there's no unambiguous
+// conversion to guess at.
+function computeAreaQty(length, width, unit) {
+  const l = Number(length);
+  const w = Number(width);
+  if (!Number.isFinite(l) || !Number.isFinite(w)) return '';
+  const sqFt = l * w;
+  const u = String(unit || '').trim().toUpperCase();
+  const qty = u.includes('SQ YD') || u.includes('SY') ? sqFt / 9 : sqFt;
+  return String(Math.round(qty * 1000) / 1000);
 }
 
 // `project` supplies the project-level starting values (from its uploaded
@@ -126,12 +140,14 @@ async function makeBlankReport(nextReportNo, project, previous) {
       description: '',
       qty: '',
       unit: '',
-      // Only meaningful for a catalog item with Stations/Locations/Side
-      // enabled (see project-file.js) -- blank and unused otherwise.
+      // Only meaningful for a catalog item with Stations/Locations/Side/
+      // Computed enabled (see project-file.js) -- blank and unused otherwise.
       startStation: '',
       endStation: '',
       location: '',
       side: '',
+      length: '',
+      width: '',
     })),
     controllingItem: meta.controllingItem || '',
     commentsOnTime: meta.commentsOnTime || '',

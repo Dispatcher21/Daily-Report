@@ -181,7 +181,7 @@ function renderCatalogList() {
     btn.addEventListener('click', () => {
       const it = catalog[Number(btn.dataset.addEntry)];
       if (!multiEntries[it.itemNumber]) multiEntries[it.itemNumber] = [];
-      multiEntries[it.itemNumber].push({ qty: '', startStation: '', endStation: '', location: '', side: '' });
+      multiEntries[it.itemNumber].push({ qty: '', startStation: '', endStation: '', location: '', side: '', length: '', width: '' });
       renderMultiEntries(it, Number(btn.dataset.addEntry));
     });
   });
@@ -212,6 +212,10 @@ function renderMultiEntries(catalogItem, idx) {
             ${PAY_ITEM_SIDE_OPTIONS.map((s) => `<option value="${s}"${entry.side === s ? ' selected' : ''}>${s}</option>`).join('')}
           </select>
         ` : ''}
+        ${catalogItem.computed ? `
+          <input type="number" step="0.01" class="me-field" data-field="length" placeholder="Length" value="${escapeHtml(entry.length || '')}">
+          <input type="number" step="0.01" class="me-field" data-field="width" placeholder="Width" value="${escapeHtml(entry.width || '')}">
+        ` : ''}
         <button type="button" class="qq-multi-remove" data-remove-entry="${ei}" title="Remove">&times;</button>
       </div>`)
     .join('');
@@ -219,8 +223,28 @@ function renderMultiEntries(catalogItem, idx) {
   $$('.me-field', container).forEach((el) => {
     const evt = el.tagName === 'SELECT' ? 'change' : 'input';
     el.addEventListener(evt, () => {
-      const ei = Number(el.closest('.qq-multi-entry').dataset.entryIdx);
-      multiEntries[catalogItem.itemNumber][ei][el.dataset.field] = el.value;
+      const entryEl = el.closest('.qq-multi-entry');
+      const ei = Number(entryEl.dataset.entryIdx);
+      const entry = multiEntries[catalogItem.itemNumber][ei];
+      entry[el.dataset.field] = el.value;
+      if (catalogItem.computed) {
+        // Length starts out as the station span, same starting-point-only
+        // deal as report-editor.html -- still hand-editable after.
+        if (catalogItem.stations && (el.dataset.field === 'startStation' || el.dataset.field === 'endStation')) {
+          const start = parseFloat(entry.startStation);
+          const end = parseFloat(entry.endStation);
+          if (Number.isFinite(start) && Number.isFinite(end)) {
+            entry.length = String(Math.round(Math.abs(end - start) * 1000) / 1000);
+            const lengthEl = entryEl.querySelector('[data-field="length"]');
+            if (lengthEl) lengthEl.value = entry.length;
+          }
+        }
+        if (['startStation', 'endStation', 'length', 'width'].includes(el.dataset.field)) {
+          entry.qty = computeAreaQty(entry.length, entry.width, catalogItem.unit);
+          const qtyEl = entryEl.querySelector('.qq-qty');
+          if (qtyEl) qtyEl.value = entry.qty;
+        }
+      }
     });
   });
   $$('[data-remove-entry]', container).forEach((btn) => {
@@ -273,6 +297,7 @@ function prefillFromReport(report) {
         if (!multiEntries[pi.itemNumber]) multiEntries[pi.itemNumber] = [];
         multiEntries[pi.itemNumber].push({
           qty: pi.qty || '', startStation: pi.startStation || '', endStation: pi.endStation || '', location: pi.location || '', side: pi.side || '',
+          length: pi.length || '', width: pi.width || '',
         });
       } else if (cat) {
         const input = document.querySelector(`.qq-qty[data-item-number="${CSS.escape(pi.itemNumber)}"]`);
@@ -383,6 +408,7 @@ function collectEntries() {
       .map((e) => ({
         itemNumber, description: cat.description, unit: cat.unit, qty: e.qty,
         startStation: e.startStation || '', endStation: e.endStation || '', location: e.location || '', side: e.side || '',
+        length: e.length || '', width: e.width || '',
       }));
     multiByItem[itemNumber] = filled;
   });
