@@ -604,6 +604,12 @@ label {
   margin-bottom: 0.8rem;
   gap: 0.3rem;
 }
+/* A plain `hidden` attribute otherwise does nothing here -- label's own
+   `display: flex` above overrides the UA [hidden]{display:none} rule
+   regardless of specificity (same footgun as .fab; see its own note in
+   this file). Fixed once, globally, rather than per hidden label, so a
+   future one doesn't quietly reintroduce it. */
+label[hidden] { display: none; }
 input, textarea, select {
   font-size: 16px; /* below 16px iOS zooms the whole page on focus */
   padding: 0.65rem 0.7rem;

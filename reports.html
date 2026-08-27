@@ -91,16 +91,11 @@
       <p class="warn">This overwrites the chosen field on every selected report. Cannot be undone (though each report can still be edited individually afterward).</p>
       <div class="field-grid">
         <label>Field
-          <select id="me-field">
-            <option value="representative">Representative</option>
-            <option value="peName">PE Name</option>
-            <option value="weatherDesc">Weather Description</option>
-            <option value="trafficControlSelect">Traffic Control Status</option>
-            <option value="workingConditions">Working Conditions</option>
-          </select>
+          <select id="me-field"></select>
         </label>
-        <label>New Value <input type="text" id="me-value" placeholder="Value to apply"></label>
+        <label id="me-value-wrap">New Value <input type="text" id="me-value" placeholder="Value to apply"></label>
       </div>
+      <label id="me-textarea-wrap" hidden>New Value <textarea id="me-value-textarea" rows="4" placeholder="Value to apply"></textarea></label>
       <div id="me-select-wrap" hidden>
         <label>New Value
           <select id="me-value-select">
@@ -597,6 +592,35 @@ $('#btn-delete-selected').addEventListener('click', async () => {
 });
 
 // ---------- Mass edit ----------
+//
+// Every report field where one shared value across a batch of reports
+// actually makes sense -- the descriptive/status fields a whole week of
+// reports often *should* share. Deliberately excludes anything that's
+// inherently unique per report (date, report #, hours, pay items, photos,
+// signatures) or that mirrors the project file rather than being edited
+// per-report (projectNo/projectName/ntpDate).
+const MASS_EDIT_FIELDS = [
+  { key: 'activity', label: 'Activity', type: 'text' },
+  { key: 'representative', label: 'Representative', type: 'text' },
+  { key: 'peName', label: 'PE Name', type: 'text' },
+  { key: 'notes', label: 'Notes', type: 'textarea' },
+  { key: 'workSummaryHeader', label: 'Work Summary Top Line', type: 'text' },
+  { key: 'trafficControlNote', label: 'Short Work Summary', type: 'text' },
+  { key: 'workSummary', label: 'Work Summary', type: 'textarea' },
+  { key: 'controllingItem', label: 'Controlling Item', type: 'text' },
+  { key: 'commentsOnTime', label: 'Comments on Time Charged', type: 'textarea' },
+  { key: 'controllingItemTimeFrom', label: 'Controlling Item Time From', type: 'text' },
+  { key: 'controllingItemTimeTo', label: 'Controlling Item Time To', type: 'text' },
+  { key: 'workingConditions', label: 'Working Conditions', type: 'textarea' },
+  { key: 'trafficControlSelect', label: 'Traffic Control Status', type: 'select' },
+  { key: 'workBegin', label: 'Work Begin', type: 'text' },
+  { key: 'workEnd', label: 'Work End', type: 'text' },
+  { key: 'weatherDesc', label: 'Weather Description', type: 'text' },
+  { key: 'tempHigh', label: 'Temp High', type: 'text' },
+  { key: 'tempLow', label: 'Temp Low', type: 'text' },
+];
+
+$('#me-field').innerHTML = MASS_EDIT_FIELDS.map((f) => `<option value="${f.key}">${escapeHtml(f.label)}</option>`).join('');
 
 $('#btn-mass-edit-selected').addEventListener('click', () => {
   $('#mass-edit-panel').hidden = false;
@@ -606,15 +630,23 @@ $('#btn-cancel-mass-edit').addEventListener('click', () => {
   $('#mass-edit-panel').hidden = true;
 });
 
+function meFieldType() {
+  const field = MASS_EDIT_FIELDS.find((f) => f.key === $('#me-field').value);
+  return field ? field.type : 'text';
+}
+
 $('#me-field').addEventListener('change', () => {
-  const isSelectField = $('#me-field').value === 'trafficControlSelect';
-  $('#me-select-wrap').hidden = !isSelectField;
-  $('#me-value').closest('label').hidden = isSelectField;
+  const type = meFieldType();
+  $('#me-value-wrap').hidden = type !== 'text';
+  $('#me-textarea-wrap').hidden = type !== 'textarea';
+  $('#me-select-wrap').hidden = type !== 'select';
 });
+$('#me-field').dispatchEvent(new Event('change'));
 
 $('#btn-apply-mass-edit').addEventListener('click', async () => {
   const field = $('#me-field').value;
-  const value = field === 'trafficControlSelect' ? $('#me-value-select').value : $('#me-value').value;
+  const type = meFieldType();
+  const value = type === 'select' ? $('#me-value-select').value : type === 'textarea' ? $('#me-value-textarea').value : $('#me-value').value;
   if (selectedIds.size === 0) return;
   if (!confirm(`Apply this value to ${selectedIds.size} selected report(s)? This cannot be undone.`)) return;
 
