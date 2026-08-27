@@ -38,21 +38,10 @@
   .ps-checkbox-label { flex-direction: row !important; align-items: center; gap: 0.5rem !important; }
   .ps-checkbox-label input { width: 1.35rem; flex-shrink: 0; }
   #ps-add-item { margin-bottom: 0.5rem; }
-  .ps-mobile-preview-btn {
-    display: none; position: fixed; right: 1rem; bottom: 5.5rem; z-index: 40;
-    background: var(--brand); color: var(--on-brand); border: none; border-radius: 999px;
-    padding: 0.75rem 1.1rem; font-weight: 700; box-shadow: var(--shadow-lg); cursor: pointer;
-  }
-  .ps-preview-modal-card { max-width: 460px; width: 92vw; max-height: 88vh; overflow-y: auto; position: relative; }
-  .ps-preview-modal-close {
-    position: absolute; top: 0.4rem; right: 0.6rem; background: none; border: none;
-    font-size: 1.4rem; line-height: 1; cursor: pointer; color: var(--text-dim);
-  }
 
   @media (max-width: 900px) {
     .ps-layout { grid-template-columns: 1fr; }
-    .ps-right { display: none; }
-    .ps-mobile-preview-btn { display: block; }
+    .ps-right { position: static; }
   }
 </style>
 </head>
@@ -72,7 +61,7 @@
 </div>
 
 <main>
-  <p class="hint" style="margin-top:0;">Fill this out instead of the Excel file &mdash; changes save automatically. The report preview and dashboard preview on the right update as you type. (The Excel upload/download on the Project page still works too, as a fallback.)</p>
+  <p class="hint" style="margin-top:0;">Fill this out instead of the Excel file, then hit Save. The report preview updates as you type; the dashboard preview updates after you save. (The Excel upload/download on the Project page still works too, as a fallback.)</p>
 
   <div class="ps-layout" id="ps-layout">
     <div class="ps-left">
@@ -95,12 +84,9 @@
   </div>
 </main>
 
-<button type="button" class="ps-mobile-preview-btn" id="ps-mobile-preview-btn">&#128065; Preview</button>
-<div class="modal-overlay" id="ps-preview-modal" hidden>
-  <div class="modal-card ps-preview-modal-card">
-    <button type="button" class="ps-preview-modal-close" id="ps-preview-modal-close">&times;</button>
-    <div id="ps-preview-modal-body"></div>
-  </div>
+<div class="floating-save-bar" id="fsb">
+  <span class="fsb-status" id="fsb-status">Unsaved changes</span>
+  <button type="button" class="btn-primary" id="fsb-save" disabled>Save</button>
 </div>
 
 <script src="common.js"></script>
@@ -136,8 +122,8 @@ let project = null;
 let layout = null;
 let logoBlob = null;
 let activeTab = 'info';
-let saveTimer = null;
 let previewTimer = null;
+let dirty = false;
 
 function trimTrailingBlanks(arr) {
   const out = arr.slice();
@@ -145,16 +131,38 @@ function trimTrailingBlanks(arr) {
   return out;
 }
 
-function scheduleSave() {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(async () => {
-    project.defaultContractors = trimTrailingBlanks(project.defaultContractors || []);
-    project.defaultEquipmentLabels = trimTrailingBlanks(project.defaultEquipmentLabels || []);
-    await saveProject(project);
-    $('#project-name-sub').textContent = project.name;
-    refreshDashboardPreview();
-  }, 500);
+// Edits are held in memory only until Save is pressed -- the report preview
+// (in-memory, no storage round trip) still updates live as you type, but
+// nothing is persisted, and the dashboard preview doesn't reload, until then.
+function markDirty() {
+  dirty = true;
+  $('#fsb').classList.add('show');
+  $('#fsb-save').disabled = false;
 }
+
+async function saveNow() {
+  const btn = $('#fsb-save');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+  project.defaultContractors = trimTrailingBlanks(project.defaultContractors || []);
+  project.defaultEquipmentLabels = trimTrailingBlanks(project.defaultEquipmentLabels || []);
+  await saveProject(project);
+  $('#project-name-sub').textContent = project.name;
+  dirty = false;
+  $('#fsb-status').textContent = 'Saved.';
+  $('#fsb').classList.remove('show');
+  btn.textContent = 'Save';
+  refreshDashboardPreview();
+}
+
+$('#fsb-save').addEventListener('click', saveNow);
+
+$('#bb-back-link').addEventListener('click', (e) => {
+  if (dirty && !confirm('You have unsaved changes. Discard them?')) e.preventDefault();
+});
+window.addEventListener('beforeunload', (e) => {
+  if (dirty) { e.preventDefault(); e.returnValue = ''; }
+});
 
 function schedulePreviewRefresh() {
   clearTimeout(previewTimer);
@@ -212,13 +220,13 @@ function renderInfoTab() {
 
   $('#ps-name').addEventListener('input', (e) => {
     project.name = e.target.value;
-    scheduleSave();
+    markDirty();
   });
   $$('[data-meta-key]', $('#ps-panel')).forEach((el) => {
     const evt = el.tagName === 'SELECT' ? 'change' : 'input';
     el.addEventListener(evt, () => {
       project.meta[el.dataset.metaKey] = el.value;
-      scheduleSave();
+      markDirty();
       schedulePreviewRefresh();
     });
   });
@@ -264,7 +272,7 @@ function renderPayItemsTab() {
       if (field === 'stations') item.stations = el.checked;
       else if (field === 'locations') item.locations = el.value.split('\n').map((s) => s.trim()).filter(Boolean);
       else item[field] = el.value;
-      scheduleSave();
+      markDirty();
       schedulePreviewRefresh();
     });
   });
@@ -272,7 +280,7 @@ function renderPayItemsTab() {
     btn.addEventListener('click', () => {
       items.splice(Number(btn.dataset.idx), 1);
       renderPayItemsTab();
-      scheduleSave();
+      markDirty();
       schedulePreviewRefresh();
     });
   });
@@ -300,7 +308,7 @@ function renderContractorsTab() {
       const i = Number(el.dataset.idx);
       while (arr.length <= i) arr.push('');
       arr[i] = el.value;
-      scheduleSave();
+      markDirty();
       schedulePreviewRefresh();
     });
   });
@@ -325,7 +333,7 @@ function renderEquipmentTab() {
       const i = Number(el.dataset.idx);
       while (arr.length <= i) arr.push('');
       arr[i] = el.value;
-      scheduleSave();
+      markDirty();
       schedulePreviewRefresh();
     });
   });
@@ -350,11 +358,16 @@ async function refreshReportPreview() {
   const container = $('#ps-report-preview');
   if (!container || !layout) return;
   try {
-    const scratch = document.createElement('div');
     const sample = await makeBlankReport(1, project, null);
-    const pages = renderReportPages(scratch, layout, sample, logoBlob);
+    // Rendered directly into the visible container, not an offscreen/detached
+    // element -- scalePreviewPage measures the page's real layout size via
+    // getBoundingClientRect(), which is always 0x0 for anything not actually
+    // attached to the document, and that silently collapsed the whole preview
+    // to a blank 0-height box.
+    container.innerHTML = '';
+    const pages = renderReportPages(container, layout, sample, logoBlob);
     pages[1].el.remove();
-    await waitForImages(scratch);
+    await waitForImages(container);
     const targetWidth = Math.min(container.clientWidth || 360, 460);
     const wrap = scalePreviewPage(pages[0].el, targetWidth);
     container.innerHTML = '';
@@ -383,18 +396,6 @@ function sizeDashboardFrame() {
   const scale = (wrap.clientWidth || 300) / PS_DASH_FRAME_W;
   frame.style.transform = `scale(${scale})`;
 }
-
-// ---------- Mobile preview modal ----------
-
-$('#ps-mobile-preview-btn').addEventListener('click', () => {
-  $('#ps-preview-modal').hidden = false;
-  $('#ps-preview-modal-body').appendChild($('#ps-right'));
-  sizeDashboardFrame();
-});
-$('#ps-preview-modal-close').addEventListener('click', () => {
-  $('#ps-preview-modal').hidden = true;
-  $('#ps-layout').appendChild($('#ps-right'));
-});
 
 window.addEventListener('resize', sizeDashboardFrame);
 
