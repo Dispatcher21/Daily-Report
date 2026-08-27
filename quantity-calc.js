@@ -194,3 +194,44 @@ function overallPercentComplete(items) {
   }
   return sumPlanned > 0 ? sumTotal / sumPlanned : null;
 }
+
+// Colour-coded completion band for one pay item's percent complete -- shared
+// by project.html's Pay Item Completion list and quantity-sheet.html's own
+// totals view, so the same figure always reads the same colour/label
+// wherever it shows up. Thresholds: nothing used yet, under half, half to
+// 90%, 90% to 110% (effectively "done" either side of exactly on-target),
+// and meaningfully over -- flagged as attention-worthy (an overrun), not as
+// extra good news.
+function completionBand(pct) {
+  if (pct == null) return { cls: 'status-none', label: 'No Target' };
+  if (pct <= 0) return { cls: 'status-notstarted', label: 'Not Started' };
+  if (pct < 0.5) return { cls: 'status-early', label: 'Early' };
+  if (pct < 0.9) return { cls: 'status-progress', label: 'In Progress' };
+  if (pct < 1.1) return { cls: 'status-near', label: pct >= 1 ? 'Complete' : 'Near Complete' };
+  return { cls: 'status-over', label: 'Over Plan' };
+}
+
+const PI_BAND_ORDER = ['status-notstarted', 'status-early', 'status-progress', 'status-near', 'status-over', 'status-none'];
+const PI_BAND_LABELS = {
+  'status-notstarted': 'Not Started', 'status-early': 'Early', 'status-progress': 'In Progress',
+  'status-near': 'Near/Complete', 'status-over': 'Over Plan', 'status-none': 'No Target',
+};
+
+// Also shared by project.html's Pay Item Completion list and
+// quantity-sheet.html's totals view -- same sort options, same behavior,
+// wherever a list of aggregated pay items shows up.
+function sortPayItems(items, mode) {
+  const byItemNumber = (a, b) => a.itemNumber.localeCompare(b.itemNumber, undefined, { numeric: true });
+  if (mode === 'item-number') return items.slice().sort(byItemNumber);
+  if (mode === 'earned-desc') return items.slice().sort((a, b) => (b.earnedTotal ?? -1) - (a.earnedTotal ?? -1));
+  if (mode === 'remaining-desc') {
+    const remaining = (it) => (it.contractTotal != null && it.earnedTotal != null ? it.contractTotal - it.earnedTotal : -Infinity);
+    return items.slice().sort((a, b) => remaining(b) - remaining(a));
+  }
+  // 'most-complete' and the default 'least complete first' both rank items
+  // with a real target by pct, and group untargeted items (no ranking to
+  // give them) at the end by item number.
+  const withTarget = items.filter((it) => it.pct != null).sort((a, b) => (mode === 'most-complete' ? b.pct - a.pct : a.pct - b.pct));
+  const noTarget = items.filter((it) => it.pct == null).sort(byItemNumber);
+  return withTarget.concat(noTarget);
+}
