@@ -385,7 +385,32 @@ function renderDashboard(reports, project) {
   renderPayItems(items);
   renderTrendChart(progressOverTime(dated, project.payItemCatalog));
   renderWeatherSchedule(dated);
+  fitDashboardValues();
 }
+
+// Shrinks a dashboard value's font just enough to keep it on one line
+// (Excel-style shrink-to-fit) instead of wrapping, which looked broken next
+// to cards that didn't need it. Wrapping (see the .dc-value CSS) only
+// kicks in as a last resort if a figure is still too long at the smallest
+// readable size.
+function fitDashboardValues() {
+  $$('.dash-card .dc-value').forEach((el) => {
+    el.style.fontSize = '';
+    el.style.whiteSpace = 'nowrap';
+    let size = parseFloat(getComputedStyle(el).fontSize);
+    while (el.scrollWidth > el.clientWidth + 0.5 && size > 11) {
+      size -= 0.5;
+      el.style.fontSize = size + 'px';
+    }
+    if (el.scrollWidth > el.clientWidth + 0.5) el.style.whiteSpace = 'normal';
+  });
+}
+
+let fitDashboardValuesResizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(fitDashboardValuesResizeTimer);
+  fitDashboardValuesResizeTimer = setTimeout(fitDashboardValues, 150);
+});
 
 // ---------- Pay item completion (color-coded list + summary strip) ----------
 

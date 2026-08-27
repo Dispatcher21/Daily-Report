@@ -999,7 +999,14 @@ input[type="file"] { min-height: 0; }
   color: var(--brand);
   line-height: 1.15;
   font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere; /* wraps a long figure onto a second line instead of overflowing the card */
+  /* Shrink-to-fit (see fitDashboardValues in project.html) keeps a long
+     figure on one line by shrinking the font instead of wrapping it, which
+     read as broken/uneven next to the other cards. Wrapping is only a
+     fallback for the rare figure still too long even at the smallest
+     readable size -- overflow-wrap keeps that fallback from spilling out
+     of the card. */
+  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 .dash-card .dc-label {
   font-size: 0.76rem;
