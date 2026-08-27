@@ -794,9 +794,9 @@ async function pushReportToCompany(code, report) {
 
   await Promise.all([...photoUploads, sigUpload]);
 
-  // thumbnail/thumbnailAt are local-only (see defaults.js) -- never
-  // pushed, so they're excluded here the same as the real blob fields.
-  const { photos: _photos, photosFetched: _pf, repSignatureImage: _sig, signatureFetched: _sf, peSignatureImage: _peSig, thumbnail: _thumb, thumbnailAt: _thumbAt, ...rest } = report;
+  // thumbnail/thumbnailBack/thumbnailAt are local-only (see defaults.js) --
+  // never pushed, so they're excluded here the same as the real blob fields.
+  const { photos: _photos, photosFetched: _pf, repSignatureImage: _sig, signatureFetched: _sf, peSignatureImage: _peSig, thumbnail: _thumb, thumbnailBack: _thumbBack, thumbnailAt: _thumbAt, ...rest } = report;
   const data = JSON.parse(JSON.stringify(rest));
   data.photoSlots = photos.map((p, i) => (photosFetched[i] ? !!p : !!existingPhotoSlots[i]));
   data.hasSignature = signatureFetched ? !!report.repSignatureImage : !!existingData.hasSignature;
@@ -909,13 +909,14 @@ async function pullAllCompanyData(code, onProgress) {
       report.signatureFetched = false;
     }
 
-    // thumbnail/thumbnailAt are local-only and never synced (see
-    // pushReportToCompany), so the incoming doc never has them -- carry
-    // forward whatever this device already generated rather than losing it
-    // and re-rendering from scratch. Harmless even if now stale: reports.html
-    // compares thumbnailAt against the report's real updatedAt and
-    // regenerates whenever they don't match.
+    // thumbnail/thumbnailBack/thumbnailAt are local-only and never synced
+    // (see pushReportToCompany), so the incoming doc never has them --
+    // carry forward whatever this device already generated rather than
+    // losing it and re-rendering from scratch. Harmless even if now stale:
+    // reports.html compares thumbnailAt against the report's real
+    // updatedAt and regenerates whenever they don't match.
     report.thumbnail = existing ? existing.thumbnail : null;
+    report.thumbnailBack = existing ? existing.thumbnailBack : null;
     report.thumbnailAt = existing ? existing.thumbnailAt : null;
 
     const result = await mergeReportRecord(report);

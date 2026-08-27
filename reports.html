@@ -62,6 +62,10 @@
   <div class="select-all-row">
     <button type="button" class="text-btn" id="btn-select-all">Select all</button>
     <span id="select-count-label"></span>
+    <div class="view-toggle" id="view-toggle" role="group" aria-label="View as">
+      <button type="button" class="view-toggle-btn" data-view="list" title="List view" aria-label="List view">&#9776;</button>
+      <button type="button" class="view-toggle-btn" data-view="grid" title="Thumbnail view" aria-label="Thumbnail view">&#9638;</button>
+    </div>
   </div>
 
   <div id="report-list" class="report-list"></div>
@@ -70,8 +74,7 @@
     <div class="step-body">
       <div class="export-bar" style="margin-top:0;">
         <button type="button" class="btn-primary" id="btn-print-selected">Generate Selected</button>
-        <button type="button" class="btn-secondary" id="btn-sync-selected">Sync Selected</button>
-        <button type="button" class="btn-secondary" id="btn-qty-sheet-selected">Quantity Sheet Selected</button>
+        <button type="button" class="btn-secondary" id="btn-qty-sheet-selected">Build Quantity Sheet</button>
         <button type="button" class="btn-secondary" id="btn-mass-edit-selected">Mass Edit Selected</button>
         <button type="button" class="btn-danger" id="btn-delete-selected">Delete Selected</button>
       </div>
@@ -120,10 +123,6 @@
 <script src="common.js"></script>
 <script src="defaults.js"></script>
 <script src="storage.js"></script>
-<script src="lib/fflate.min.js"></script>
-<script src="lib/xlsx.min.js"></script>
-<script src="report-bundle.js"></script>
-<script src="sync-export.js"></script>
 <script type="module" src="firebase-init.js"></script>
 <script src="firebase-sync.js"></script>
 <script>
@@ -137,16 +136,17 @@ let reportPermCtx = { isAdmin: true, canEditAny: true, canEditOwn: true, userNam
 
 // ---------- Report row thumbnails ----------
 //
-// A small rendered image of each report's main sheet, generated lazily (not
-// blocking the list) and cached on the report itself (thumbnail/thumbnailAt,
+// Small rendered images of each report's two printed pages (front: the work
+// report, back: the photo log), generated lazily (not blocking the list) and
+// cached on the report itself (thumbnail/thumbnailBack/thumbnailAt,
 // local-only -- see defaults.js/firebase-sync.js) so it's instant on every
 // visit after the first. render-report.js/print-sheet.css/html2canvas are
 // loaded on demand rather than as static <script> tags, so a page with
 // nothing left to generate never pays for them at all.
-let thumbnailUrls = new Map(); // report id -> object URL, kept for the life of the page
+let thumbnailUrls = new Map(); // report id -> { front, back } object URLs, kept for the life of the page
 let thumbnailInFlight = new Set();
 let thumbnailLibsPromise = null;
-const THUMB_CAPTURE_WIDTH = 90; // device px, before scaling for a retina screen
+const THUMB_CAPTURE_WIDTH = 150; // device px, before scaling for a retina screen -- shared by both the smaller list-row thumbs and the bigger grid-view ones, sized for the larger of the two so neither looks soft
 
 function loadScriptOnce(src) {
   return new Promise((resolve, reject) => {
@@ -182,52 +182,63 @@ function ensureThumbnailLibs() {
   return thumbnailLibsPromise;
 }
 
-function showThumb(id, blob) {
-  const url = URL.createObjectURL(blob);
-  thumbnailUrls.set(id, url);
-  const wrap = document.querySelector(`.report-row-thumb-wrap[data-thumb="${id}"]`);
-  if (wrap) wrap.innerHTML = `<img src="${url}" alt="">`;
+function showThumb(id, frontBlob, backBlob) {
+  const frontUrl = URL.createObjectURL(frontBlob);
+  const backUrl = URL.createObjectURL(backBlob);
+  thumbnailUrls.set(id, { front: frontUrl, back: backUrl });
+  $$(`[data-thumb="${id}"]`).forEach((wrap) => {
+    wrap.querySelector('[data-page="1"]').innerHTML = `<img src="${frontUrl}" alt="Page 1">`;
+    wrap.querySelector('[data-page="2"]').innerHTML = `<img src="${backUrl}" alt="Page 2">`;
+  });
 }
 
-// Renders just the main report sheet (not the Daily Photo Log page) into
-// `sandbox` at thumbnail size and rasterizes it -- the same renderReportPages
-// used for the real PDF, just captured far smaller since nothing here needs
-// print resolution.
-async function generateReportThumbnailBlob(sandbox, layout, report, logoBlob) {
+// Renders both of a report's printed pages (the work report and the photo
+// log) into `sandbox` at thumbnail size and rasterizes each -- the same
+// renderReportPages used for the real PDF, just captured far smaller since
+// nothing here needs print resolution.
+async function generateReportThumbnailBlobs(sandbox, layout, report, logoBlob) {
   const pages = renderReportPages(sandbox, layout, report, logoBlob);
   await waitForImages(sandbox);
   await new Promise((resolve) => setTimeout(resolve, 30));
 
-  const page1 = pages[0].el;
-  pages[1].el.remove();
+  const capture = async (page) => {
+    const scale = (THUMB_CAPTURE_WIDTH * (window.devicePixelRatio > 1 ? 2 : 1)) / page.offsetWidth;
+    const canvas = await html2canvas(page, {
+      scale,
+      backgroundColor: '#ffffff',
+      useCORS: true,
+      width: page.offsetWidth,
+      height: page.offsetHeight,
+    });
+    return new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.72));
+  };
 
-  const scale = (THUMB_CAPTURE_WIDTH * (window.devicePixelRatio > 1 ? 2 : 1)) / page1.offsetWidth;
-  const canvas = await html2canvas(page1, {
-    scale,
-    backgroundColor: '#ffffff',
-    useCORS: true,
-    width: page1.offsetWidth,
-    height: page1.offsetHeight,
-  });
-  $$('img', page1).forEach((img) => {
-    if (img.src.startsWith('blob:')) URL.revokeObjectURL(img.src);
-  });
-  page1.remove();
+  const front = await capture(pages[0].el);
+  const back = await capture(pages[1].el);
 
-  return new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.72));
+  pages.forEach(({ el }) => {
+    $$('img', el).forEach((img) => {
+      if (img.src.startsWith('blob:')) URL.revokeObjectURL(img.src);
+    });
+    el.remove();
+  });
+
+  return { front, back };
 }
 
-// Wires up whatever's already cached immediately (cheap: just an object
-// URL), then generates the rest one at a time in the background, yielding a
-// frame between each so scrolling/typing on the list stays responsive.
+// Wires up whatever's already cached immediately (cheap: just object URLs),
+// then generates the rest one at a time in the background, yielding a frame
+// between each so scrolling/typing on the list stays responsive.
 async function ensureThumbnails(list) {
   list.forEach((r) => {
-    if (r.thumbnail && r.thumbnailAt === r.updatedAt && !thumbnailUrls.has(r.id)) {
-      showThumb(r.id, r.thumbnail);
+    if (r.thumbnail && r.thumbnailBack && r.thumbnailAt === r.updatedAt && !thumbnailUrls.has(r.id)) {
+      showThumb(r.id, r.thumbnail, r.thumbnailBack);
     }
   });
 
-  const stale = list.filter((r) => (!r.thumbnail || r.thumbnailAt !== r.updatedAt) && !thumbnailInFlight.has(r.id));
+  const stale = list.filter((r) =>
+    (!r.thumbnail || !r.thumbnailBack || r.thumbnailAt !== r.updatedAt) && !thumbnailInFlight.has(r.id)
+  );
   if (stale.length === 0) return;
 
   try {
@@ -242,14 +253,15 @@ async function ensureThumbnails(list) {
   for (const r of stale) {
     thumbnailInFlight.add(r.id);
     try {
-      const blob = await generateReportThumbnailBlob(sandbox, layout, r, logoBlob);
-      r.thumbnail = blob;
+      const { front, back } = await generateReportThumbnailBlobs(sandbox, layout, r, logoBlob);
+      r.thumbnail = front;
+      r.thumbnailBack = back;
       r.thumbnailAt = r.updatedAt;
       // putReportRaw, not saveReport -- generating a thumbnail to look at
       // the list isn't an edit, so it shouldn't bump updatedAt/lastEditedBy
       // (which would just invalidate the thumbnail it's trying to cache).
       await putReportRaw(r);
-      showThumb(r.id, blob);
+      showThumb(r.id, front, back);
     } catch (err) {
       console.error('Thumbnail generation failed for report', r.id, err);
     } finally {
@@ -262,6 +274,25 @@ async function ensureThumbnails(list) {
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
 }
+
+// ---------- View mode (list / grid, like a Windows folder) ----------
+//
+// Remembered per device (not per project) via saveSetting, same as theme --
+// whichever way someone likes to browse reports is probably how they want
+// to browse every project's reports.
+const VIEW_MODE_SETTING = 'reportsViewMode';
+let viewMode = 'list';
+
+function setViewMode(mode) {
+  viewMode = mode;
+  $$('.view-toggle-btn').forEach((btn) => btn.classList.toggle('active', btn.dataset.view === mode));
+  saveSetting(VIEW_MODE_SETTING, mode).catch((err) => console.error(err));
+  render();
+}
+
+$$('.view-toggle-btn').forEach((btn) => {
+  btn.addEventListener('click', () => setViewMode(btn.dataset.view));
+});
 
 async function init() {
   project = projectId ? await getProject(projectId) : null;
@@ -283,6 +314,10 @@ async function init() {
     $('#btn-delete-selected').hidden = true;
     $('#btn-mass-edit-selected').hidden = true;
   }
+
+  const savedViewMode = await getSetting(VIEW_MODE_SETTING);
+  viewMode = savedViewMode === 'grid' ? 'grid' : 'list';
+  $$('.view-toggle-btn').forEach((btn) => btn.classList.toggle('active', btn.dataset.view === viewMode));
 
   allReports = await getReportsForProject(project.id);
   render();
@@ -315,42 +350,79 @@ function getFilteredSorted() {
   return list;
 }
 
+// Both pages' thumbnails, shared markup between list rows and grid cards --
+// see showThumb, which fills these in by id once generated.
+function reportThumbsHtml(r) {
+  const t = thumbnailUrls.get(r.id);
+  const page = (n, src) =>
+    `<div class="thumb-page" data-page="${n}">${src ? `<img src="${src}" alt="Page ${n}">` : '<span class="thumb-placeholder">&#128196;</span>'}</div>`;
+  return `<div class="report-thumbs" data-thumb="${r.id}">${page(1, t && t.front)}${page(2, t && t.back)}</div>`;
+}
+
+function reportBadgesHtml(r) {
+  const badges = [];
+  if (isNoWorkDayReport(r)) badges.push('<span class="report-row-nwd">NO WORK DAY</span>');
+  if (r.createdBy || r.representative) badges.push(`<span class="report-row-author">${escapeHtml(r.createdBy || r.representative)}</span>`);
+  return badges.join(' ');
+}
+
+function reportCheckboxHtml(r) {
+  return canEditReportWithContext(r, reportPermCtx)
+    ? `<input type="checkbox" class="report-row-check" ${selectedIds.has(r.id) ? 'checked' : ''}>`
+    : `<span class="report-row-check-spacer"></span>`;
+}
+
+function renderRow(r) {
+  const badges = reportBadgesHtml(r);
+  return `
+    <div class="report-row" data-id="${r.id}">
+      ${reportCheckboxHtml(r)}
+      ${reportThumbsHtml(r)}
+      <div class="report-row-main" data-open="${r.id}">
+        <span class="report-row-date">${r.date || '(no date)'}${badges ? ' ' + badges : ''}</span>
+        <span class="report-row-sub">${escapeHtml(r.activity || 'No activity noted')}</span>
+      </div>
+      <div class="report-row-actions">
+        <a class="btn-sm" href="report-editor.html?project=${project.id}&report=${r.id}">Edit</a>
+        <span class="report-row-no">#${r.reportNo}</span>
+      </div>
+    </div>`;
+}
+
+function renderCard(r) {
+  const badges = reportBadgesHtml(r);
+  return `
+    <div class="report-card" data-id="${r.id}">
+      <div class="report-card-top">
+        ${reportCheckboxHtml(r)}
+        <span class="report-row-no">#${r.reportNo}</span>
+      </div>
+      <div class="report-card-body" data-open="${r.id}">
+        ${reportThumbsHtml(r)}
+        <span class="report-row-date">${r.date || '(no date)'}</span>
+        ${badges ? `<div class="report-card-badges">${badges}</div>` : ''}
+        <span class="report-row-sub">${escapeHtml(r.activity || 'No activity noted')}</span>
+      </div>
+      <a class="btn-sm report-card-edit" href="report-editor.html?project=${project.id}&report=${r.id}">Edit</a>
+    </div>`;
+}
+
 function render() {
   const list = getFilteredSorted();
   const container = $('#report-list');
+  container.className = viewMode === 'grid' ? 'report-grid' : 'report-list';
 
   if (allReports.length === 0) {
     container.innerHTML = '<div class="empty-state">No reports yet. Tap "+ New Report" to start today\'s.</div>';
   } else if (list.length === 0) {
     container.innerHTML = '<div class="empty-state">No reports match the current filters.</div>';
   } else {
-    container.innerHTML = list
-      .map((r) => {
-        const editable = canEditReportWithContext(r, reportPermCtx);
-        const checkbox = editable
-          ? `<input type="checkbox" class="report-row-check" ${selectedIds.has(r.id) ? 'checked' : ''}>`
-          : `<span class="report-row-check-spacer"></span>`;
-        const thumbSrc = thumbnailUrls.get(r.id);
-        return `
-        <div class="report-row" data-id="${r.id}">
-          ${checkbox}
-          <div class="report-row-thumb-wrap" data-thumb="${r.id}">${thumbSrc ? `<img src="${thumbSrc}" alt="">` : '<span class="report-row-thumb-placeholder">&#128196;</span>'}</div>
-          <div class="report-row-main" data-open="${r.id}">
-            <span class="report-row-date">${r.date || '(no date)'}${isNoWorkDayReport(r) ? ' <span class="report-row-nwd">NO WORK DAY</span>' : ''}${r.createdBy || r.representative ? ` <span class="report-row-author">${escapeHtml(r.createdBy || r.representative)}</span>` : ''}</span>
-            <span class="report-row-sub">${escapeHtml(r.activity || 'No activity noted')}</span>
-          </div>
-          <div class="report-row-actions">
-            <a class="btn-sm" href="report-editor.html?project=${project.id}&report=${r.id}">Edit</a>
-            <span class="report-row-no">#${r.reportNo}</span>
-          </div>
-        </div>`;
-      })
-      .join('');
+    container.innerHTML = list.map(viewMode === 'grid' ? renderCard : renderRow).join('');
   }
 
   $$('.report-row-check', container).forEach((cb) => {
     cb.addEventListener('change', (e) => {
-      const id = e.target.closest('.report-row').dataset.id;
+      const id = e.target.closest('.report-row, .report-card').dataset.id;
       if (e.target.checked) selectedIds.add(id);
       else selectedIds.delete(id);
       updateBulkBar();
@@ -369,14 +441,19 @@ function render() {
   if (list.length > 0) ensureThumbnails(list).catch((err) => console.error(err));
 }
 
+// The "+ New Report" FAB sits fixed at the same bottom-of-screen spot the
+// bulk action bar occupies once something's selected -- rather than the two
+// fighting for the same space (Delete Selected kept ending up underneath
+// the FAB), the FAB just steps aside while a selection is active. Nothing's
+// lost: every action relevant during selection lives in the bulk bar.
 function updateBulkBar() {
   const n = selectedIds.size;
   $('#select-count-label').textContent = n > 0 ? `${n} selected` : '';
   $('#bulk-bar').hidden = n === 0;
+  $('#fab-new-report').hidden = n > 0;
   $('#btn-print-selected').textContent = n === 1 ? 'Generate Selected' : `Generate Selected (${n})`;
   $('#btn-delete-selected').textContent = n === 1 ? 'Delete Selected' : `Delete Selected (${n})`;
-  $('#btn-qty-sheet-selected').textContent = n === 1 ? 'Quantity Sheet Selected' : `Quantity Sheet Selected (${n})`;
-  $('#btn-sync-selected').textContent = n === 1 ? 'Sync Selected' : `Sync Selected (${n})`;
+  $('#btn-qty-sheet-selected').textContent = n === 1 ? 'Build Quantity Sheet' : `Build Quantity Sheet (${n})`;
 }
 
 ['f-date-from', 'f-date-to', 'f-search', 'f-sort'].forEach((id) => {
@@ -411,54 +488,6 @@ $('#btn-qty-sheet-selected').addEventListener('click', () => {
   if (selectedIds.size === 0) return;
   const ids = Array.from(selectedIds).join(',');
   location.href = `quantity-sheet.html?project=${project.id}&report=${ids}`;
-});
-
-// Builds a .report bundle per selected report (data + photos, for another
-// device running this app) plus one fresh project summary spreadsheet (for
-// anyone just browsing the destination folder), then hands them to the OS
-// share sheet so they land wherever the inspector already has a cloud
-// account signed in -- OneDrive, Drive, whatever. Falls back to plain
-// downloads on browsers that can't share files (desktop, mainly), same
-// pattern already used for the setup-sharing flow in Settings.
-$('#btn-sync-selected').addEventListener('click', async () => {
-  if (selectedIds.size === 0) return;
-  const selected = allReports.filter((r) => selectedIds.has(r.id));
-
-  const btn = $('#btn-sync-selected');
-  const original = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = 'Preparing...';
-  try {
-    const files = [];
-    for (const report of selected) {
-      const blob = await buildReportBundle(project, report);
-      files.push(new File([blob], reportBundleFilename(report), { type: 'application/octet-stream' }));
-    }
-
-    // The whole project's history, not just what's selected -- useful as a
-    // standing reference regardless of which reports triggered this share.
-    const allProjectReports = await getReportsForProject(project.id);
-    const wb = buildMasterWorkbook(project, allProjectReports);
-    const xlsxOut = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-    files.push(new File(
-      [xlsxOut],
-      masterSpreadsheetFilename(project),
-      { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }
-    ));
-
-    if (navigator.canShare && navigator.canShare({ files })) {
-      await navigator.share({ files, title: `${project.name} — Sync` });
-    } else {
-      files.forEach((file) => triggerDownload(file, file.name));
-    }
-  } catch (err) {
-    if (err && err.name === 'AbortError') return; // user dismissed the share sheet
-    console.error(err);
-    alert(userError("Couldn't prepare the files to share: " + err.message, 'SHARE_REPORTS'));
-  } finally {
-    btn.textContent = original;
-    btn.disabled = false;
-  }
 });
 
 $('#btn-delete-selected').addEventListener('click', async () => {

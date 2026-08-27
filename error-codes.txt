@@ -34,7 +34,6 @@ it on the Welcome screen or in Settings).
   THUNDERCRACKER  Couldn't add a shared setup
   WHEELIE         Couldn't build the downloadable project data file
   BLASTER         Couldn't import .report files into a project
-  HOTROD          Couldn't prepare reports to share/sync
   SIDESWIPE       Couldn't delete the selected reports
   SUNSTREAKER     Couldn't apply a mass edit to reports
   LONGHAUL        Couldn't build the quantity sheet
