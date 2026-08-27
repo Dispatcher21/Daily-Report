@@ -19,6 +19,23 @@ function isLumpSumUnit(unit) {
   return /^lump\s*sum$|^l\.?s\.?$/i.test(String(unit || '').trim());
 }
 
+// A Lump Sum item isn't priced per unit the way "12 MILE @ $500/MILE" is --
+// its Unit Price on file already IS the total contract value for that one
+// item, and the "quantity" an inspector logs against it on a report is
+// already a dollar amount earned that day (e.g. "$20,850" toward a
+// $430,000 lump sum), not a multiplier. Multiplying either one by price
+// the way every other unit does produces nonsense figures (a $42K running
+// total on a $430K item was coming out as $18 BILLION before this).
+function contractTotalFor(unit, planned, unitPrice) {
+  if (unitPrice == null) return null;
+  if (isLumpSumUnit(unit)) return unitPrice;
+  return planned != null ? planned * unitPrice : null;
+}
+function earnedTotalFor(unit, total, unitPrice) {
+  if (unitPrice == null) return null;
+  return isLumpSumUnit(unit) ? total : total * unitPrice;
+}
+
 // Sums each pay item's quantity across a flat list of pay-item entries
 // (first-seen order, so it's on the caller to pass them in whatever order
 // "first seen" should mean -- chronological, undated-last, whatever fits),
@@ -61,8 +78,8 @@ function aggregatePayItemTotals(flatItems, payItemCatalog) {
       planned,
       pct: planned != null && !isLumpSumUnit(unit) ? total / planned : null,
       unitPrice,
-      contractTotal: planned != null && unitPrice != null ? planned * unitPrice : null,
-      earnedTotal: unitPrice != null ? total * unitPrice : null,
+      contractTotal: contractTotalFor(unit, planned, unitPrice),
+      earnedTotal: earnedTotalFor(unit, total, unitPrice),
     };
   });
 }
@@ -95,8 +112,8 @@ function fullPayItemCatalogOverview(flatItems, payItemCatalog) {
         planned,
         pct: planned != null && !isLumpSumUnit(cat.unit) ? 0 : null,
         unitPrice,
-        contractTotal: planned != null && unitPrice != null ? planned * unitPrice : null,
-        earnedTotal: unitPrice != null ? 0 : null,
+        contractTotal: contractTotalFor(cat.unit, planned, unitPrice),
+        earnedTotal: earnedTotalFor(cat.unit, 0, unitPrice),
       };
     });
 

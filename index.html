@@ -263,14 +263,26 @@ async function handleIncomingSetup() {
   const room = await getCompanyRoom();
   $('#link-company-management').classList.toggle('show', !!(room && room.isAdmin));
 
+  // Logo/background pulls are fire-and-forget by design (see
+  // pullCompanyMediaInBackground) so login never blocks on a photo
+  // download -- but login.html redirects here the instant joinCompanyRoom()
+  // returns, which kills those in-flight promises before they can finish
+  // (navigating away unloads the page they're running on). Re-firing it
+  // here, on the page the device actually lands on and stays on, is what
+  // lets them actually complete; pullCompanyLogo/fetchProjectBackground are
+  // both cheap no-ops when nothing's actually behind, so doing this on
+  // every load is fine.
+  if (room) pullCompanyMediaInBackground(room.code);
+
   await handleIncomingSetup();
   await adoptOrphanReportsIfAny();
   await renderProjectCards();
 })();
 
-// The logo and project background photos sync in the background after
-// Join/Sync Now return (see pullCompanyMediaInBackground) -- this is what
-// makes them show up here without needing a manual reload once they land.
+// The logo and project background photos sync in the background (see
+// pullCompanyMediaInBackground above and after Join/Sync Now elsewhere) --
+// this is what makes them show up here without needing a manual reload
+// once they land.
 window.addEventListener('company-media-updated', () => {
   applyHeaderLogo();
   renderProjectCards();
