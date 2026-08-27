@@ -33,7 +33,7 @@
 
   <div class="no-work-day-bar">
     <button type="button" class="btn-secondary" id="btn-no-work-day">&#128683; Mark as No Work Day</button>
-    <p class="hint" style="margin:0.4rem 0 0;">Sets Notes to "NO WORK DAY" and leaves everything else as-is -- counted on the project dashboard.</p>
+    <p class="hint" style="margin:0.4rem 0 0;">Sets Notes to "NO WORK DAY" and Hours to 0, leaves everything else as-is -- counted on the project dashboard.</p>
   </div>
 
   <div class="step">
@@ -399,6 +399,12 @@ function renderEditor() {
     report.notes = NO_WORK_DAY_NOTE;
     const notesEl = $('#f-notes'); // may not exist -- Notes could be hidden/reordered for this project
     if (notesEl) notesEl.value = NO_WORK_DAY_NOTE;
+    // Hours otherwise carries forward from whatever the previous report had
+    // (see makeBlankReport) -- harmless for a normal day, but nobody worked
+    // hours on a day nobody worked, so a No Work Day shouldn't inherit them.
+    report.hours = 0;
+    const hoursEl = $('#f-hours');
+    if (hoursEl) hoursEl.value = 0;
     scheduleSave();
   };
 }
