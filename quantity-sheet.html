@@ -20,7 +20,7 @@
   <span></span>
 </header>
 <div class="back-bar">
-  <a href="#" id="bb-back-link">&larr; Reports</a>
+  <a href="#" id="bb-back-link">&larr; Project</a>
   <span class="bb-sep">//</span>
   <span class="bb-cur">Quantity Sheet</span>
 </div>
@@ -178,7 +178,7 @@ async function init() {
   }
   document.title = `Quantity Sheet — ${project.name}`;
   $('#project-name-sub').textContent = project.name;
-  $('#bb-back-link').href = `reports.html?project=${project.id}`;
+  $('#bb-back-link').href = `project.html?id=${project.id}`;
 
   allReports = (await getReportsForProject(project.id)).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 
