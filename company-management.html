@@ -57,6 +57,7 @@
 
 <main>
 
+  <div class="step-pair">
   <div class="step">
     <div class="step-header">
       <span class="step-num">NAME</span>
@@ -89,6 +90,7 @@
       <button type="button" class="btn-danger" id="btn-remove-cm-logo" style="margin-top:0.75rem;">Remove Logo</button>
     </div>
   </div>
+  </div>
 
   <div class="step">
     <div class="step-header">
@@ -107,6 +109,7 @@
     </div>
   </div>
 
+  <div class="step-pair">
   <div class="step">
     <div class="step-header">
       <span class="step-num">FORM RULES</span>
@@ -122,20 +125,6 @@
         </label>
         <a class="btn-primary" id="rf-open-link" style="margin-top:0.6rem;display:inline-block;text-decoration:none;text-align:center;">Open Visual Field Editor</a>
       </details>
-    </div>
-  </div>
-
-  <div class="step">
-    <div class="step-header">
-      <span class="step-num">ACTIVITY</span>
-      <h2>Who's Done What</h2>
-    </div>
-    <div class="step-body">
-      <p class="hint" style="margin-top:0;">Reports grouped by whoever's logged in as on the device that created them. Only reflects data this device has synced -- tap Refresh to pull in the latest first.</p>
-      <button type="button" class="btn-secondary" id="btn-refresh-activity" style="margin-bottom:0.75rem;">Refresh</button>
-      <div class="empty-state" id="cm-activity-empty" hidden style="padding:1.25rem;">No reports yet.</div>
-      <div id="cm-activity-list"></div>
-      <p class="hint" style="margin-bottom:0;">Looking for a full, timestamped record of every change -- edits, deletions, exact before/after values? See the <a href="audit-log.html">Audit Log</a>.</p>
     </div>
   </div>
 
@@ -162,6 +151,21 @@
         <input type="checkbox" id="cm-perm-create-projects">
         <span>Members can create new projects</span>
       </label>
+    </div>
+  </div>
+  </div>
+
+  <div class="step">
+    <div class="step-header">
+      <span class="step-num">ACTIVITY</span>
+      <h2>Who's Done What</h2>
+    </div>
+    <div class="step-body">
+      <p class="hint" style="margin-top:0;">Reports grouped by whoever's logged in as on the device that created them. Only reflects data this device has synced -- tap Refresh to pull in the latest first.</p>
+      <button type="button" class="btn-secondary" id="btn-refresh-activity" style="margin-bottom:0.75rem;">Refresh</button>
+      <div class="empty-state" id="cm-activity-empty" hidden style="padding:1.25rem;">No reports yet.</div>
+      <div id="cm-activity-list"></div>
+      <p class="hint" style="margin-bottom:0;">Looking for a full, timestamped record of every change -- edits, deletions, exact before/after values? See the <a href="audit-log.html">Audit Log</a>.</p>
     </div>
   </div>
 
@@ -222,6 +226,7 @@
     </div>
   </div>
 
+  <div class="step-pair">
   <div class="step">
     <div class="step-header">
       <span class="step-num">SECURITY</span>
@@ -256,6 +261,7 @@
       </label>
       <button type="button" class="btn-primary" id="btn-change-company-password" style="margin-top:0.5rem;">Change Company Password</button>
     </div>
+  </div>
   </div>
 
   <div id="cm-status" class="hint" style="margin-top:0.75rem;" hidden></div>
