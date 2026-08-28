@@ -823,6 +823,25 @@ async function deleteReportFromCompany(code, report) {
   await deleteDoc(doc(db, 'companies', code, 'reports', report.id));
 }
 
+// ---------- Audit log sync ----------
+//
+// Far simpler than projects/reports: no blobs, and an entry is written once
+// and never edited or deleted afterward (see storage.js), so there's no
+// merge-by-updatedAt logic needed either direction -- push is a plain
+// create, pull just adds whatever id isn't already local (mergeAuditEntry).
+async function pushAuditEntryToCompany(code, entry) {
+  const { db, ensureSignedIn } = await waitForFirebaseCore();
+  const { doc, setDoc } = await import(FIRESTORE_SDK);
+  await ensureSignedIn();
+  await setDoc(doc(db, 'companies', code, 'auditLog', entry.id), entry);
+}
+
+async function onCompanySyncAuditEntry(entry) {
+  const room = await getCompanyRoom();
+  if (!room) return;
+  await pushAuditEntryToCompany(room.code, entry);
+}
+
 // ---------- Bulk pull / push -- used by join and "Sync Now" ----------
 
 async function pullAllCompanyData(code, onProgress) {
@@ -930,6 +949,14 @@ async function pullAllCompanyData(code, onProgress) {
     if (result !== 'skipped') summary.reportsPulled++;
   }
 
+  if (onProgress) onProgress({ phase: 'audit' });
+  const auditSnap = await getDocs(collection(db, 'companies', code, 'auditLog'));
+  summary.auditEntriesPulled = 0;
+  for (const d of auditSnap.docs) {
+    const result = await mergeAuditEntry({ ...d.data(), id: d.id });
+    if (result !== 'skipped') summary.auditEntriesPulled++;
+  }
+
   return summary;
 }
 
@@ -980,6 +1007,10 @@ async function pushAllLocalData(code, onProgress) {
     await pushReportToCompany(code, reports[i]);
     if (onProgress) onProgress({ phase: 'reports', index: i + 1, total: reports.length });
   }
+
+  const auditEntries = await getAllAuditEntries();
+  await Promise.all(auditEntries.map((entry) => pushAuditEntryToCompany(code, entry)));
+  if (onProgress) onProgress({ phase: 'audit', count: auditEntries.length });
 }
 
 // ---------- live hooks -- called from storage.js after every save/delete ----------

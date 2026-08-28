@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Audit Log</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1c3d5a">
+<link rel="stylesheet" href="style.css">
+<script src="theme.js"></script>
+<style>
+  .al-log {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.82rem; line-height: 1.5; white-space: pre-wrap; word-break: break-word;
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+    padding: 0.85rem; max-height: 60vh; overflow-y: auto; margin: 0;
+  }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <a href="company-management.html" class="home-link">
+    <h1>Audit Log</h1>
+    <div class="app-sub" id="al-company-sub">Admin</div>
+  </a>
+  <span></span>
+</header>
+<div class="back-bar">
+  <a href="company-management.html">&larr; Company Management</a>
+  <span class="bb-sep">//</span>
+  <span class="bb-cur">Audit Log</span>
+</div>
+
+<main>
+  <div class="step">
+    <div class="step-header">
+      <span class="step-num">FILTER</span>
+      <h2>Narrow It Down</h2>
+    </div>
+    <div class="step-body">
+      <div class="field-grid">
+        <label>Project <select id="f-al-project"><option value="">All Projects</option></select></label>
+        <label>User <select id="f-al-user"><option value="">All Users</option></select></label>
+        <label>From <input type="date" id="f-al-from"></label>
+        <label>To <input type="date" id="f-al-to"></label>
+      </div>
+      <p class="hint" id="al-summary" style="margin-bottom:0;"></p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-header">
+      <span class="step-num">LOG</span>
+      <h2>Activity</h2>
+    </div>
+    <div class="step-body">
+      <pre class="al-log" id="al-log-text"></pre>
+      <button type="button" class="btn-primary" id="btn-download-log" style="margin-top:1rem;">Download as .txt</button>
+    </div>
+  </div>
+</main>
+
+<script src="common.js"></script>
+<script src="defaults.js"></script>
+<script src="storage.js"></script>
+<script src="audit-log.js"></script>
+<script type="module" src="firebase-init.js"></script>
+<script src="firebase-sync.js"></script>
+<script>
+let allEntries = [];
+let filterState = { projectLabel: '', userName: '', from: '', to: '' };
+
+async function init() {
+  const room = await getCompanyRoom();
+  if (!room || !room.isAdmin) {
+    location.href = 'index.html';
+    return;
+  }
+  $('#al-company-sub').textContent = `Admin — ${room.name || 'Audit Log'}`;
+
+  allEntries = await getAllAuditEntries();
+
+  // A report entry's label already carries its project name ("Report #14
+  // — PR#439 ..."); a project entry's label IS the project name. Either way,
+  // the part after the em dash (or the whole label for a project entity) is
+  // what the Project filter groups by.
+  const projectLabels = new Set();
+  const userNames = new Set();
+  allEntries.forEach((e) => {
+    userNames.add(e.userName);
+    projectLabels.add(projectLabelFor(e));
+  });
+
+  $('#f-al-project').innerHTML = '<option value="">All Projects</option>' +
+    Array.from(projectLabels).sort().map((p) => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');
+  $('#f-al-user').innerHTML = '<option value="">All Users</option>' +
+    Array.from(userNames).sort().map((u) => `<option value="${escapeHtml(u)}">${escapeHtml(u)}</option>`).join('');
+
+  render();
+}
+
+function projectLabelFor(entry) {
+  if (entry.entityType === 'project') return entry.entityLabel;
+  const idx = entry.entityLabel.indexOf('—');
+  return idx === -1 ? entry.entityLabel : entry.entityLabel.slice(idx + 1).trim();
+}
+
+function filteredEntries() {
+  return allEntries.filter((e) => {
+    if (filterState.projectLabel && projectLabelFor(e) !== filterState.projectLabel) return false;
+    if (filterState.userName && e.userName !== filterState.userName) return false;
+    const day = new Date(e.timestamp).toISOString().slice(0, 10);
+    if (filterState.from && day < filterState.from) return false;
+    if (filterState.to && day > filterState.to) return false;
+    return true;
+  });
+}
+
+function render() {
+  const entries = filteredEntries();
+  $('#al-log-text').textContent = formatAuditLogAsText(entries);
+  $('#al-summary').textContent = `${entries.length} of ${allEntries.length} total entries.`;
+}
+
+$('#f-al-project').addEventListener('change', (e) => { filterState.projectLabel = e.target.value; render(); });
+$('#f-al-user').addEventListener('change', (e) => { filterState.userName = e.target.value; render(); });
+$('#f-al-from').addEventListener('input', (e) => { filterState.from = e.target.value; render(); });
+$('#f-al-to').addEventListener('input', (e) => { filterState.to = e.target.value; render(); });
+
+$('#btn-download-log').addEventListener('click', () => {
+  const text = formatAuditLogAsText(filteredEntries());
+  const stamp = new Date().toISOString().slice(0, 10);
+  triggerDownload(new Blob([text], { type: 'text/plain' }), `AuditLog_${stamp}.txt`);
+});
+
+init();
+</script>
+</body>
+</html>

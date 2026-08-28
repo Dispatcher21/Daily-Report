@@ -2,10 +2,11 @@
 // photo/signature blobs) on-device. No library needed.
 
 const DB_NAME = 'daily-report-app';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const REPORTS_STORE = 'reports';
 const PROJECTS_STORE = 'projects';
 const SETTINGS_STORE = 'settings';
+const AUDIT_STORE = 'auditLog';
 const LOGO_SETTING_KEY = 'reportLogo';
 const USER_NAME_SETTING_KEY = 'userName';
 
@@ -22,6 +23,9 @@ function openDb() {
       }
       if (!db.objectStoreNames.contains(SETTINGS_STORE)) {
         db.createObjectStore(SETTINGS_STORE, { keyPath: 'key' });
+      }
+      if (!db.objectStoreNames.contains(AUDIT_STORE)) {
+        db.createObjectStore(AUDIT_STORE, { keyPath: 'id' });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -158,6 +162,9 @@ async function putReportRaw(report) {
 // Fired without awaiting: a company push shouldn't make the caller wait for
 // a save that's already durable in IndexedDB by this point.
 async function saveReport(report) {
+  // Needed before the write for the audit hook to diff against -- a no-op
+  // extra read when nothing's listening (logAuditableChange undefined).
+  const before = typeof logAuditableChange === 'function' ? await getReport(report.id) : null;
   const userName = await getUserName();
   if (userName) {
     if (!report.createdBy) report.createdBy = userName; // set once, never overwritten by a later editor
@@ -168,14 +175,21 @@ async function saveReport(report) {
   if (typeof onCompanySyncReportChanged === 'function') {
     onCompanySyncReportChanged(report, false).catch((err) => console.error('company sync mirror:', err));
   }
+  if (typeof logAuditableChange === 'function') {
+    logAuditableChange('report', before, report, false).catch((err) => console.error('audit log:', err));
+  }
 }
 
 async function deleteReport(id) {
-  const report = typeof onCompanySyncReportChanged === 'function' ? await getReport(id) : null;
+  const needsExisting = typeof onCompanySyncReportChanged === 'function' || typeof logAuditableChange === 'function';
+  const report = needsExisting ? await getReport(id) : null;
   await withStore(REPORTS_STORE, 'readwrite', (store) => store.delete(id));
   if (report) {
     if (typeof onCompanySyncReportChanged === 'function') {
       onCompanySyncReportChanged(report, true).catch((err) => console.error('company sync mirror:', err));
+    }
+    if (typeof logAuditableChange === 'function') {
+      logAuditableChange('report', report, null, true).catch((err) => console.error('audit log:', err));
     }
   }
 }
@@ -213,10 +227,14 @@ async function putProjectRaw(project) {
 }
 
 async function saveProject(project) {
+  const before = typeof logAuditableChange === 'function' ? await getProject(project.id) : null;
   project.updatedAt = Date.now();
   await putProjectRaw(project);
   if (typeof onCompanySyncProjectChanged === 'function') {
     onCompanySyncProjectChanged(project, false).catch((err) => console.error('company sync mirror:', err));
+  }
+  if (typeof logAuditableChange === 'function') {
+    logAuditableChange('project', before, project, false).catch((err) => console.error('audit log:', err));
   }
 }
 
@@ -237,15 +255,19 @@ async function getProject(id) {
 
 // Deletes a project and every report that belongs to it.
 async function deleteProject(id) {
-  const project = typeof onCompanySyncProjectChanged === 'function' ? await getProject(id) : null;
+  const needsExisting = typeof onCompanySyncProjectChanged === 'function' || typeof logAuditableChange === 'function';
+  const project = needsExisting ? await getProject(id) : null;
   const reports = await getReportsForProject(id);
   for (const r of reports) {
-    await deleteReport(r.id); // also mirrors each report's own deletion, see above
+    await deleteReport(r.id); // also mirrors and audit-logs each report's own deletion, see above
   }
   await withStore(PROJECTS_STORE, 'readwrite', (store) => store.delete(id));
   if (project) {
     if (typeof onCompanySyncProjectChanged === 'function') {
       onCompanySyncProjectChanged(project, true).catch((err) => console.error('company sync mirror:', err));
+    }
+    if (typeof logAuditableChange === 'function') {
+      logAuditableChange('project', project, null, true).catch((err) => console.error('audit log:', err));
     }
   }
 }
@@ -372,4 +394,43 @@ async function mergeProjectRecord(project) {
     return 'updated';
   }
   return 'skipped';
+}
+
+// ---------- Audit log ----------
+//
+// Append-only: an entry is written once (by logAuditableChange, see
+// audit-log.js) and never edited or deleted afterward -- that's what makes
+// it worth trusting as a record. mergeAuditEntry (used when pulling a
+// company's log from the cloud) reflects that: an id already on file locally
+// is left completely alone rather than checked for changes, since there
+// never should be any.
+async function saveAuditEntry(entry) {
+  await withStore(AUDIT_STORE, 'readwrite', (store) => store.put(entry));
+}
+
+async function getAuditEntry(id) {
+  return withStore(AUDIT_STORE, 'readonly', (store) => {
+    return new Promise((resolve, reject) => {
+      const req = store.get(id);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+    });
+  });
+}
+
+function getAllAuditEntries() {
+  return withStore(AUDIT_STORE, 'readonly', (store) => {
+    return new Promise((resolve, reject) => {
+      const req = store.getAll();
+      req.onsuccess = () => resolve(req.result.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)));
+      req.onerror = () => reject(req.error);
+    });
+  });
+}
+
+async function mergeAuditEntry(entry) {
+  const existing = await getAuditEntry(entry.id);
+  if (existing) return 'skipped';
+  await saveAuditEntry(entry);
+  return 'added';
 }
