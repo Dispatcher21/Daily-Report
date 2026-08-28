@@ -82,24 +82,64 @@
 
   <div class="step">
     <div class="step-header">
-      <span class="step-num">TOTALS</span>
+      <span class="step-num">VIEW</span>
       <h2>Quantities For This Range</h2>
     </div>
     <div class="step-body">
-      <div id="qty-status-summary"></div>
-      <div class="pi-controls" id="qty-controls" hidden>
-        <input type="text" id="qty-search" placeholder="Search item # or description...">
-        <select id="qty-sort">
-          <option value="most-complete">Sort: Most Complete First</option>
-          <option value="default">Sort: Least Complete First</option>
-          <option value="item-number">Sort: Item Number</option>
-          <option value="earned-desc">Sort: Highest $ Earned</option>
-          <option value="remaining-desc">Sort: Highest $ Remaining</option>
-        </select>
+      <div class="segmented" id="view-picker">
+        <button type="button" data-view="totals">Totals</button>
+        <button type="button" data-view="byDay">By Day</button>
+        <button type="button" data-view="byEstimate">By Estimate</button>
+        <button type="button" data-view="detail">Detail Log</button>
       </div>
-      <div class="bar-list" id="qty-bars"></div>
-      <p class="hint" id="qty-bars-empty" hidden style="margin:0;">No pay items logged on any report in this range.</p>
-      <p class="hint" id="qty-bars-no-match" hidden style="margin:0;">No pay items match the current search/filter.</p>
+
+      <div id="view-totals" style="margin-top:0.9rem;">
+        <div id="qty-status-summary"></div>
+        <div class="pi-controls" id="qty-controls" hidden>
+          <input type="text" id="qty-search" placeholder="Search item # or description...">
+          <select id="qty-sort">
+            <option value="most-complete">Sort: Most Complete First</option>
+            <option value="default">Sort: Least Complete First</option>
+            <option value="item-number">Sort: Item Number</option>
+            <option value="earned-desc">Sort: Highest $ Earned</option>
+            <option value="remaining-desc">Sort: Highest $ Remaining</option>
+          </select>
+        </div>
+        <div class="bar-list" id="qty-bars"></div>
+        <p class="hint" id="qty-bars-empty" hidden style="margin:0;">No pay items logged on any report in this range.</p>
+        <p class="hint" id="qty-bars-no-match" hidden style="margin:0;">No pay items match the current search/filter.</p>
+      </div>
+
+      <div id="view-byDay" style="margin-top:0.9rem;" hidden>
+        <p class="hint" style="margin-top:0;">Each item's own quantity for that day -- not a running total.</p>
+        <div class="table-scroll"><table class="data-table" id="byday-table"></table></div>
+        <p class="hint" id="byday-empty" hidden style="margin:0;">No pay items logged on any report in this range.</p>
+      </div>
+
+      <div id="view-byEstimate" style="margin-top:0.9rem;" hidden>
+        <p class="hint" style="margin-top:0;">Each item's quantity billed in that period (since the previous estimate, or since the start for the first one).</p>
+        <div class="table-scroll"><table class="data-table" id="byestimate-table"></table></div>
+        <p class="hint" id="byestimate-empty" hidden style="margin:0;">No estimates recorded yet -- add one in the Billing section above.</p>
+      </div>
+
+      <div id="view-detail" style="margin-top:0.9rem;" hidden>
+        <div class="pi-controls" id="detail-controls">
+          <input type="text" id="detail-search" placeholder="Search item # or description...">
+          <select id="detail-side"><option value="">All Sides</option></select>
+          <select id="detail-estimate"><option value="">All Estimates</option></select>
+          <select id="detail-inspector"><option value="">All Inspectors</option></select>
+          <select id="detail-sort">
+            <option value="date-desc">Sort: Date (Newest)</option>
+            <option value="date-asc">Sort: Date (Oldest)</option>
+            <option value="item-number">Sort: Item Number</option>
+            <option value="qty-desc">Sort: Qty (High-Low)</option>
+          </select>
+          <label class="detail-group-toggle"><input type="checkbox" id="detail-group"> Group by Item</label>
+        </div>
+        <div class="table-scroll"><table class="data-table" id="detail-table"></table></div>
+        <p class="hint" id="detail-empty" hidden style="margin:0;">No pay items logged on any report in this range.</p>
+        <p class="hint" id="detail-summary" style="margin-bottom:0;"></p>
+      </div>
 
       <button type="button" class="btn-primary" id="btn-generate" disabled style="margin-top:1rem;">Download as Excel</button>
       <p class="hint" id="btn-generate-hint" style="margin-bottom:0;">Includes a Cover page, By Day and By Estimate breakdowns, and a filterable Detail Log of every entry, alongside these totals.</p>
@@ -161,6 +201,7 @@ async function init() {
   renderEstimateHistory();
   $('#f-est-no').value = nextEstimateNo(project.billingEstimates);
   $('#f-est-date').value = todayIso();
+  $('#view-picker button[data-view="totals"]').setAttribute('aria-pressed', 'true');
   renderRangeMode();
 }
 
@@ -224,9 +265,219 @@ function updateControls() {
   }
   $('#btn-generate').disabled = n === 0;
   $('#btn-generate').textContent = n > 1 ? `Download as Excel (${n} reports)` : 'Download as Excel';
-  renderQuantityTotals();
   renderPeriodSection();
+  renderActiveView();
 }
+
+// ---------- View tabs (Totals / By Day / By Estimate / Detail Log) ----------
+
+let activeView = 'totals';
+
+function renderActiveView() {
+  if (activeView === 'totals') renderQuantityTotals();
+  else if (activeView === 'byDay') renderByDayTable();
+  else if (activeView === 'byEstimate') renderByEstimateTable();
+  else if (activeView === 'detail') renderDetailTable();
+}
+
+$('#view-picker').addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  activeView = btn.dataset.view;
+  $$('#view-picker button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.view === activeView)));
+  ['totals', 'byDay', 'byEstimate', 'detail'].forEach((v) => {
+    $(`#view-${v}`).hidden = v !== activeView;
+  });
+  renderActiveView();
+});
+
+function fillFilterSelect(select, values, allLabel) {
+  const current = select.value;
+  select.innerHTML = `<option value="">${allLabel}</option>` +
+    values.map((v) => `<option value="${escapeHtml(v)}"${v === current ? ' selected' : ''}>${escapeHtml(v)}</option>`).join('');
+}
+
+function renderByDayTable() {
+  const selected = selectedReports();
+  const byDate = new Map();
+  for (const r of selected) {
+    const date = r.date || NO_DATE_KEY;
+    const its = (r.payItems || []).filter((it) => it && String(it.itemNumber || '').trim() !== '');
+    if (!byDate.has(date)) byDate.set(date, []);
+    byDate.get(date).push(...its);
+  }
+  const dates = Array.from(byDate.keys()).sort(compareDateKeys);
+  const flat = dates.flatMap((d) => byDate.get(d));
+  const items = aggregatePayItemTotals(flat, project.payItemCatalog);
+  $('#byday-empty').hidden = items.length > 0;
+  if (items.length === 0) {
+    $('#byday-table').innerHTML = '';
+    return;
+  }
+
+  const perDateQty = new Map();
+  for (const date of dates) {
+    const m = new Map();
+    items.forEach((it) => m.set(it.itemNumber, 0));
+    for (const e of byDate.get(date)) {
+      const k = String(e.itemNumber).trim();
+      m.set(k, (m.get(k) || 0) + (Number(e.qty) || 0));
+    }
+    perDateQty.set(date, m);
+  }
+
+  const header = `<thead><tr><th>Item Number</th><th>Description</th><th>Unit</th>${dates.map((d) => `<th class="dt-num">${escapeHtml(displayDate(d))}</th>`).join('')}</tr></thead>`;
+  const body = items
+    .map((it) => {
+      const cells = dates.map((d) => {
+        const v = perDateQty.get(d).get(it.itemNumber);
+        return `<td class="dt-num">${v ? v.toLocaleString() : ''}</td>`;
+      }).join('');
+      return `<tr><td>${escapeHtml(it.itemNumber)}</td><td>${escapeHtml(it.description)}</td><td>${escapeHtml(it.unit || '')}</td>${cells}</tr>`;
+    })
+    .join('');
+  $('#byday-table').innerHTML = header + `<tbody>${body}</tbody>`;
+}
+
+function renderByEstimateTable() {
+  const selected = selectedReports();
+  const sortedBillingEstimates = sortedEstimates(project.billingEstimates);
+  if (sortedBillingEstimates.length === 0) {
+    $('#byestimate-table').innerHTML = '';
+    $('#byestimate-empty').textContent = 'No estimates recorded yet -- add one in the Billing section above.';
+    $('#byestimate-empty').hidden = false;
+    return;
+  }
+
+  const flat = selected.flatMap((r) =>
+    (r.payItems || []).filter((it) => it && String(it.itemNumber || '').trim() !== '').map((it) => ({ ...it, __date: r.date }))
+  );
+  const items = aggregatePayItemTotals(flat, project.payItemCatalog);
+  if (items.length === 0) {
+    $('#byestimate-table').innerHTML = '';
+    $('#byestimate-empty').textContent = 'No pay items logged on any report in this range.';
+    $('#byestimate-empty').hidden = false;
+    return;
+  }
+  $('#byestimate-empty').hidden = true;
+
+  const perEstimateQty = sortedBillingEstimates.map((e) => {
+    const bounds = estimatePeriodBounds(project.billingEstimates, e.id);
+    const periodItems = flat.filter((it) => it.__date && (!bounds.periodFrom || it.__date > bounds.periodFrom) && it.__date <= bounds.periodTo);
+    const m = new Map();
+    items.forEach((it) => m.set(it.itemNumber, 0));
+    for (const it of periodItems) {
+      const k = String(it.itemNumber).trim();
+      m.set(k, (m.get(k) || 0) + (Number(it.qty) || 0));
+    }
+    return m;
+  });
+
+  const header = `<thead><tr><th>Item Number</th><th>Description</th><th>Unit</th>${sortedBillingEstimates.map((e) => `<th class="dt-num">Est. ${escapeHtml(e.estimateNo)} (${e.date})</th>`).join('')}</tr></thead>`;
+  const body = items
+    .map((it) => {
+      const cells = perEstimateQty.map((m) => {
+        const v = m.get(it.itemNumber);
+        return `<td class="dt-num">${v ? v.toLocaleString() : ''}</td>`;
+      }).join('');
+      return `<tr><td>${escapeHtml(it.itemNumber)}</td><td>${escapeHtml(it.description)}</td><td>${escapeHtml(it.unit || '')}</td>${cells}</tr>`;
+    })
+    .join('');
+  $('#byestimate-table').innerHTML = header + `<tbody>${body}</tbody>`;
+}
+
+const detailFilterState = { search: '', side: '', estimate: '', inspector: '', sort: 'date-desc', group: false };
+
+function detailEntries() {
+  const selected = selectedReports();
+  const sortedBillingEstimates = sortedEstimates(project.billingEstimates);
+  const rows = [];
+  for (const r of selected) {
+    for (const pi of (r.payItems || [])) {
+      if (!pi.itemNumber) continue;
+      const overrun = pi.theoreticalQty ? computeOverrun(pi.qty, pi.theoreticalQty) : null;
+      rows.push({
+        itemNumber: pi.itemNumber, description: pi.description || '', date: r.date || '',
+        startStation: pi.startStation || '', endStation: pi.endStation || '', side: pi.side || '',
+        qty: Number(pi.qty) || 0, unit: pi.unit || '',
+        theoreticalQty: pi.theoreticalQty || '', overrun,
+        estimateNo: estimateNoForDate(sortedBillingEstimates, r.date),
+        inspector: r.representative || '',
+      });
+    }
+  }
+  return rows;
+}
+
+function renderDetailTable() {
+  const all = detailEntries();
+  $('#detail-empty').hidden = all.length > 0;
+  if (all.length === 0) {
+    $('#detail-table').innerHTML = '';
+    $('#detail-summary').textContent = '';
+    return;
+  }
+
+  fillFilterSelect($('#detail-side'), Array.from(new Set(all.map((r) => r.side).filter(Boolean))).sort(), 'All Sides');
+  fillFilterSelect($('#detail-estimate'), Array.from(new Set(all.map((r) => r.estimateNo).filter(Boolean))).sort(), 'All Estimates');
+  fillFilterSelect($('#detail-inspector'), Array.from(new Set(all.map((r) => r.inspector).filter(Boolean))).sort(), 'All Inspectors');
+
+  const q = detailFilterState.search.trim().toLowerCase();
+  let filtered = all.filter((r) => {
+    if (q && !r.itemNumber.toLowerCase().includes(q) && !r.description.toLowerCase().includes(q)) return false;
+    if (detailFilterState.side && r.side !== detailFilterState.side) return false;
+    if (detailFilterState.estimate && r.estimateNo !== detailFilterState.estimate) return false;
+    if (detailFilterState.inspector && r.inspector !== detailFilterState.inspector) return false;
+    return true;
+  });
+
+  const sortFns = {
+    'date-desc': (a, b) => (b.date || '').localeCompare(a.date || ''),
+    'date-asc': (a, b) => (a.date || '').localeCompare(b.date || ''),
+    'item-number': (a, b) => a.itemNumber.localeCompare(b.itemNumber, undefined, { numeric: true }),
+    'qty-desc': (a, b) => b.qty - a.qty,
+  };
+  filtered = filtered.slice().sort(sortFns[detailFilterState.sort] || sortFns['date-desc']);
+
+  const hasTheoretical = filtered.some((r) => r.theoreticalQty !== '');
+  const headerCols = ['Item', 'Description', 'Date', 'Station', 'Stop', 'Side', 'Qty', 'Unit', ...(hasTheoretical ? ['Theoretical', 'Overrun'] : []), 'Estimate', 'Inspector'];
+  const numCols = new Set(['Qty', 'Theoretical', 'Overrun']);
+  const header = `<thead><tr>${headerCols.map((h) => `<th${numCols.has(h) ? ' class="dt-num"' : ''}>${escapeHtml(h)}</th>`).join('')}</tr></thead>`;
+
+  function rowHtml(r) {
+    const theoCells = hasTheoretical ? `<td class="dt-num">${escapeHtml(String(r.theoreticalQty))}</td><td class="dt-num">${r.overrun != null ? r.overrun : ''}</td>` : '';
+    return `<tr><td>${escapeHtml(r.itemNumber)}</td><td>${escapeHtml(r.description)}</td><td>${escapeHtml(r.date)}</td><td>${escapeHtml(r.startStation)}</td><td>${escapeHtml(r.endStation)}</td><td>${escapeHtml(r.side)}</td><td class="dt-num">${r.qty.toLocaleString()}</td><td>${escapeHtml(r.unit)}</td>${theoCells}<td>${escapeHtml(r.estimateNo)}</td><td>${escapeHtml(r.inspector)}</td></tr>`;
+  }
+
+  let bodyHtml;
+  if (detailFilterState.group) {
+    const groups = new Map();
+    filtered.forEach((r) => {
+      if (!groups.has(r.itemNumber)) groups.set(r.itemNumber, []);
+      groups.get(r.itemNumber).push(r);
+    });
+    bodyHtml = Array.from(groups.entries())
+      .map(([item, rows]) => {
+        const subtotal = rows.reduce((s, r) => s + r.qty, 0);
+        const trailingCols = headerCols.length - 7;
+        const groupRow = `<tr class="dt-group-row"><td colspan="6">${escapeHtml(item)} &mdash; ${escapeHtml(rows[0].description)}</td><td class="dt-num">${subtotal.toLocaleString()}</td>${'<td></td>'.repeat(trailingCols)}</tr>`;
+        return groupRow + rows.map(rowHtml).join('');
+      })
+      .join('');
+  } else {
+    bodyHtml = filtered.map(rowHtml).join('');
+  }
+
+  $('#detail-table').innerHTML = header + `<tbody>${bodyHtml}</tbody>`;
+  $('#detail-summary').textContent = `${filtered.length} of ${all.length} entries.`;
+}
+
+$('#detail-search').addEventListener('input', (e) => { detailFilterState.search = e.target.value; renderDetailTable(); });
+$('#detail-side').addEventListener('change', (e) => { detailFilterState.side = e.target.value; renderDetailTable(); });
+$('#detail-estimate').addEventListener('change', (e) => { detailFilterState.estimate = e.target.value; renderDetailTable(); });
+$('#detail-inspector').addEventListener('change', (e) => { detailFilterState.inspector = e.target.value; renderDetailTable(); });
+$('#detail-sort').addEventListener('change', (e) => { detailFilterState.sort = e.target.value; renderDetailTable(); });
+$('#detail-group').addEventListener('change', (e) => { detailFilterState.group = e.target.checked; renderDetailTable(); });
 
 // ---------- Billing estimates ----------
 

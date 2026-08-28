@@ -640,6 +640,18 @@ input[type="file"] { min-height: 0; }
 .estimate-table th, .estimate-table td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border); }
 .estimate-table th { color: var(--text-dim); font-weight: 600; font-size: 0.8rem; }
 .estimate-table td:last-child { text-align: right; }
+
+.table-scroll { overflow-x: auto; }
+.data-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; white-space: nowrap; }
+.data-table th, .data-table td { text-align: left; padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border); }
+.data-table th { color: var(--text-dim); font-weight: 600; font-size: 0.78rem; position: sticky; top: 0; background: var(--surface-1); }
+.data-table td.dt-num, .data-table th.dt-num { text-align: right; }
+.data-table tbody tr:hover { background: var(--surface-2); }
+.data-table .dt-group-row td { background: var(--surface-2); font-weight: 700; }
+.data-table .dt-group-row td.dt-num { font-weight: 700; }
+
+.detail-group-toggle { display: flex; align-items: center; gap: 0.4rem; flex: 0 0 auto; font-size: 0.85rem; color: var(--text-dim); margin-bottom: 0; }
+.detail-group-toggle input { width: 1.1rem; height: 1.1rem; }
 .warn {
   background: var(--warn-bg); border: 1px solid var(--warn-border);
   border-radius: var(--radius-sm); padding: 0.7rem 0.85rem; font-size: 0.82rem;
