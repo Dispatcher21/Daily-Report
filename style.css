@@ -713,6 +713,12 @@ input[type="file"] { min-height: 0; }
 
 .filter-row { display: flex; gap: 0.6rem; flex-wrap: wrap; margin: 0.75rem 0; align-items: flex-end; }
 .filter-box { display: flex; flex-direction: column; gap: 0.25rem; flex: 1; min-width: 130px; }
+/* flex:1 on every box meant a lone date field stretched to match however
+   wide the row happened to be -- fine at 780px, a 300px-wide date picker
+   past that. Capped growth here; the search box's own inline flex:2 still
+   wins over this (inline beats a class rule), so it keeps taking the
+   extra room the others give up. */
+@media (min-width: 900px) { .filter-box { flex: 0 1 220px; } }
 .filter-box label {
   font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
   color: var(--text-dim); margin-bottom: 0;
@@ -897,6 +903,12 @@ input[type="file"] { min-height: 0; }
 .thumb-placeholder { font-size: 0.9rem; opacity: 0.5; }
 
 .report-list { display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 5rem; }
+/* Each row is compact (date, badges, one line of notes, actions) -- same
+   reasoning as the bar-list and hub-grid fixes: let a wide screen show
+   more of them side by side instead of stretching one column full width. */
+@media (min-width: 900px) {
+  .report-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(480px, 1fr)); gap: 0.6rem 1rem; align-content: start; }
+}
 .report-row {
   background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius);
   padding: 0.85rem 1rem; display: flex; justify-content: space-between; align-items: center;
