@@ -468,7 +468,7 @@ main { max-width: min(1400px, 94vw); margin: 0 auto; padding: 1rem; }
      the shorter one just carries blank space at the bottom of its own
      border -- expected card-grid behaviour, and the next section always
      starts at the same line regardless of which side was taller. */
-  .step-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 0; }
+  .step-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
   .step-pair > .step { margin-bottom: 0; }
   /* project.html's Trend/Weather pair each conditionally [hidden] until
      there's data for them -- if only one is showing, let it take the full
