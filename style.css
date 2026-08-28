@@ -666,6 +666,11 @@ input[type="file"] { min-height: 0; }
 @media (min-width: 700px) {
   #estimate-form { grid-template-columns: repeat(3, 1fr); }
 }
+/* Four filters (Project/User/From/To) forced into two columns wraps to a
+   second row for no reason once there's width for all four in one. */
+@media (min-width: 800px) {
+  #audit-log-filters { grid-template-columns: repeat(4, 1fr); }
+}
 
 .hint { font-size: 0.8rem; font-weight: 400; color: var(--text-dim); margin: 0.25rem 0 0; }
 
