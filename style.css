@@ -640,6 +640,16 @@ input, textarea, select {
 }
 input:focus, textarea:focus, select:focus { border-color: var(--focus); }
 textarea { resize: vertical; min-height: 5rem; line-height: 1.45; }
+/* Unlike a list of cards or bars, free text gets *harder* to read as a line
+   gets longer -- report-editor.html's one-field-per-step layout (Notes,
+   Work Summary, etc.) would otherwise stretch a textarea/text input to the
+   full width of a now much wider main. Caps the line length, not the step
+   card itself, and only past 900px -- a phone was never wide enough for
+   this to matter. Doesn't touch date/number/select, whose short fixed-width
+   values don't have a "line length" to worry about. */
+@media (min-width: 900px) {
+  textarea, input[type="text"] { max-width: 46rem; }
+}
 input[type="checkbox"], input[type="radio"] {
   width: 1.35rem; height: 1.35rem; min-height: 0; accent-color: var(--brand-light);
 }
@@ -873,6 +883,7 @@ input[type="file"] { min-height: 0; }
 /* ---------- Photos ---------- */
 
 .photo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+@media (min-width: 900px) { .photo-grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); } }
 .photo-slot {
   aspect-ratio: 4 / 3; border: 2px dashed var(--border-strong); border-radius: var(--radius-sm);
   display: flex; align-items: center; justify-content: center; position: relative;
