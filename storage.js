@@ -113,20 +113,25 @@ async function applyHeaderLogo() {
 
     const logo = await getReportLogo();
 
-    let img = header.querySelector('.header-logo');
+    let link = header.querySelector('.header-logo-link');
+    let img = link ? link.querySelector('.header-logo') : null;
     if (!logo) {
-      if (img) {
+      if (link) {
         if (img.dataset.url) URL.revokeObjectURL(img.dataset.url);
-        img.remove();
+        link.remove();
       }
       return;
     }
 
-    if (!img) {
+    if (!link) {
+      link = document.createElement('a');
+      link.className = 'header-logo-link';
+      link.href = 'index.html';
       img = document.createElement('img');
       img.className = 'header-logo';
       img.alt = '';
-      header.insertBefore(img, header.firstChild);
+      link.appendChild(img);
+      header.insertBefore(link, header.firstChild);
     }
     const url = URL.createObjectURL(logo);
     const prevUrl = img.dataset.url;

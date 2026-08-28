@@ -608,6 +608,17 @@ function renderFilteredPayItems() {
         <div class="br-sub"><span>${qtyLine}${moneyLine}</span><span class="br-pct">${pctLabel}</span></div>
       </div>`;
   }).join('');
+
+  // Row tooltips open upward by default; a row in the visual first row sits
+  // flush with the scrollable list's own top edge, so its tooltip pops out
+  // above the clipping boundary and never shows. Flag those rows so the CSS
+  // can flip their tooltip downward instead -- offsetTop rather than index,
+  // since the desktop grid can put 2-3 items in that first row.
+  const barEls = $$('.bar-row', $('#dash-bars'));
+  if (barEls.length) {
+    const topY = Math.min(...barEls.map((el) => el.offsetTop));
+    barEls.forEach((el) => el.classList.toggle('bar-row-top', el.offsetTop === topY));
+  }
 }
 
 $('#pi-search').addEventListener('input', (e) => {

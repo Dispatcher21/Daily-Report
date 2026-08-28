@@ -215,12 +215,16 @@ body {
 /* Company logo, shown in the header only once the app is installed (added to
    the home screen) -- a browser tab already has its own favicon, so this is
    reserved for the "feels like a real app" moment. */
+.app-header .header-logo-link {
+  flex: 0 0 auto;
+  display: inline-flex;
+}
+
 .app-header .header-logo {
   height: 34px;
   width: auto;
   max-width: 92px;
   object-fit: contain;
-  flex: 0 0 auto;
 }
 
 /* Gear in the header -- icon only, but a full 44px tap target. */
@@ -1208,6 +1212,23 @@ input[type="file"] { min-height: 0; }
    doesn't exist rather than carry dead, overflow-causing boxes around. */
 @media (hover: none) {
   [data-tip]::after, [data-tip]::before { content: none; }
+}
+
+/* .bar-row-top (project.html pay item list) sits flush with its scrollable
+   container's top edge, so the usual upward-opening bubble pops out above
+   the clip boundary and never shows -- open it downward there instead. */
+.bar-row-top[data-tip]::after {
+  bottom: auto; top: calc(100% + 10px);
+  transform: translateX(-50%) translateY(-4px);
+}
+.bar-row-top[data-tip]::before {
+  bottom: auto; top: calc(100% + 4px);
+  transform: translateX(-50%) translateY(-4px);
+  border-top-color: transparent; border-bottom-color: var(--text);
+}
+.bar-row-top[data-tip]:hover::after, .bar-row-top[data-tip]:hover::before,
+.bar-row-top[data-tip]:focus-visible::after, .bar-row-top[data-tip]:focus-visible::before {
+  transform: translateX(-50%) translateY(0);
 }
 
 /* ---------- Project dashboard ---------- */
