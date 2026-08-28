@@ -102,7 +102,7 @@
       <p class="hint" id="qty-bars-no-match" hidden style="margin:0;">No pay items match the current search/filter.</p>
 
       <button type="button" class="btn-primary" id="btn-generate" disabled style="margin-top:1rem;">Download as Excel</button>
-      <p class="hint" id="btn-generate-hint" style="margin-bottom:0;">Adds a By Day tab (one column per day) alongside these totals.</p>
+      <p class="hint" id="btn-generate-hint" style="margin-bottom:0;">Includes a Cover page, By Day and By Estimate breakdowns, and a filterable Detail Log of every entry, alongside these totals.</p>
     </div>
   </div>
 </main>
@@ -465,19 +465,72 @@ function setCellFormat(ws, row, col, fmt) {
   if (ws[addr]) ws[addr].z = fmt;
 }
 
+// Which billing estimate (if any) a given date falls under -- the first
+// recorded estimate whose date is on or after it. Blank if the date is
+// past every recorded estimate (not billed yet) or none exist at all.
+function estimateNoForDate(sortedList, date) {
+  if (!date) return '';
+  const hit = sortedList.find((e) => date <= e.date);
+  return hit ? hit.estimateNo : '';
+}
+
+// A plain FIELD/VALUE header page -- project/company identity, the range
+// this workbook covers, and a short table of contents, so the workbook
+// still makes sense to someone who opens it with no other context (a
+// contractor's biller, an auditor) months later.
+function buildCoverSheet(wb, project, room, dates, items, contentsLines) {
+  const realDates = dates.filter((d) => d !== NO_DATE_KEY);
+  const { totalContract, totalEarned, pctByValue } = contractValueSummary(items);
+  const overall = overallPercentComplete(items);
+
+  const rows = [
+    ['Project', project.name || ''],
+    ['Project No.', project.meta.projectNo || ''],
+    ['Company', (room && room.name) || ''],
+    ['Representative', project.meta.representative || ''],
+    ['PE Name', project.meta.peName || ''],
+    [],
+    ['Report Range', realDates.length ? `${realDates[0]} to ${realDates[realDates.length - 1]}  (${realDates.length} reporting days)` : 'No dated reports in range'],
+    ['Generated', new Date().toLocaleString()],
+    ['Pay Items With Activity', String(items.length)],
+    [],
+    ['Overall % Complete', overall != null ? overall : 'N/A -- no Per Plans Total on file'],
+    ['Total Contract Value', totalContract != null ? totalContract : 'N/A -- no Unit Price on file'],
+    ['Total Earned to Date', totalEarned != null ? totalEarned : 'N/A -- no Unit Price on file'],
+    [],
+    ['Contents'],
+    ...contentsLines.map((l) => [`  ${l[0]}`, l[1]]),
+  ];
+
+  const aoa = [[], ['', 'Pay Item Quantity & Billing Report'], ['', 'Generated from Daily Work Reports'], [], ...rows];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{ wch: 3 }, { wch: 26 }, { wch: 62 }];
+  const pctRowIdx = aoa.findIndex((r) => r[0] === 'Overall % Complete');
+  if (pctRowIdx !== -1 && overall != null) setCellFormat(ws, pctRowIdx, 2, '0.0%');
+  const contractRowIdx = aoa.findIndex((r) => r[0] === 'Total Contract Value');
+  if (contractRowIdx !== -1 && totalContract != null) setCellFormat(ws, contractRowIdx, 2, '$#,##0.00');
+  const earnedRowIdx = aoa.findIndex((r) => r[0] === 'Total Earned to Date');
+  if (earnedRowIdx !== -1 && totalEarned != null) setCellFormat(ws, earnedRowIdx, 2, '$#,##0.00');
+  XLSX.utils.book_append_sheet(wb, ws, 'Cover');
+}
+
 // Builds the workbook from the selected reports. Reports sharing a calendar
 // date are merged rather than kept separate -- "day" is the unit here, not
-// "report". Two sheets only: Totals (each item summed across every selected
-// day, plus percent complete against the project's per-plans quantity where
-// one is on file) and By Day (the same items as rows, one column per day,
-// that day's own non-cumulative quantity).
-function buildQuantitySheetWorkbook(reports, project) {
-  const byDate = new Map(); // date -> flat array of {itemNumber, description, unit, qty}
+// "report". Five sheets: Cover (project/company header + contents), Totals
+// (each item summed, % complete, and Overrun for items that track
+// Theoretical Qty), By Day (one column per day), By Estimate (one column
+// per billing checkpoint, skipped entirely if none are recorded), and
+// Detail Log (every individual entry, filterable by any column -- station,
+// side, date, estimate, inspector).
+function buildQuantitySheetWorkbook(reports, project, room) {
+  const byDate = new Map(); // date -> flat array of pay-item entries, each tagged with its report
   for (const r of reports) {
     const date = r.date || NO_DATE_KEY;
-    const items = (r.payItems || []).filter((it) => it && String(it.itemNumber || '').trim() !== '');
+    const entries = (r.payItems || [])
+      .filter((it) => it && String(it.itemNumber || '').trim() !== '')
+      .map((it) => ({ ...it, __report: r }));
     if (!byDate.has(date)) byDate.set(date, []);
-    byDate.get(date).push(...items);
+    byDate.get(date).push(...entries);
   }
   const dates = Array.from(byDate.keys()).sort(compareDateKeys);
 
@@ -487,6 +540,7 @@ function buildQuantitySheetWorkbook(reports, project) {
   const items = aggregatePayItemTotals(flatItems, project.payItemCatalog);
   if (items.length === 0) return null;
   const itemOrder = items.map((it) => it.itemNumber);
+  const catalogByNumber = new Map((project.payItemCatalog || []).map((c) => [c.itemNumber, c]));
 
   const perDateQty = new Map(); // date -> Map(itemNumber -> that day's own qty)
   for (const date of dates) {
@@ -501,20 +555,22 @@ function buildQuantitySheetWorkbook(reports, project) {
 
   const wb = XLSX.utils.book_new();
 
-  const totalsRows = [['Item Number', 'Description', 'Unit', 'Total Quantity', 'Per Plans Total', '% Complete']];
+  // ---------- Totals ----------
+  const totalsRows = [['Item Number', 'Description', 'Unit', 'Total Quantity', 'Per Plans Total', '% Complete', 'Overrun/Underrun']];
   items.forEach((it) => {
     totalsRows.push([
       it.itemNumber, it.description, it.unit, it.total,
       it.planned != null ? it.planned : '',
       it.pct != null ? it.pct : '',
+      it.overrun != null ? it.overrun : '',
     ]);
   });
   totalsRows.push([]);
   const overall = overallPercentComplete(items);
-  totalsRows.push(['', '', '', '', 'Overall % Complete', overall != null ? overall : '']);
+  totalsRows.push(['', '', '', '', 'Overall % Complete', overall != null ? overall : '', '']);
 
   const totalsWs = XLSX.utils.aoa_to_sheet(totalsRows);
-  totalsWs['!cols'] = [{ wch: 16 }, { wch: 42 }, { wch: 8 }, { wch: 14 }, { wch: 16 }, { wch: 12 }];
+  totalsWs['!cols'] = [{ wch: 16 }, { wch: 42 }, { wch: 8 }, { wch: 14 }, { wch: 16 }, { wch: 12 }, { wch: 15 }];
   // % Complete column (index 5) for every item row, plus the overall summary
   // row at the very end -- both need the percentage format, not the raw
   // fraction SheetJS would otherwise render as e.g. "0.42".
@@ -522,6 +578,7 @@ function buildQuantitySheetWorkbook(reports, project) {
   setCellFormat(totalsWs, totalsRows.length - 1, 5, '0.0%');
   XLSX.utils.book_append_sheet(wb, totalsWs, 'Totals');
 
+  // ---------- By Day ----------
   const matrixHeader = ['Item Number', 'Description', 'Unit', ...dates.map(displayDate)];
   const matrixRows = [matrixHeader];
   items.forEach((it) => {
@@ -533,12 +590,76 @@ function buildQuantitySheetWorkbook(reports, project) {
   matrixWs['!cols'] = [{ wch: 16 }, { wch: 42 }, { wch: 8 }, ...dates.map(() => ({ wch: 12 }))];
   XLSX.utils.book_append_sheet(wb, matrixWs, 'By Day');
 
+  // ---------- By Estimate ----------
+  const sortedBillingEstimates = sortedEstimates(project.billingEstimates);
+  if (sortedBillingEstimates.length > 0) {
+    const perEstimateQty = sortedBillingEstimates.map((e, idx) => {
+      const bounds = estimatePeriodBounds(project.billingEstimates, e.id);
+      const periodItems = flatItems.filter((it) => it.__report.date && (!bounds.periodFrom || it.__report.date > bounds.periodFrom) && it.__report.date <= bounds.periodTo);
+      const dayMap = new Map();
+      itemOrder.forEach((k) => dayMap.set(k, 0));
+      for (const it of periodItems) {
+        const key = String(it.itemNumber).trim();
+        dayMap.set(key, dayMap.get(key) + (Number(it.qty) || 0));
+      }
+      return dayMap;
+    });
+    const estHeader = ['Item Number', 'Description', 'Unit', ...sortedBillingEstimates.map((e) => `Est. ${e.estimateNo} (${e.date})`)];
+    const estRows = [estHeader];
+    items.forEach((it) => {
+      const row = [it.itemNumber, it.description, it.unit];
+      perEstimateQty.forEach((dayMap) => row.push(dayMap.get(it.itemNumber)));
+      estRows.push(row);
+    });
+    const estWs = XLSX.utils.aoa_to_sheet(estRows);
+    estWs['!cols'] = [{ wch: 16 }, { wch: 42 }, { wch: 8 }, ...sortedBillingEstimates.map(() => ({ wch: 16 }))];
+    XLSX.utils.book_append_sheet(wb, estWs, 'By Estimate');
+  }
+
+  // ---------- Detail Log ----------
+  const detailHeader = [
+    'Item Number', 'Description', 'Date', 'Station', 'Stop Station', 'Side',
+    'Length', 'Width', 'Qty', 'Unit', 'Theoretical Qty', 'Overrun/Underrun',
+    'Estimate No.', 'Inspector',
+  ];
+  const sortedFlat = flatItems.slice().sort((a, b) => {
+    const byItem = String(a.itemNumber).localeCompare(String(b.itemNumber), undefined, { numeric: true });
+    if (byItem !== 0) return byItem;
+    return (a.__report.date || '').localeCompare(b.__report.date || '');
+  });
+  const detailRows = [detailHeader];
+  sortedFlat.forEach((it) => {
+    const overrun = it.theoreticalQty ? computeOverrun(it.qty, it.theoreticalQty) : '';
+    detailRows.push([
+      it.itemNumber, it.description, it.__report.date || '',
+      it.startStation || '', it.endStation || '', it.side || '',
+      it.length || '', it.width || '', Number(it.qty) || 0, it.unit || '',
+      it.theoreticalQty || '', overrun != null ? overrun : '',
+      estimateNoForDate(sortedBillingEstimates, it.__report.date), it.__report.representative || '',
+    ]);
+  });
+  const detailWs = XLSX.utils.aoa_to_sheet(detailRows);
+  detailWs['!cols'] = [{ wch: 14 }, { wch: 40 }, { wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 6 }, { wch: 8 }, { wch: 7 }, { wch: 8 }, { wch: 7 }, { wch: 14 }, { wch: 15 }, { wch: 11 }, { wch: 16 }];
+  detailWs['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: detailRows.length - 1, c: detailHeader.length - 1 } }) };
+  XLSX.utils.book_append_sheet(wb, detailWs, 'Detail Log');
+
+  // Cover goes in last so it can reference the fully-built Totals figures,
+  // then gets moved to the front -- SheetJS has no insert-at-index for
+  // sheets, only append.
+  buildCoverSheet(wb, project, room, dates, items, [
+    ['Totals', 'Summed quantity per pay item, with % complete and Overrun where tracked'],
+    ['By Day', 'Quantity per item, one column per reporting day'],
+    ...(sortedBillingEstimates.length > 0 ? [['By Estimate', 'Quantity per item, one column per billing period']] : []),
+    ['Detail Log', 'Every logged entry -- station, side, date, inspector, filterable'],
+  ]);
+  wb.SheetNames.unshift(wb.SheetNames.pop());
+
   return { wb, dates };
 }
 
 onEnterSubmit($('#range-fields'), $('#btn-generate'));
 
-$('#btn-generate').addEventListener('click', () => {
+$('#btn-generate').addEventListener('click', async () => {
   const selected = selectedReports();
   if (selected.length === 0) return;
 
@@ -547,7 +668,8 @@ $('#btn-generate').addEventListener('click', () => {
   btn.disabled = true;
   btn.textContent = 'Generating...';
   try {
-    const result = buildQuantitySheetWorkbook(selected, project);
+    const room = await getCompanyRoom();
+    const result = buildQuantitySheetWorkbook(selected, project, room);
     if (!result) {
       alert('None of the selected reports have any pay items listed -- nothing to build.');
       return;
