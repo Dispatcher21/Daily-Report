@@ -459,7 +459,16 @@ main { max-width: min(1400px, 94vw); margin: 0 auto; padding: 1rem; }
    that, identical to two ordinary .step cards, so mobile is untouched. */
 .step-pair { margin-bottom: 1rem; }
 @media (min-width: 900px) {
-  .step-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start; margin-bottom: 0; }
+  /* align-items: start (the original choice here) let each card size to
+     its own content -- fine when both sides are similar, but a short card
+     (Company Name) next to a tall one whose content varies (Company Logo:
+     image + dropzone + button) stops early and leaves a dead gap before
+     the next section, which reads as broken rather than just uneven.
+     Default stretch instead: both cards in a row match the row's height,
+     the shorter one just carries blank space at the bottom of its own
+     border -- expected card-grid behaviour, and the next section always
+     starts at the same line regardless of which side was taller. */
+  .step-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 0; }
   .step-pair > .step { margin-bottom: 0; }
 }
 .step-header {
