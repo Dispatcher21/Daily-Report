@@ -492,15 +492,31 @@ async function refreshLivePreview() {
   if (!previewLayout) return;
   const previewEl = $('#rb-preview');
   const token = ++previewRenderToken;
-  const targetWidth = Math.min(previewEl.clientWidth || 600, 640);
   const scrollTop = previewEl.scrollTop;
 
-  const rendered = document.createElement('div');
-  const pages = renderReportPages(rendered, previewLayout, report, previewLogoBlob);
-  if (token !== previewRenderToken) return; // a newer refresh started while this one was working
+  // scalePreviewPage measures the rendered page's real width via
+  // getBoundingClientRect(), which is always 0 for a detached element (no
+  // layout box) -- render into an attached-but-invisible sandbox first
+  // (same off-screen technique reports.html/download.html already use for
+  // html2canvas), not a bare detached div, so the measurement is real.
+  const sandbox = document.createElement('div');
+  sandbox.style.cssText = 'position:fixed; top:0; left:-20000px; z-index:-1;';
+  document.body.appendChild(sandbox);
+  const pages = renderReportPages(sandbox, previewLayout, report, previewLogoBlob);
+  if (token !== previewRenderToken) { sandbox.remove(); return; } // a newer refresh started while this one was working
+
+  // The wrap needs to fit within the frame's *content* box, not its
+  // clientWidth (which still includes the frame's own left/right padding)
+  // -- using clientWidth directly here is exactly why the report was
+  // clipped on the right edge instead of actually filling the column.
+  const frameStyle = getComputedStyle(previewEl);
+  const paddingX = parseFloat(frameStyle.paddingLeft) + parseFloat(frameStyle.paddingRight);
+  const targetWidth = Math.max(200, previewEl.clientWidth - paddingX);
+  const wraps = pages.map(({ el }) => scalePreviewPage(el, targetWidth));
+  sandbox.remove();
 
   previewEl.innerHTML = '';
-  pages.forEach(({ el }) => previewEl.appendChild(scalePreviewPage(el, targetWidth)));
+  wraps.forEach((wrap) => previewEl.appendChild(wrap));
   previewGrids = { 1: pages[0].el.querySelector('.print-grid'), 2: pages[1].el.querySelector('.print-grid') };
   Object.keys(FIELD_HIGHLIGHT_REGIONS).forEach((key) => addPreviewClickTarget(key, FIELD_HIGHLIGHT_REGIONS[key]));
   previewEl.scrollTop = scrollTop;
