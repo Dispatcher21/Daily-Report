@@ -37,7 +37,9 @@
   }
   .qq-multi-entry .qq-qty { width: 5.5rem; }
   .qq-multi-entry input[type="text"] { flex: 1 1 100px; min-width: 0; }
+  .qq-multi-entry input[type="number"].me-field { width: 5.5rem; flex: 0 0 auto; }
   .qq-multi-entry select { flex: 1 1 140px; min-width: 0; }
+  .qq-overrun { font-size: 0.85em; color: var(--text-dim); white-space: nowrap; }
   .qq-multi-remove { flex: 0 0 auto; color: var(--danger); background: none; border: none; font-size: 1.2rem; cursor: pointer; min-height: 0; padding: 0 0.3rem; }
   .qq-multi-add { margin-top: 0.5rem; }
 </style>
@@ -181,7 +183,7 @@ function renderCatalogList() {
     btn.addEventListener('click', () => {
       const it = catalog[Number(btn.dataset.addEntry)];
       if (!multiEntries[it.itemNumber]) multiEntries[it.itemNumber] = [];
-      multiEntries[it.itemNumber].push({ qty: '', startStation: '', endStation: '', location: '', side: '', length: '', width: '' });
+      multiEntries[it.itemNumber].push({ qty: '', startStation: '', endStation: '', location: '', side: '', length: '', width: '', theoreticalQty: '' });
       renderMultiEntries(it, Number(btn.dataset.addEntry));
     });
   });
@@ -216,6 +218,10 @@ function renderMultiEntries(catalogItem, idx) {
           <input type="number" step="0.01" class="me-field" data-field="length" placeholder="Length" value="${escapeHtml(entry.length || '')}">
           <input type="number" step="0.01" class="me-field" data-field="width" placeholder="Width" value="${escapeHtml(entry.width || '')}">
         ` : ''}
+        ${catalogItem.theoretical ? `
+          <input type="number" step="0.01" class="me-field" data-field="theoreticalQty" placeholder="Theoretical Qty" value="${escapeHtml(entry.theoreticalQty || '')}">
+          <span class="qq-overrun">${overrunLabel(computeOverrun(entry.qty, entry.theoreticalQty))}</span>
+        ` : ''}
         <button type="button" class="qq-multi-remove" data-remove-entry="${ei}" title="Remove">&times;</button>
       </div>`)
     .join('');
@@ -244,6 +250,10 @@ function renderMultiEntries(catalogItem, idx) {
           const qtyEl = entryEl.querySelector('.qq-qty');
           if (qtyEl) qtyEl.value = entry.qty;
         }
+      }
+      if (catalogItem.theoretical && (el.dataset.field === 'qty' || el.dataset.field === 'theoreticalQty')) {
+        const overrunEl = entryEl.querySelector('.qq-overrun');
+        if (overrunEl) overrunEl.textContent = overrunLabel(computeOverrun(entry.qty, entry.theoreticalQty));
       }
     });
   });
@@ -297,7 +307,7 @@ function prefillFromReport(report) {
         if (!multiEntries[pi.itemNumber]) multiEntries[pi.itemNumber] = [];
         multiEntries[pi.itemNumber].push({
           qty: pi.qty || '', startStation: pi.startStation || '', endStation: pi.endStation || '', location: pi.location || '', side: pi.side || '',
-          length: pi.length || '', width: pi.width || '',
+          length: pi.length || '', width: pi.width || '', theoreticalQty: pi.theoreticalQty || '',
         });
       } else if (cat) {
         const input = document.querySelector(`.qq-qty[data-item-number="${CSS.escape(pi.itemNumber)}"]`);
@@ -408,7 +418,7 @@ function collectEntries() {
       .map((e) => ({
         itemNumber, description: cat.description, unit: cat.unit, qty: e.qty,
         startStation: e.startStation || '', endStation: e.endStation || '', location: e.location || '', side: e.side || '',
-        length: e.length || '', width: e.width || '',
+        length: e.length || '', width: e.width || '', theoreticalQty: e.theoreticalQty || '',
       }));
     multiByItem[itemNumber] = filled;
   });

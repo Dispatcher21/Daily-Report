@@ -228,6 +228,7 @@ function renderFilteredQuantityItems() {
     const moneyLine = it.unitPrice != null
       ? ` &middot; ${fmtMoney(it.earnedTotal)} earned${it.contractTotal != null ? ' of ' + fmtMoney(it.contractTotal) : ''}`
       : '';
+    const overrunLine = it.overrun != null ? ` &middot; ${overrunLabel(it.overrun)}` : '';
     const tip = `${qtyLine}.${it.unitPrice != null ? ' Unit price ' + fmtMoney(it.unitPrice) + '/' + (it.unit || 'unit') + '.' : ' No Unit Price on file.'}`;
     return `
       <div class="bar-row" data-tip="${escapeHtml(tip)}" tabindex="0">
@@ -236,7 +237,7 @@ function renderFilteredQuantityItems() {
           <span class="pill ${band.cls}">${band.label}</span>
         </div>
         <div class="bar-track"><div class="bar-fill ${band.cls}" style="width:${widthPct}%"></div></div>
-        <div class="br-sub"><span>${qtyLine}${moneyLine}</span><span class="br-pct">${pctLabel}</span></div>
+        <div class="br-sub"><span>${qtyLine}${moneyLine}${overrunLine}</span><span class="br-pct">${pctLabel}</span></div>
       </div>`;
   }).join('');
 }

@@ -59,7 +59,25 @@ function isNoWorkDayReport(report) {
 const PAY_ITEM_SIDE_OPTIONS = ['Lt', 'Rt', 'Ctr'];
 
 function payItemNeedsMultiple(catalogItem) {
-  return !!catalogItem && (catalogItem.stations || catalogItem.side || catalogItem.computed || (catalogItem.locations && catalogItem.locations.length > 0));
+  return !!catalogItem && (catalogItem.stations || catalogItem.side || catalogItem.computed || catalogItem.theoretical || (catalogItem.locations && catalogItem.locations.length > 0));
+}
+
+// Overrun/Underrun for a Theoretical Qty pay item -- Qty minus Theoretical
+// Qty, positive meaning more was actually used than the theoretical figure
+// called for. Null (shown as a dash) unless both sides are real numbers.
+function computeOverrun(qty, theoreticalQty) {
+  const q = Number(qty);
+  const t = Number(theoreticalQty);
+  if (qty === '' || theoreticalQty === '' || !Number.isFinite(q) || !Number.isFinite(t)) return null;
+  return Math.round((q - t) * 1000) / 1000;
+}
+
+// Shared by report-editor.html and quick-quantity.html so an Overrun figure
+// always reads the same wherever it shows up.
+function overrunLabel(overrun) {
+  if (overrun == null) return '—';
+  const sign = overrun > 0 ? '+' : '';
+  return `${sign}${overrun} ovr/undr`;
 }
 
 // Length x Width area math for a Computed Quantity pay item, converted to
@@ -141,13 +159,15 @@ async function makeBlankReport(nextReportNo, project, previous) {
       qty: '',
       unit: '',
       // Only meaningful for a catalog item with Stations/Locations/Side/
-      // Computed enabled (see project-file.js) -- blank and unused otherwise.
+      // Computed/Theoretical enabled (see project-file.js) -- blank and
+      // unused otherwise.
       startStation: '',
       endStation: '',
       location: '',
       side: '',
       length: '',
       width: '',
+      theoreticalQty: '',
     })),
     controllingItem: meta.controllingItem || '',
     commentsOnTime: meta.commentsOnTime || '',

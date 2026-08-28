@@ -574,6 +574,7 @@ function renderPayItemsStep() {
             item.side ? '<span class="ci-flag" title="Tracks Side (Lt/Rt/Ctr)">SIDE</span>' : '',
             (item.locations || []).length ? '<span class="ci-flag" title="Has Location options">LOC</span>' : '',
             item.computed ? '<span class="ci-flag" title="Qty computed from Length x Width">CALC</span>' : '',
+            item.theoretical ? '<span class="ci-flag" title="Tracks Theoretical Qty / Overrun">THEO</span>' : '',
           ].join(' ');
           return `
             <div class="check-item check-item-multi" data-num="${escapeHtml(item.itemNumber)}" title="Tap to add another entry -- this item can be logged more than once per report">
@@ -626,7 +627,7 @@ function togglePayItem(catalogItem) {
     // is how you log a second segment, not how you undo the first one.
     const entry = {
       itemNumber: catalogItem.itemNumber, description: catalogItem.description, qty: '', unit: catalogItem.unit,
-      startStation: '', endStation: '', location: '', side: '', length: '', width: '',
+      startStation: '', endStation: '', location: '', side: '', length: '', width: '', theoreticalQty: '',
     };
     const emptyIdx = items.findIndex((pi) => !pi.itemNumber && !pi.description);
     if (emptyIdx === -1) items.push(entry);
@@ -666,7 +667,8 @@ function renderSelectedPayItems() {
       const hasLocations = !!(cat && cat.locations && cat.locations.length > 0);
       const hasSide = !!(cat && cat.side);
       const hasComputed = !!(cat && cat.computed);
-      const extra = hasStations || hasLocations || hasSide || hasComputed
+      const hasTheoretical = !!(cat && cat.theoretical);
+      const extra = hasStations || hasLocations || hasSide || hasComputed || hasTheoretical
         ? `
         <div class="si-extra">
           ${hasStations ? `
@@ -689,6 +691,10 @@ function renderSelectedPayItems() {
             <input type="number" step="0.01" class="si-length" data-idx="${i}" value="${item.length || ''}" placeholder="Length">
             <input type="number" step="0.01" class="si-width" data-idx="${i}" value="${item.width || ''}" placeholder="Width">
           ` : ''}
+          ${hasTheoretical ? `
+            <input type="number" step="0.01" class="si-theoretical" data-idx="${i}" value="${item.theoreticalQty || ''}" placeholder="Theoretical Qty">
+            <span class="si-overrun" data-idx="${i}">${overrunLabel(computeOverrun(item.qty, item.theoreticalQty))}</span>
+          ` : ''}
         </div>`
         : '';
       return `
@@ -703,9 +709,17 @@ function renderSelectedPayItems() {
     })
     .join('');
 
+  function updateOverrunDisplay(idx) {
+    const item = report.payItems[idx];
+    const overrunEl = container.querySelector(`.si-overrun[data-idx="${idx}"]`);
+    if (overrunEl) overrunEl.textContent = overrunLabel(computeOverrun(item.qty, item.theoreticalQty));
+  }
+
   $$('.si-qty', container).forEach((el) => {
     el.addEventListener('input', () => {
-      report.payItems[Number(el.dataset.idx)].qty = el.value;
+      const idx = Number(el.dataset.idx);
+      report.payItems[idx].qty = el.value;
+      updateOverrunDisplay(idx);
       scheduleSave();
     });
   });
@@ -728,6 +742,7 @@ function renderSelectedPayItems() {
           const qtyEl = container.querySelector(`.si-qty[data-idx="${idx}"]`);
           if (lengthEl) lengthEl.value = item.length;
           if (qtyEl) qtyEl.value = item.qty;
+          updateOverrunDisplay(idx);
         }
       }
       scheduleSave();
@@ -755,7 +770,16 @@ function renderSelectedPayItems() {
         item.qty = computeAreaQty(item.length, item.width, item.unit);
         const qtyEl = container.querySelector(`.si-qty[data-idx="${idx}"]`);
         if (qtyEl) qtyEl.value = item.qty;
+        updateOverrunDisplay(idx);
       }
+      scheduleSave();
+    });
+  });
+  $$('.si-theoretical', container).forEach((el) => {
+    el.addEventListener('input', () => {
+      const idx = Number(el.dataset.idx);
+      report.payItems[idx].theoreticalQty = el.value;
+      updateOverrunDisplay(idx);
       scheduleSave();
     });
   });

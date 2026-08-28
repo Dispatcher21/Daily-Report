@@ -47,6 +47,7 @@ function aggregatePayItemTotals(flatItems, payItemCatalog) {
   const itemOrder = [];
   const itemMeta = new Map();
   const totalQty = new Map();
+  const totalTheoreticalQty = new Map();
 
   for (const it of (flatItems || []).filter((it) => it && String(it.itemNumber || '').trim() !== '')) {
     const key = String(it.itemNumber).trim();
@@ -54,8 +55,10 @@ function aggregatePayItemTotals(flatItems, payItemCatalog) {
       itemMeta.set(key, { itemNumber: key, description: it.description || '', unit: it.unit || '' });
       itemOrder.push(key);
       totalQty.set(key, 0);
+      totalTheoreticalQty.set(key, 0);
     }
     totalQty.set(key, totalQty.get(key) + (Number(it.qty) || 0));
+    totalTheoreticalQty.set(key, totalTheoreticalQty.get(key) + (Number(it.theoreticalQty) || 0));
   }
 
   const catalogByItem = new Map((payItemCatalog || []).map((p) => [String(p.itemNumber).trim(), p]));
@@ -70,6 +73,10 @@ function aggregatePayItemTotals(flatItems, payItemCatalog) {
     // typed on the report entry (a catalog item is the authoritative source,
     // and it's the only source at all for items with zero usage).
     const unit = (cat && cat.unit) || meta.unit;
+    // Overrun only means anything for an item that actually tracks
+    // Theoretical Qty -- otherwise every entry's theoreticalQty is blank and
+    // this would show a misleading "0 overrun" for items that never use it.
+    const overrun = cat && cat.theoretical ? Math.round((total - totalTheoreticalQty.get(key)) * 1000) / 1000 : null;
     return {
       itemNumber: meta.itemNumber,
       description: (cat && cat.description) || meta.description,
@@ -80,6 +87,7 @@ function aggregatePayItemTotals(flatItems, payItemCatalog) {
       unitPrice,
       contractTotal: contractTotalFor(unit, planned, unitPrice),
       earnedTotal: earnedTotalFor(unit, total, unitPrice),
+      overrun,
     };
   });
 }
@@ -114,6 +122,7 @@ function fullPayItemCatalogOverview(flatItems, payItemCatalog) {
         unitPrice,
         contractTotal: contractTotalFor(cat.unit, planned, unitPrice),
         earnedTotal: earnedTotalFor(cat.unit, 0, unitPrice),
+        overrun: cat.theoretical ? 0 : null,
       };
     });
 

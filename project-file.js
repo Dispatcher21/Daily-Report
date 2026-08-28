@@ -167,7 +167,7 @@ function parsePayItemsSheet(ws) {
   // contract value (planned qty x price) and $ earned to date (used qty x
   // price). Optional, same as above -- dollar figures just stay blank.
   const cPrice = findCol(['UNIT PRICE', 'BID UNIT PRICE', 'PRICE']);
-  // All four optional, sit after pricing in the sheet. STATIONS: a bare
+  // All five optional, sit after pricing in the sheet. STATIONS: a bare
   // "Y" turns on Start/Stop Station fields for this item when logging a
   // quantity. LOCATIONS: one location name per line in the cell (Alt+Enter
   // in Excel) populates a dropdown for assigning that day's quantity to a
@@ -178,12 +178,18 @@ function parsePayItemsSheet(ws) {
   // that multiply out to Qty automatically (Sq Yd/Sq Ft area math) -- if
   // Stations is also on for the item, Length starts out as the station
   // span and Qty as Length x Width, both still hand-editable afterward.
-  // Any of the four enables logging the same item more than once per
+  // THEORETICAL: a bare "Y" adds a hand-entered Theoretical Qty field next
+  // to Qty, so each entry line shows an Overrun/Underrun (Qty minus
+  // Theoretical) -- there's no formula for this in general (it depends on
+  // mix design/density for something like asphalt tonnage), so it's just
+  // typed in the same as Qty itself.
+  // Any of the five enables logging the same item more than once per
   // report (different segments/locations/sides/measurements the same day).
   const cStations = findCol(['STATIONS', 'STATION', 'TRACK STATIONS']);
   const cLocations = findCol(['LOCATIONS', 'LOCATION']);
   const cSide = findCol(['SIDE', 'TRACK SIDE']);
   const cComputed = findCol(['COMPUTED', 'COMPUTED QTY', 'CALC QTY']);
+  const cTheoretical = findCol(['THEORETICAL', 'THEORETICAL QTY']);
 
   const items = [];
   for (let i = headerIdx + 1; i < rows.length; i++) {
@@ -200,8 +206,9 @@ function parsePayItemsSheet(ws) {
       : [];
     const side = cSide !== -1 && row[cSide] != null && /^y(es)?$/i.test(String(row[cSide]).trim());
     const computed = cComputed !== -1 && row[cComputed] != null && /^y(es)?$/i.test(String(row[cComputed]).trim());
+    const theoretical = cTheoretical !== -1 && row[cTheoretical] != null && /^y(es)?$/i.test(String(row[cTheoretical]).trim());
     if (!itemNumber && !description) continue;
-    items.push({ itemNumber, description, unit, plannedQty, unitPrice, stations, locations, side, computed });
+    items.push({ itemNumber, description, unit, plannedQty, unitPrice, stations, locations, side, computed, theoretical });
   }
   return items;
 }
@@ -264,15 +271,15 @@ function buildProjectDataWorkbook({ meta, payItemCatalog, contractors, equipment
   infoWs['!cols'] = [{ wch: 34 }, { wch: 32 }];
   XLSX.utils.book_append_sheet(wb, infoWs, PROJECT_INFO_SHEET);
 
-  const itemRows = [['ITEM NUMBER', 'DESCRIPTION', 'UNIT', 'PER PLANS TOTAL', 'UNIT PRICE', 'STATIONS', 'LOCATIONS', 'SIDE', 'COMPUTED']];
+  const itemRows = [['ITEM NUMBER', 'DESCRIPTION', 'UNIT', 'PER PLANS TOTAL', 'UNIT PRICE', 'STATIONS', 'LOCATIONS', 'SIDE', 'COMPUTED', 'THEORETICAL']];
   (payItemCatalog || []).forEach((it) => {
     itemRows.push([
       it.itemNumber || '', it.description || '', it.unit || '', it.plannedQty || '', it.unitPrice || '',
-      it.stations ? 'Y' : '', (it.locations || []).join('\n'), it.side ? 'Y' : '', it.computed ? 'Y' : '',
+      it.stations ? 'Y' : '', (it.locations || []).join('\n'), it.side ? 'Y' : '', it.computed ? 'Y' : '', it.theoretical ? 'Y' : '',
     ]);
   });
   const itemsWs = XLSX.utils.aoa_to_sheet(itemRows);
-  itemsWs['!cols'] = [{ wch: 14 }, { wch: 38 }, { wch: 8 }, { wch: 16 }, { wch: 12 }, { wch: 10 }, { wch: 24 }, { wch: 8 }, { wch: 10 }];
+  itemsWs['!cols'] = [{ wch: 14 }, { wch: 38 }, { wch: 8 }, { wch: 16 }, { wch: 12 }, { wch: 10 }, { wch: 24 }, { wch: 8 }, { wch: 10 }, { wch: 12 }];
   XLSX.utils.book_append_sheet(wb, itemsWs, PAY_ITEMS_SHEET);
 
   const contractorRows = [['CONTRACTOR NAME']];
@@ -311,10 +318,11 @@ function downloadProjectDataTemplate() {
       peName: 'NOTTA RE-AL ENJINIR',
     },
     payItemCatalog: [
-      { itemNumber: '618-01', description: 'Thermoplastic Pavement Marking 4in', unit: 'LF', plannedQty: '12000', unitPrice: '1.10', stations: true, locations: [], side: true, computed: false },
-      { itemNumber: '618-02', description: 'Thermoplastic Pavement Marking 24in', unit: 'LF', plannedQty: '3500', unitPrice: '4.50', stations: false, locations: ['North Approach', 'Mid Span', 'South Approach'], side: false, computed: false },
-      { itemNumber: '619-01', description: 'Raised Pavement Markers', unit: 'EA', plannedQty: '450', unitPrice: '3.25', stations: false, locations: [], side: false, computed: false },
-      { itemNumber: '202-02-06100', description: 'Removal of Concrete Walks and Drives', unit: 'SQ YD', plannedQty: '500', unitPrice: '18.00', stations: true, locations: [], side: false, computed: true },
+      { itemNumber: '618-01', description: 'Thermoplastic Pavement Marking 4in', unit: 'LF', plannedQty: '12000', unitPrice: '1.10', stations: true, locations: [], side: true, computed: false, theoretical: false },
+      { itemNumber: '618-02', description: 'Thermoplastic Pavement Marking 24in', unit: 'LF', plannedQty: '3500', unitPrice: '4.50', stations: false, locations: ['North Approach', 'Mid Span', 'South Approach'], side: false, computed: false, theoretical: false },
+      { itemNumber: '619-01', description: 'Raised Pavement Markers', unit: 'EA', plannedQty: '450', unitPrice: '3.25', stations: false, locations: [], side: false, computed: false, theoretical: false },
+      { itemNumber: '202-02-06100', description: 'Removal of Concrete Walks and Drives', unit: 'SQ YD', plannedQty: '500', unitPrice: '18.00', stations: true, locations: [], side: false, computed: true, theoretical: false },
+      { itemNumber: '502-01-00100', description: 'Asphalt Concrete', unit: 'TON', plannedQty: '2000', unitPrice: '95.00', stations: true, locations: [], side: true, computed: false, theoretical: true },
     ],
     contractors: ['ABC Trucking', 'XYZ Barricades'],
     equipmentLabels: DEFAULT_EQUIPMENT_LABELS,
