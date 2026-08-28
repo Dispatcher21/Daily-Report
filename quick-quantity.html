@@ -42,6 +42,18 @@
   .qq-overrun { font-size: 0.85em; color: var(--text-dim); white-space: nowrap; }
   .qq-multi-remove { flex: 0 0 auto; color: var(--danger); background: none; border: none; font-size: 1.2rem; cursor: pointer; min-height: 0; padding: 0 0.3rem; }
   .qq-multi-add { margin-top: 0.5rem; }
+
+  /* This is a fill-in-order list (visit every row, type a qty), not a
+     browsable grid of cards -- a divider-separated list like this doesn't
+     have a safe way to go multi-column (the border-bottom rules assume one
+     column; :last-child would leave a stray border in whichever column
+     didn't happen to end the list). Capped instead of stretched full width,
+     same reasoning as report-editor.html's text fields: a name/description
+     on the far left and a qty box 1300px away is just a long dead gutter,
+     not a more useful layout. */
+  @media (min-width: 900px) {
+    #catalog-list, #manual-list { max-width: 780px; }
+  }
 </style>
 </head>
 <body>
