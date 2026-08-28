@@ -8,6 +8,7 @@
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c3d5a">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="print-sheet.css">
 <script src="theme.js"></script>
 </head>
 <body>
@@ -36,35 +37,50 @@
     <p class="hint" style="margin:0.4rem 0 0;">Sets Notes to "NO WORK DAY" and Hours to 0, leaves everything else as-is -- counted on the project dashboard.</p>
   </div>
 
-  <div class="step">
-    <div class="step-header"><span class="step-num">STEP 1</span><h2>Report Info</h2></div>
-    <div class="step-body">
-      <div class="field-grid">
-        <label>Report No. <input type="number" id="f-reportNo"></label>
-        <label>Date <input type="date" id="f-date"></label>
+  <div class="rb-layout" id="rb-layout">
+    <div class="rb-form" id="rb-form">
+      <div class="step" id="step-reportInfo">
+        <div class="step-header"><span class="step-num">BASICS</span><h2>Report Info</h2></div>
+        <div class="step-body">
+          <div class="field-grid">
+            <label>Report No. <input type="number" id="f-reportNo"></label>
+            <label>Date <input type="date" id="f-date"></label>
+          </div>
+
+          <div class="time-worked-block">
+            <div class="rb-subtoggle-hd" id="time-worked-toggle">
+              <span class="sig-label" style="margin:0;">Time Worked</span>
+              <span class="rb-subtoggle-summary" id="time-worked-summary">0.00 hrs</span>
+              <span class="rb-chev">&#9656;</span>
+            </div>
+            <div class="rb-subtoggle-bd" id="time-worked-body">
+              <div id="time-entries"></div>
+              <button type="button" class="btn-secondary" id="btn-add-time-entry">+ Add Time Segment (e.g. after lunch)</button>
+              <div class="total-hours-row">
+                <span>Total Hours</span>
+                <span id="total-hours-value" class="total-hours-value">0.00</span>
+              </div>
+              <label class="hours-override">Hours (auto-filled, editable) <input type="number" step="0.25" id="f-hours"></label>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div class="time-worked-block">
-        <span class="sig-label">Time Worked</span>
-        <div id="time-entries"></div>
-        <button type="button" class="btn-secondary" id="btn-add-time-entry">+ Add Time Segment (e.g. after lunch)</button>
-        <div class="total-hours-row">
-          <span>Total Hours</span>
-          <span id="total-hours-value" class="total-hours-value">0.00</span>
-        </div>
-        <label class="hours-override">Hours (auto-filled, editable) <input type="number" step="0.25" id="f-hours"></label>
+      <!-- Everything else is admin-orderable/hideable per project (see
+           required-fields.html), clustered into REPORT_BUILDER_GROUPS
+           (defaults.js) and rendered as collapsible cards here. -->
+      <div id="rb-groups"></div>
+
+      <div class="export-bar">
+        <button id="btn-generate" class="btn-primary">Generate Report</button>
+        <button id="btn-delete-report" class="btn-danger">Delete This Report</button>
       </div>
     </div>
-  </div>
 
-  <!-- Everything else is admin-orderable/hideable per project (see
-       required-fields.html) -- built up here at render time from
-       ORDERABLE_FIELD_DEFS rather than fixed markup. -->
-  <div id="dynamic-fields"></div>
-
-  <div class="export-bar">
-    <button id="btn-generate" class="btn-primary">Generate Report</button>
-    <button id="btn-delete-report" class="btn-danger">Delete This Report</button>
+    <div class="rb-preview-col" id="rb-preview-col">
+      <p class="rb-preview-label">Live Preview &mdash; click any part of it to jump to that field</p>
+      <div class="rb-preview-frame" id="rb-preview"></div>
+    </div>
   </div>
 
 </main>
@@ -83,6 +99,7 @@
 <script src="defaults.js"></script>
 <script src="storage.js"></script>
 <script src="audit-log.js"></script>
+<script src="render-report.js"></script>
 <script type="module" src="firebase-init.js"></script>
 <script src="firebase-sync.js"></script>
 <script>
@@ -95,16 +112,23 @@ let payItemSearch = '';
 let manualPayOpen = false;
 let editable = true;
 
+let previewTimer = null;
 function scheduleSave() {
   applyRequiredFieldHighlights();
+  updateTotalHoursDisplay(); // keeps the collapsed Time Worked summary (and Total Hours row) in sync with any edit, not just ones made inside that block
+  // Debounced on its own timer, not called straight from every keystroke --
+  // a full print-grid re-render on every character typed would be wasted
+  // work and visibly janky on a long field like Summary of Work Performed.
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(refreshLivePreview, 250);
   if (!report || !editable) return;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => saveReport(report).catch(console.error), 400);
 }
 
-// Every rendered field/block step carries id="step-<key>" (see
-// renderDynamicFields), so highlighting "what's missing" is just looking
-// that element up directly -- blockKeyFor (defaults.js) folds contractors/
+// Every rendered field/block carries id="step-<key>" (see renderGroups),
+// so highlighting "what's missing" is just looking that element up
+// directly -- blockKeyFor (defaults.js) folds contractors/
 // equipmentRows onto the one Contractors & Equipment step they actually
 // render in.
 function applyRequiredFieldHighlights() {
@@ -223,32 +247,31 @@ const SIMPLE_FIELD_CONFIG = {
   tempLow: { type: 'number' },
 };
 
-function simpleFieldStepHtml(key, stepNum, def) {
+// Just the field's own controls, wrapped in id="step-<key>" -- that id is
+// what applyRequiredFieldHighlights and the live-preview click targets
+// (jumpToField, below) both key off of, same convention report-editor.html
+// always used, just now attached to a field inside a group card instead of
+// a full step of its own.
+function simpleFieldBodyHtml(key, def) {
   const cfg = SIMPLE_FIELD_CONFIG[key];
   const tag = cfg.type === 'textarea'
     ? `<textarea id="f-${key}" rows="${cfg.rows || 3}"></textarea>`
     : `<input type="${cfg.type}" id="f-${key}"${cfg.placeholder ? ` placeholder="${cfg.placeholder}"` : ''}>`;
   const hint = cfg.hint ? `<span class="hint">${cfg.hint}</span>` : '';
-  return `
-    <div class="step" id="step-${key}">
-      <div class="step-header"><span class="step-num">STEP ${stepNum}</span><h2>${escapeHtml(def.label)}</h2></div>
-      <div class="step-body">
-        <label>${tag}${hint}</label>
-      </div>
-    </div>`;
+  return `<div class="rb-field" id="step-${key}"><label>${escapeHtml(def.label)}${tag}${hint}</label></div>`;
 }
 
-function blockFieldStepHtml(key, stepNum, def) {
-  let body = '';
+function blockFieldBodyHtml(key, def) {
   let tag = '';
+  let inner = '';
   if (key === 'contractorsEquipment') {
-    body = `
+    inner = `
       <div id="contractor-tabs" class="tab-row"></div>
       <div id="contractor-panel"></div>
       <p class="hint">22 personnel/equipment rows are fixed by the template &mdash; you can rename any row, and quantities are per contractor tab.</p>`;
   } else if (key === 'payItems') {
     tag = `<span class="step-tag" id="pay-items-tag">0 / ${PAY_ITEM_ROW_COUNT}</span>`;
-    body = `
+    inner = `
       <p class="hint" style="margin-top:0;">No limit on how many you add. The printed template has room for 6 in the table itself; anything past that lists automatically at the end of the Summary of Work Performed, the same way it'd be written in by hand.</p>
       <label>Search Catalog <input type="text" id="pi-search" placeholder="Search by item # or description..."></label>
       <div id="pay-catalog-list" class="check-list"></div>
@@ -269,40 +292,221 @@ function blockFieldStepHtml(key, stepNum, def) {
       <div class="eyebrow" style="margin-top:1rem;">Today's Pay Items</div>
       <div id="selected-pay-items" class="selected-items"></div>`;
   } else if (key === 'trafficControlSelect') {
-    body = `
+    inner = `
       <div class="radio-row">
         <label><input type="radio" name="f-trafficControlSelect" value="IN_PLACE"> In Place</label>
         <label><input type="radio" name="f-trafficControlSelect" value="ATTENTION_REQUIRED"> Attention Required</label>
       </div>`;
   } else if (key === 'repSignatureImage') {
-    body = `
+    inner = `
       <span class="sig-label">Signature</span>
       <canvas id="sig-rep" class="sig-pad" width="600" height="150"></canvas>
       <button type="button" class="btn-secondary" data-clear-sig="rep">Clear Signature</button>`;
   } else if (key === 'photos') {
-    body = `<div id="photo-grid" class="photo-grid"></div>`;
+    inner = `<div id="photo-grid" class="photo-grid"></div>`;
   }
-  return `
-    <div class="step" id="step-${key}">
-      <div class="step-header"><span class="step-num">STEP ${stepNum}</span><h2>${escapeHtml(def.label)}</h2>${tag}</div>
-      <div class="step-body">${body}</div>
-    </div>`;
+  return `<div class="rb-field rb-field-block" id="step-${key}"><div class="rb-field-hd"><span>${escapeHtml(def.label)}</span>${tag}</div>${inner}</div>`;
 }
 
-function renderDynamicFields() {
+// One collapsible card per REPORT_BUILDER_GROUPS entry, skipped entirely
+// when every key inside it is hidden for this project. Fields within a
+// group still render in whatever order the admin set (getFieldOrder), the
+// group itself just clusters them -- see the comment on
+// REPORT_BUILDER_GROUPS in defaults.js.
+function renderGroups() {
   const order = getFieldOrder(project);
-  const visible = order.filter((key) => !isFieldHidden(project, key));
-  $('#dynamic-fields').innerHTML = visible
-    .map((key, i) => {
-      const def = ORDERABLE_FIELD_DEFS.find((d) => d.key === key);
-      const stepNum = i + 2; // Step 1 (Report Info) is always fixed above
-      return def.kind === 'simple' ? simpleFieldStepHtml(key, stepNum, def) : blockFieldStepHtml(key, stepNum, def);
+  const visible = new Set(order.filter((key) => !isFieldHidden(project, key)));
+
+  $('#rb-groups').innerHTML = REPORT_BUILDER_GROUPS
+    .map((group) => {
+      const keys = order.filter((k) => group.keys.includes(k) && visible.has(k));
+      if (keys.length === 0) return '';
+      const body = keys
+        .map((key) => {
+          const def = ORDERABLE_FIELD_DEFS.find((d) => d.key === key);
+          return def.kind === 'simple' ? simpleFieldBodyHtml(key, def) : blockFieldBodyHtml(key, def);
+        })
+        .join('');
+      return `
+        <div class="rb-group" id="rb-group-${group.id}" data-group="${group.id}">
+          <div class="rb-group-hd" data-toggle-group="${group.id}">
+            <span class="rb-icon">${group.icon}</span>
+            <div class="rb-titles"><div class="t">${escapeHtml(group.label)}</div></div>
+            <span class="rb-chev">&#9656;</span>
+          </div>
+          <div class="rb-group-bd">${body}</div>
+        </div>`;
     })
     .join('');
 }
 
-// Wires up whatever renderDynamicFields actually put on the page -- a
-// hidden field/block simply isn't in the DOM, so every hookup here is
+const openGroups = new Set();
+
+function setGroupOpen(groupId, open) {
+  const card = $('#rb-group-' + groupId);
+  if (!card) return;
+  card.classList.toggle('open', open);
+  if (open) openGroups.add(groupId);
+  else openGroups.delete(groupId);
+}
+
+function toggleGroup(groupId) {
+  setGroupOpen(groupId, !openGroups.has(groupId));
+}
+
+$('#rb-groups').addEventListener('click', (e) => {
+  const hd = e.target.closest('[data-toggle-group]');
+  if (!hd) return;
+  const groupId = hd.dataset.toggleGroup;
+  toggleGroup(groupId);
+  if (openGroups.has(groupId)) flashPreviewForGroup(groupId);
+});
+
+// The other half of the sync: opening a card on the left flashes every
+// field it contains on the live preview, so you can see where it landed
+// on the actual report without needing to click the report itself first.
+function flashPreviewForGroup(groupId) {
+  const group = REPORT_BUILDER_GROUPS.find((g) => g.id === groupId);
+  if (!group) return;
+  group.keys.forEach((key) => {
+    $$(`.rb-click-target[data-field-key="${key}"]`).forEach((t) => {
+      t.classList.add('rb-flash');
+      setTimeout(() => t.classList.remove('rb-flash'), 1400);
+    });
+  });
+}
+
+function groupIdForKey(key) {
+  const group = REPORT_BUILDER_GROUPS.find((g) => g.keys.includes(key));
+  return group ? group.id : null;
+}
+
+// ---------- Live preview: the actual printed template, not a redrawn
+// approximation -- same renderReportPages/FIELD_HIGHLIGHT_REGIONS
+// machinery required-fields.html uses, just re-rendering the real in-
+// progress report instead of a blank sample, and clicking a region jumps
+// to + opens that field's card instead of opening an admin popover. ----------
+
+let previewLayout = null;
+let previewLogoBlob = null;
+let previewGrids = null; // { 1: gridEl, 2: gridEl }, set after each render
+let previewRenderToken = 0;
+
+function scalePreviewPage(pageEl, targetWidthPx) {
+  const rect = pageEl.getBoundingClientRect();
+  const scale = targetWidthPx / rect.width;
+  const wrap = document.createElement('div');
+  wrap.className = 'rb-preview-page-wrap';
+  wrap.style.width = targetWidthPx + 'px';
+  wrap.style.height = Math.round(rect.height * scale) + 'px';
+  pageEl.style.transform = `scale(${scale})`;
+  pageEl.style.transformOrigin = 'top left';
+  wrap.appendChild(pageEl);
+  return wrap;
+}
+
+// One invisible-until-hovered box per field, positioned at its actual
+// printed coordinates -- see FIELD_HIGHLIGHT_REGIONS in render-report.js.
+function addPreviewClickTarget(key, region) {
+  const grid = previewGrids[region.sheet];
+  if (!grid) return;
+  const def = ORDERABLE_FIELD_DEFS.find((d) => d.key === key);
+  const groupId = groupIdForKey(key);
+
+  function place(gridColumn, gridRow) {
+    const target = document.createElement('div');
+    target.className = 'rb-click-target';
+    target.dataset.fieldKey = key;
+    target.style.gridColumn = gridColumn;
+    target.style.gridRow = gridRow;
+    target.title = def ? def.label : key;
+    target.addEventListener('click', () => jumpToField(key, groupId));
+    grid.appendChild(target);
+  }
+
+  if (region.coord) {
+    const cell = grid.querySelector(`[data-coord="${region.coord}"]`);
+    if (!cell) return;
+    place(cell.style.gridColumn, cell.style.gridRow);
+    return;
+  }
+  region.ranges.forEach(({ fromCol, toCol, fromRow, toRow }) => {
+    const colStart = parseCoord(fromCol + '1').col;
+    const colEnd = parseCoord(toCol + '1').col;
+    place(`${colStart} / span ${colEnd - colStart + 1}`, `${fromRow} / span ${toRow - fromRow + 1}`);
+  });
+}
+
+function jumpToField(key, groupId) {
+  if (groupId) {
+    setGroupOpen(groupId, true);
+    const card = $('#rb-group-' + groupId);
+    if (card) {
+      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      card.classList.add('rb-flash');
+      setTimeout(() => card.classList.remove('rb-flash'), 1400);
+    }
+  }
+  $$(`.rb-click-target[data-field-key="${key}"]`).forEach((t) => {
+    t.classList.add('rb-flash');
+    setTimeout(() => t.classList.remove('rb-flash'), 1400);
+  });
+  const fieldEl = document.getElementById('step-' + key);
+  if (fieldEl && groupId) {
+    // simple/most block fields are directly focusable; a first real input
+    // inside gives a visible cursor to land in, nice-to-have not required.
+    const focusable = fieldEl.querySelector('input, textarea, select');
+    if (focusable) setTimeout(() => focusable.focus({ preventScroll: true }), 300);
+  }
+}
+
+async function setupLivePreview() {
+  const previewEl = $('#rb-preview');
+  try {
+    [previewLayout, previewLogoBlob] = await Promise.all([loadPrintLayout(), getReportLogo()]);
+    await refreshLivePreview();
+  } catch (err) {
+    console.error(err);
+    previewEl.innerHTML = '<p class="hint">Preview unavailable.</p>';
+  }
+}
+
+async function refreshLivePreview() {
+  if (!previewLayout) return;
+  const previewEl = $('#rb-preview');
+  const token = ++previewRenderToken;
+  const scrollTop = previewEl.scrollTop;
+
+  // scalePreviewPage measures the rendered page's real width via
+  // getBoundingClientRect(), which is always 0 for a detached element (no
+  // layout box) -- render into an attached-but-invisible sandbox first
+  // (same off-screen technique reports.html/download.html already use for
+  // html2canvas), not a bare detached div, so the measurement is real.
+  const sandbox = document.createElement('div');
+  sandbox.style.cssText = 'position:fixed; top:0; left:-20000px; z-index:-1;';
+  document.body.appendChild(sandbox);
+  const pages = renderReportPages(sandbox, previewLayout, report, previewLogoBlob);
+  if (token !== previewRenderToken) { sandbox.remove(); return; } // a newer refresh started while this one was working
+
+  // The wrap needs to fit within the frame's *content* box, not its
+  // clientWidth (which still includes the frame's own left/right padding)
+  // -- using clientWidth directly here is exactly why the report was
+  // clipped on the right edge instead of actually filling the column.
+  const frameStyle = getComputedStyle(previewEl);
+  const paddingX = parseFloat(frameStyle.paddingLeft) + parseFloat(frameStyle.paddingRight);
+  const targetWidth = Math.max(200, previewEl.clientWidth - paddingX);
+  const wraps = pages.map(({ el }) => scalePreviewPage(el, targetWidth));
+  sandbox.remove();
+
+  previewEl.innerHTML = '';
+  wraps.forEach((wrap) => previewEl.appendChild(wrap));
+  previewGrids = { 1: pages[0].el.querySelector('.print-grid'), 2: pages[1].el.querySelector('.print-grid') };
+  Object.keys(FIELD_HIGHLIGHT_REGIONS).forEach((key) => addPreviewClickTarget(key, FIELD_HIGHLIGHT_REGIONS[key]));
+  previewEl.scrollTop = scrollTop;
+}
+
+// Wires up whatever renderGroups actually put on the page -- a hidden
+// field/block simply isn't in the DOM, so every hookup here is
 // conditional on the element existing rather than assumed.
 function bindDynamicFields() {
   Object.keys(SIMPLE_FIELD_CONFIG).forEach((key) => bindText('#f-' + key, key));
@@ -368,13 +572,15 @@ function renderEditor() {
   }
   renderTimeEntries();
 
-  renderDynamicFields();
+  renderGroups();
   bindDynamicFields();
   applyRequiredFieldHighlights();
+  setupLivePreview();
 
   $('#btn-generate').onclick = () => {
     const missing = applyRequiredFieldHighlights();
     if (missing.length) {
+      missing.forEach((def) => setGroupOpen(groupIdForKey(blockKeyFor(def.key)), true));
       $('#rf-warning-list').innerHTML = missing.map((def) => `<li>${escapeHtml(def.label)}</li>`).join('');
       $('#rf-warning-overlay').hidden = false;
       return;
@@ -470,8 +676,15 @@ function onTimeEntriesChanged() {
 }
 
 function updateTotalHoursDisplay() {
+  if (!report || !$('#total-hours-value')) return;
   $('#total-hours-value').textContent = totalHours(report.timeEntries).toFixed(2);
+  const hours = Number(report.hours);
+  $('#time-worked-summary').textContent = `${Number.isFinite(hours) ? hours.toFixed(2) : '0.00'} hrs`;
 }
+
+$('#time-worked-toggle').addEventListener('click', () => {
+  $('#step-reportInfo').querySelector('.time-worked-block').classList.toggle('open');
+});
 
 $('#btn-add-time-entry').addEventListener('click', () => {
   report.timeEntries.push({ start: '', end: '' });
