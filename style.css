@@ -353,7 +353,10 @@ main { max-width: min(1400px, 94vw); margin: 0 auto; padding: 1rem; }
 
 .hub-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  /* Was a hard-coded 2 columns regardless of viewport -- a card is compact
+     content (icon/title/desc/count), so let it fill however many actually
+     fit instead of capping a wide screen at the same 2 a phone gets. */
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 1rem;
   margin: 1rem 0;
 }
@@ -1188,6 +1191,13 @@ input[type="file"] { min-height: 0; }
 }
 
 .bar-list { display: flex; flex-direction: column; gap: 0.9rem; max-height: 560px; overflow-y: auto; padding-right: 0.25rem; }
+/* A single progress bar stretched to ~1300px reads as a thin stripe with
+   nothing to look at either side of it. Two per row keeps each bar a
+   sane width and, same as the card grids elsewhere, actually uses a wide
+   screen instead of just centering the same mobile list in more margin. */
+@media (min-width: 900px) {
+  .bar-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 0.9rem 1.5rem; align-content: start; }
+}
 .bar-row { min-width: 0; }
 .bar-row .br-top {
   display: flex; justify-content: space-between; align-items: center;
