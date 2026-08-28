@@ -326,7 +326,11 @@ body {
 .back-bar .bb-sep,
 .back-bar .bb-cur { color: var(--text-dim); }
 
-main { max-width: 780px; margin: 0 auto; padding: 1rem; }
+/* 780px was a mobile-first ceiling that never got a desktop pass -- every
+   page routes through this one rule, so widening it is the single biggest
+   lever for using real screen space. min() keeps a breathing margin on
+   very wide monitors instead of running edge-to-edge. */
+main { max-width: min(1400px, 94vw); margin: 0 auto; padding: 1rem; }
 
 /* Optional per-project background photo on the project landing page --
    sits at the very top of the document (not fixed -- it scrolls away like
@@ -444,6 +448,16 @@ main { max-width: 780px; margin: 0 auto; padding: 1rem; }
   margin-bottom: 1rem;
   overflow: hidden;
   box-shadow: var(--shadow);
+}
+
+/* Two independent (not sequential) step cards side by side on wide
+   viewports -- e.g. a range picker next to a billing panel, neither
+   depending on the other being read first. Plain block stacking below
+   that, identical to two ordinary .step cards, so mobile is untouched. */
+.step-pair { margin-bottom: 1rem; }
+@media (min-width: 900px) {
+  .step-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start; margin-bottom: 0; }
+  .step-pair > .step { margin-bottom: 0; }
 }
 .step-header {
   background: var(--brand);
@@ -632,6 +646,12 @@ input[type="file"] { min-height: 0; }
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0 0.75rem;
+}
+/* Three logical fields (Estimate No. / Date / Note) forced into two columns
+   left the third stranded alone on its own row -- give it the column it
+   actually needs once there's room. */
+@media (min-width: 700px) {
+  #estimate-form { grid-template-columns: repeat(3, 1fr); }
 }
 
 .hint { font-size: 0.8rem; font-weight: 400; color: var(--text-dim); margin: 0.25rem 0 0; }
