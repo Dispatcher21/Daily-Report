@@ -536,6 +536,77 @@ main { max-width: min(1400px, 94vw); margin: 0 auto; padding: 1rem; }
 .rf-preview-page-wrap { margin: 0 auto 0.9rem; position: relative; overflow: hidden; border: 1px solid var(--border); }
 .rf-preview-page-wrap:last-child { margin-bottom: 0; }
 
+/* ---------- report-editor.html: split-screen Report Builder ----------
+   Left: collapsible field-group cards (REPORT_BUILDER_GROUPS). Right: the
+   real printed template, live, with click targets at each field's actual
+   coordinates (FIELD_HIGHLIGHT_REGIONS) -- same component required-
+   fields.html uses, just clicking jumps to + opens that field's card
+   instead of opening an admin popover. Desktop only for now; below
+   1050px this collapses to the preview under the form, same components,
+   just stacked -- a dedicated mobile pass is separate, later work. */
+.rb-layout { display: flex; flex-direction: column; gap: 1rem; }
+@media (min-width: 1050px) {
+  .rb-layout { display: grid; grid-template-columns: minmax(380px, 1fr) minmax(420px, 640px); align-items: start; }
+}
+
+.rb-form { display: flex; flex-direction: column; gap: 0.75rem; min-width: 0; }
+
+.rb-preview-col { position: static; }
+@media (min-width: 1050px) {
+  .rb-preview-col { position: sticky; top: 1rem; }
+}
+.rb-preview-label {
+  font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--text-dim); margin: 0 0 0.6rem;
+}
+.rb-preview-frame {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 0.85rem; max-height: calc(100vh - 3rem); overflow-y: auto;
+}
+
+.rb-group {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow); overflow: hidden; transition: border-color 0.15s, box-shadow 0.15s;
+  scroll-margin-top: 1rem;
+}
+.rb-group.rb-flash { border-color: var(--focus); box-shadow: 0 0 0 3px var(--brand-dim), var(--shadow); }
+
+.rb-group-hd {
+  display: flex; align-items: center; gap: 0.7rem; padding: 0.75rem 1rem;
+  cursor: pointer; user-select: none; min-height: var(--tap);
+}
+.rb-group-hd:hover { background: var(--surface-2); }
+.rb-group-hd .rb-icon {
+  width: 1.9rem; height: 1.9rem; border-radius: 8px; background: var(--surface-3);
+  display: flex; align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0;
+}
+.rb-group-hd .rb-titles { flex: 1; min-width: 0; font-weight: 700; font-size: 0.92rem; }
+.rb-group-hd .rb-chev { color: var(--text-dim); transition: transform 0.15s; flex-shrink: 0; }
+.rb-group.open .rb-group-hd .rb-chev { transform: rotate(90deg); }
+
+.rb-group-bd {
+  display: none; padding: 0 1rem 1rem; border-top: 1px solid var(--border);
+  padding-top: 0.85rem; grid-template-columns: 1fr 1fr; gap: 0.85rem 0.7rem;
+}
+.rb-group.open .rb-group-bd { display: grid; }
+.rb-field { min-width: 0; }
+.rb-field:has(textarea) { grid-column: 1 / -1; }
+.rb-field-block { grid-column: 1 / -1; }
+.rb-field-hd { display: flex; align-items: center; justify-content: space-between; font-size: 0.88rem; font-weight: 600; color: var(--text-dim); margin-bottom: 0.5rem; }
+
+.rb-click-target {
+  cursor: pointer;
+  outline: 1px dashed rgba(128, 140, 160, 0.5);
+  outline-offset: -1px;
+  background: transparent;
+  transition: background 0.1s;
+  z-index: 4;
+}
+.rb-click-target:hover { background: rgba(70, 130, 230, 0.16); }
+.rb-click-target.rb-flash { outline: 2px solid var(--focus); background: rgba(70, 130, 230, 0.24); }
+.rb-preview-page-wrap { margin: 0 auto 0.9rem; position: relative; overflow: hidden; border: 1px solid var(--border); }
+.rb-preview-page-wrap:last-child { margin-bottom: 0; }
+
 /* One invisible-until-touched box per field, positioned over the live
    preview at that field's real printed coordinates (FIELD_HIGHLIGHT_REGIONS
    in render-report.js) -- the click target IS the report, not a separate

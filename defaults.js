@@ -407,6 +407,26 @@ const ORDERABLE_FIELD_DEFS = [
 ];
 const DEFAULT_FIELD_ORDER = ORDERABLE_FIELD_DEFS.map((d) => d.key);
 
+// report-editor.html's desktop layout clusters ORDERABLE_FIELD_DEFS keys
+// into these fixed, thematic groups (each its own collapsible card) rather
+// than one flat step per field -- this is a *display* grouping only, a
+// separate concern from the field order/hidden/required config above,
+// which admins still fully control per field. A group with every one of
+// its keys hidden simply doesn't render; keys within a group still render
+// in whatever order the admin set. Every ORDERABLE_FIELD_DEFS key must
+// appear in exactly one group here.
+const REPORT_BUILDER_GROUPS = [
+  { id: 'overview', icon: '\u{1F4DD}', label: 'Overview', keys: ['activity', 'notes', 'representative', 'peName', 'ntpDate'] },
+  { id: 'contractorsEquipment', icon: '\u{1F477}', label: 'Contractors & Equipment', keys: ['contractorsEquipment'] },
+  { id: 'workSummary', icon: '\u{270D}\u{FE0F}', label: 'Work Summary', keys: ['workSummaryHeader', 'trafficControlNote', 'workSummary'] },
+  { id: 'payItems', icon: '\u{1F4CA}', label: 'Pay Items', keys: ['payItems'] },
+  { id: 'controllingItem', icon: '\u{23F1}\u{FE0F}', label: 'Controlling Item & Time Charged', keys: ['controllingItem', 'commentsOnTime', 'controllingItemTimeFrom', 'controllingItemTimeTo'] },
+  { id: 'siteConditions', icon: '\u{1F6A7}', label: 'Site Conditions', keys: ['workingConditions', 'trafficControlSelect', 'workBegin', 'workEnd'] },
+  { id: 'weather', icon: '\u{1F324}\u{FE0F}', label: 'Weather', keys: ['weatherDesc', 'tempHigh', 'tempLow'] },
+  { id: 'signOff', icon: '\u{1F58B}\u{FE0F}', label: 'Sign-Off', keys: ['repSignatureName', 'repSignatureImage', 'peSignatureName'] },
+  { id: 'photos', icon: '\u{1F4F7}', label: 'Photos', keys: ['photos'] },
+];
+
 // A required-field key that isn't its own orderable block (contractors,
 // equipmentRows) resolves to the block that actually controls whether it's
 // on the form at all.
