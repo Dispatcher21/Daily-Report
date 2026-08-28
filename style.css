@@ -326,7 +326,11 @@ body {
 .back-bar .bb-sep,
 .back-bar .bb-cur { color: var(--text-dim); }
 
-main { max-width: 780px; margin: 0 auto; padding: 1rem; }
+/* 780px was a mobile-first ceiling that never got a desktop pass -- every
+   page routes through this one rule, so widening it is the single biggest
+   lever for using real screen space. min() keeps a breathing margin on
+   very wide monitors instead of running edge-to-edge. */
+main { max-width: min(1400px, 94vw); margin: 0 auto; padding: 1rem; }
 
 /* Optional per-project background photo on the project landing page --
    sits at the very top of the document (not fixed -- it scrolls away like
@@ -349,7 +353,10 @@ main { max-width: 780px; margin: 0 auto; padding: 1rem; }
 
 .hub-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  /* Was a hard-coded 2 columns regardless of viewport -- a card is compact
+     content (icon/title/desc/count), so let it fill however many actually
+     fit instead of capping a wide screen at the same 2 a phone gets. */
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 1rem;
   margin: 1rem 0;
 }
@@ -444,6 +451,31 @@ main { max-width: 780px; margin: 0 auto; padding: 1rem; }
   margin-bottom: 1rem;
   overflow: hidden;
   box-shadow: var(--shadow);
+}
+
+/* Two independent (not sequential) step cards side by side on wide
+   viewports -- e.g. a range picker next to a billing panel, neither
+   depending on the other being read first. Plain block stacking below
+   that, identical to two ordinary .step cards, so mobile is untouched. */
+.step-pair { margin-bottom: 1rem; }
+@media (min-width: 900px) {
+  /* align-items: start (the original choice here) let each card size to
+     its own content -- fine when both sides are similar, but a short card
+     (Company Name) next to a tall one whose content varies (Company Logo:
+     image + dropzone + button) stops early and leaves a dead gap before
+     the next section, which reads as broken rather than just uneven.
+     Default stretch instead: both cards in a row match the row's height,
+     the shorter one just carries blank space at the bottom of its own
+     border -- expected card-grid behaviour, and the next section always
+     starts at the same line regardless of which side was taller. */
+  .step-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .step-pair > .step { margin-bottom: 0; }
+  /* project.html's Trend/Weather pair each conditionally [hidden] until
+     there's data for them -- if only one is showing, let it take the full
+     row instead of sitting alone in the left half with dead space beside
+     it. Harmless on the always-both-visible pairs elsewhere (:has() with
+     no hidden child never matches). */
+  .step-pair:has(> .step[hidden]) { grid-template-columns: 1fr; }
 }
 .step-header {
   background: var(--brand);
@@ -623,6 +655,16 @@ input, textarea, select {
 }
 input:focus, textarea:focus, select:focus { border-color: var(--focus); }
 textarea { resize: vertical; min-height: 5rem; line-height: 1.45; }
+/* Unlike a list of cards or bars, free text gets *harder* to read as a line
+   gets longer -- report-editor.html's one-field-per-step layout (Notes,
+   Work Summary, etc.) would otherwise stretch a textarea/text input to the
+   full width of a now much wider main. Caps the line length, not the step
+   card itself, and only past 900px -- a phone was never wide enough for
+   this to matter. Doesn't touch date/number/select, whose short fixed-width
+   values don't have a "line length" to worry about. */
+@media (min-width: 900px) {
+  textarea, input[type="text"] { max-width: 46rem; }
+}
 input[type="checkbox"], input[type="radio"] {
   width: 1.35rem; height: 1.35rem; min-height: 0; accent-color: var(--brand-light);
 }
@@ -632,6 +674,17 @@ input[type="file"] { min-height: 0; }
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0 0.75rem;
+}
+/* Three logical fields (Estimate No. / Date / Note) forced into two columns
+   left the third stranded alone on its own row -- give it the column it
+   actually needs once there's room. */
+@media (min-width: 700px) {
+  #estimate-form { grid-template-columns: repeat(3, 1fr); }
+}
+/* Four filters (Project/User/From/To) forced into two columns wraps to a
+   second row for no reason once there's width for all four in one. */
+@media (min-width: 800px) {
+  #audit-log-filters { grid-template-columns: repeat(4, 1fr); }
 }
 
 .hint { font-size: 0.8rem; font-weight: 400; color: var(--text-dim); margin: 0.25rem 0 0; }
@@ -690,6 +743,12 @@ input[type="file"] { min-height: 0; }
 
 .filter-row { display: flex; gap: 0.6rem; flex-wrap: wrap; margin: 0.75rem 0; align-items: flex-end; }
 .filter-box { display: flex; flex-direction: column; gap: 0.25rem; flex: 1; min-width: 130px; }
+/* flex:1 on every box meant a lone date field stretched to match however
+   wide the row happened to be -- fine at 780px, a 300px-wide date picker
+   past that. Capped growth here; the search box's own inline flex:2 still
+   wins over this (inline beats a class rule), so it keeps taking the
+   extra room the others give up. */
+@media (min-width: 900px) { .filter-box { flex: 0 1 220px; } }
 .filter-box label {
   font-size: 0.7rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
   color: var(--text-dim); margin-bottom: 0;
@@ -844,6 +903,7 @@ input[type="file"] { min-height: 0; }
 /* ---------- Photos ---------- */
 
 .photo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+@media (min-width: 900px) { .photo-grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); } }
 .photo-slot {
   aspect-ratio: 4 / 3; border: 2px dashed var(--border-strong); border-radius: var(--radius-sm);
   display: flex; align-items: center; justify-content: center; position: relative;
@@ -874,6 +934,12 @@ input[type="file"] { min-height: 0; }
 .thumb-placeholder { font-size: 0.9rem; opacity: 0.5; }
 
 .report-list { display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 5rem; }
+/* Each row is compact (date, badges, one line of notes, actions) -- same
+   reasoning as the bar-list and hub-grid fixes: let a wide screen show
+   more of them side by side instead of stretching one column full width. */
+@media (min-width: 900px) {
+  .report-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(480px, 1fr)); gap: 0.6rem 1rem; align-content: start; }
+}
 .report-row {
   background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius);
   padding: 0.85rem 1rem; display: flex; justify-content: space-between; align-items: center;
@@ -1168,6 +1234,13 @@ input[type="file"] { min-height: 0; }
 }
 
 .bar-list { display: flex; flex-direction: column; gap: 0.9rem; max-height: 560px; overflow-y: auto; padding-right: 0.25rem; }
+/* A single progress bar stretched to ~1300px reads as a thin stripe with
+   nothing to look at either side of it. Two per row keeps each bar a
+   sane width and, same as the card grids elsewhere, actually uses a wide
+   screen instead of just centering the same mobile list in more margin. */
+@media (min-width: 900px) {
+  .bar-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 0.9rem 1.5rem; align-content: start; }
+}
 .bar-row { min-width: 0; }
 .bar-row .br-top {
   display: flex; justify-content: space-between; align-items: center;
