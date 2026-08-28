@@ -13,6 +13,7 @@ const PROJECT_INFO_SHEET = 'PROJECT INFO';
 const PAY_ITEMS_SHEET = 'PAY ITEMS';
 const CONTRACTORS_SHEET = 'CONTRACTORS';
 const EQUIPMENT_ROWS_SHEET = 'EQUIPMENT ROWS';
+const ESTIMATES_SHEET = 'ESTIMATES';
 
 // key: field on project.meta / used to seed a new report.
 // label: the text expected in column A of the PROJECT INFO sheet.
@@ -242,19 +243,60 @@ function parseSingleColumnList(ws, headerLabel, maxCount) {
   return values;
 }
 
+// Reads an ESTIMATE NO. / DATE / NOTE table -- the record of billing
+// checkpoints a project accumulates over time via the Quantity Sheet's
+// "Record New Estimate" button, not something typically hand-authored like
+// the Pay Items sheet. Returns null (not []) when the sheet is missing
+// entirely, so a re-upload of an older file (from before this feature, or
+// just edited without that sheet) doesn't wipe out real billing history --
+// see applyProjectUpdate in defaults.js, which only overwrites on a real []
+// or non-null result, never on null.
+function parseEstimatesSheet(ws) {
+  if (!ws) return null;
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+  let headerIdx = rows.findIndex(
+    (row) => Array.isArray(row) && row.some((c) => c && String(c).trim().toUpperCase().startsWith('ESTIMATE'))
+  );
+  if (headerIdx === -1) headerIdx = 0;
+  const header = rows[headerIdx] || [];
+  const findCol = (labels) => {
+    for (let i = 0; i < header.length; i++) {
+      const h = header[i] ? String(header[i]).trim().toUpperCase() : '';
+      if (labels.includes(h)) return i;
+    }
+    return -1;
+  };
+  const cNo = findCol(['ESTIMATE NO.', 'ESTIMATE NO', 'ESTIMATE #', 'ESTIMATE']);
+  const cDate = findCol(['DATE']);
+  const cNote = findCol(['NOTE', 'NOTES']);
+
+  const estimates = [];
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row) continue;
+    const estimateNo = cNo !== -1 && row[cNo] != null ? String(row[cNo]).trim() : '';
+    const date = cDate !== -1 && row[cDate] != null ? normalizeDateValue(row[cDate]) : '';
+    const note = cNote !== -1 && row[cNote] != null ? String(row[cNote]).trim() : '';
+    if (!estimateNo && !date) continue;
+    estimates.push({ id: crypto.randomUUID(), estimateNo, date, note });
+  }
+  return estimates;
+}
+
 async function parseProjectDataFile(file) {
   const wb = await readWorkbookFromFile(file);
   const meta = parseProjectInfoSheet(findSheet(wb, PROJECT_INFO_SHEET));
   const payItemCatalog = parsePayItemsSheet(findSheet(wb, PAY_ITEMS_SHEET));
   const contractors = parseSingleColumnList(findSheet(wb, CONTRACTORS_SHEET), 'CONTRACTOR NAME', CONTRACTOR_COUNT);
   const equipmentLabels = parseSingleColumnList(findSheet(wb, EQUIPMENT_ROWS_SHEET), 'LABEL', EQUIPMENT_ROW_COUNT);
-  return { meta, payItemCatalog, contractors, equipmentLabels };
+  const billingEstimates = parseEstimatesSheet(findSheet(wb, ESTIMATES_SHEET));
+  return { meta, payItemCatalog, contractors, equipmentLabels, billingEstimates };
 }
 
-// Builds the four-sheet project data workbook. Both the blank example
+// Builds the five-sheet project data workbook. Both the blank example
 // template and the export of a saved project go through here, so the format
 // the app writes can't drift from the format it reads.
-function buildProjectDataWorkbook({ meta, payItemCatalog, contractors, equipmentLabels }) {
+function buildProjectDataWorkbook({ meta, payItemCatalog, contractors, equipmentLabels, billingEstimates }) {
   const wb = XLSX.utils.book_new();
 
   const infoRows = [['FIELD', 'VALUE']];
@@ -294,6 +336,14 @@ function buildProjectDataWorkbook({ meta, payItemCatalog, contractors, equipment
   equipWs['!cols'] = [{ wch: 26 }];
   XLSX.utils.book_append_sheet(wb, equipWs, EQUIPMENT_ROWS_SHEET);
 
+  const estimateRows = [['ESTIMATE NO.', 'DATE', 'NOTE']];
+  (billingEstimates || []).forEach((e) => {
+    estimateRows.push([e.estimateNo || '', e.date || '', e.note || '']);
+  });
+  const estimatesWs = XLSX.utils.aoa_to_sheet(estimateRows);
+  estimatesWs['!cols'] = [{ wch: 14 }, { wch: 14 }, { wch: 40 }];
+  XLSX.utils.book_append_sheet(wb, estimatesWs, ESTIMATES_SHEET);
+
   return wb;
 }
 
@@ -326,6 +376,9 @@ function downloadProjectDataTemplate() {
     ],
     contractors: ['ABC Trucking', 'XYZ Barricades'],
     equipmentLabels: DEFAULT_EQUIPMENT_LABELS,
+    billingEstimates: [
+      { id: crypto.randomUUID(), estimateNo: '001', date: '2026-07-15', note: 'First pay estimate' },
+    ],
   });
   writeProjectWorkbook(wb, 'ProjectData_Template.xlsx');
 }
@@ -339,6 +392,7 @@ function downloadProjectDataFile(project) {
     payItemCatalog: project.payItemCatalog,
     contractors: project.defaultContractors,
     equipmentLabels: project.defaultEquipmentLabels,
+    billingEstimates: project.billingEstimates,
   });
   const slug = String(project.name || project.meta.projectNo || 'project')
     .replace(/[^A-Za-z0-9]+/g, '_')

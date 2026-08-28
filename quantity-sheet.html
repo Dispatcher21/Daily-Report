@@ -37,13 +37,46 @@
       <div class="segmented" id="range-mode-picker">
         <button type="button" data-mode="range">Date Range</button>
         <button type="button" data-mode="all">All Reports</button>
+        <button type="button" data-mode="estimate">By Estimate</button>
       </div>
 
       <div class="field-grid" id="range-fields" style="margin-top:0.75rem;">
         <label>From <input type="date" id="f-date-from"></label>
         <label>To <input type="date" id="f-date-to"></label>
       </div>
+      <div id="range-estimate-field" style="margin-top:0.75rem;" hidden>
+        <label>Estimate <select id="f-estimate"></select></label>
+      </div>
       <p class="hint" id="range-summary" style="margin-bottom:0;"></p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-header">
+      <span class="step-num">BILLING</span>
+      <h2>Estimates</h2>
+    </div>
+    <div class="step-body">
+      <p class="hint" style="margin-top:0;">Record a checkpoint each time a pay estimate goes out, so the quantities billed since the last one -- and since the start -- stay on file.</p>
+      <div id="estimate-history"></div>
+      <div class="field-grid" id="estimate-form" style="margin-top:0.75rem;">
+        <label>Estimate No. <input type="text" id="f-est-no"></label>
+        <label>Date <input type="date" id="f-est-date"></label>
+        <label>Note (optional) <input type="text" id="f-est-note" placeholder="e.g. Pay estimate 3"></label>
+      </div>
+      <button type="button" class="btn-secondary" id="btn-record-estimate" style="margin-top:0.5rem;">+ Record New Estimate</button>
+      <p class="hint" id="estimate-error" style="color:var(--danger);" hidden></p>
+    </div>
+  </div>
+
+  <div class="step" id="period-step" hidden>
+    <div class="step-header">
+      <span class="step-num">PERIOD</span>
+      <h2>This Billing Period</h2>
+    </div>
+    <div class="step-body">
+      <p class="hint" id="period-summary" style="margin-top:0;"></p>
+      <div id="period-items"></div>
     </div>
   </div>
 
@@ -91,7 +124,8 @@ const projectId = queryParam('project');
 const preselectedIds = new Set((queryParam('report') || '').split(',').filter(Boolean));
 let project = null;
 let allReports = [];
-let rangeMode = 'range'; // 'range' | 'all'
+let rangeMode = 'range'; // 'range' | 'all' | 'estimate'
+let selectedEstimateId = null;
 
 async function init() {
   project = projectId ? await getProject(projectId) : null;
@@ -123,21 +157,52 @@ async function init() {
     rangeMode = 'all'; // nothing has a date at all -- a range can never match anything
   }
 
+  renderEstimateHistory();
+  $('#f-est-no').value = nextEstimateNo(project.billingEstimates);
+  $('#f-est-date').value = todayIso();
   renderRangeMode();
+}
+
+function reportsBetween(from, to) {
+  if (!from && !to) return allReports.filter((r) => r.date);
+  return allReports.filter((r) => r.date && (!from || r.date >= from) && (!to || r.date <= to));
 }
 
 function selectedReports() {
   if (rangeMode === 'all') return allReports;
+  if (rangeMode === 'estimate') {
+    const bounds = selectedEstimateId ? estimatePeriodBounds(project.billingEstimates, selectedEstimateId) : null;
+    if (!bounds) return [];
+    return reportsBetween(bounds.cumulativeFrom, bounds.cumulativeTo);
+  }
   const from = $('#f-date-from').value;
   const to = $('#f-date-to').value;
   if (!from && !to) return [];
-  return allReports.filter((r) => r.date && (!from || r.date >= from) && (!to || r.date <= to));
+  return reportsBetween(from, to);
 }
 
 function renderRangeMode() {
   $$('#range-mode-picker button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === rangeMode)));
-  $('#range-fields').style.display = rangeMode === 'all' ? 'none' : '';
+  $('#range-fields').style.display = rangeMode === 'range' ? '' : 'none';
+  $('#range-estimate-field').hidden = rangeMode !== 'estimate';
+  if (rangeMode === 'estimate') renderEstimateSelect();
   updateControls();
+}
+
+function renderEstimateSelect() {
+  const sorted = sortedEstimates(project.billingEstimates);
+  const select = $('#f-estimate');
+  if (sorted.length === 0) {
+    select.innerHTML = '<option value="">No estimates recorded yet</option>';
+    selectedEstimateId = null;
+    return;
+  }
+  if (!selectedEstimateId || !sorted.some((e) => e.id === selectedEstimateId)) {
+    selectedEstimateId = sorted[sorted.length - 1].id; // most recent by default
+  }
+  select.innerHTML = sorted
+    .map((e) => `<option value="${e.id}"${e.id === selectedEstimateId ? ' selected' : ''}>Estimate ${escapeHtml(e.estimateNo)} &middot; ${e.date}${e.note ? ' — ' + escapeHtml(e.note) : ''}</option>`)
+    .join('');
 }
 
 function updateControls() {
@@ -147,6 +212,10 @@ function updateControls() {
     $('#range-summary').textContent = 'No reports in this project yet.';
   } else if (rangeMode === 'all') {
     $('#range-summary').textContent = `${n} report(s) -- every report in this project.`;
+  } else if (rangeMode === 'estimate') {
+    $('#range-summary').textContent = selectedEstimateId
+      ? `${n} report(s) from the start of the project through this estimate's date.`
+      : 'Record an estimate below to select one.';
   } else if (n === 0) {
     $('#range-summary').textContent = 'No reports fall in that range.';
   } else {
@@ -155,6 +224,114 @@ function updateControls() {
   $('#btn-generate').disabled = n === 0;
   $('#btn-generate').textContent = n > 1 ? `Download as Excel (${n} reports)` : 'Download as Excel';
   renderQuantityTotals();
+  renderPeriodSection();
+}
+
+// ---------- Billing estimates ----------
+
+function renderEstimateHistory() {
+  const sorted = sortedEstimates(project.billingEstimates).slice().reverse(); // newest first
+  const container = $('#estimate-history');
+  if (sorted.length === 0) {
+    container.innerHTML = '<p class="hint" style="margin:0;">No estimates recorded yet.</p>';
+    return;
+  }
+  container.innerHTML = `
+    <table class="estimate-table">
+      <thead><tr><th>Estimate</th><th>Date</th><th>Note</th><th></th></tr></thead>
+      <tbody>
+        ${sorted.map((e) => `
+          <tr>
+            <td>${escapeHtml(e.estimateNo)}</td>
+            <td>${e.date}</td>
+            <td>${escapeHtml(e.note || '')}</td>
+            <td><button type="button" class="text-btn est-remove" data-id="${e.id}" style="color:var(--danger);">&times;</button></td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+  $$('.est-remove', container).forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      project.billingEstimates = (project.billingEstimates || []).filter((e) => e.id !== btn.dataset.id);
+      await saveProject(project);
+      renderEstimateHistory();
+      if (rangeMode === 'estimate') renderRangeMode();
+    });
+  });
+}
+
+$('#btn-record-estimate').addEventListener('click', async () => {
+  const estimateNo = $('#f-est-no').value.trim();
+  const date = $('#f-est-date').value;
+  const note = $('#f-est-note').value.trim();
+  $('#estimate-error').hidden = true;
+  if (!estimateNo || !date) {
+    $('#estimate-error').textContent = 'Estimate No. and Date are both required.';
+    $('#estimate-error').hidden = false;
+    return;
+  }
+  if (!project.billingEstimates) project.billingEstimates = [];
+  const newEstimate = { id: crypto.randomUUID(), estimateNo, date, note };
+  project.billingEstimates.push(newEstimate);
+  await saveProject(project);
+  renderEstimateHistory();
+  $('#f-est-no').value = '';
+  $('#f-est-date').value = '';
+  $('#f-est-note').value = '';
+  $('#f-est-no').value = nextEstimateNo(project.billingEstimates);
+  if (rangeMode === 'estimate') {
+    selectedEstimateId = newEstimate.id;
+    renderRangeMode();
+  }
+});
+
+$('#f-estimate').addEventListener('change', (e) => {
+  selectedEstimateId = e.target.value || null;
+  updateControls();
+});
+
+// ---------- This Billing Period ----------
+
+function renderPeriodSection() {
+  const step = $('#period-step');
+  if (rangeMode !== 'estimate' || !selectedEstimateId) {
+    step.hidden = true;
+    return;
+  }
+  const bounds = estimatePeriodBounds(project.billingEstimates, selectedEstimateId);
+  if (!bounds) {
+    step.hidden = true;
+    return;
+  }
+  step.hidden = false;
+  const periodReports = reportsBetween(bounds.periodFrom, bounds.periodTo);
+  const flat = periodReports.flatMap((r) => (r.payItems || []).filter((it) => it && String(it.itemNumber || '').trim() !== ''));
+  const items = aggregatePayItemTotals(flat, project.payItemCatalog).filter((it) => it.total);
+  const { totalEarned } = contractValueSummary(items);
+
+  const rangeDesc = bounds.prevEstimate
+    ? `since Estimate ${escapeHtml(bounds.prevEstimate.estimateNo)} (${bounds.prevEstimate.date})`
+    : 'since the start of the project (first estimate on file)';
+  $('#period-summary').textContent = `${periodReports.length} report(s) ${rangeDesc}, through ${bounds.estimate.date}.` +
+    (totalEarned != null ? ` ${fmtMoney(totalEarned)} billed this period.` : '');
+
+  const container = $('#period-items');
+  if (items.length === 0) {
+    container.innerHTML = '<p class="hint" style="margin:0;">No pay items logged this period.</p>';
+    return;
+  }
+  container.innerHTML = `
+    <table class="estimate-table">
+      <thead><tr><th>Item</th><th>Description</th><th>Qty This Period</th><th>$ Billed</th></tr></thead>
+      <tbody>
+        ${sortPayItems(items, 'item-number').map((it) => `
+          <tr>
+            <td>${escapeHtml(it.itemNumber)}</td>
+            <td>${escapeHtml(it.description)}</td>
+            <td>${it.total.toLocaleString()} ${escapeHtml(it.unit || '')}</td>
+            <td>${it.earnedTotal != null ? fmtMoney(it.earnedTotal) : '—'}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
 }
 
 // ---------- Totals view (same visual language as project.html's Pay Item

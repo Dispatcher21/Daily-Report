@@ -226,6 +226,42 @@ const PI_BAND_LABELS = {
   'status-near': 'Near/Complete', 'status-over': 'Over Plan', 'status-none': 'No Target',
 };
 
+// Estimates in date order (oldest first) -- the order billing periods
+// actually happened in, regardless of what order they were recorded in or
+// how their Estimate No. text sorts.
+function sortedEstimates(billingEstimates) {
+  return (billingEstimates || []).slice().sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+}
+
+function nextDayIso(iso) {
+  const d = new Date(`${iso}T00:00:00`);
+  d.setDate(d.getDate() + 1);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+// The two date ranges one billing checkpoint implies: "cumulative" is
+// everything up through this estimate's date (from project start), the
+// figure a contractor's running total gets checked against; "period" is
+// just what's new since the *previous* estimate -- the actual delta being
+// billed this time. The first estimate on file has no previous one, so its
+// period equals its cumulative range.
+function estimatePeriodBounds(billingEstimates, estimateId) {
+  const sorted = sortedEstimates(billingEstimates);
+  const idx = sorted.findIndex((e) => e.id === estimateId);
+  if (idx === -1) return null;
+  const estimate = sorted[idx];
+  const prevEstimate = idx > 0 ? sorted[idx - 1] : null;
+  return {
+    estimate,
+    prevEstimate,
+    cumulativeFrom: null,
+    cumulativeTo: estimate.date,
+    periodFrom: prevEstimate ? nextDayIso(prevEstimate.date) : null,
+    periodTo: estimate.date,
+  };
+}
+
 // Also shared by project.html's Pay Item Completion list and
 // quantity-sheet.html's totals view -- same sort options, same behavior,
 // wherever a list of aggregated pay items shows up.

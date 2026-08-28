@@ -635,6 +635,11 @@ input[type="file"] { min-height: 0; }
 }
 
 .hint { font-size: 0.8rem; font-weight: 400; color: var(--text-dim); margin: 0.25rem 0 0; }
+
+.estimate-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.estimate-table th, .estimate-table td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border); }
+.estimate-table th { color: var(--text-dim); font-weight: 600; font-size: 0.8rem; }
+.estimate-table td:last-child { text-align: right; }
 .warn {
   background: var(--warn-bg); border: 1px solid var(--warn-border);
   border-radius: var(--radius-sm); padding: 0.7rem 0.85rem; font-size: 0.82rem;

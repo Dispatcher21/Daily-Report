@@ -271,6 +271,7 @@ function makeProjectFromParsedFile(parsed) {
     defaultContractors: parsed.contractors || [],
     defaultEquipmentLabels: parsed.equipmentLabels || [],
     payItemCatalog: parsed.payItemCatalog || [],
+    billingEstimates: parsed.billingEstimates || [],
     requiredFields: [],
     hiddenFields: [],
     fieldOrder: [],
@@ -309,7 +310,28 @@ function applyProjectUpdate(existing, candidate) {
     payItemCatalog: candidate.payItemCatalog,
     defaultContractors: candidate.defaultContractors,
     defaultEquipmentLabels: candidate.defaultEquipmentLabels,
+    // Billing estimates are accumulated over time from the Quantity Sheet's
+    // "Record New Estimate" button, not authored up front like the rest of
+    // this file -- a re-upload only overwrites them when the file actually
+    // has an ESTIMATES sheet (candidate.billingEstimates non-null), so
+    // re-importing an older export never silently erases real billing
+    // history (see parseEstimatesSheet in project-file.js).
+    billingEstimates: candidate.billingEstimates != null ? candidate.billingEstimates : existing.billingEstimates,
   };
+}
+
+// Next Estimate No. to suggest when recording a new billing checkpoint --
+// one past the highest existing number, formatted with the same digit
+// width as the one it follows (so "001" stays "002", not "2"). Purely a
+// suggestion; the field stays editable.
+function nextEstimateNo(billingEstimates) {
+  const nums = (billingEstimates || [])
+    .map((e) => e.estimateNo || '')
+    .filter((s) => /^\d+$/.test(s));
+  if (nums.length === 0) return '001';
+  const widest = nums.reduce((a, b) => (b.length > a.length ? b : a));
+  const max = Math.max(...nums.map(Number));
+  return String(max + 1).padStart(widest.length, '0');
 }
 
 // ---------- Required-field definitions ----------
