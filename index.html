@@ -438,6 +438,13 @@ function renderMdTrendChart(projectStats, included, reports, today) {
     const ntpDate = project.meta.ntpDate;
     const points = progressOverTime(reports.filter((r) => r.projectId === project.id && r.date), project.payItemCatalog || [])
       .map((p) => ({ ...p, day: Math.max(0, daysBetween(ntpDate, p.date)) }));
+    // The line should always reach all the way back to NTP (day 0, 0%
+    // complete) even when the earliest dated report came well after it --
+    // nothing done yet as of NTP is a safe assumption, and without this the
+    // line would start wherever the first report happened to land instead.
+    if (points.length && points[0].day > 0) {
+      points.unshift({ date: ntpDate, day: 0, pct: 0, earned: 0, synthetic: true });
+    }
     return { label: project.name, color: TREND_LINE_COLORS[i % TREND_LINE_COLORS.length], points, maxDay: daysBetween(ntpDate, today) };
   }).filter((s) => s.points.length > 0);
 

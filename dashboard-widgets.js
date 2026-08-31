@@ -251,13 +251,23 @@ function renderTrendSvg(container, series, opts) {
         const areaPath = `M${coords[0][0]},${padT + innerH} L${coords.map((c) => c.join(',')).join(' L')} L${coords[coords.length - 1][0]},${padT + innerH} Z`;
         pathSection = `<path d="${areaPath}" class="trend-area"></path><path d="${linePath}" class="trend-line"></path>`;
       } else {
-        pathSection = `<path d="${linePath}" class="trend-line" style="stroke:${color}"></path>`;
+        // One <path> per segment rather than a single continuous one, so a
+        // segment leading out of a synthetic point (a project's assumed 0%
+        // at NTP, stood in for a real report -- see renderMdTrendChart) can
+        // be dashed to mark it as "not an actual data point" while the rest
+        // of the line stays solid.
+        pathSection = coords.slice(1).map((c, i) => {
+          const dashed = s.points[i].synthetic ? ' stroke-dasharray:5,4;' : '';
+          return `<path d="M${coords[i].join(',')} L${c.join(',')}" class="trend-line" style="stroke:${color};${dashed}"></path>`;
+        }).join('');
       }
     }
     const dots = s.points.map((p, i) => {
       const [cx, cy] = coords[i];
       const when = daysMode ? `Day ${p.day} (${p.date})` : p.date;
-      const tip = `${s.label ? s.label + ' — ' : ''}${when}: ${p.pct != null ? (p.pct * 100).toFixed(1) + '% complete' : 'no target set yet'}${p.earned != null ? ', ' + fmtMoney(p.earned) + ' earned' : ''}`;
+      const tip = p.synthetic
+        ? `${s.label ? s.label + ' — ' : ''}NTP (${p.date}): assumed 0% complete, no report on file yet`
+        : `${s.label ? s.label + ' — ' : ''}${when}: ${p.pct != null ? (p.pct * 100).toFixed(1) + '% complete' : 'no target set yet'}${p.earned != null ? ', ' + fmtMoney(p.earned) + ' earned' : ''}`;
       // daysMode (the Manager Dashboard's multi-project chart) draws lines
       // only -- visible dots at every report date were noise once several
       // projects' lines were overlapping. The circle still exists, just
