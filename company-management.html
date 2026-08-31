@@ -38,6 +38,32 @@
   }
   .cc-chip button { all: unset; cursor: pointer; line-height: 1; font-size: 0.95rem; color: var(--text-dim); padding: 0 0.15rem; }
   .cc-chip button:hover { color: var(--danger); }
+
+  /* A sub-header inside one step-body, for the Passwords & Access card's
+     several distinct sub-sections -- .eyebrow is for dividing top-level
+     page sections, one size too loud to repeat this many times in a row
+     inside a single card. */
+  .cm-sub-eyebrow {
+    font-size: 0.78rem; font-weight: 700; color: var(--text-dim); letter-spacing: 0.04em; text-transform: uppercase;
+    margin: 1.4rem 0 0.6rem; padding-bottom: 0.3rem; border-bottom: 1px solid var(--border);
+  }
+  .cm-sub-eyebrow:first-child { margin-top: 0; }
+
+  .cm-password-grid { display: flex; flex-direction: column; gap: 1.5rem; }
+  .cm-password-col h3 { font-size: 0.95rem; margin: 0 0 0.4rem; }
+  @media (min-width: 900px) {
+    .cm-password-grid { flex-direction: row; gap: 2rem; }
+    .cm-password-col { flex: 1 1 0; min-width: 0; }
+  }
+
+  .cm-pw-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+    padding: 0.6rem 0; border-bottom: 1px solid var(--border);
+  }
+  .cm-pw-row:last-child { border-bottom: none; }
+  .cm-pw-label { font-weight: 600; font-size: 0.85rem; }
+  .cm-pw-value { font-family: monospace; font-size: 1rem; user-select: all; }
+  .cm-pw-value.cm-pw-none { font-family: inherit; font-size: 0.8rem; color: var(--text-dim); font-style: italic; user-select: none; }
 </style>
 </head>
 <body>
@@ -171,11 +197,18 @@
 
   <div class="step">
     <div class="step-header">
-      <span class="step-num">CUSTOM</span>
-      <h2>Custom Setups</h2>
+      <span class="step-num">SECURITY</span>
+      <h2>Passwords &amp; Access</h2>
     </div>
     <div class="step-body">
-      <p class="hint" style="margin-top:0;">A named, project-scoped password -- e.g. an inspector who should only ever see one project. Same permission options as above, applied only within the project(s) checked below.</p>
+
+      <div class="cm-sub-eyebrow">Saved Passwords</div>
+      <p class="hint" style="margin-top:0;">The company password and every custom setup's password, kept in a form only someone who knows the admin password can read back -- an alternative to writing them down. Confirmed fresh every time, never remembered on this device.</p>
+      <button type="button" class="btn-secondary" id="btn-reveal-passwords">View Saved Passwords</button>
+      <div id="cm-passwords-list" hidden></div>
+
+      <div class="cm-sub-eyebrow">Custom Setups</div>
+      <p class="hint" style="margin-top:0;">A named, project-scoped password -- e.g. an inspector who should only ever see one project. Same permission options as Member Permissions above, applied only within the project(s) checked below.</p>
 
       <div id="cs-list-empty" class="empty-state" hidden style="padding:1.25rem;">No custom setups yet.</div>
       <div id="cs-list"></div>
@@ -223,45 +256,37 @@
       </details>
 
       <div id="cs-created-box" class="success" hidden style="margin-top:0.9rem;"></div>
-    </div>
-  </div>
 
-  <div class="step-pair">
-  <div class="step">
-    <div class="step-header">
-      <span class="step-num">SECURITY</span>
-      <h2>Admin Password</h2>
-    </div>
-    <div class="step-body">
-      <p class="hint" style="margin-top:0;">Changes who can unlock admin access on a device -- doesn't affect anyone already unlocked, and doesn't affect the company password below.</p>
-      <label>New Admin Password
-        <input type="password" id="cm-admin-password" autocomplete="new-password">
-      </label>
-      <label>Confirm New Admin Password
-        <input type="password" id="cm-admin-password-confirm" autocomplete="new-password">
-      </label>
-      <button type="button" class="btn-primary" id="btn-change-admin-password" style="margin-top:0.5rem;">Change Admin Password</button>
-    </div>
-  </div>
+      <div class="cm-sub-eyebrow">Change Passwords</div>
+      <div class="cm-password-grid">
+        <div class="cm-password-col" id="cm-admin-password-col">
+          <h3>Admin Password</h3>
+          <p class="hint" style="margin-top:0;">Changes who can unlock admin access on a device -- doesn't affect anyone already unlocked, and doesn't affect the company password. You'll be asked to confirm the current admin password to make this change.</p>
+          <label>New Admin Password
+            <input type="password" id="cm-admin-password" autocomplete="new-password">
+          </label>
+          <label>Confirm New Admin Password
+            <input type="password" id="cm-admin-password-confirm" autocomplete="new-password">
+          </label>
+          <button type="button" class="btn-primary" id="btn-change-admin-password" style="margin-top:0.5rem;">Change Admin Password</button>
+        </div>
 
-  <div class="step">
-    <div class="step-header">
-      <span class="step-num">SECURITY</span>
-      <h2>Company Password</h2>
-    </div>
-    <div class="step-body">
-      <div class="warn" style="margin-top:0;">
-        Every other device stays on the old password until someone manually opens Settings &rarr; Leave This Company, then rejoins with the new one. There's no way to push the change to them automatically -- tell your team before (or right after) you do this. Nothing already synced is lost either way; a device just won't sync anything new until it rejoins.
+        <div class="cm-password-col" id="cm-company-password-col">
+          <h3>Company Password</h3>
+          <div class="warn" style="margin-top:0;">
+            Every other device stays on the old password until someone manually opens Settings &rarr; Leave This Company, then rejoins with the new one. There's no way to push the change to them automatically -- tell your team before (or right after) you do this. Nothing already synced is lost either way; a device just won't sync anything new until it rejoins.
+          </div>
+          <label>New Company Password
+            <input type="password" id="cm-company-password" autocomplete="new-password">
+          </label>
+          <label>Confirm New Company Password
+            <input type="password" id="cm-company-password-confirm" autocomplete="new-password">
+          </label>
+          <button type="button" class="btn-primary" id="btn-change-company-password" style="margin-top:0.5rem;">Change Company Password</button>
+        </div>
       </div>
-      <label>New Company Password
-        <input type="password" id="cm-company-password" autocomplete="new-password">
-      </label>
-      <label>Confirm New Company Password
-        <input type="password" id="cm-company-password-confirm" autocomplete="new-password">
-      </label>
-      <button type="button" class="btn-primary" id="btn-change-company-password" style="margin-top:0.5rem;">Change Company Password</button>
+
     </div>
-  </div>
   </div>
 
   <div id="cm-status" class="hint" style="margin-top:0.75rem;" hidden></div>
@@ -288,6 +313,23 @@ function cmError(text) {
   const el = $('#cm-error');
   el.textContent = text;
   el.hidden = !text;
+}
+
+// A plain in-memory variable, not a setting -- gone the moment this page is
+// left or reloaded, so an admin password never gets "carried over from a
+// cookie or such" the way a real session token would. Verified fresh
+// against the real hash the first time it's needed each visit (via
+// unlockCompanyAdmin, which throws on a wrong one), then reused for the
+// rest of that same visit so creating a setup and rotating a password back
+// to back doesn't mean typing it in twice.
+let cachedAdminPassword = null;
+async function requireAdminPassword(promptText) {
+  if (cachedAdminPassword) return cachedAdminPassword;
+  const pw = prompt(promptText || 'Enter the admin password to continue:');
+  if (!pw) throw new Error('Admin password required.');
+  await unlockCompanyAdmin(pw); // throws 'Incorrect admin password.' on a mismatch
+  cachedAdminPassword = pw;
+  return pw;
 }
 
 let cmLogoPreviewUrl = null;
@@ -624,7 +666,8 @@ $('#btn-create-setup').addEventListener('click', async () => {
 
   btn.disabled = true;
   try {
-    const result = await createCustomRole({ name, password: pw, permissions, projectIds });
+    const adminPassword = await requireAdminPassword();
+    const result = await createCustomRole({ name, password: pw, permissions, projectIds, adminPassword });
     $('#cs-name').value = '';
     $('#cs-password').value = '';
     $('#cs-password-confirm').value = '';
@@ -645,9 +688,44 @@ $('#btn-create-setup').addEventListener('click', async () => {
   }
 });
 
+// ---------- Saved passwords ----------
+
+$('#btn-reveal-passwords').addEventListener('click', async () => {
+  const btn = $('#btn-reveal-passwords');
+  const box = $('#cm-passwords-list');
+  if (!box.hidden) {
+    box.hidden = true;
+    box.innerHTML = '';
+    btn.textContent = 'View Saved Passwords';
+    return;
+  }
+
+  cmError('');
+  btn.disabled = true;
+  try {
+    const adminPassword = await requireAdminPassword('Enter the admin password to view saved passwords:');
+    const { companyPassword, roles } = await getRecoverablePasswords(adminPassword);
+    const rowHtml = (label, password) => `
+      <div class="cm-pw-row">
+        <span class="cm-pw-label">${escapeHtml(label)}</span>
+        <span class="cm-pw-value${password == null ? ' cm-pw-none' : ''}">${
+          password == null ? 'Not available -- set before this feature existed. Rotate it to save a recoverable copy.' : escapeHtml(password)
+        }</span>
+      </div>`;
+    box.innerHTML = rowHtml('Company Password', companyPassword) + roles.map((r) => rowHtml(r.name, r.password)).join('');
+    box.hidden = false;
+    btn.textContent = 'Hide Saved Passwords';
+  } catch (err) {
+    console.error(err);
+    cmError(userError("Couldn't view saved passwords: " + err.message, 'VIEW_PASSWORDS'));
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 // ---------- Admin password ----------
 
-onEnterSubmit($('#cm-admin-password').closest('.step-body'), $('#btn-change-admin-password'));
+onEnterSubmit($('#cm-admin-password-col'), $('#btn-change-admin-password'));
 
 $('#btn-change-admin-password').addEventListener('click', async () => {
   const btn = $('#btn-change-admin-password');
@@ -658,7 +736,9 @@ $('#btn-change-admin-password').addEventListener('click', async () => {
 
   btn.disabled = true;
   try {
-    await changeCompanyAdminPassword(pw);
+    const currentAdminPassword = await requireAdminPassword('Enter the CURRENT admin password to confirm this change:');
+    await changeCompanyAdminPassword(currentAdminPassword, pw);
+    cachedAdminPassword = pw; // the cached one just became stale -- it's this device's own next admin action now
     $('#cm-admin-password').value = '';
     $('#cm-admin-password-confirm').value = '';
     cmStatus('Admin password changed.');
@@ -670,7 +750,7 @@ $('#btn-change-admin-password').addEventListener('click', async () => {
   }
 });
 
-onEnterSubmit($('#cm-company-password').closest('.step-body'), $('#btn-change-company-password'));
+onEnterSubmit($('#cm-company-password-col'), $('#btn-change-company-password'));
 
 $('#btn-change-company-password').addEventListener('click', async () => {
   const btn = $('#btn-change-company-password');
@@ -687,10 +767,18 @@ $('#btn-change-company-password').addEventListener('click', async () => {
   )) return;
 
   btn.disabled = true;
+  let adminPassword;
+  try {
+    adminPassword = await requireAdminPassword();
+  } catch (err) {
+    cmError(userError(err.message, 'COMPANY_PASSWORD'));
+    btn.disabled = false;
+    return;
+  }
   startProgressBanner();
   progressStep('starting', 'Getting ready');
   try {
-    await changeCompanyPassword(pw, reportCompanyProgress);
+    await changeCompanyPassword(pw, adminPassword, reportCompanyProgress);
     $('#cm-company-password').value = '';
     $('#cm-company-password-confirm').value = '';
     finishProgressBanner('Your new address is ready! Tell your team to rejoin with the new password.');

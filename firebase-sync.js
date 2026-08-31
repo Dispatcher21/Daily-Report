@@ -82,6 +82,68 @@ async function hashText(text) {
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+// ---------- Recoverable passwords ----------
+//
+// Every password in this app is otherwise only ever stored as a one-way
+// hash (see hashText above) -- by design, there's no way to look one back
+// up. This is the one deliberate exception: an admin can optionally keep a
+// recoverable copy of the company password and each custom setup's
+// password, so there's an alternative to writing them down on paper.
+// Encrypted with a key derived from the ADMIN password specifically (never
+// stored, only ever entered fresh -- see requireAdminPassword in
+// company-management.html), not the password being recovered -- a raw
+// Firestore data leak alone still yields nothing readable; actually
+// recovering one of these requires knowing the admin password too, which is
+// already the one secret this whole app treats as the root of trust.
+const PBKDF2_ITERATIONS = 250000;
+
+function bytesToBase64(bytes) {
+  let binary = '';
+  bytes.forEach((b) => { binary += String.fromCharCode(b); });
+  return btoa(binary);
+}
+function base64ToBytes(b64) {
+  return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+}
+
+async function deriveAdminKey(adminPassword, saltB64) {
+  const salt = saltB64 ? base64ToBytes(saltB64) : crypto.getRandomValues(new Uint8Array(16));
+  const keyMaterial = await crypto.subtle.importKey('raw', new TextEncoder().encode(adminPassword), 'PBKDF2', false, ['deriveKey']);
+  const key = await crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+  return { key, salt };
+}
+
+async function encryptWithAdminPassword(adminPassword, plaintext) {
+  const { key, salt } = await deriveAdminKey(adminPassword);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(plaintext));
+  return { salt: bytesToBase64(salt), iv: bytesToBase64(iv), ciphertext: bytesToBase64(new Uint8Array(ciphertext)) };
+}
+
+// Throws if adminPassword doesn't match what encRecord was encrypted with --
+// AES-GCM's built-in auth tag makes that check free, no separate hash
+// comparison needed.
+async function decryptWithAdminPassword(adminPassword, encRecord) {
+  if (!encRecord) return null;
+  const { key } = await deriveAdminKey(adminPassword, encRecord.salt);
+  try {
+    const plainBuf = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: base64ToBytes(encRecord.iv) },
+      key,
+      base64ToBytes(encRecord.ciphertext)
+    );
+    return new TextDecoder().decode(plainBuf);
+  } catch (err) {
+    throw new Error('Incorrect admin password.');
+  }
+}
+
 // Waits for firebase-init.js's module script to finish loading and expose
 // window.FirebaseCore, in case this runs before that (both are plain
 // <script> tags; module scripts execute after classic ones).
@@ -126,6 +188,7 @@ async function createCompanyRoom({ name, password, adminPassword }, onProgress) 
   await setDoc(doc(db, 'companies', code), {
     name: name || '',
     adminPasswordHash: await hashText(adminPassword),
+    companyPasswordEnc: await encryptWithAdminPassword(adminPassword, password),
     permissions: DEFAULT_PERMISSIONS,
     createdAt: serverTimestamp(),
   });
@@ -399,11 +462,12 @@ async function updateCompanyName(name) {
 // orphaned room sitting unused in Firestore. There is no way to push the
 // new password to other devices automatically -- the caller is responsible
 // for telling every other device to Leave and rejoin with it.
-async function changeCompanyPassword(newPassword, onProgress) {
+async function changeCompanyPassword(newPassword, adminPassword, onProgress) {
   const room = await getCompanyRoom();
   if (!room) throw new Error('Not connected to a company.');
   if (!room.isAdmin) throw new Error('Only an admin can change the company password.');
   if (!newPassword) throw new Error('Enter a new company password.');
+  if (!adminPassword) throw new Error('Enter the admin password.');
 
   const { db, ensureSignedIn } = await waitForFirebaseCore();
   const { doc, getDoc, setDoc, serverTimestamp } = await import(FIRESTORE_SDK);
@@ -418,12 +482,16 @@ async function changeCompanyPassword(newPassword, onProgress) {
 
   const oldSnap = await getDoc(doc(db, 'companies', room.code));
   const oldData = oldSnap.exists() ? oldSnap.data() : {};
+  if (!oldData.adminPasswordHash || (await hashText(adminPassword)) !== oldData.adminPasswordHash) {
+    throw new Error('Incorrect admin password.');
+  }
 
   const newCode = await hashText(newPassword);
   if (onProgress) onProgress({ phase: 'creating' });
   await setDoc(doc(db, 'companies', newCode), {
     name: oldData.name || '',
     adminPasswordHash: oldData.adminPasswordHash,
+    companyPasswordEnc: await encryptWithAdminPassword(adminPassword, newPassword),
     permissions: oldData.permissions || DEFAULT_PERMISSIONS,
     createdAt: serverTimestamp(),
   });
@@ -440,17 +508,48 @@ async function changeCompanyPassword(newPassword, onProgress) {
   return { oldCode: room.code, newCode };
 }
 
-async function changeCompanyAdminPassword(newAdminPassword) {
+// Everything recoverable (the company password, every custom setup's
+// password) is encrypted under a key derived from the admin password --
+// changing it orphans all of that unless each one gets decrypted with the
+// OLD admin password and re-encrypted under the new one here, in the same
+// breath as the hash itself changes. That's why this needs the current
+// admin password as an input, not just the new one -- unlike before this
+// feature existed, when nothing but the hash depended on it.
+async function changeCompanyAdminPassword(currentAdminPassword, newAdminPassword) {
   const room = await getCompanyRoom();
   if (!room) throw new Error('Not connected to a company.');
   if (!room.isAdmin) throw new Error('Only an admin can change the admin password.');
+  if (!currentAdminPassword) throw new Error('Enter the current admin password.');
   if (!newAdminPassword) throw new Error('Enter a new admin password.');
 
   const { db, ensureSignedIn } = await waitForFirebaseCore();
-  const { doc, updateDoc } = await import(FIRESTORE_SDK);
+  const { doc, getDoc, updateDoc, collection, getDocs } = await import(FIRESTORE_SDK);
   await ensureSignedIn();
 
-  await updateDoc(doc(db, 'companies', room.code), { adminPasswordHash: await hashText(newAdminPassword) });
+  const companyRef = doc(db, 'companies', room.code);
+  const companySnap = await getDoc(companyRef);
+  const companyData = companySnap.exists() ? companySnap.data() : {};
+  if (!companyData.adminPasswordHash || (await hashText(currentAdminPassword)) !== companyData.adminPasswordHash) {
+    throw new Error('Incorrect current admin password.');
+  }
+
+  const rolesSnap = await getDocs(collection(db, 'companies', room.code, 'roles'));
+
+  const companyUpdate = { adminPasswordHash: await hashText(newAdminPassword) };
+  if (companyData.companyPasswordEnc) {
+    const plainCompanyPassword = await decryptWithAdminPassword(currentAdminPassword, companyData.companyPasswordEnc);
+    companyUpdate.companyPasswordEnc = await encryptWithAdminPassword(newAdminPassword, plainCompanyPassword);
+  }
+  await updateDoc(companyRef, companyUpdate);
+
+  for (const roleDoc of rolesSnap.docs) {
+    const roleData = roleDoc.data();
+    if (!roleData.passwordEnc) continue;
+    const plainRolePassword = await decryptWithAdminPassword(currentAdminPassword, roleData.passwordEnc);
+    await updateDoc(doc(db, 'companies', room.code, 'roles', roleDoc.id), {
+      passwordEnc: await encryptWithAdminPassword(newAdminPassword, plainRolePassword),
+    });
+  }
 }
 
 // ---------- Custom setups ----------
@@ -476,18 +575,28 @@ async function listCustomRoles() {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
-// Returns the password so the caller can show it once -- there is no way
-// to retrieve it again after this, same as the company/admin passwords.
-async function createCustomRole({ name, password, permissions, projectIds }) {
+// Returns the password so the caller can show it once. adminPassword is
+// used only to encrypt a recoverable copy for later (see "Recoverable
+// passwords" above) -- verified against the room's own hash first, so a
+// typo there fails loudly now instead of silently producing an
+// unrecoverable copy.
+async function createCustomRole({ name, password, permissions, projectIds, adminPassword }) {
   const room = await getCompanyRoom();
   if (!room) throw new Error('Not connected to a company.');
   if (!room.isAdmin) throw new Error('Only an admin can create a custom setup.');
   if (!name) throw new Error('Name this setup.');
   if (!password) throw new Error('Choose a password for this setup.');
+  if (!adminPassword) throw new Error('Enter the admin password.');
 
   const { db, ensureSignedIn } = await waitForFirebaseCore();
   const { doc, getDoc, setDoc } = await import(FIRESTORE_SDK);
   await ensureSignedIn();
+
+  const companySnap = await getDoc(doc(db, 'companies', room.code));
+  const companyData = companySnap.exists() ? companySnap.data() : {};
+  if (!companyData.adminPasswordHash || (await hashText(adminPassword)) !== companyData.adminPasswordHash) {
+    throw new Error('Incorrect admin password.');
+  }
 
   const pointerCode = await hashText(password);
   if (pointerCode === room.code) throw new Error('Choose a password different from the company password.');
@@ -503,6 +612,7 @@ async function createCustomRole({ name, password, permissions, projectIds }) {
     permissions: mergedPermissions,
     projectIds: finalProjectIds,
     pointerCode,
+    passwordEnc: await encryptWithAdminPassword(adminPassword, password),
     createdAt: Date.now(),
   });
   await setDoc(doc(db, 'companies', pointerCode), {
@@ -531,6 +641,37 @@ async function deleteCustomRole(roleId) {
     await deleteDoc(doc(db, 'companies', roleSnap.data().pointerCode)).catch(() => {});
   }
   await deleteDoc(doc(db, 'companies', room.code, 'roles', roleId));
+}
+
+// Decrypts and returns the company password plus every custom setup's
+// password. A setup/company password created before this feature existed
+// has no companyPasswordEnc/passwordEnc to decrypt -- `password: null` for
+// those (rotating it is what backfills a recoverable copy).
+async function getRecoverablePasswords(adminPassword) {
+  const room = await getCompanyRoom();
+  if (!room) throw new Error('Not connected to a company.');
+  if (!room.isAdmin) throw new Error('Only an admin can view saved passwords.');
+  if (!adminPassword) throw new Error('Enter the admin password.');
+
+  const { db, ensureSignedIn } = await waitForFirebaseCore();
+  const { doc, getDoc, collection, getDocs } = await import(FIRESTORE_SDK);
+  await ensureSignedIn();
+
+  const companySnap = await getDoc(doc(db, 'companies', room.code));
+  const companyData = companySnap.exists() ? companySnap.data() : {};
+  if (!companyData.adminPasswordHash || (await hashText(adminPassword)) !== companyData.adminPasswordHash) {
+    throw new Error('Incorrect admin password.');
+  }
+
+  const companyPassword = await decryptWithAdminPassword(adminPassword, companyData.companyPasswordEnc);
+
+  const rolesSnap = await getDocs(collection(db, 'companies', room.code, 'roles'));
+  const roles = await Promise.all(rolesSnap.docs.map(async (d) => {
+    const data = d.data();
+    return { id: d.id, name: data.name, password: await decryptWithAdminPassword(adminPassword, data.passwordEnc) };
+  }));
+
+  return { companyPassword, roles };
 }
 
 // ---------- Logo sync ----------
