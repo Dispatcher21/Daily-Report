@@ -159,10 +159,19 @@ body {
 .app-header a.home-link { color: var(--on-brand); text-decoration: none; display: flex; flex-direction: column; }
 
 /* ---------- Shared progress banner (see common.js) ---------- */
+/* Fixed to the bottom of the viewport, not the top -- it's injected right
+   after the sticky header in the DOM, but a plain sibling of a sticky
+   element isn't itself sticky, so anyone who'd scrolled down before
+   triggering a save/sync (a button at the bottom of a long page, easy to
+   have in this app) would trigger it off-screen with no visible feedback.
+   Bottom-fixed sidesteps needing to know the header's height at all, and
+   matches the same fixed-toast pattern .floating-save-bar already uses. */
 .progress-banner {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 550;
   background: var(--surface);
-  border-bottom: 1.5px solid var(--border);
-  padding: 0.7rem 1rem 0.8rem;
+  border-top: 1.5px solid var(--border);
+  box-shadow: 0 -4px 16px rgba(0,0,0,0.25);
+  padding: 0.7rem 1rem calc(0.8rem + env(safe-area-inset-bottom));
 }
 .progress-banner[hidden] { display: none; }
 
