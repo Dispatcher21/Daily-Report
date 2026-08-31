@@ -72,6 +72,10 @@
       <div id="rb-groups"></div>
 
       <div class="export-bar">
+        <div class="save-row">
+          <button type="button" id="btn-save-report" class="btn-primary" disabled>Save</button>
+          <span class="save-status" id="save-status"></span>
+        </div>
         <button id="btn-generate" class="btn-primary">Generate Report</button>
         <button id="btn-delete-report" class="btn-danger">Delete This Report</button>
       </div>
@@ -112,6 +116,21 @@ let payItemSearch = '';
 let manualPayOpen = false;
 let editable = true;
 
+// Edits only land in the real, synced/audit-logged record once the Save
+// button is pressed -- scheduleSave, called from every field on the page,
+// just keeps a local draft (putReportRaw, not saveReport) so nothing's lost
+// to a refresh or crash in the meantime.
+let reportDirty = false;
+function setDirty(dirty) {
+  reportDirty = dirty;
+  const btn = $('#btn-save-report');
+  const status = $('#save-status');
+  if (!btn || !status) return;
+  btn.disabled = !dirty;
+  status.textContent = dirty ? 'Unsaved changes' : '';
+  status.classList.remove('save-status-err');
+}
+
 let previewTimer = null;
 function scheduleSave() {
   applyRequiredFieldHighlights();
@@ -122,8 +141,18 @@ function scheduleSave() {
   clearTimeout(previewTimer);
   previewTimer = setTimeout(refreshLivePreview, 250);
   if (!report || !editable) return;
+  setDirty(true);
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => saveReport(report).catch(console.error), 400);
+  saveTimer = setTimeout(() => putReportRaw(report).catch(console.error), 400);
+}
+
+// The real, committed save -- stamps who/when, mirrors to the company, and
+// writes the audit log entry. Used by the Save button and by Generate
+// Report (a report being finalized/printed should never be stuck as an
+// uncommitted draft).
+async function commitSave() {
+  await saveReport(report);
+  setDirty(false);
 }
 
 // Every rendered field/block carries id="step-<key>" (see renderGroups),
@@ -577,13 +606,40 @@ function renderEditor() {
   applyRequiredFieldHighlights();
   setupLivePreview();
 
-  $('#btn-generate').onclick = () => {
+  $('#btn-save-report').onclick = async () => {
+    const btn = $('#btn-save-report');
+    const status = $('#save-status');
+    btn.disabled = true;
+    status.textContent = 'Saving…';
+    status.classList.remove('save-status-err');
+    try {
+      await commitSave();
+      status.textContent = 'Saved';
+      setTimeout(() => { if (!reportDirty) status.textContent = ''; }, 2000);
+    } catch (err) {
+      console.error(err);
+      btn.disabled = false;
+      status.textContent = 'Save failed — check your connection and try again.';
+      status.classList.add('save-status-err');
+    }
+  };
+
+  $('#btn-generate').onclick = async () => {
     const missing = applyRequiredFieldHighlights();
     if (missing.length) {
       missing.forEach((def) => setGroupOpen(groupIdForKey(blockKeyFor(def.key)), true));
       $('#rf-warning-list').innerHTML = missing.map((def) => `<li>${escapeHtml(def.label)}</li>`).join('');
       $('#rf-warning-overlay').hidden = false;
       return;
+    }
+    if (reportDirty) {
+      try {
+        await commitSave();
+      } catch (err) {
+        console.error(err);
+        alert('Could not save your changes -- check your connection and try again before generating.');
+        return;
+      }
     }
     location.href = `download.html?project=${project.id}&report=${report.id}`;
   };
@@ -597,6 +653,18 @@ function renderEditor() {
     await deleteReport(report.id);
     location.href = `reports.html?project=${project.id}`;
   };
+
+  // Editing is silent/local-only (see scheduleSave) until Save is pressed --
+  // warn before either kind of exit loses that draft.
+  window.addEventListener('beforeunload', (e) => {
+    if (!reportDirty) return;
+    e.preventDefault();
+    e.returnValue = '';
+  });
+  $('#bb-back-link').addEventListener('click', (e) => {
+    if (!reportDirty) return;
+    if (!confirm('You have unsaved changes. Leave without saving?')) e.preventDefault();
+  });
 
   $('#btn-no-work-day').onclick = () => {
     const existing = (report.notes || '').trim();

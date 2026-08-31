@@ -1163,6 +1163,10 @@ input[type="file"] { min-height: 0; }
 .fab[hidden] { display: none; }
 
 .export-bar { margin-top: 1rem; display: flex; flex-direction: column; gap: 0.5rem; }
+.save-row { display: flex; align-items: center; gap: 0.7rem; }
+.save-row #btn-save-report { flex: 0 0 auto; }
+.save-status { font-size: 0.85rem; color: var(--text-dim); }
+.save-status-err { color: var(--danger); font-weight: 600; }
 
 .success {
   background: var(--ok-bg); border: 1.5px solid var(--ok); border-radius: var(--radius-sm);
