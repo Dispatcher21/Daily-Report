@@ -493,14 +493,21 @@ async function updateCompanyName(name) {
 // hash(newPassword) with the same name/permissions/admin password, and
 // pushes every local project and report into it -- reusing pushAllLocalData
 // exactly as Create Company and Sync Now do, since this device's IndexedDB
-// already holds the full picture once the pull above completes.
+// already holds the full picture once the pull above completes. Every
+// custom setup (companies/{oldCode}/roles/*) gets copied forward too, with
+// its pointer doc (companies/{pointerCode}, which is what a device joining
+// by that setup's own password actually resolves through) repointed at the
+// new company code -- otherwise every custom setup would silently stop
+// working the moment the company password changed, with no error to
+// explain why.
 //
-// The old room is deliberately left in place rather than deleted: deleting
-// it would turn a stale device's next autosave into a silent write to a
-// company that no longer exists to anyone, which is worse than a harmless
-// orphaned room sitting unused in Firestore. There is no way to push the
-// new password to other devices automatically -- the caller is responsible
-// for telling every other device to Leave and rejoin with it.
+// The old room (and its now-superseded role pointers) is deliberately left
+// in place rather than deleted: deleting it would turn a stale device's
+// next autosave into a silent write to a company that no longer exists to
+// anyone, which is worse than a harmless orphaned room sitting unused in
+// Firestore. There is no way to push the new password to other devices
+// automatically -- the caller is responsible for telling every other
+// device (and every custom setup's user) to Leave and rejoin with it.
 async function changeCompanyPassword(newPassword, adminPassword, onProgress) {
   const room = await getCompanyRoom();
   if (!room) throw new Error('Not connected to a company.');
@@ -509,7 +516,7 @@ async function changeCompanyPassword(newPassword, adminPassword, onProgress) {
   if (!adminPassword) throw new Error('Enter the admin password.');
 
   const { db, ensureSignedIn } = await waitForFirebaseCore();
-  const { doc, getDoc, setDoc, serverTimestamp } = await import(FIRESTORE_SDK);
+  const { doc, getDoc, setDoc, serverTimestamp, collection, getDocs } = await import(FIRESTORE_SDK);
   await ensureSignedIn();
 
   if (onProgress) onProgress({ phase: 'pulling' });
@@ -535,6 +542,23 @@ async function changeCompanyPassword(newPassword, adminPassword, onProgress) {
     managerDashboard: oldData.managerDashboard || null,
     createdAt: serverTimestamp(),
   });
+
+  if (onProgress) onProgress({ phase: 'roles' });
+  const rolesSnap = await getDocs(collection(db, 'companies', room.code, 'roles'));
+  for (const roleDoc of rolesSnap.docs) {
+    const roleData = roleDoc.data();
+    await setDoc(doc(db, 'companies', newCode, 'roles', roleDoc.id), roleData);
+    if (roleData.pointerCode) {
+      await setDoc(doc(db, 'companies', roleData.pointerCode), {
+        isRoleSetup: true,
+        companyCode: newCode,
+        roleId: roleDoc.id,
+        name: roleData.name,
+        permissions: roleData.permissions,
+        projectIds: roleData.projectIds,
+      });
+    }
+  }
 
   await saveSetting(COMPANY_CODE_SETTING, newCode);
   await saveSetting(LOGO_SYNCED_AT_SETTING, null); // force a fresh logo push under the new address

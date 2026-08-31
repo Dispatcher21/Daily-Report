@@ -154,6 +154,7 @@ function reportCompanyProgress(progress) {
     case 'looking-up': progressStep('looking-up', 'Finding your company'); break;
     case 'pulling': progressStep('pulling', 'Getting the latest company data'); break;
     case 'creating': progressStep('creating', 'Setting up your new address'); break;
+    case 'roles': progressStep('roles', 'Carrying over your custom setups'); break;
     case 'logo': progressStep('logo', 'Getting your company logo'); break;
     case 'projects':
       progressStep(
