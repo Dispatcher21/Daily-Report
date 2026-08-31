@@ -60,6 +60,7 @@
             <label>Report No. <input type="number" inputmode="numeric" id="f-reportNo"></label>
             <label>Date <input type="date" id="f-date"></label>
           </div>
+          <div id="rb-dupe-warn" class="rb-dupe-warn" hidden></div>
 
           <div class="time-worked-block">
             <div class="rb-subtoggle-hd" id="time-worked-toggle">
@@ -146,10 +147,33 @@ function setDirty(dirty) {
   status.classList.remove('save-status-err');
 }
 
+// Every other report on this project, fetched once at load -- checked
+// against on every edit (see checkDupeWarnings) so a colliding Report No.
+// or Date shows up while it's still easy to fix, instead of days later as a
+// warning icon in the Reports list (see reports.html's computeReportWarnings,
+// which this mirrors for the two checks cheap enough to run on every
+// keystroke).
+let otherProjectReports = [];
+
+function checkDupeWarnings() {
+  const el = $('#rb-dupe-warn');
+  if (!el || !report) return;
+  const no = String(report.reportNo ?? '').trim();
+  const date = report.date || '';
+  const sameNo = no ? otherProjectReports.filter((r) => String(r.reportNo ?? '').trim() === no) : [];
+  const sameDate = date ? otherProjectReports.filter((r) => r.date === date) : [];
+  const msgs = [];
+  if (sameNo.length) msgs.push(`Report No. ${no} is already used by ${sameNo.map((r) => r.date || 'a report with no date').join(', ')}.`);
+  if (sameDate.length) msgs.push(`${date} already has ${sameDate.map((r) => `#${r.reportNo}`).join(', ')} on file.`);
+  el.hidden = msgs.length === 0;
+  el.innerHTML = msgs.map((m) => `<div>&#9888;&#65039; ${escapeHtml(m)}</div>`).join('');
+}
+
 let previewTimer = null;
 function scheduleSave() {
   applyRequiredFieldHighlights();
   updateTotalHoursDisplay(); // keeps the collapsed Time Worked summary (and Total Hours row) in sync with any edit, not just ones made inside that block
+  checkDupeWarnings();
   // Debounced on its own timer, not called straight from every keystroke --
   // a full print-grid re-render on every character typed would be wasted
   // work and visibly janky on a long field like Summary of Work Performed.
@@ -263,11 +287,14 @@ async function init() {
   document.title = `Report #${report.reportNo} — ${project.name}`;
   $('#editor-title').textContent = `Report #${report.reportNo} - ${report.date || ''}`;
 
+  otherProjectReports = (await getReportsForProject(project.id)).filter((r) => r.id !== report.id);
+
   // finally, not just a trailing call: a permission gate should fail safe
   // (locked) if rendering throws for any reason, not silently fail open.
   try {
     renderEditor();
     if (hasRestoredDraft) setDirty(true);
+    checkDupeWarnings(); // catches a conflict that already existed when this report was opened, not just one made while editing it
   } finally {
     if (!editable) lockReportEditor();
   }

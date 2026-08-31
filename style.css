@@ -844,6 +844,15 @@ input[type="file"] { min-height: 0; }
   color: var(--warn); margin-bottom: 0.75rem;
 }
 
+/* Live Report No./Date collision notice in report-editor.html -- same
+   styling as .warn, just below the fields it's about instead of at the top
+   of the page, and can hold two stacked lines (one per kind of collision). */
+.rb-dupe-warn {
+  background: var(--warn-bg); border: 1px solid var(--warn-border);
+  border-radius: var(--radius-sm); padding: 0.6rem 0.75rem; font-size: 0.82rem;
+  color: var(--warn); margin-top: -0.35rem; display: flex; flex-direction: column; gap: 0.3rem;
+}
+
 .no-work-day-bar {
   background: var(--surface); border: 1.5px dashed var(--border);
   border-radius: var(--radius); padding: 0.85rem 1rem; margin-bottom: 1rem;
