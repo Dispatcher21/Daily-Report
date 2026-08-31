@@ -211,8 +211,15 @@ async function init() {
   if (reportParam === 'new') {
     const existing = await getReportsForProject(project.id);
     const nextNo = await getNextReportNo(project.id);
+    // Deliberately NOT committed here (no saveReport call) -- that used to
+    // write a real, audit-logged, synced-to-everyone report the instant this
+    // page loaded, before a single field was touched. Clicking "+ New
+    // Report" more than once (a double click, the back button, a changed
+    // mind) each left a permanent blank report behind. Now it only exists in
+    // memory until the first real edit hands it to scheduleSave -- same
+    // local-draft-then-explicit-commit path every other edit already goes
+    // through -- so an abandoned blank report leaves no trace anywhere.
     report = await makeBlankReport(nextNo, project, existing[0]);
-    await saveReport(report);
     history.replaceState(null, '', `report-editor.html?project=${project.id}&report=${report.id}`);
   } else {
     report = await getReport(reportParam);
