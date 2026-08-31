@@ -49,6 +49,7 @@ const DASH_COUNT_FORMATS = {
   decimal1: (n) => n.toFixed(1),
   money: (n) => fmtMoney(n),
   pct: (n) => Math.round(n) + '%',
+  hours: (n) => n.toFixed(1) + 'h',
 };
 
 // `barPct`, if given, draws a slim fill bar under the value -- for a stat
@@ -97,7 +98,11 @@ function animateDashboardFills() {
   const rings = $$('.ring-fill[data-target-offset]').map((el) => ({
     el, from: parseFloat(el.getAttribute('stroke-dasharray')), to: parseFloat(el.dataset.targetOffset),
   }));
-  const bars = $$('.dc-bar-fill[data-target-width]').map((el) => ({ el, to: parseFloat(el.dataset.targetWidth) }));
+  // .dc-bar-fill (the stat-card sub-bar) and .md-bar-fill (Hours per
+  // Employee) both animate through the same [data-target-width] mechanism,
+  // so a new bar style elsewhere gets this animation for free by just using
+  // that attribute -- no changes needed here.
+  const bars = $$('[data-target-width]').map((el) => ({ el, to: parseFloat(el.dataset.targetWidth) }));
   const counts = $$('[data-count-target]').map((el) => ({
     el, to: parseFloat(el.dataset.countTarget), fmt: DASH_COUNT_FORMATS[el.dataset.countFmt] || DASH_COUNT_FORMATS.int,
   }));
@@ -157,3 +162,69 @@ window.addEventListener('resize', () => {
   clearTimeout(fitDashboardValuesResizeTimer);
   fitDashboardValuesResizeTimer = setTimeout(fitDashboardValues, 150);
 });
+
+// ---------- Progress-over-time trend chart (hand-rolled SVG line chart) ----------
+// Shared by project.html's own Progress Over Time card and index.html's
+// Manager Dashboard trend -- `container` is passed in rather than looked up
+// by a fixed id, so each caller keeps its own show/hide-when-empty logic.
+
+function trendDateLabel(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  return m ? `${m[2]}/${m[3]}` : iso;
+}
+
+// `points`: [{ date, pct, earned }] -- pct in 0..1, earned in dollars (both
+// optional per-point; the tooltip just omits whichever is missing).
+function renderTrendSvg(container, points) {
+  if (points.length === 0) { container.innerHTML = ''; return; }
+
+  const w = 640, h = 220, padL = 38, padR = 12, padT = 14, padB = 26;
+  const innerW = w - padL - padR, innerH = h - padT - padB;
+  const n = points.length;
+  const x = (i) => padL + (n <= 1 ? innerW / 2 : (innerW * i) / (n - 1));
+  const y = (pct) => padT + innerH * (1 - Math.max(0, Math.min(1, pct || 0)));
+
+  const gridLines = [0, 0.25, 0.5, 0.75, 1].map((f) => {
+    const gy = y(f);
+    return `<line x1="${padL}" y1="${gy}" x2="${w - padR}" y2="${gy}" class="trend-grid"></line>
+      <text x="${padL - 6}" y="${gy + 3}" class="trend-axis-label" text-anchor="end">${Math.round(f * 100)}%</text>`;
+  }).join('');
+
+  const coords = points.map((p, i) => [x(i), y(p.pct)]);
+  let pathSection = '';
+  if (n > 1) {
+    const linePath = 'M' + coords.map((c) => c.join(',')).join(' L');
+    const areaPath = `M${coords[0][0]},${padT + innerH} L${coords.map((c) => c.join(',')).join(' L')} L${coords[n - 1][0]},${padT + innerH} Z`;
+    pathSection = `<path d="${areaPath}" class="trend-area"></path><path d="${linePath}" class="trend-line"></path>`;
+  }
+
+  const dots = points.map((p, i) => {
+    const [cx, cy] = coords[i];
+    const tip = `${p.date}: ${p.pct != null ? (p.pct * 100).toFixed(1) + '% complete' : 'no target set yet'}${p.earned != null ? ', ' + fmtMoney(p.earned) + ' earned' : ''}`;
+    return `<circle cx="${cx}" cy="${cy}" r="4" class="trend-dot"><title>${escapeHtml(tip)}</title></circle>`;
+  }).join('');
+
+  const xLabels = `<text x="${x(0)}" y="${h - 6}" class="trend-axis-label" text-anchor="start">${trendDateLabel(points[0].date)}</text>` +
+    (n > 1 ? `<text x="${x(n - 1)}" y="${h - 6}" class="trend-axis-label" text-anchor="end">${trendDateLabel(points[n - 1].date)}</text>` : '');
+
+  container.innerHTML = `
+    <svg viewBox="0 0 ${w} ${h}" class="trend-svg" role="img" aria-label="Percent complete over time">
+      ${gridLines}${pathSection}${dots}${xLabels}
+    </svg>`;
+}
+
+// ---------- Collapsible sections ----------
+// Opt-in per .step via the .step-collapsible class (see style.css) -- click
+// the header to fold/unfold the body. Wires any not-yet-wired header found
+// under `container` (default: the whole document), so it's safe to call
+// again after re-rendering a section that replaces its own DOM.
+function setupCollapsibleSteps(container) {
+  $$('.step-collapsible > .step-header', container || document).forEach((header) => {
+    if (header.dataset.collapsibleWired) return;
+    header.dataset.collapsibleWired = '1';
+    header.insertAdjacentHTML('beforeend', '<span class="step-chevron">&#9656;</span>');
+    header.addEventListener('click', () => {
+      header.closest('.step-collapsible').classList.toggle('collapsed');
+    });
+  });
+}

@@ -1493,6 +1493,17 @@ input[type="file"] { min-height: 0; }
 .trend-line { fill: none; stroke: var(--brand); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
 .trend-dot { fill: var(--brand); stroke: var(--surface); stroke-width: 2; }
 
+/* Opt-in per .step (see setupCollapsibleSteps in dashboard-widgets.js) --
+   most .step cards across the app aren't collapsible, so this only ever
+   applies where a page explicitly asks for it (currently just the Manager
+   Dashboard). */
+.step-collapsible > .step-header { cursor: pointer; user-select: none; }
+.step-collapsible > .step-header .step-chevron {
+  margin-left: auto; flex-shrink: 0; transition: transform 0.15s;
+}
+.step-collapsible.collapsed > .step-header .step-chevron { transform: rotate(-90deg); }
+.step-collapsible.collapsed > .step-body { display: none; }
+
 /* ---------- Weather & schedule log ---------- */
 
 .weather-log { display: flex; flex-direction: column; gap: 0.6rem; max-height: 460px; overflow-y: auto; padding-right: 0.25rem; }

@@ -486,55 +486,15 @@ $('#pi-sort').addEventListener('change', (e) => {
   renderFilteredPayItems();
 });
 
-// ---------- Progress over time (hand-rolled SVG line chart) ----------
-
-function trendDateLabel(iso) {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
-  return m ? `${m[2]}/${m[3]}` : iso;
-}
+// ---------- Progress over time ----------
+// trendDateLabel/renderTrendSvg live in dashboard-widgets.js, shared with
+// index.html's Manager Dashboard trend.
 
 function renderTrendChart(points) {
   const step = $('#dash-trend-step');
   step.hidden = points.length === 0;
   $('#dash-trend-hint').hidden = points.length !== 1;
-  if (points.length === 0) {
-    $('#dash-trend-chart').innerHTML = '';
-    return;
-  }
-
-  const w = 640, h = 220, padL = 38, padR = 12, padT = 14, padB = 26;
-  const innerW = w - padL - padR, innerH = h - padT - padB;
-  const n = points.length;
-  const x = (i) => padL + (n <= 1 ? innerW / 2 : (innerW * i) / (n - 1));
-  const y = (pct) => padT + innerH * (1 - Math.max(0, Math.min(1, pct || 0)));
-
-  const gridLines = [0, 0.25, 0.5, 0.75, 1].map((f) => {
-    const gy = y(f);
-    return `<line x1="${padL}" y1="${gy}" x2="${w - padR}" y2="${gy}" class="trend-grid"></line>
-      <text x="${padL - 6}" y="${gy + 3}" class="trend-axis-label" text-anchor="end">${Math.round(f * 100)}%</text>`;
-  }).join('');
-
-  const coords = points.map((p, i) => [x(i), y(p.pct)]);
-  let pathSection = '';
-  if (n > 1) {
-    const linePath = 'M' + coords.map((c) => c.join(',')).join(' L');
-    const areaPath = `M${coords[0][0]},${padT + innerH} L${coords.map((c) => c.join(',')).join(' L')} L${coords[n - 1][0]},${padT + innerH} Z`;
-    pathSection = `<path d="${areaPath}" class="trend-area"></path><path d="${linePath}" class="trend-line"></path>`;
-  }
-
-  const dots = points.map((p, i) => {
-    const [cx, cy] = coords[i];
-    const tip = `${p.date}: ${p.pct != null ? (p.pct * 100).toFixed(1) + '% complete' : 'no target set yet'}${p.earned != null ? ', ' + fmtMoney(p.earned) + ' earned' : ''}`;
-    return `<circle cx="${cx}" cy="${cy}" r="4" class="trend-dot"><title>${escapeHtml(tip)}</title></circle>`;
-  }).join('');
-
-  const xLabels = `<text x="${x(0)}" y="${h - 6}" class="trend-axis-label" text-anchor="start">${trendDateLabel(points[0].date)}</text>` +
-    (n > 1 ? `<text x="${x(n - 1)}" y="${h - 6}" class="trend-axis-label" text-anchor="end">${trendDateLabel(points[n - 1].date)}</text>` : '');
-
-  $('#dash-trend-chart').innerHTML = `
-    <svg viewBox="0 0 ${w} ${h}" class="trend-svg" role="img" aria-label="Overall percent complete over time">
-      ${gridLines}${pathSection}${dots}${xLabels}
-    </svg>`;
+  renderTrendSvg($('#dash-trend-chart'), points);
 }
 
 // ---------- Weather & schedule log ----------

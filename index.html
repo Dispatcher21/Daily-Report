@@ -14,7 +14,7 @@
      display:block while visible, and any author-stylesheet rule that sets
      display on an element overrides the UA [hidden]{display:none} rule
      regardless of specificity -- so visibility is a class, not `hidden`. */
-  #link-company-management { display: none; text-align: center; text-decoration: none; margin-bottom: 1rem; }
+  #link-company-management { display: none; text-align: center; text-decoration: none; max-width: 400px; margin: 1.5rem auto 0; }
   #link-company-management.show { display: block; }
 </style>
 </head>
@@ -42,11 +42,26 @@
         <div id="md-project-checks"></div>
       </div>
 
-      <div class="dash-grid" id="md-stats"></div>
       <div class="empty-state" id="md-empty" hidden style="padding:1.25rem;">No projects included yet -- use "Manage Included Projects" above to add some.</div>
 
       <div id="md-content">
-        <div class="step">
+        <div class="step step-collapsible">
+          <div class="step-header"><span class="step-num">OVERVIEW</span><h2>Overview</h2></div>
+          <div class="step-body">
+            <div class="dash-grid" id="md-stats"></div>
+          </div>
+        </div>
+
+        <div class="step step-collapsible" id="md-trend-step" hidden>
+          <div class="step-header"><span class="step-num">TREND</span><h2>Portfolio Value Over Time</h2></div>
+          <div class="step-body">
+            <p class="hint" style="margin-top:0;">Combined earned value across included projects, as a share of their combined contract value.</p>
+            <div id="md-trend-chart"></div>
+            <p class="hint" id="md-trend-hint" hidden style="margin-top:0.5rem;">Only one dated point on file so far &mdash; a trend line will appear once there's more than one date to compare.</p>
+          </div>
+        </div>
+
+        <div class="step step-collapsible">
           <div class="step-header"><span class="step-num">TEAM</span><h2>Hours per Employee</h2></div>
           <div class="step-body">
             <p class="hint" style="margin-top:0;">Last 30 days, by Representative on file.</p>
@@ -55,7 +70,7 @@
           </div>
         </div>
 
-        <div class="step">
+        <div class="step step-collapsible">
           <div class="step-header"><span class="step-num">STATUS</span><h2>Projects: Ahead / Behind</h2></div>
           <div class="step-body">
             <p class="hint" style="margin-top:0;">Needs an NTP Date, Total Contract Length, and at least one priced pay item to classify.</p>
@@ -64,7 +79,7 @@
           </div>
         </div>
 
-        <div class="step">
+        <div class="step step-collapsible">
           <div class="step-header"><span class="step-num">ACTIVITY</span><h2>Recent Reports</h2></div>
           <div class="step-body">
             <div class="md-feed" id="md-feed"></div>
@@ -75,8 +90,6 @@
     </div>
 
     <div class="index-projects-col">
-      <a class="btn-secondary" id="link-company-management" href="company-management.html">&#9881;&#65039; Company Management</a>
-
       <div class="unsaved-drafts" id="unsaved-drafts" hidden>
         <div class="eyebrow">Unsaved Reports</div>
         <div id="unsaved-drafts-list"></div>
@@ -119,6 +132,8 @@
     </div>
 
   </div>
+
+  <a class="btn-secondary" id="link-company-management" href="company-management.html">&#9881;&#65039; Company Management</a>
 </main>
 
 <script src="lib/xlsx.min.js"></script>
@@ -318,10 +333,12 @@ async function renderManagerDashboard() {
   });
 
   renderMdStats(projectStats, reports);
+  renderMdTrendChart(projectStats, included, reports);
   renderMdHoursBars(reports);
   renderMdProjectStatus(projectStats);
   renderMdFeed(reports);
 
+  setupCollapsibleSteps($('#manager-dashboard-col'));
   fitDashboardValues();
   animateDashboardFills();
 }
@@ -407,6 +424,48 @@ function renderMdStats(projectStats, reports) {
     ) : '');
 }
 
+// Combined earned-value-over-time across every included project, as a share
+// of their combined (current) contract value. Each project keeps its own
+// progressOverTime points (same math as project.html's own trend chart --
+// merging raw pay items across different projects' catalogs first would
+// collide on itemNumber, so dollar totals are combined instead, only after
+// each project has already resolved its own). At each combined date, a
+// project without a report on that exact date carries forward its most
+// recent known earned total, same as the underlying quantities themselves
+// only ever move forward.
+function renderMdTrendChart(projectStats, included, reports) {
+  const step = $('#md-trend-step');
+  const totalContractSum = projectStats.reduce((sum, s) => sum + (s.totalContract || 0), 0);
+  if (totalContractSum <= 0) { step.hidden = true; return; }
+
+  const perProjectPoints = included.map((project) =>
+    progressOverTime(reports.filter((r) => r.projectId === project.id && r.date), project.payItemCatalog || [])
+  );
+
+  const allDates = new Set();
+  perProjectPoints.forEach((pts) => pts.forEach((p) => allDates.add(p.date)));
+  const dates = [...allDates].sort();
+
+  step.hidden = dates.length === 0;
+  if (dates.length === 0) return;
+
+  const points = dates.map((date) => {
+    let earnedSum = 0;
+    perProjectPoints.forEach((pts) => {
+      let latest = null;
+      for (const p of pts) {
+        if (p.date > date) break;
+        latest = p;
+      }
+      if (latest && latest.earned != null) earnedSum += latest.earned;
+    });
+    return { date, earned: earnedSum, pct: earnedSum / totalContractSum };
+  });
+
+  $('#md-trend-hint').hidden = points.length !== 1;
+  renderTrendSvg($('#md-trend-chart'), points);
+}
+
 function renderMdHoursBars(reports) {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - 30);
@@ -427,7 +486,7 @@ function renderMdHoursBars(reports) {
   $('#md-hours-bars').innerHTML = sorted.map(([name, hours]) => `
     <div class="md-bar-row">
       <span class="md-bar-name">${escapeHtml(name)}</span>
-      <div class="md-bar-track"><div class="md-bar-fill" style="width:${Math.max(4, (hours / max) * 100)}%">${hours.toFixed(1)}h</div></div>
+      <div class="md-bar-track"><div class="md-bar-fill" style="width:0%" data-target-width="${Math.max(4, (hours / max) * 100)}" data-count-target="${hours}" data-count-fmt="hours">0.0h</div></div>
     </div>`).join('');
 }
 
