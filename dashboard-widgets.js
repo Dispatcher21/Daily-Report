@@ -258,7 +258,12 @@ function renderTrendSvg(container, series, opts) {
       const [cx, cy] = coords[i];
       const when = daysMode ? `Day ${p.day} (${p.date})` : p.date;
       const tip = `${s.label ? s.label + ' — ' : ''}${when}: ${p.pct != null ? (p.pct * 100).toFixed(1) + '% complete' : 'no target set yet'}${p.earned != null ? ', ' + fmtMoney(p.earned) + ' earned' : ''}`;
-      return `<circle cx="${cx}" cy="${cy}" r="${singlePlainSeries ? 4 : 3}" class="trend-dot" style="fill:${color}"><title>${escapeHtml(tip)}</title></circle>`;
+      // daysMode (the Manager Dashboard's multi-project chart) draws lines
+      // only -- visible dots at every report date were noise once several
+      // projects' lines were overlapping. The circle still exists, just
+      // invisible, so hovering the line's actual points still gets a tooltip.
+      const visible = daysMode ? 'fill:transparent;stroke:none' : `fill:${color}`;
+      return `<circle cx="${cx}" cy="${cy}" r="${daysMode ? 6 : singlePlainSeries ? 4 : 3}" class="trend-dot" style="${visible}"><title>${escapeHtml(tip)}</title></circle>`;
     }).join('');
     return pathSection + dots;
   }).join('');
