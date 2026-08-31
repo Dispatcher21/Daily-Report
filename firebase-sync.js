@@ -434,6 +434,40 @@ async function updateCompanyPermissions(patch) {
   return merged;
 }
 
+const DEFAULT_MANAGER_DASHBOARD = { enabled: false, excludedProjectIds: [] };
+
+// Read fresh from Firestore every time rather than mirrored into a local
+// setting the way permissions are -- this is only ever checked once per
+// index.html load (not a hot path), and the alternative is a manager on a
+// second device seeing a stale enabled/disabled state or an out-of-date
+// excluded-projects list until something else happens to refresh it.
+async function getManagerDashboardConfig() {
+  const room = await getCompanyRoom();
+  if (!room) return { ...DEFAULT_MANAGER_DASHBOARD };
+
+  const { db, ensureSignedIn } = await waitForFirebaseCore();
+  const { doc, getDoc } = await import(FIRESTORE_SDK);
+  await ensureSignedIn();
+
+  const snap = await getDoc(doc(db, 'companies', room.code));
+  const data = snap.exists() ? snap.data() : {};
+  return { ...DEFAULT_MANAGER_DASHBOARD, ...(data.managerDashboard || {}) };
+}
+
+async function updateManagerDashboardConfig(patch) {
+  const room = await getCompanyRoom();
+  if (!room) throw new Error('Not connected to a company.');
+  if (!room.isAdmin) throw new Error('Only an admin can change this.');
+
+  const { db, ensureSignedIn } = await waitForFirebaseCore();
+  const { doc, updateDoc } = await import(FIRESTORE_SDK);
+  await ensureSignedIn();
+
+  const merged = { ...(await getManagerDashboardConfig()), ...patch };
+  await updateDoc(doc(db, 'companies', room.code), { managerDashboard: merged });
+  return merged;
+}
+
 async function updateCompanyName(name) {
   const room = await getCompanyRoom();
   if (!room) throw new Error('Not connected to a company.');
@@ -493,6 +527,7 @@ async function changeCompanyPassword(newPassword, adminPassword, onProgress) {
     adminPasswordHash: oldData.adminPasswordHash,
     companyPasswordEnc: await encryptWithAdminPassword(adminPassword, newPassword),
     permissions: oldData.permissions || DEFAULT_PERMISSIONS,
+    managerDashboard: oldData.managerDashboard || null,
     createdAt: serverTimestamp(),
   });
 

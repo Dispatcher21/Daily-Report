@@ -183,6 +183,20 @@
 
   <div class="step">
     <div class="step-header">
+      <span class="step-num">FEATURE</span>
+      <h2>Manager Dashboard</h2>
+    </div>
+    <div class="step-body">
+      <p class="hint" style="margin-top:0;">A company-wide dashboard on the home page -- combined stats, hours per employee, and project status across every project at once. Admin-only; members never see it.</p>
+      <label class="toggle-row" for="cm-manager-dashboard-enabled" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;">
+        <input type="checkbox" id="cm-manager-dashboard-enabled">
+        <span>Show the Manager Dashboard on the home page</span>
+      </label>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-header">
       <span class="step-num">ACTIVITY</span>
       <h2>Who's Done What</h2>
     </div>
@@ -579,6 +593,20 @@ $('#cm-perm-create-projects').addEventListener('change', async (e) => {
   }
 });
 
+// ---------- Manager Dashboard ----------
+
+$('#cm-manager-dashboard-enabled').addEventListener('change', async (e) => {
+  cmError('');
+  try {
+    await updateManagerDashboardConfig({ enabled: e.target.checked });
+    cmStatus('Saved.');
+  } catch (err) {
+    console.error(err);
+    e.target.checked = !e.target.checked;
+    cmError(userError("Couldn't save that: " + err.message, 'MANAGER_DASHBOARD_TOGGLE'));
+  }
+});
+
 // ---------- Custom Setups ----------
 
 function renderCsProjectChecks(projects) {
@@ -864,6 +892,9 @@ $('#btn-refresh-activity').addEventListener('click', async () => {
   $('#cm-perm-reports-any').checked = !!perms.membersCanEditAnyReport;
   $('#cm-perm-projects').checked = !!perms.membersCanEditProjects;
   $('#cm-perm-create-projects').checked = !!perms.membersCanCreateProjects;
+
+  const managerDashboard = await getManagerDashboardConfig();
+  $('#cm-manager-dashboard-enabled').checked = !!managerDashboard.enabled;
 
   await renderCmProjects();
   await renderCmActivity();
