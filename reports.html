@@ -457,6 +457,26 @@ function computeReportWarnings(reports) {
     });
   });
 
+  // Report No. is a free-typed field (not an auto-assigned ID), so two
+  // different reports can end up sharing one -- this is a separate check
+  // from the date one above since either can happen without the other (two
+  // reports dated the same day with different numbers, or two differently-
+  // dated reports someone typed the same number into).
+  const byReportNo = new Map();
+  reports.forEach((r) => {
+    const no = String(r.reportNo ?? '').trim();
+    if (!no) return;
+    if (!byReportNo.has(no)) byReportNo.set(no, []);
+    byReportNo.get(no).push(r);
+  });
+  byReportNo.forEach((list) => {
+    if (list.length < 2) return;
+    list.forEach((r) => {
+      const others = list.filter((x) => x !== r).map((x) => x.date || 'no date').join(', ');
+      flag(r.id, `Same Report No. as ${others}`);
+    });
+  });
+
   // Hours well off the average of days actually worked -- excludes No Work
   // Days (0 is correct there, not an anomaly) and reports with no hours
   // entered at all. Needs a handful of real data points before "average"
