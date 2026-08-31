@@ -965,8 +965,8 @@ function renderSelectedPayItems() {
         ? `
         <div class="si-extra">
           ${hasStations ? `
-            <input type="text" class="si-station" data-idx="${i}" data-field="startStation" value="${escapeHtml(item.startStation || '')}" placeholder="Start Station">
-            <input type="text" class="si-station" data-idx="${i}" data-field="endStation" value="${escapeHtml(item.endStation || '')}" placeholder="Stop Station">
+            <input type="text" class="si-station" data-idx="${i}" data-field="startStation" value="${escapeHtml(item.startStation || '')}" placeholder="Start Station (e.g. 120+15)">
+            <input type="text" class="si-station" data-idx="${i}" data-field="endStation" value="${escapeHtml(item.endStation || '')}" placeholder="Stop Station (e.g. 121+40)">
           ` : ''}
           ${hasLocations ? `
             <select class="si-location" data-idx="${i}">
@@ -1026,9 +1026,9 @@ function renderSelectedPayItems() {
       // tracks Stations -- still just a starting point, since the field
       // below stays hand-editable the same as the total-hours field does.
       if (cat && cat.computed) {
-        const start = parseFloat(item.startStation);
-        const end = parseFloat(item.endStation);
-        if (Number.isFinite(start) && Number.isFinite(end)) {
+        const start = parseStation(item.startStation);
+        const end = parseStation(item.endStation);
+        if (start != null && end != null) {
           item.length = String(Math.round(Math.abs(end - start) * 1000) / 1000);
           item.qty = computeAreaQty(item.length, item.width, item.unit);
           const lengthEl = container.querySelector(`.si-length[data-idx="${idx}"]`);

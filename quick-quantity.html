@@ -212,8 +212,8 @@ function renderMultiEntries(catalogItem, idx) {
         <input type="number" step="any" class="qq-qty me-field" data-field="qty" placeholder="Qty" value="${escapeHtml(entry.qty || '')}">
         <span class="qq-unit">${escapeHtml(catalogItem.unit || '')}</span>
         ${catalogItem.stations ? `
-          <input type="text" class="me-field" data-field="startStation" placeholder="Start Station" value="${escapeHtml(entry.startStation || '')}">
-          <input type="text" class="me-field" data-field="endStation" placeholder="Stop Station" value="${escapeHtml(entry.endStation || '')}">
+          <input type="text" class="me-field" data-field="startStation" placeholder="Start Station (e.g. 120+15)" value="${escapeHtml(entry.startStation || '')}">
+          <input type="text" class="me-field" data-field="endStation" placeholder="Stop Station (e.g. 121+40)" value="${escapeHtml(entry.endStation || '')}">
         ` : ''}
         ${(catalogItem.locations || []).length ? `
           <select class="me-field" data-field="location">
@@ -250,9 +250,9 @@ function renderMultiEntries(catalogItem, idx) {
         // Length starts out as the station span, same starting-point-only
         // deal as report-editor.html -- still hand-editable after.
         if (catalogItem.stations && (el.dataset.field === 'startStation' || el.dataset.field === 'endStation')) {
-          const start = parseFloat(entry.startStation);
-          const end = parseFloat(entry.endStation);
-          if (Number.isFinite(start) && Number.isFinite(end)) {
+          const start = parseStation(entry.startStation);
+          const end = parseStation(entry.endStation);
+          if (start != null && end != null) {
             entry.length = String(Math.round(Math.abs(end - start) * 1000) / 1000);
             const lengthEl = entryEl.querySelector('[data-field="length"]');
             if (lengthEl) lengthEl.value = entry.length;

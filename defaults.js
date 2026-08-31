@@ -80,6 +80,20 @@ function overrunLabel(overrun) {
   return `${sign}${overrun} ovr/undr`;
 }
 
+// Parses a civil engineering "station" value -- either plain feet (a bare
+// number) or standard stationing notation like "120+15" (station 120, plus
+// 15 feet; one station is 100 feet, so this is 12,015 feet from the
+// reference point). Returns null for anything that's neither, same as a
+// plain unparseable number always has.
+function parseStation(value) {
+  const str = String(value ?? '').trim();
+  if (!str) return null;
+  const stationMatch = /^(\d+)\s*\+\s*(\d+(?:\.\d+)?)$/.exec(str);
+  if (stationMatch) return Number(stationMatch[1]) * 100 + Number(stationMatch[2]);
+  const n = parseFloat(str);
+  return Number.isFinite(n) ? n : null;
+}
+
 // Length x Width area math for a Computed Quantity pay item, converted to
 // match the item's own unit -- everything else (Sq Ft, linear units, etc.)
 // is left as a plain Length x Width product since there's no unambiguous
