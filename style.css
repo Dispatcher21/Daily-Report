@@ -1369,7 +1369,12 @@ input[type="file"] { min-height: 0; }
 .index-layout { display: flex; flex-direction: column; gap: 1.5rem; }
 @media (min-width: 1100px) {
   .index-layout:has(> #manager-dashboard-col:not([hidden])) {
-    display: grid; grid-template-columns: minmax(360px, 480px) 1fr; align-items: start; gap: 1.75rem;
+    /* Dashboard gets the lion's share of the width (~3/4 once there's
+       room to spare) -- it's the reason this layout exists at all, and
+       the project grid keeps reflowing its own columns fine at a
+       narrower width. minmax() on both sides keeps either from getting
+       uselessly cramped as the window narrows toward 1100px. */
+    display: grid; grid-template-columns: minmax(0, 3fr) minmax(280px, 1fr); align-items: start; gap: 1.75rem;
   }
 }
 
