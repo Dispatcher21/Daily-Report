@@ -14,7 +14,7 @@
      display:block while visible, and any author-stylesheet rule that sets
      display on an element overrides the UA [hidden]{display:none} rule
      regardless of specificity -- so visibility is a class, not `hidden`. */
-  #link-company-management { display: none; text-align: center; text-decoration: none; margin-bottom: 1rem; }
+  #link-company-management { display: none; text-align: center; text-decoration: none; max-width: 400px; margin: 1.5rem auto 0; }
   #link-company-management.show { display: block; }
 </style>
 </head>
@@ -29,48 +29,105 @@
 </header>
 
 <main>
+  <div class="index-layout" id="index-layout">
+
+    <div class="index-dashboard-col" id="manager-dashboard-col" hidden>
+      <div class="md-topbar">
+        <div class="eyebrow" style="margin-top:0;">Manager Dashboard</div>
+        <button type="button" class="btn-secondary" id="md-manage-btn">&#9881;&#65039; Manage Included Projects</button>
+      </div>
+
+      <div class="md-manage-panel" id="md-manage-panel" hidden>
+        <p class="hint" style="margin-top:0;">Uncheck a project to leave it out of every stat below &mdash; it still works normally everywhere else.</p>
+        <div id="md-project-checks"></div>
+      </div>
+
+      <div class="dash-grid" id="md-stats"></div>
+      <div class="empty-state" id="md-empty" hidden style="padding:1.25rem;">No projects included yet -- use "Manage Included Projects" above to add some.</div>
+
+      <div id="md-content">
+        <div class="step step-collapsible" id="md-trend-step" hidden>
+          <div class="step-header"><span class="step-num">TREND</span><h2>Progress Over Time</h2></div>
+          <div class="step-body">
+            <p class="hint" style="margin-top:0;">Each included project's own percent complete, weighted by planned quantity within that project.</p>
+            <div id="md-trend-chart"></div>
+            <p class="hint" id="md-trend-hint" hidden style="margin-top:0.5rem;">Only one dated point on file so far for every included project &mdash; a trend line will appear once at least one has more than one date to compare.</p>
+          </div>
+        </div>
+
+        <div class="step step-collapsible">
+          <div class="step-header"><span class="step-num">TEAM</span><h2>Hours per Employee</h2></div>
+          <div class="step-body">
+            <p class="hint" style="margin-top:0;">Last 30 days, by Representative on file.</p>
+            <div class="md-bars" id="md-hours-bars"></div>
+            <p class="hint" id="md-hours-empty" hidden style="margin:0;">No hours logged in the last 30 days.</p>
+          </div>
+        </div>
+
+        <div class="step step-collapsible">
+          <div class="step-header"><span class="step-num">STATUS</span><h2>Projects: Ahead / Behind</h2></div>
+          <div class="step-body">
+            <p class="hint" style="margin-top:0;">Needs an NTP Date, Total Contract Length, and at least one priced pay item to classify.</p>
+            <div class="md-projlist" id="md-proj-status"></div>
+            <p class="hint" id="md-proj-status-empty" hidden style="margin:0;">No included project has enough data on file to classify yet.</p>
+          </div>
+        </div>
+
+        <div class="step step-collapsible">
+          <div class="step-header"><span class="step-num">ACTIVITY</span><h2>Recent Reports</h2></div>
+          <div class="step-body">
+            <div class="md-feed" id="md-feed"></div>
+            <p class="hint" id="md-feed-empty" hidden style="margin:0;">No reports on file yet.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="index-projects-col">
+      <div class="unsaved-drafts" id="unsaved-drafts" hidden>
+        <div class="eyebrow">Unsaved Reports</div>
+        <div id="unsaved-drafts-list"></div>
+      </div>
+
+      <div class="eyebrow">Your Projects</div>
+      <div id="hub-grid" class="hub-grid"></div>
+
+      <!-- ADD PROJECT PANEL (revealed in place, no separate page) -->
+      <div id="add-project-panel" class="step" hidden>
+        <div class="step-header">
+          <span class="step-num">NEW PROJECT</span>
+          <h2>Add a Project</h2>
+        </div>
+        <div class="step-body">
+          <button type="button" class="btn-primary" id="btn-setup-manually" style="margin-bottom:1rem;">&#9998; Set Up Manually</button>
+          <p class="hint" style="margin:0 0 1rem;">Fill out project info, pay items, contractors, and equipment right here, with a live preview &mdash; no spreadsheet needed.</p>
+
+          <div style="display:flex;align-items:center;gap:1rem;margin-bottom:0.75rem;flex-wrap:wrap;">
+            <span class="hint" style="margin:0;">Or, as a fallback, upload an Excel file with this project's info and pay items.</span>
+            <button type="button" class="text-btn" id="btn-download-project-template" style="color:var(--brand);text-decoration:underline;padding:0;">&#8681; Download Template</button>
+          </div>
+
+          <div class="uz" id="uz-project-data">
+            <input type="file" id="f-project-data" accept=".xlsx,.xls">
+            <span class="uz-icon">&#128202;</span>
+            <span class="uz-lbl">Upload Project Data (Excel)</span>
+            <span class="uz-hint">PROJECT INFO + PAY ITEMS sheets</span>
+            <span class="uz-fname" id="fn-project-data"></span>
+          </div>
+
+          <div id="parsed-preview"></div>
+
+          <div class="export-bar">
+            <button type="button" class="btn-primary" id="btn-save-new-project" disabled>Save Project</button>
+            <button type="button" class="btn-secondary" id="btn-cancel-new-project">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
   <a class="btn-secondary" id="link-company-management" href="company-management.html">&#9881;&#65039; Company Management</a>
-
-  <div class="unsaved-drafts" id="unsaved-drafts" hidden>
-    <div class="eyebrow">Unsaved Reports</div>
-    <div id="unsaved-drafts-list"></div>
-  </div>
-
-  <div class="eyebrow">Your Projects</div>
-  <div id="hub-grid" class="hub-grid"></div>
-
-  <!-- ADD PROJECT PANEL (revealed in place, no separate page) -->
-  <div id="add-project-panel" class="step" hidden>
-    <div class="step-header">
-      <span class="step-num">NEW PROJECT</span>
-      <h2>Add a Project</h2>
-    </div>
-    <div class="step-body">
-      <button type="button" class="btn-primary" id="btn-setup-manually" style="margin-bottom:1rem;">&#9998; Set Up Manually</button>
-      <p class="hint" style="margin:0 0 1rem;">Fill out project info, pay items, contractors, and equipment right here, with a live preview &mdash; no spreadsheet needed.</p>
-
-      <div style="display:flex;align-items:center;gap:1rem;margin-bottom:0.75rem;flex-wrap:wrap;">
-        <span class="hint" style="margin:0;">Or, as a fallback, upload an Excel file with this project's info and pay items.</span>
-        <button type="button" class="text-btn" id="btn-download-project-template" style="color:var(--brand);text-decoration:underline;padding:0;">&#8681; Download Template</button>
-      </div>
-
-      <div class="uz" id="uz-project-data">
-        <input type="file" id="f-project-data" accept=".xlsx,.xls">
-        <span class="uz-icon">&#128202;</span>
-        <span class="uz-lbl">Upload Project Data (Excel)</span>
-        <span class="uz-hint">PROJECT INFO + PAY ITEMS sheets</span>
-        <span class="uz-fname" id="fn-project-data"></span>
-      </div>
-
-      <div id="parsed-preview"></div>
-
-      <div class="export-bar">
-        <button type="button" class="btn-primary" id="btn-save-new-project" disabled>Save Project</button>
-        <button type="button" class="btn-secondary" id="btn-cancel-new-project">Cancel</button>
-      </div>
-    </div>
-  </div>
-
 </main>
 
 <script src="lib/xlsx.min.js"></script>
@@ -80,6 +137,8 @@
 <script src="audit-log.js"></script>
 <script src="project-file.js"></script>
 <script src="setup-share.js"></script>
+<script src="quantity-calc.js"></script>
+<script src="dashboard-widgets.js"></script>
 <script type="module" src="firebase-init.js"></script>
 <script src="firebase-sync.js"></script>
 <script>
@@ -198,6 +257,247 @@ async function renderUnsavedDrafts() {
     });
   });
 }
+
+// ---------- Manager Dashboard ----------
+// Admin-only, opt-in per company (see Company Management -- Manager
+// Dashboard toggle). Combined stats/charts across every INCLUDED project
+// (see getManagerDashboardConfig's excludedProjectIds) -- computed the same
+// way project.html computes its own per-project dashboard, reusing the
+// shared ring/stat-card/animation pieces in dashboard-widgets.js so both
+// dashboards look and behave identically.
+
+let mdScopedProjects = []; // every project this device can see, for the checklist
+let mdExcluded = new Set();
+
+function mdScheduleStatus(project, overall, today) {
+  const ntpDate = (project.meta || {}).ntpDate;
+  const contractLength = parseInt((project.meta || {}).contractLength, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ntpDate || '') || !Number.isFinite(contractLength) || contractLength <= 0 || overall == null) return null;
+  const daysSinceNtp = daysBetween(ntpDate, today);
+  if (!Number.isFinite(daysSinceNtp)) return null;
+  const timeFrac = daysSinceNtp / contractLength;
+  // Same 3-tier judgement as project.html's own Schedule Used ring.
+  if (overall + 0.05 >= timeFrac) return 'ok';
+  if (overall + 0.2 >= timeFrac) return 'warn';
+  return 'danger';
+}
+
+async function renderManagerDashboard() {
+  const room = await getCompanyRoom();
+  const col = $('#manager-dashboard-col');
+  if (!room) { col.hidden = true; return; }
+  // Admin always sees it (companyCan short-circuits true for an admin room
+  // regardless of the permission's actual value); anyone else needs the
+  // "Members can view the Manager Dashboard" permission granted in Company
+  // Management, same as every other member permission.
+  if (!(await companyCan('viewManagerDashboard'))) { col.hidden = true; return; }
+  col.hidden = false;
+
+  // Only an admin can edit which projects are included -- everyone else
+  // who can see the dashboard sees the same admin-chosen set.
+  $('#md-manage-btn').hidden = !room.isAdmin;
+
+  const cfg = await getManagerDashboardConfig();
+
+  const [allProjects, allReports] = await Promise.all([getAllProjects(), getAllReports()]);
+  mdScopedProjects = allProjects.filter((p) => projectInScope(p.id, room));
+  mdExcluded = new Set(cfg.excludedProjectIds || []);
+  renderMdChecklist();
+
+  const included = mdScopedProjects.filter((p) => !mdExcluded.has(p.id));
+  const includedIds = new Set(included.map((p) => p.id));
+  const reports = allReports.filter((r) => includedIds.has(r.projectId));
+
+  $('#md-empty').hidden = included.length > 0;
+  $('#md-content').hidden = included.length === 0;
+  $('#md-stats').hidden = included.length === 0;
+  if (included.length === 0) { $('#md-stats').innerHTML = ''; return; }
+
+  const today = todayIso();
+  // Same pay-item math as project.html's own dashboard, computed once per
+  // included project and shared by the stat cards and the ahead/behind
+  // list below rather than redone twice.
+  const projectStats = included.map((project) => {
+    const projReports = reports.filter((r) => r.projectId === project.id);
+    const flatItems = projReports.flatMap((r) => r.payItems || []);
+    const items = fullPayItemCatalogOverview(flatItems, project.payItemCatalog || []);
+    const overall = overallPercentComplete(items);
+    const { totalContract, totalEarned } = contractValueSummary(items);
+    return { project, overall, totalContract, totalEarned, status: mdScheduleStatus(project, overall, today) };
+  });
+
+  renderMdStats(projectStats, reports);
+  renderMdTrendChart(projectStats, included, reports);
+  renderMdHoursBars(reports);
+  renderMdProjectStatus(projectStats);
+  renderMdFeed(reports);
+
+  setupCollapsibleSteps($('#manager-dashboard-col'));
+  fitDashboardValues();
+  animateDashboardFills();
+}
+
+function renderMdChecklist() {
+  $('#md-project-checks').innerHTML = mdScopedProjects.map((p) => `
+    <label class="md-check-row">
+      <input type="checkbox" data-md-project="${p.id}"${mdExcluded.has(p.id) ? '' : ' checked'}>
+      <span>${escapeHtml(p.name)}</span>
+    </label>`).join('');
+
+  $$('[data-md-project]', $('#md-project-checks')).forEach((cb) => {
+    cb.addEventListener('change', async () => {
+      const id = cb.dataset.mdProject;
+      const nextExcluded = new Set(mdExcluded);
+      if (cb.checked) nextExcluded.delete(id); else nextExcluded.add(id);
+      cb.disabled = true;
+      try {
+        await updateManagerDashboardConfig({ excludedProjectIds: [...nextExcluded] });
+        await renderManagerDashboard();
+      } catch (err) {
+        console.error(err);
+        cb.checked = !cb.checked; // revert
+        alert(userError("Couldn't save that: " + err.message, 'MANAGER_DASHBOARD_PROJECTS'));
+        cb.disabled = false;
+      }
+    });
+  });
+}
+
+function mdWeekAgoIso() {
+  const d = new Date();
+  d.setDate(d.getDate() - 6);
+  return d.toISOString().slice(0, 10);
+}
+
+function renderMdStats(projectStats, reports) {
+  const dated = reports.filter((r) => r.date);
+  const weekAgo = mdWeekAgoIso();
+  const reportsThisWeek = dated.filter((r) => r.date >= weekAgo).length;
+
+  let aheadOnPace = 0, slightlyBehind = 0, behind = 0, classified = 0;
+  let totalContractSum = 0, hasContract = false;
+  let totalEarnedSum = 0, hasEarned = false;
+
+  projectStats.forEach(({ totalContract, totalEarned, status }) => {
+    if (totalContract != null) { totalContractSum += totalContract; hasContract = true; }
+    if (totalEarned != null) { totalEarnedSum += totalEarned; hasEarned = true; }
+    if (status === 'ok') aheadOnPace++;
+    else if (status === 'warn') slightlyBehind++;
+    else if (status === 'danger') behind++;
+    if (status) classified++;
+  });
+
+  const portfolioPct = hasContract && hasEarned && totalContractSum > 0 ? totalEarnedSum / totalContractSum : null;
+
+  $('#md-stats').innerHTML =
+    (portfolioPct != null ? `<div class="dash-card dc-headline" data-tip="Earned to date divided by total contract value, across every included project." tabindex="0">
+      ${ringSvg(portfolioPct)}
+      <div>
+        <span class="dc-label">Overall % Complete</span>
+        <span class="dc-sub">By contract value, included projects</span>
+      </div>
+    </div>` : '') +
+    statCard(projectStats.length, 'Active Projects', mdExcluded.size ? `${mdExcluded.size} excluded from this view` : '', 'Projects currently included in this dashboard.', null, 'int') +
+    statCard(reportsThisWeek, 'Reports This Week', '', 'Dated reports in the last 7 days, across included projects.', null, 'int') +
+    (classified > 0 ? statCard(
+      behind, 'Projects Behind Schedule',
+      `${aheadOnPace} ahead/on pace · ${slightlyBehind} slightly behind`,
+      'More of the contract\'s days have elapsed than work completed, by more than 20%. Only counts projects with an NTP Date, Total Contract Length, and at least one priced pay item.',
+      null, 'int'
+    ) : '') +
+    (hasContract ? statCard(
+      totalContractSum, 'Total Contract Value', '',
+      'Sum of Total Contract Value across included projects.',
+      null, 'money'
+    ) : '') +
+    (hasEarned ? statCard(
+      totalEarnedSum, 'Earned to Date',
+      portfolioPct != null ? `${(portfolioPct * 100).toFixed(1)}% of contract value` : '',
+      'Sum of Earned to Date across included projects.',
+      portfolioPct, 'money'
+    ) : '');
+}
+
+// One line per included project, each its own color -- each project's
+// progressOverTime points are already its own quantity-weighted percent
+// complete (same math as project.html's own trend chart), so unlike a
+// combined portfolio figure, these don't need to be blended through dollar
+// value first to make sense side by side -- every line just is that
+// project's own real progress.
+function renderMdTrendChart(projectStats, included, reports) {
+  const step = $('#md-trend-step');
+  const series = included.map((project, i) => ({
+    label: project.name,
+    color: TREND_LINE_COLORS[i % TREND_LINE_COLORS.length],
+    points: progressOverTime(reports.filter((r) => r.projectId === project.id && r.date), project.payItemCatalog || []),
+  })).filter((s) => s.points.length > 0);
+
+  step.hidden = series.length === 0;
+  if (series.length === 0) return;
+
+  $('#md-trend-hint').hidden = series.some((s) => s.points.length > 1);
+  renderTrendSvg($('#md-trend-chart'), series, { h: 150 });
+}
+
+function renderMdHoursBars(reports) {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 30);
+  const cutoffIso = cutoff.toISOString().slice(0, 10);
+
+  const totals = new Map();
+  reports.forEach((r) => {
+    if (!r.date || r.date < cutoffIso) return;
+    const hours = Number(r.hours) || 0;
+    if (hours <= 0) return;
+    const name = (r.representative || '').trim() || 'Unassigned';
+    totals.set(name, (totals.get(name) || 0) + hours);
+  });
+
+  const sorted = [...totals.entries()].sort((a, b) => b[1] - a[1]);
+  $('#md-hours-empty').hidden = sorted.length > 0;
+  const max = sorted.length ? sorted[0][1] : 1;
+  $('#md-hours-bars').innerHTML = sorted.map(([name, hours]) => `
+    <div class="md-bar-row">
+      <span class="md-bar-name">${escapeHtml(name)}</span>
+      <div class="md-bar-track"><div class="md-bar-fill" style="width:0%" data-target-width="${Math.max(4, (hours / max) * 100)}" data-count-target="${hours}" data-count-fmt="hours">0.0h</div></div>
+    </div>`).join('');
+}
+
+function renderMdProjectStatus(projectStats) {
+  const rows = projectStats.filter((r) => r.status != null);
+  $('#md-proj-status-empty').hidden = rows.length > 0;
+  // Furthest behind (lowest % complete relative to schedule) first --
+  // pct-complete alone is an imperfect stand-in for that ranking, but the
+  // status dot already carries the real ahead/behind judgement, and a
+  // secondary sort has to pick something.
+  rows.sort((a, b) => (a.overall ?? 0) - (b.overall ?? 0));
+  $('#md-proj-status').innerHTML = rows.map(({ project, overall, status }) => `
+    <div class="md-proj-row">
+      <span class="md-proj-dot md-proj-dot-${status}"></span>
+      <span class="md-proj-name">${escapeHtml(project.name)}</span>
+      <span class="md-proj-pct">${Math.round((overall || 0) * 100)}%</span>
+    </div>`).join('');
+}
+
+function renderMdFeed(reports) {
+  const projectById = new Map(mdScopedProjects.map((p) => [p.id, p]));
+  const sorted = reports.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 10);
+  $('#md-feed-empty').hidden = sorted.length > 0;
+  $('#md-feed').innerHTML = sorted.map((r) => {
+    const project = projectById.get(r.projectId);
+    const isAdverse = ADVERSE_WEATHER_RE.test(r.weatherDesc || '');
+    const who = r.representative || r.createdBy || 'Unknown';
+    return `
+      <div class="md-feed-row">
+        <span class="md-feed-date">${escapeHtml(r.date || '—')}</span>
+        <span class="md-feed-body"><strong>${escapeHtml(project ? project.name : 'Unknown project')}</strong> &middot; filed by ${escapeHtml(who)}${isAdverse ? '<span class="md-feed-flag">weather-flagged</span>' : ''}</span>
+      </div>`;
+  }).join('');
+}
+
+$('#md-manage-btn').addEventListener('click', () => {
+  $('#md-manage-panel').hidden = !$('#md-manage-panel').hidden;
+});
 
 function showAddProjectPanel() {
   $('#add-project-panel').hidden = false;
@@ -336,13 +636,17 @@ async function handleIncomingSetup() {
   await adoptOrphanReportsIfAny();
   await renderProjectCards();
   await renderUnsavedDrafts();
+  await renderManagerDashboard();
   wireAutoPull();
 })();
 
 // A background auto-pull (see wireAutoPull/autoPullCompanyData in
 // firebase-sync.js) landed new project/report data -- refresh the list so a
 // teammate's new project shows up without a manual reload.
-window.addEventListener('company-data-pulled', renderProjectCards);
+window.addEventListener('company-data-pulled', () => {
+  renderProjectCards();
+  renderManagerDashboard();
+});
 
 // The logo and project background photos sync in the background (see
 // pullCompanyMediaInBackground above and after Join/Sync Now elsewhere) --
