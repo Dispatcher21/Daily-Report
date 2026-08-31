@@ -480,18 +480,18 @@ function renderDashboard(reports, project) {
       'Number of distinct pay item numbers on this project, whether or not they\'ve shown up on a report yet.',
       null, 'int'
     ) +
-    statCard(
+    (totalContract != null ? statCard(
       totalContract, 'Total Contract Value', '',
       'Sum of Per Plans Total × Unit Price across every pay item that has both on file.',
       null, 'money'
-    ) +
-    statCard(
+    ) : '') +
+    (totalEarned != null ? statCard(
       totalEarned,
       'Earned to Date',
       pctByValue != null ? `${(pctByValue * 100).toFixed(1)}% of contract value` : '',
       'Sum of quantity used × Unit Price across every pay item that has a Unit Price on file.',
       pctByValue, 'money'
-    );
+    ) : '');
 
   renderPayItems(items);
   renderTrendChart(progressOverTime(dated, project.payItemCatalog));
