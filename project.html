@@ -101,7 +101,14 @@
       </div>
       <div class="step-body">
         <div class="dash-grid" id="dash-weather-stats" style="margin-top:0;"></div>
+        <div class="weather-view-controls">
+          <div class="view-toggle" id="weather-view-toggle" role="group" aria-label="View as">
+            <button type="button" class="view-toggle-btn active" data-view="list" title="List view" aria-label="List view">&#9776;</button>
+            <button type="button" class="view-toggle-btn" data-view="calendar" title="Calendar view" aria-label="Calendar view">&#128197;</button>
+          </div>
+        </div>
         <div class="weather-log" id="dash-weather-log"></div>
+        <div class="weather-calendar" id="dash-weather-calendar" hidden></div>
       </div>
     </div>
     </div>
@@ -688,16 +695,18 @@ function renderTrendChart(points) {
 // and qualified wind ("high wind", "strong wind", gusts) still count.
 const ADVERSE_WEATHER_RE = /rain|storm|snow|\bice\b|icy|sleet|flood|hurricane|thunder|windy|(high|strong|heavy) wind|gust/i;
 
+let weatherViewMode = 'list';
+let weatherLoggableCache = [];
+
 function renderWeatherSchedule(dated) {
   const step = $('#dash-weather-step');
+  // A No Work Day report is blank apart from its Notes by design (see the
+  // report-editor.html button) -- included here too now so it can be
+  // annotated in the list/calendar, not just counted in the stat card.
   const loggable = dated.filter((r) =>
-    r.weatherDesc || r.tempHigh || r.tempLow || r.trafficControlSelect || r.controllingItem || r.commentsOnTime
+    r.weatherDesc || r.tempHigh || r.tempLow || r.trafficControlSelect || r.controllingItem || r.commentsOnTime || isNoWorkDayReport(r)
   );
   const noWorkDays = dated.filter(isNoWorkDayReport).length;
-  // A project with nothing but No Work Day reports still deserves this
-  // section for that stat alone -- it just won't have anything to show in
-  // the weather/schedule log below, since a No Work Day report is blank
-  // apart from its Notes by design (see the report-editor.html button).
   step.hidden = loggable.length === 0 && noWorkDays === 0;
   if (step.hidden) return;
 
@@ -709,10 +718,29 @@ function renderWeatherSchedule(dated) {
     statCard(attentionDays, 'Traffic Control Attention Days', '', 'Dated reports where Traffic Control Status was set to "Attention Required".', null, 'int') +
     statCard(noWorkDays, 'No Work Days', '', 'Dated reports marked "NO WORK DAY" via the button at the top of the report editor.', null, 'int');
 
+  weatherLoggableCache = loggable;
+  renderWeatherView();
+}
+
+function renderWeatherView() {
+  $('#dash-weather-log').hidden = weatherViewMode !== 'list';
+  $('#dash-weather-calendar').hidden = weatherViewMode !== 'calendar';
+  if (weatherViewMode === 'list') renderWeatherLogList(weatherLoggableCache);
+  else renderWeatherCalendar(weatherLoggableCache);
+}
+
+function renderWeatherLogList(loggable) {
   $('#dash-weather-log').innerHTML = loggable
     .slice()
     .reverse()
     .map((r) => {
+      if (isNoWorkDayReport(r)) {
+        return `
+          <div class="wlog-row wlog-nwd">
+            <div class="wlog-date">${escapeHtml(r.date)}</div>
+            <div class="wlog-body"><div class="wlog-nwd-badge">&#128683; No Work Day</div></div>
+          </div>`;
+      }
       const isAttention = r.trafficControlSelect === 'ATTENTION_REQUIRED';
       const temps = (r.tempHigh || r.tempLow) ? `${r.tempHigh || '—'}°/${r.tempLow || '—'}°F` : '';
       const weatherText = [r.weatherDesc, temps].filter(Boolean).join(' · ');
@@ -730,6 +758,68 @@ function renderWeatherSchedule(dated) {
     })
     .join('');
 }
+
+const WCAL_WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
+function weatherCalDayHtml(dayNum, r) {
+  if (!r) return `<div class="wcal-day"><span class="wcal-day-num">${dayNum}</span></div>`;
+  if (isNoWorkDayReport(r)) {
+    return `
+      <div class="wcal-day wcal-nwd" data-tip="No Work Day" tabindex="0">
+        <span class="wcal-day-num">${dayNum}</span>
+        <span class="wcal-badge">NWD</span>
+      </div>`;
+  }
+  const isAttention = r.trafficControlSelect === 'ATTENTION_REQUIRED';
+  const isAdverse = ADVERSE_WEATHER_RE.test(r.weatherDesc || '');
+  const temps = (r.tempHigh || r.tempLow) ? `${r.tempHigh || '—'}°/${r.tempLow || '—'}°F` : '';
+  const weatherText = [r.weatherDesc, temps].filter(Boolean).join(' · ');
+  const tipParts = [
+    weatherText,
+    r.trafficControlSelect ? `Traffic Control: ${isAttention ? 'Attention Required' : 'In Place'}` : '',
+    r.controllingItem ? `Controlling Item: ${r.controllingItem}` : '',
+  ].filter(Boolean);
+  const cls = ['wcal-day'];
+  if (isAdverse) cls.push('wcal-adverse');
+  if (isAttention) cls.push('wcal-attention');
+  return `
+    <div class="${cls.join(' ')}"${tipParts.length ? ` data-tip="${escapeHtml(tipParts.join(' — '))}" tabindex="0"` : ''}>
+      <span class="wcal-day-num">${dayNum}</span>
+      ${isAdverse ? '<span class="wcal-icon" title="Adverse weather">⛈️</span>' : ''}
+      ${r.trafficControlSelect ? `<span class="wcal-dot ${isAttention ? 'wcal-dot-attention' : 'wcal-dot-ok'}"></span>` : ''}
+    </div>`;
+}
+
+function renderWeatherCalendar(loggable) {
+  const byDate = new Map(loggable.map((r) => [r.date, r]));
+  const months = [...new Set(loggable.map((r) => r.date.slice(0, 7)))].sort();
+  $('#dash-weather-calendar').innerHTML = months.map((mk) => {
+    const [y, m] = mk.split('-').map(Number);
+    const first = new Date(y, m - 1, 1);
+    const daysInMonth = new Date(y, m, 0).getDate();
+    const monthLabel = first.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+    const cells = [];
+    for (let i = 0; i < first.getDay(); i++) cells.push('<div class="wcal-day wcal-day-empty"></div>');
+    for (let d = 1; d <= daysInMonth; d++) {
+      const iso = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      cells.push(weatherCalDayHtml(d, byDate.get(iso)));
+    }
+    return `
+      <div class="wcal-month">
+        <div class="wcal-month-label">${escapeHtml(monthLabel)}</div>
+        <div class="wcal-weekdays">${WCAL_WEEKDAY_LABELS.map((l) => `<div>${l}</div>`).join('')}</div>
+        <div class="wcal-grid">${cells.join('')}</div>
+      </div>`;
+  }).join('');
+}
+
+$$('#weather-view-toggle .view-toggle-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    weatherViewMode = btn.dataset.view;
+    $$('#weather-view-toggle .view-toggle-btn').forEach((b) => b.classList.toggle('active', b === btn));
+    renderWeatherView();
+  });
+});
 
 $('#btn-toggle-settings').addEventListener('click', () => {
   const btn = $('#btn-toggle-settings');

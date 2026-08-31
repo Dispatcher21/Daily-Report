@@ -1425,6 +1425,59 @@ input[type="file"] { min-height: 0; }
 .wlog-tc { display: flex; align-items: center; gap: 0.4rem; }
 .wlog-tc .status-dot { width: 8px; height: 8px; display: inline-block; border-radius: 50%; flex: 0 0 auto; }
 .wlog-comment { font-style: italic; }
+.wlog-nwd .wlog-date { color: var(--text-dim); }
+.wlog-nwd-badge {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  font-weight: 700; color: var(--text-dim);
+}
+
+.weather-view-controls { display: flex; justify-content: flex-end; margin-bottom: 0.7rem; }
+
+/* One mini month per card, stacked -- a project's dated reports rarely span
+   more than a handful of months, so this reads better than paging through a
+   single always-current-month calendar the way a scheduling app would. */
+.weather-calendar { display: flex; flex-direction: column; gap: 1.1rem; max-height: 460px; overflow-y: auto; padding-right: 0.25rem; }
+.wcal-month-label { font-weight: 700; font-size: 0.85rem; margin-bottom: 0.5rem; }
+.wcal-weekdays, .wcal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.wcal-weekdays { margin-bottom: 4px; text-align: center; font-size: 0.68rem; font-weight: 700; color: var(--text-dim); }
+.wcal-day {
+  position: relative; aspect-ratio: 1; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface); padding: 3px 4px; display: flex; flex-direction: column; gap: 2px;
+  cursor: default;
+}
+.wcal-day[data-tip] { cursor: help; }
+.wcal-day-empty { border-color: transparent; background: none; }
+.wcal-day-num { font-size: 0.72rem; font-weight: 600; color: var(--text-dim); }
+.wcal-icon { font-size: 0.8rem; line-height: 1; }
+.wcal-dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; }
+.wcal-dot-ok { background: var(--ok); }
+.wcal-dot-attention { background: var(--danger); }
+.wcal-adverse { border-color: var(--warn); }
+.wcal-attention { background: var(--danger-bg); border-color: var(--danger); }
+.wcal-nwd { background: var(--border); }
+.wcal-nwd .wcal-day-num { color: var(--text-dim); }
+.wcal-badge {
+  font-size: 0.58rem; font-weight: 700; letter-spacing: 0.02em; color: var(--text-dim);
+}
+/* data-tip's bubble opens upward off the whole page's cursor position by
+   default -- inside a short calendar cell that's fine, but a day in the top
+   row of a month card sits at (or above) this scrollable list's own top
+   edge, same clipping problem as the pay item list's first row. */
+.weather-calendar .wcal-month:first-child .wcal-grid > :nth-child(-n+7)[data-tip]::after {
+  bottom: auto; top: calc(100% + 10px);
+  transform: translateX(-50%) translateY(-4px);
+}
+.weather-calendar .wcal-month:first-child .wcal-grid > :nth-child(-n+7)[data-tip]::before {
+  bottom: auto; top: calc(100% + 4px);
+  transform: translateX(-50%) translateY(-4px);
+  border-top-color: transparent; border-bottom-color: var(--text);
+}
+.weather-calendar .wcal-month:first-child .wcal-grid > :nth-child(-n+7)[data-tip]:hover::after,
+.weather-calendar .wcal-month:first-child .wcal-grid > :nth-child(-n+7)[data-tip]:hover::before,
+.weather-calendar .wcal-month:first-child .wcal-grid > :nth-child(-n+7)[data-tip]:focus-visible::after,
+.weather-calendar .wcal-month:first-child .wcal-grid > :nth-child(-n+7)[data-tip]:focus-visible::before {
+  transform: translateX(-50%) translateY(0);
+}
 
 .settings-toggle {
   width: 100%; display: flex; align-items: center; justify-content: space-between;
