@@ -1,7 +1,7 @@
 // Caches the app shell so it keeps working with no signal in the field.
 // Bump CACHE_NAME whenever any of these files change so the new version
 // actually gets picked up.
-const CACHE_NAME = 'daily-report-app-v148';
+const CACHE_NAME = 'daily-report-app-v149';
 const ASSETS = [
   './',
   './login.html',
@@ -41,6 +41,7 @@ const ASSETS = [
   './lib/fflate.min.js',
   './manifest.json',
   './icon.svg',
+  './apple-touch-icon.png',
   './settings-icon.png',
 ];
 
