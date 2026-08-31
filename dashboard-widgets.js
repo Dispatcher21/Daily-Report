@@ -173,15 +173,39 @@ function trendDateLabel(iso) {
   return m ? `${m[2]}/${m[3]}` : iso;
 }
 
-// `points`: [{ date, pct, earned }] -- pct in 0..1, earned in dollars (both
-// optional per-point; the tooltip just omits whichever is missing).
-function renderTrendSvg(container, points) {
-  if (points.length === 0) { container.innerHTML = ''; return; }
+// A small, fixed categorical palette for telling several lines on the same
+// chart apart -- distinct from the semantic ok/warn/danger colors used
+// elsewhere (those mean something specific; these just need to be
+// distinguishable from each other), and picked to stay legible against
+// both a light and a dark --surface.
+const TREND_LINE_COLORS = ['#3d6fa8', '#c9622f', '#2f9e6f', '#a13d8f', '#c9a227', '#3d97a1', '#a13d4f', '#6b7c3d'];
 
-  const w = 640, h = 220, padL = 38, padR = 12, padT = 14, padB = 26;
+// `series`: [{ label, color, points }], points: [{ date, pct, earned }] --
+// pct in 0..1, earned in dollars (both optional per-point; the tooltip just
+// omits whichever is missing). A single series with no `color` draws like
+// the original one-line chart (filled area under the line); 2+ series (or
+// one with a color) draw as plain colored lines with a small legend below,
+// since overlapping filled areas from several projects would just be
+// visual noise. `opts.w`/`opts.h` override the default viewBox size --
+// e.g. a shorter `h` for a chart that needs to take up less vertical room.
+function renderTrendSvg(container, series, opts) {
+  series = (series || []).filter((s) => s.points && s.points.length > 0);
+  if (series.length === 0) { container.innerHTML = ''; return; }
+
+  const w = (opts && opts.w) || 640, h = (opts && opts.h) || 220;
+  const padL = 38, padR = 12, padT = 14, padB = 26;
   const innerW = w - padL - padR, innerH = h - padT - padB;
-  const n = points.length;
-  const x = (i) => padL + (n <= 1 ? innerW / 2 : (innerW * i) / (n - 1));
+
+  // Positioned by actual calendar date, not point index -- with more than
+  // one series, different projects' report dates rarely line up, so index
+  // position alone would misalign them.
+  const allDates = [...new Set(series.flatMap((s) => s.points.map((p) => p.date)))].sort();
+  const minMs = new Date(allDates[0] + 'T00:00:00').getTime();
+  const maxMs = new Date(allDates[allDates.length - 1] + 'T00:00:00').getTime();
+  const span = Math.max(1, maxMs - minMs);
+  const x = (dateIso) => minMs === maxMs
+    ? padL + innerW / 2
+    : padL + innerW * ((new Date(dateIso + 'T00:00:00').getTime() - minMs) / span);
   const y = (pct) => padT + innerH * (1 - Math.max(0, Math.min(1, pct || 0)));
 
   const gridLines = [0, 0.25, 0.5, 0.75, 1].map((f) => {
@@ -190,27 +214,40 @@ function renderTrendSvg(container, points) {
       <text x="${padL - 6}" y="${gy + 3}" class="trend-axis-label" text-anchor="end">${Math.round(f * 100)}%</text>`;
   }).join('');
 
-  const coords = points.map((p, i) => [x(i), y(p.pct)]);
-  let pathSection = '';
-  if (n > 1) {
-    const linePath = 'M' + coords.map((c) => c.join(',')).join(' L');
-    const areaPath = `M${coords[0][0]},${padT + innerH} L${coords.map((c) => c.join(',')).join(' L')} L${coords[n - 1][0]},${padT + innerH} Z`;
-    pathSection = `<path d="${areaPath}" class="trend-area"></path><path d="${linePath}" class="trend-line"></path>`;
-  }
-
-  const dots = points.map((p, i) => {
-    const [cx, cy] = coords[i];
-    const tip = `${p.date}: ${p.pct != null ? (p.pct * 100).toFixed(1) + '% complete' : 'no target set yet'}${p.earned != null ? ', ' + fmtMoney(p.earned) + ' earned' : ''}`;
-    return `<circle cx="${cx}" cy="${cy}" r="4" class="trend-dot"><title>${escapeHtml(tip)}</title></circle>`;
+  const singlePlainSeries = series.length === 1 && !series[0].color;
+  const seriesSvg = series.map((s) => {
+    const color = s.color || 'var(--brand)';
+    const coords = s.points.map((p) => [x(p.date), y(p.pct)]);
+    let pathSection = '';
+    if (coords.length > 1) {
+      const linePath = 'M' + coords.map((c) => c.join(',')).join(' L');
+      if (singlePlainSeries) {
+        const areaPath = `M${coords[0][0]},${padT + innerH} L${coords.map((c) => c.join(',')).join(' L')} L${coords[coords.length - 1][0]},${padT + innerH} Z`;
+        pathSection = `<path d="${areaPath}" class="trend-area"></path><path d="${linePath}" class="trend-line"></path>`;
+      } else {
+        pathSection = `<path d="${linePath}" class="trend-line" style="stroke:${color}"></path>`;
+      }
+    }
+    const dots = s.points.map((p, i) => {
+      const [cx, cy] = coords[i];
+      const tip = `${s.label ? s.label + ' — ' : ''}${p.date}: ${p.pct != null ? (p.pct * 100).toFixed(1) + '% complete' : 'no target set yet'}${p.earned != null ? ', ' + fmtMoney(p.earned) + ' earned' : ''}`;
+      return `<circle cx="${cx}" cy="${cy}" r="${singlePlainSeries ? 4 : 3}" class="trend-dot" style="fill:${color}"><title>${escapeHtml(tip)}</title></circle>`;
+    }).join('');
+    return pathSection + dots;
   }).join('');
 
-  const xLabels = `<text x="${x(0)}" y="${h - 6}" class="trend-axis-label" text-anchor="start">${trendDateLabel(points[0].date)}</text>` +
-    (n > 1 ? `<text x="${x(n - 1)}" y="${h - 6}" class="trend-axis-label" text-anchor="end">${trendDateLabel(points[n - 1].date)}</text>` : '');
+  const xLabels = `<text x="${x(allDates[0])}" y="${h - 6}" class="trend-axis-label" text-anchor="start">${trendDateLabel(allDates[0])}</text>` +
+    (allDates.length > 1 ? `<text x="${x(allDates[allDates.length - 1])}" y="${h - 6}" class="trend-axis-label" text-anchor="end">${trendDateLabel(allDates[allDates.length - 1])}</text>` : '');
+
+  const legendHtml = series.length > 1
+    ? `<div class="trend-legend">${series.map((s) => `
+        <span class="trend-legend-item"><span class="trend-legend-dot" style="background:${s.color || 'var(--brand)'}"></span>${escapeHtml(s.label || '')}</span>`).join('')}</div>`
+    : '';
 
   container.innerHTML = `
     <svg viewBox="0 0 ${w} ${h}" class="trend-svg" role="img" aria-label="Percent complete over time">
-      ${gridLines}${pathSection}${dots}${xLabels}
-    </svg>`;
+      ${gridLines}${seriesSvg}${xLabels}
+    </svg>${legendHtml}`;
 }
 
 // ---------- Collapsible sections ----------

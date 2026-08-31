@@ -1493,6 +1493,12 @@ input[type="file"] { min-height: 0; }
 .trend-line { fill: none; stroke: var(--brand); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
 .trend-dot { fill: var(--brand); stroke: var(--surface); stroke-width: 2; }
 
+/* Shown under the chart only when it's drawing 2+ colored series (see
+   renderTrendSvg) -- a single line already reads fine with no key. */
+.trend-legend { display: flex; flex-wrap: wrap; gap: 0.3rem 0.9rem; margin-top: 0.6rem; }
+.trend-legend-item { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.76rem; color: var(--text-dim); }
+.trend-legend-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
+
 /* Opt-in per .step (see setupCollapsibleSteps in dashboard-widgets.js) --
    most .step cards across the app aren't collapsible, so this only ever
    applies where a page explicitly asks for it (currently just the Manager

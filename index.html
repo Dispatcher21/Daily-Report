@@ -49,9 +49,9 @@
         <div class="step step-collapsible" id="md-trend-step" hidden>
           <div class="step-header"><span class="step-num">TREND</span><h2>Progress Over Time</h2></div>
           <div class="step-body">
-            <p class="hint" style="margin-top:0;">Combined percent complete across included projects, weighted by contract value -- same weighting as the Overall % Complete card above.</p>
+            <p class="hint" style="margin-top:0;">Each included project's own percent complete, weighted by planned quantity within that project.</p>
             <div id="md-trend-chart"></div>
-            <p class="hint" id="md-trend-hint" hidden style="margin-top:0.5rem;">Only one dated point on file so far &mdash; a trend line will appear once there's more than one date to compare.</p>
+            <p class="hint" id="md-trend-hint" hidden style="margin-top:0.5rem;">Only one dated point on file so far for every included project &mdash; a trend line will appear once at least one has more than one date to compare.</p>
           </div>
         </div>
 
@@ -418,48 +418,25 @@ function renderMdStats(projectStats, reports) {
     ) : '');
 }
 
-// Combined percent-complete-over-time across every included project --
-// dollar-weighted (same as the Overall % Complete card above it), since
-// physical quantities aren't comparable across projects that measure in
-// different units (tons of asphalt vs. square yards of sidewalk, etc.) the
-// way dollars are. Each project keeps its own progressOverTime points (same
-// math as project.html's own trend chart -- merging raw pay items across
-// different projects' catalogs first would collide on itemNumber, so
-// dollar totals are combined instead, only after each project has already
-// resolved its own). At each combined date, a project without a report on
-// that exact date carries forward its most recent known earned total, same
-// as the underlying quantities themselves only ever move forward.
+// One line per included project, each its own color -- each project's
+// progressOverTime points are already its own quantity-weighted percent
+// complete (same math as project.html's own trend chart), so unlike a
+// combined portfolio figure, these don't need to be blended through dollar
+// value first to make sense side by side -- every line just is that
+// project's own real progress.
 function renderMdTrendChart(projectStats, included, reports) {
   const step = $('#md-trend-step');
-  const totalContractSum = projectStats.reduce((sum, s) => sum + (s.totalContract || 0), 0);
-  if (totalContractSum <= 0) { step.hidden = true; return; }
+  const series = included.map((project, i) => ({
+    label: project.name,
+    color: TREND_LINE_COLORS[i % TREND_LINE_COLORS.length],
+    points: progressOverTime(reports.filter((r) => r.projectId === project.id && r.date), project.payItemCatalog || []),
+  })).filter((s) => s.points.length > 0);
 
-  const perProjectPoints = included.map((project) =>
-    progressOverTime(reports.filter((r) => r.projectId === project.id && r.date), project.payItemCatalog || [])
-  );
+  step.hidden = series.length === 0;
+  if (series.length === 0) return;
 
-  const allDates = new Set();
-  perProjectPoints.forEach((pts) => pts.forEach((p) => allDates.add(p.date)));
-  const dates = [...allDates].sort();
-
-  step.hidden = dates.length === 0;
-  if (dates.length === 0) return;
-
-  const points = dates.map((date) => {
-    let earnedSum = 0;
-    perProjectPoints.forEach((pts) => {
-      let latest = null;
-      for (const p of pts) {
-        if (p.date > date) break;
-        latest = p;
-      }
-      if (latest && latest.earned != null) earnedSum += latest.earned;
-    });
-    return { date, earned: earnedSum, pct: earnedSum / totalContractSum };
-  });
-
-  $('#md-trend-hint').hidden = points.length !== 1;
-  renderTrendSvg($('#md-trend-chart'), points);
+  $('#md-trend-hint').hidden = series.some((s) => s.points.length > 1);
+  renderTrendSvg($('#md-trend-chart'), series, { h: 150 });
 }
 
 function renderMdHoursBars(reports) {
