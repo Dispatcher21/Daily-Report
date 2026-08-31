@@ -173,26 +173,16 @@
         <input type="checkbox" id="cm-perm-projects">
         <span>Members can edit/delete projects</span>
       </label>
-      <label class="toggle-row" for="cm-perm-create-projects" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;">
+      <label class="toggle-row" for="cm-perm-create-projects" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-bottom:0.75rem;">
         <input type="checkbox" id="cm-perm-create-projects">
         <span>Members can create new projects</span>
       </label>
-    </div>
-  </div>
-  </div>
-
-  <div class="step">
-    <div class="step-header">
-      <span class="step-num">FEATURE</span>
-      <h2>Manager Dashboard</h2>
-    </div>
-    <div class="step-body">
-      <p class="hint" style="margin-top:0;">A company-wide dashboard on the home page -- combined stats, hours per employee, and project status across every project at once. Admin-only; members never see it.</p>
-      <label class="toggle-row" for="cm-manager-dashboard-enabled" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;">
-        <input type="checkbox" id="cm-manager-dashboard-enabled">
-        <span>Show the Manager Dashboard on the home page</span>
+      <label class="toggle-row" for="cm-perm-view-manager-dashboard" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;">
+        <input type="checkbox" id="cm-perm-view-manager-dashboard">
+        <span>Members can view the Manager Dashboard</span>
       </label>
     </div>
+  </div>
   </div>
 
   <div class="step">
@@ -247,9 +237,13 @@
           <input type="checkbox" id="cs-perm-projects">
           <span>Can edit/delete projects</span>
         </label>
-        <label class="toggle-row" for="cs-perm-create-projects" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;">
+        <label class="toggle-row" for="cs-perm-create-projects" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-bottom:0.6rem;">
           <input type="checkbox" id="cs-perm-create-projects">
           <span>Can create new projects</span>
+        </label>
+        <label class="toggle-row" for="cs-perm-view-manager-dashboard" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;">
+          <input type="checkbox" id="cs-perm-view-manager-dashboard">
+          <span>Can view the Manager Dashboard (scoped to this setup's projects)</span>
         </label>
 
         <p class="hint" style="margin:0.75rem 0 0.3rem;">Projects this setup can see</p>
@@ -592,18 +586,15 @@ $('#cm-perm-create-projects').addEventListener('change', async (e) => {
     cmError(userError("Couldn't save that permission: " + err.message, 'PERMISSION_TOGGLE'));
   }
 });
-
-// ---------- Manager Dashboard ----------
-
-$('#cm-manager-dashboard-enabled').addEventListener('change', async (e) => {
+$('#cm-perm-view-manager-dashboard').addEventListener('change', async (e) => {
   cmError('');
   try {
-    await updateManagerDashboardConfig({ enabled: e.target.checked });
-    cmStatus('Saved.');
+    await updateCompanyPermissions({ membersCanViewManagerDashboard: e.target.checked });
+    cmStatus('Permissions saved.');
   } catch (err) {
     console.error(err);
     e.target.checked = !e.target.checked;
-    cmError(userError("Couldn't save that: " + err.message, 'MANAGER_DASHBOARD_TOGGLE'));
+    cmError(userError("Couldn't save that permission: " + err.message, 'PERMISSION_TOGGLE'));
   }
 });
 
@@ -690,6 +681,7 @@ $('#btn-create-setup').addEventListener('click', async () => {
     membersCanEditAnyReport: $('#cs-perm-reports-any').checked,
     membersCanEditProjects: $('#cs-perm-projects').checked,
     membersCanCreateProjects: $('#cs-perm-create-projects').checked,
+    membersCanViewManagerDashboard: $('#cs-perm-view-manager-dashboard').checked,
   };
 
   btn.disabled = true;
@@ -892,9 +884,7 @@ $('#btn-refresh-activity').addEventListener('click', async () => {
   $('#cm-perm-reports-any').checked = !!perms.membersCanEditAnyReport;
   $('#cm-perm-projects').checked = !!perms.membersCanEditProjects;
   $('#cm-perm-create-projects').checked = !!perms.membersCanCreateProjects;
-
-  const managerDashboard = await getManagerDashboardConfig();
-  $('#cm-manager-dashboard-enabled').checked = !!managerDashboard.enabled;
+  $('#cm-perm-view-manager-dashboard').checked = !!perms.membersCanViewManagerDashboard;
 
   await renderCmProjects();
   await renderCmActivity();

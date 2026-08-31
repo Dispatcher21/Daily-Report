@@ -276,11 +276,19 @@ function mdScheduleStatus(project, overall, today) {
 async function renderManagerDashboard() {
   const room = await getCompanyRoom();
   const col = $('#manager-dashboard-col');
-  if (!room || !room.isAdmin) { col.hidden = true; return; }
+  if (!room) { col.hidden = true; return; }
+  // Admin always sees it (companyCan short-circuits true for an admin room
+  // regardless of the permission's actual value); anyone else needs the
+  // "Members can view the Manager Dashboard" permission granted in Company
+  // Management, same as every other member permission.
+  if (!(await companyCan('viewManagerDashboard'))) { col.hidden = true; return; }
+  col.hidden = false;
+
+  // Only an admin can edit which projects are included -- everyone else
+  // who can see the dashboard sees the same admin-chosen set.
+  $('#md-manage-btn').hidden = !room.isAdmin;
 
   const cfg = await getManagerDashboardConfig();
-  col.hidden = !cfg.enabled;
-  if (!cfg.enabled) return;
 
   const [allProjects, allReports] = await Promise.all([getAllProjects(), getAllReports()]);
   mdScopedProjects = allProjects.filter((p) => projectInScope(p.id, room));

@@ -74,6 +74,7 @@ const DEFAULT_PERMISSIONS = {
   membersCanEditAnyReport: false,
   membersCanEditProjects: false,
   membersCanCreateProjects: false,
+  membersCanViewManagerDashboard: false,
 };
 
 async function hashText(text) {
@@ -392,6 +393,7 @@ async function companyCan(action) {
   if (!room || room.isAdmin) return true;
   const perms = await getCompanyPermissions();
   if (action === 'createProjects') return !!perms.membersCanCreateProjects;
+  if (action === 'viewManagerDashboard') return !!perms.membersCanViewManagerDashboard;
   return !!perms.membersCanEditProjects; // 'editProjects'
 }
 
@@ -434,13 +436,16 @@ async function updateCompanyPermissions(patch) {
   return merged;
 }
 
-const DEFAULT_MANAGER_DASHBOARD = { enabled: false, excludedProjectIds: [] };
+const DEFAULT_MANAGER_DASHBOARD = { excludedProjectIds: [] };
 
-// Read fresh from Firestore every time rather than mirrored into a local
-// setting the way permissions are -- this is only ever checked once per
-// index.html load (not a hot path), and the alternative is a manager on a
-// second device seeing a stale enabled/disabled state or an out-of-date
-// excluded-projects list until something else happens to refresh it.
+// Who can even SEE the Manager Dashboard is a permission (membersCanView
+// ManagerDashboard/companyCan -- admin always can, same as every other
+// permission), not part of this config. This is just which projects count
+// toward it, shared by everyone who can see it. Read fresh from Firestore
+// every time rather than mirrored into a local setting the way permissions
+// are -- this is only ever checked once per index.html load (not a hot
+// path), and the alternative is a manager on a second device seeing a
+// stale excluded-projects list until something else happens to refresh it.
 async function getManagerDashboardConfig() {
   const room = await getCompanyRoom();
   if (!room) return { ...DEFAULT_MANAGER_DASHBOARD };
