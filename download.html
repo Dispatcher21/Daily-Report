@@ -193,7 +193,35 @@ function isMobileDevice() {
 
   const btnPdf = $('#btn-download-pdf');
   btnPdf.disabled = false;
-  btnPdf.addEventListener('click', () => triggerDownload(pdfBlob, pdfFilename(reports)));
+  const filename = pdfFilename(reports);
+
+  if (isMobileDevice()) {
+    // The Web Share API hands the PDF straight to the OS share sheet (Save
+    // to Files, AirDrop, Mail, etc.) -- a better landing spot than a plain
+    // download on a phone, when it's available (iOS 15+, Android). Falls
+    // back to the same <a download> mechanism as desktop otherwise, not a
+    // window.open() -- a blob: URL opened in a *new* tab doesn't reliably
+    // load on WebKit (confirmed by hand, opens blank), where <a download>
+    // itself is not actually the broken part.
+    const file = new File([pdfBlob], filename, { type: 'application/pdf' });
+    const canShareFile = navigator.canShare && navigator.canShare({ files: [file] });
+    if (canShareFile) {
+      btnPdf.textContent = 'Share / Save PDF';
+      btnPdf.addEventListener('click', async () => {
+        try {
+          await navigator.share({ files: [file], title: filename });
+        } catch (err) {
+          if (err.name === 'AbortError') return; // user dismissed the share sheet
+          console.error(err);
+          triggerDownload(pdfBlob, filename);
+        }
+      });
+    } else {
+      btnPdf.addEventListener('click', () => triggerDownload(pdfBlob, filename));
+    }
+  } else {
+    btnPdf.addEventListener('click', () => triggerDownload(pdfBlob, filename));
+  }
 })();
 </script>
 </body>
