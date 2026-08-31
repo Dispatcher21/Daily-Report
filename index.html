@@ -424,10 +424,13 @@ function renderMdStats(projectStats, reports) {
 // combined portfolio figure, these don't need to be blended through dollar
 // value first to make sense side by side -- every line just is that
 // project's own real progress. Positioned by days since each project's own
-// NTP Date rather than the calendar, so every line starts at the same left
-// edge (day 0) and pace is directly comparable -- a project with no NTP
-// Date on file has no day-0 to anchor to, so it's left out of this chart
-// (it still counts everywhere else on the dashboard).
+// NTP Date rather than the calendar, and normalized to that project's own
+// elapsed range (day 0 = NTP, .maxDay = today) rather than one range shared
+// across every project -- otherwise a project running far longer than the
+// rest would set the scale and squash everyone else's whole history into a
+// sliver near the left edge. A project with no NTP Date on file has no
+// day-0 to anchor to, so it's left out of this chart (it still counts
+// everywhere else on the dashboard).
 function renderMdTrendChart(projectStats, included, reports, today) {
   const step = $('#md-trend-step');
   const withNtp = included.filter((project) => /^\d{4}-\d{2}-\d{2}$/.test((project.meta || {}).ntpDate || ''));
@@ -435,15 +438,14 @@ function renderMdTrendChart(projectStats, included, reports, today) {
     const ntpDate = project.meta.ntpDate;
     const points = progressOverTime(reports.filter((r) => r.projectId === project.id && r.date), project.payItemCatalog || [])
       .map((p) => ({ ...p, day: Math.max(0, daysBetween(ntpDate, p.date)) }));
-    return { label: project.name, color: TREND_LINE_COLORS[i % TREND_LINE_COLORS.length], points, ntpDate };
+    return { label: project.name, color: TREND_LINE_COLORS[i % TREND_LINE_COLORS.length], points, maxDay: daysBetween(ntpDate, today) };
   }).filter((s) => s.points.length > 0);
 
   step.hidden = series.length === 0;
   if (series.length === 0) return;
 
   $('#md-trend-hint').hidden = series.some((s) => s.points.length > 1);
-  const xMax = Math.max(1, ...series.map((s) => daysBetween(s.ntpDate, today)));
-  renderTrendSvg($('#md-trend-chart'), series, { h: 150, xAxis: 'daysSinceStart', xMax });
+  renderTrendSvg($('#md-trend-chart'), series, { h: 150, xAxis: 'daysSinceStart' });
 }
 
 function renderMdHoursBars(reports) {

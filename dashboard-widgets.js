@@ -191,12 +191,15 @@ const TREND_LINE_COLORS = ['#3d6fa8', '#c9622f', '#2f9e6f', '#a13d8f', '#c9a227'
 //
 // `opts.xAxis === 'daysSinceStart'` switches the x-axis from actual
 // calendar date to elapsed days since each point's own `.day` (e.g. days
-// since that project's NTP date) -- every series then starts at the same
-// left edge (day 0) instead of at wherever its first report happened to
-// fall on the calendar, which is the whole point when comparing several
-// projects' pace against each other. `opts.xMax` sets the right edge (e.g.
-// today's elapsed day count for the longest-running project); points
-// still carry `.date` for the tooltip even in this mode.
+// since that project's NTP date). Each series is normalized to ITS OWN
+// elapsed range -- day 0 (NTP) at the left edge, that project's own `.maxDay`
+// (its current elapsed day count, i.e. "today") at the right edge -- rather
+// than one range shared across every series. A shared range would squeeze a
+// newer project's entire history into a sliver whenever another included
+// project has been running far longer; normalizing per series instead means
+// every line spans the full NTP-to-today width regardless of how long that
+// project has actually been going, which is what actually makes pace
+// comparable at a glance. Points still carry `.date` for the tooltip.
 function renderTrendSvg(container, series, opts) {
   series = (series || []).filter((s) => s.points && s.points.length > 0);
   if (series.length === 0) { container.innerHTML = ''; return; }
@@ -206,27 +209,29 @@ function renderTrendSvg(container, series, opts) {
   const innerW = w - padL - padR, innerH = h - padT - padB;
   const daysMode = opts && opts.xAxis === 'daysSinceStart';
 
-  let x, xStartLabel, xEndLabel;
+  let xOf, xStartLabel, xEndLabel;
   if (daysMode) {
-    const maxDay = Math.max(1, (opts && opts.xMax) || 0, ...series.flatMap((s) => s.points.map((p) => p.day || 0)));
-    x = (day) => padL + innerW * (Math.max(0, day || 0) / maxDay);
+    xOf = (p, s) => {
+      const maxDay = Math.max(1, s.maxDay || 0);
+      return padL + innerW * (Math.max(0, Math.min(maxDay, p.day || 0)) / maxDay);
+    };
     xStartLabel = 'NTP';
     xEndLabel = 'Today';
   } else {
     // Positioned by actual calendar date, not point index -- with more than
     // one series, different projects' report dates rarely line up, so index
     // position alone would misalign them.
-    var allDates = [...new Set(series.flatMap((s) => s.points.map((p) => p.date)))].sort();
+    const allDates = [...new Set(series.flatMap((s) => s.points.map((p) => p.date)))].sort();
     const minMs = new Date(allDates[0] + 'T00:00:00').getTime();
     const maxMs = new Date(allDates[allDates.length - 1] + 'T00:00:00').getTime();
     const span = Math.max(1, maxMs - minMs);
-    x = (dateIso) => minMs === maxMs
+    const xCal = (dateIso) => minMs === maxMs
       ? padL + innerW / 2
       : padL + innerW * ((new Date(dateIso + 'T00:00:00').getTime() - minMs) / span);
+    xOf = (p) => xCal(p.date);
     xStartLabel = trendDateLabel(allDates[0]);
     xEndLabel = allDates.length > 1 ? trendDateLabel(allDates[allDates.length - 1]) : null;
   }
-  const xOf = (p) => daysMode ? x(p.day) : x(p.date);
   const y = (pct) => padT + innerH * (1 - Math.max(0, Math.min(1, pct || 0)));
 
   const gridLines = [0, 0.25, 0.5, 0.75, 1].map((f) => {
@@ -238,7 +243,7 @@ function renderTrendSvg(container, series, opts) {
   const singlePlainSeries = series.length === 1 && !series[0].color;
   const seriesSvg = series.map((s) => {
     const color = s.color || 'var(--brand)';
-    const coords = s.points.map((p) => [xOf(p), y(p.pct)]);
+    const coords = s.points.map((p) => [xOf(p, s), y(p.pct)]);
     let pathSection = '';
     if (coords.length > 1) {
       const linePath = 'M' + coords.map((c) => c.join(',')).join(' L');
