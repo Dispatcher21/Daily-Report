@@ -507,14 +507,15 @@ let weatherLoggableCache = [];
 
 function renderWeatherSchedule(dated) {
   const step = $('#dash-weather-step');
-  // A No Work Day report is blank apart from its Notes by design (see the
-  // report-editor.html button) -- included here too now so it can be
-  // annotated in the list/calendar, not just counted in the stat card.
+  // A No Work Day/Weather Day report is blank apart from its Notes by design
+  // (see the report-editor.html buttons) -- included here too now so it can
+  // be annotated in the list/calendar, not just counted in the stat card.
   const loggable = dated.filter((r) =>
-    r.weatherDesc || r.tempHigh || r.tempLow || r.trafficControlSelect || r.controllingItem || r.commentsOnTime || r.activity || isNoWorkDayReport(r)
+    r.weatherDesc || r.tempHigh || r.tempLow || r.trafficControlSelect || r.controllingItem || r.commentsOnTime || r.activity || isNoWorkDayReport(r) || isWeatherDayReport(r)
   );
   const noWorkDays = dated.filter(isNoWorkDayReport).length;
-  step.hidden = loggable.length === 0 && noWorkDays === 0;
+  const weatherDays = dated.filter(isWeatherDayReport).length;
+  step.hidden = loggable.length === 0 && noWorkDays === 0 && weatherDays === 0;
   if (step.hidden) return;
 
   const weatherFlagged = dated.filter((r) => ADVERSE_WEATHER_RE.test(r.weatherDesc || '')).length;
@@ -523,7 +524,8 @@ function renderWeatherSchedule(dated) {
   $('#dash-weather-stats').innerHTML =
     statCard(weatherFlagged, 'Weather-Flagged Days', '', 'Dated reports whose Weather Description mentions rain, snow, wind, or similar adverse conditions.', null, 'int') +
     statCard(attentionDays, 'Traffic Control Attention Days', '', 'Dated reports where Traffic Control Status was set to "Attention Required".', null, 'int') +
-    statCard(noWorkDays, 'No Work Days', '', 'Dated reports marked "NO WORK DAY" via the button at the top of the report editor.', null, 'int');
+    statCard(noWorkDays, 'No Work Days', '', 'Dated reports marked "NO WORK DAY" via the button at the top of the report editor.', null, 'int') +
+    statCard(weatherDays, 'Weather Days', '', 'Dated reports marked "WEATHER DAY" via the button at the top of the report editor.', null, 'int');
 
   weatherLoggableCache = loggable;
   renderWeatherView();
@@ -546,6 +548,13 @@ function renderWeatherLogList(loggable) {
           <div class="wlog-row wlog-nwd">
             <div class="wlog-date">${escapeHtml(r.date)}</div>
             <div class="wlog-body"><div class="wlog-nwd-badge">&#128683; No Work Day</div></div>
+          </div>`;
+      }
+      if (isWeatherDayReport(r)) {
+        return `
+          <div class="wlog-row wlog-nwd">
+            <div class="wlog-date">${escapeHtml(r.date)}</div>
+            <div class="wlog-body"><div class="wlog-nwd-badge">&#9925; Weather Day</div></div>
           </div>`;
       }
       const isAttention = r.trafficControlSelect === 'ATTENTION_REQUIRED';
@@ -576,6 +585,13 @@ function weatherCalDayHtml(dayNum, r) {
       <div class="wcal-day wcal-nwd" data-tip="No Work Day" tabindex="0">
         <span class="wcal-day-num">${dayNum}</span>
         <span class="wcal-badge">NWD</span>
+      </div>`;
+  }
+  if (isWeatherDayReport(r)) {
+    return `
+      <div class="wcal-day wcal-nwd" data-tip="Weather Day" tabindex="0">
+        <span class="wcal-day-num">${dayNum}</span>
+        <span class="wcal-badge">WD</span>
       </div>`;
   }
   const isAttention = r.trafficControlSelect === 'ATTENTION_REQUIRED';

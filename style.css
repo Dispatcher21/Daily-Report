@@ -566,12 +566,28 @@ main { max-width: min(1400px, 94vw); margin: 0 auto; padding: 1rem; }
    real printed template, live, with click targets at each field's actual
    coordinates (FIELD_HIGHLIGHT_REGIONS) -- same component required-
    fields.html uses, just clicking jumps to + opens that field's card
-   instead of opening an admin popover. Desktop only for now; below
-   1050px this collapses to the preview under the form, same components,
-   just stacked -- a dedicated mobile pass is separate, later work. */
+   instead of opening an admin popover. Desktop shows both side by side.
+   Below 1050px, the "rb-mobile-tabs" Form/Preview switcher (below) shows
+   one at a time full-screen instead of a long stacked scroll. */
 .rb-layout { display: flex; flex-direction: column; gap: 1rem; }
 @media (min-width: 1050px) {
   .rb-layout { display: grid; grid-template-columns: minmax(380px, 1fr) minmax(420px, 640px); align-items: start; }
+}
+
+/* Mobile-only Form/Preview tab switcher. Hidden entirely at desktop width,
+   where both columns already show side by side. */
+.rb-mobile-tabs {
+  display: flex; gap: 0.4rem; position: sticky; top: 0; z-index: 5;
+  background: var(--bg); padding: 0.5rem 0; margin: -0.5rem 0 0.5rem;
+}
+.rb-mobile-tab {
+  flex: 1; padding: 0.6rem 0.5rem; border-radius: var(--radius);
+  border: 1px solid var(--border); background: var(--surface); color: var(--text-dim);
+  font-weight: 700; font-size: 0.9rem; cursor: pointer;
+}
+.rb-mobile-tab.active { background: var(--accent); border-color: var(--accent); color: var(--accent-contrast, #fff); }
+@media (min-width: 1050px) {
+  .rb-mobile-tabs { display: none; }
 }
 
 .rb-form { display: flex; flex-direction: column; gap: 0.75rem; min-width: 0; }
@@ -579,6 +595,27 @@ main { max-width: min(1400px, 94vw); margin: 0 auto; padding: 1rem; }
 .rb-preview-col { position: static; }
 @media (min-width: 1050px) {
   .rb-preview-col { position: sticky; top: 1rem; }
+}
+@media (max-width: 1049.98px) {
+  .rb-layout .rb-form { display: flex; }
+  .rb-layout .rb-preview-col { display: none; }
+  .rb-layout.mobile-view-preview .rb-form { display: none; }
+  .rb-layout.mobile-view-preview .rb-preview-col { display: block; }
+
+  /* The Save button + its status text used to sit at the very bottom of a
+     long, scrolling form -- a "Save failed" or "Unsaved changes" message
+     there was easy to scroll right past. Pin it to the bottom of the
+     viewport instead so it's always visible while in Form view. */
+  .rb-form { padding-bottom: 4.5rem; }
+  .save-row {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; margin: 0;
+    background: var(--bg); border-top: 1px solid var(--border);
+    padding: 0.7rem 1rem calc(0.7rem + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.15);
+  }
+  /* .btn-primary is width:100% by default (fine inline in the form) -- fixed
+     to a set width here so the status text next to it has room to wrap. */
+  .save-row .btn-primary { width: auto; min-width: 110px; flex: 0 0 auto; }
 }
 .rb-preview-label {
   font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
@@ -1064,6 +1101,11 @@ input[type="file"] { min-height: 0; }
   background: var(--danger); padding: 2px 8px; border-radius: 10px;
   vertical-align: middle; white-space: nowrap;
 }
+.report-row-wd {
+  font-size: 0.68rem; font-weight: 700; letter-spacing: 0.02em; color: #fff;
+  background: var(--warn); padding: 2px 8px; border-radius: 10px;
+  vertical-align: middle; white-space: nowrap;
+}
 .report-row .report-row-sub { font-size: 0.83rem; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .report-row .report-row-actions { display: flex; align-items: center; gap: 0.5rem; }
 .report-row-no {
@@ -1186,7 +1228,7 @@ input[type="file"] { min-height: 0; }
 .export-bar { margin-top: 1rem; display: flex; flex-direction: column; gap: 0.5rem; }
 .save-row { display: flex; align-items: center; gap: 0.7rem; }
 .save-row #btn-save-report { flex: 0 0 auto; }
-.save-status { font-size: 0.85rem; color: var(--text-dim); }
+.save-status { font-size: 0.85rem; color: var(--text-dim); flex: 1 1 auto; min-width: 0; }
 .save-status-err { color: var(--danger); font-weight: 600; }
 
 .success {

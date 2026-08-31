@@ -47,6 +47,14 @@ function isNoWorkDayReport(report) {
   return !!report && (report.notes || '').trim().toUpperCase() === NO_WORK_DAY_NOTE;
 }
 
+// Same idea as a No Work Day, but for a day lost specifically to weather
+// (the contract-time-extension sense of the term) rather than blank for any
+// other reason -- same otherwise-blank-apart-from-Notes convention.
+const WEATHER_DAY_NOTE = 'WEATHER DAY';
+function isWeatherDayReport(report) {
+  return !!report && (report.notes || '').trim().toUpperCase() === WEATHER_DAY_NOTE;
+}
+
 // True for a catalog item that tracks Start/Stop Station, Side, and/or has a
 // Locations list (see the STATIONS/LOCATIONS/SIDE columns in project-file.js).
 // These can legitimately show up more than once on the same report --

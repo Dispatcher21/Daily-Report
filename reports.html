@@ -415,6 +415,7 @@ function reportThumbsHtml(r) {
 function reportBadgesHtml(r) {
   const badges = [];
   if (isNoWorkDayReport(r)) badges.push('<span class="report-row-nwd">NO WORK DAY</span>');
+  if (isWeatherDayReport(r)) badges.push('<span class="report-row-wd">WEATHER DAY</span>');
   if (r.createdBy || r.representative) badges.push(`<span class="report-row-author">${escapeHtml(r.createdBy || r.representative)}</span>`);
   return badges.join(' ');
 }
@@ -457,7 +458,7 @@ function computeReportWarnings(reports) {
   // entered at all. Needs a handful of real data points before "average"
   // means anything, so this stays quiet on a brand-new project.
   const worked = reports.filter(
-    (r) => !isNoWorkDayReport(r) && r.hours !== '' && r.hours != null && Number.isFinite(Number(r.hours))
+    (r) => !isNoWorkDayReport(r) && !isWeatherDayReport(r) && r.hours !== '' && r.hours != null && Number.isFinite(Number(r.hours))
   );
   if (worked.length >= 3) {
     const avg = worked.reduce((sum, r) => sum + Number(r.hours), 0) / worked.length;
@@ -505,11 +506,13 @@ function renderRow(r) {
 
 function renderCard(r) {
   // Activity leads the card -- it's the thing actually worth scanning for.
-  // A true No Work Day report has nothing there by design (the button that
-  // makes one only touches Notes, never Activity), so its badge takes over
-  // that slot instead of every one just saying "No activity noted".
+  // A true No Work Day/Weather Day report has nothing there by design (the
+  // buttons that make one only touch Notes, never Activity), so its badge
+  // takes over that slot instead of every one just saying "No activity noted".
   const activityHtml = !r.activity && isNoWorkDayReport(r)
     ? '<span class="report-row-nwd">NO WORK DAY</span>'
+    : !r.activity && isWeatherDayReport(r)
+    ? '<span class="report-row-wd">WEATHER DAY</span>'
     : escapeHtml(r.activity || 'No activity noted');
   const authorBadge = (r.createdBy || r.representative)
     ? ` <span class="report-row-author">${escapeHtml(r.createdBy || r.representative)}</span>`

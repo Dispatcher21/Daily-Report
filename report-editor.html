@@ -37,6 +37,16 @@
     <p class="hint" style="margin:0.4rem 0 0;">Sets Notes to "NO WORK DAY" and Hours to 0, leaves everything else as-is -- counted on the project dashboard.</p>
   </div>
 
+  <div class="no-work-day-bar">
+    <button type="button" class="btn-secondary" id="btn-weather-day">&#9925; Mark as Weather Day</button>
+    <p class="hint" style="margin:0.4rem 0 0;">Sets Notes to "WEATHER DAY" and Hours to 0, leaves everything else as-is -- counted on the project dashboard.</p>
+  </div>
+
+  <div class="rb-mobile-tabs" id="rb-mobile-tabs">
+    <button type="button" class="rb-mobile-tab active" id="rb-mobile-tab-form" data-view="form">Form</button>
+    <button type="button" class="rb-mobile-tab" id="rb-mobile-tab-preview" data-view="preview">Preview</button>
+  </div>
+
   <div class="rb-layout" id="rb-layout">
     <div class="rb-form" id="rb-form">
       <div class="step" id="step-reportInfo">
@@ -574,27 +584,55 @@ function addPreviewClickTarget(key, region) {
   });
 }
 
-function jumpToField(key, groupId) {
-  if (groupId) {
-    setGroupOpen(groupId, true);
-    const card = $('#rb-group-' + groupId);
-    if (card) {
-      card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      card.classList.add('rb-flash');
-      setTimeout(() => card.classList.remove('rb-flash'), 1400);
-    }
-  }
-  $$(`.rb-click-target[data-field-key="${key}"]`).forEach((t) => {
-    t.classList.add('rb-flash');
-    setTimeout(() => t.classList.remove('rb-flash'), 1400);
+let rbMobileView = 'form';
+
+function setRbMobileView(view) {
+  const switchingToPreview = view === 'preview' && rbMobileView !== 'preview';
+  rbMobileView = view;
+  const layout = $('#rb-layout');
+  if (layout) layout.classList.toggle('mobile-view-preview', view === 'preview');
+  $$('.rb-mobile-tab').forEach((tab) => {
+    tab.classList.toggle('active', tab.dataset.view === view);
   });
-  const fieldEl = document.getElementById('step-' + key);
-  if (fieldEl && groupId) {
-    // simple/most block fields are directly focusable; a first real input
-    // inside gives a visible cursor to land in, nice-to-have not required.
-    const focusable = fieldEl.querySelector('input, textarea, select');
-    if (focusable) setTimeout(() => focusable.focus({ preventScroll: true }), 300);
+  // #rb-preview is display:none (0 clientWidth) whenever Preview isn't the
+  // active mobile view, so refreshLivePreview's width-fit render from
+  // earlier ran against a 0-width frame -- re-render now that it's visible.
+  if (switchingToPreview && previewLayout) {
+    requestAnimationFrame(() => requestAnimationFrame(refreshLivePreview));
   }
+}
+
+function jumpToField(key, groupId) {
+  // Switching mobile views changes display:none -> block on .rb-form, so the
+  // scroll/focus below must happen after that layout change lands, not before.
+  const wasOnPreview = rbMobileView === 'preview';
+  if (wasOnPreview) setRbMobileView('form');
+
+  const doJump = () => {
+    if (groupId) {
+      setGroupOpen(groupId, true);
+      const card = $('#rb-group-' + groupId);
+      if (card) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        card.classList.add('rb-flash');
+        setTimeout(() => card.classList.remove('rb-flash'), 1400);
+      }
+    }
+    $$(`.rb-click-target[data-field-key="${key}"]`).forEach((t) => {
+      t.classList.add('rb-flash');
+      setTimeout(() => t.classList.remove('rb-flash'), 1400);
+    });
+    const fieldEl = document.getElementById('step-' + key);
+    if (fieldEl && groupId) {
+      // simple/most block fields are directly focusable; a first real input
+      // inside gives a visible cursor to land in, nice-to-have not required.
+      const focusable = fieldEl.querySelector('input, textarea, select');
+      if (focusable) setTimeout(() => focusable.focus({ preventScroll: true }), 300);
+    }
+  };
+
+  if (wasOnPreview) requestAnimationFrame(() => requestAnimationFrame(doJump));
+  else doJump();
 }
 
 async function setupLivePreview() {
@@ -735,13 +773,10 @@ function renderEditor() {
   };
 
   $('#btn-generate').onclick = async () => {
-    const missing = applyRequiredFieldHighlights();
-    if (missing.length) {
-      missing.forEach((def) => setGroupOpen(groupIdForKey(blockKeyFor(def.key)), true));
-      $('#rf-warning-list').innerHTML = missing.map((def) => `<li>${escapeHtml(def.label)}</li>`).join('');
-      $('#rf-warning-overlay').hidden = false;
-      return;
-    }
+    // Save first, unconditionally -- previously this only saved once the
+    // report passed the required-fields check below, so hitting Generate
+    // with something still missing left whatever you'd just typed sitting
+    // as an uncommitted local draft instead of the real, synced record.
     if (reportDirty) {
       try {
         await commitSave();
@@ -750,6 +785,13 @@ function renderEditor() {
         alert('Could not save your changes -- check your connection and try again before generating.');
         return;
       }
+    }
+    const missing = applyRequiredFieldHighlights();
+    if (missing.length) {
+      missing.forEach((def) => setGroupOpen(groupIdForKey(blockKeyFor(def.key)), true));
+      $('#rf-warning-list').innerHTML = missing.map((def) => `<li>${escapeHtml(def.label)}</li>`).join('');
+      $('#rf-warning-overlay').hidden = false;
+      return;
     }
     location.href = `download.html?project=${project.id}&report=${report.id}`;
   };
@@ -776,22 +818,27 @@ function renderEditor() {
     if (!confirm('You have unsaved changes. Leave without saving?')) e.preventDefault();
   });
 
-  $('#btn-no-work-day').onclick = () => {
-    const existing = (report.notes || '').trim();
-    if (existing && existing.toUpperCase() !== NO_WORK_DAY_NOTE) {
-      if (!confirm('This report already has notes. Replace them with "NO WORK DAY"?')) return;
-    }
-    report.notes = NO_WORK_DAY_NOTE;
-    const notesEl = $('#f-notes'); // may not exist -- Notes could be hidden/reordered for this project
-    if (notesEl) notesEl.value = NO_WORK_DAY_NOTE;
-    // Hours otherwise carries forward from whatever the previous report had
-    // (see makeBlankReport) -- harmless for a normal day, but nobody worked
-    // hours on a day nobody worked, so a No Work Day shouldn't inherit them.
-    report.hours = 0;
-    const hoursEl = $('#f-hours');
-    if (hoursEl) hoursEl.value = 0;
-    scheduleSave();
-  };
+  $('#btn-no-work-day').onclick = () => markBlankDay(NO_WORK_DAY_NOTE);
+  $('#btn-weather-day').onclick = () => markBlankDay(WEATHER_DAY_NOTE);
+}
+
+// Shared by the No Work Day and Weather Day buttons -- both fill Notes with
+// a fixed marker string and zero out Hours, leaving everything else as-is.
+function markBlankDay(noteText) {
+  const existing = (report.notes || '').trim();
+  if (existing && existing.toUpperCase() !== noteText) {
+    if (!confirm(`This report already has notes. Replace them with "${noteText}"?`)) return;
+  }
+  report.notes = noteText;
+  const notesEl = $('#f-notes'); // may not exist -- Notes could be hidden/reordered for this project
+  if (notesEl) notesEl.value = noteText;
+  // Hours otherwise carries forward from whatever the previous report had
+  // (see makeBlankReport) -- harmless for a normal day, but nobody worked
+  // hours on a day nobody worked, so a blank-day marker shouldn't inherit them.
+  report.hours = 0;
+  const hoursEl = $('#f-hours');
+  if (hoursEl) hoursEl.value = 0;
+  scheduleSave();
 }
 
 // ---------- Time worked / hours calculator ----------
@@ -859,6 +906,10 @@ function updateTotalHoursDisplay() {
   const hours = Number(report.hours);
   $('#time-worked-summary').textContent = `${Number.isFinite(hours) ? hours.toFixed(2) : '0.00'} hrs`;
 }
+
+$$('.rb-mobile-tab').forEach((tab) => {
+  tab.addEventListener('click', () => setRbMobileView(tab.dataset.view));
+});
 
 $('#time-worked-toggle').addEventListener('click', () => {
   $('#step-reportInfo').querySelector('.time-worked-block').classList.toggle('open');
