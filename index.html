@@ -31,6 +31,11 @@
 <main>
   <a class="btn-secondary" id="link-company-management" href="company-management.html">&#9881;&#65039; Company Management</a>
 
+  <div class="unsaved-drafts" id="unsaved-drafts" hidden>
+    <div class="eyebrow">Unsaved Reports</div>
+    <div id="unsaved-drafts-list"></div>
+  </div>
+
   <div class="eyebrow">Your Projects</div>
   <div id="hub-grid" class="hub-grid"></div>
 
@@ -145,6 +150,42 @@ async function renderProjectCards() {
       e.stopPropagation();
       await toggleFavoriteProject(btn.dataset.favoriteId);
       await renderProjectCards();
+    });
+  });
+}
+
+// A draft (see saveReportDraft in storage.js) is edits to a report that
+// never made it through the Save button in report-editor.html -- surfaced
+// here so they're not just silently sitting on the device unfinished.
+// Never synced, so this only ever reflects drafts made on this device.
+async function renderUnsavedDrafts() {
+  const room = await getCompanyRoom();
+  const [drafts, allProjects] = await Promise.all([getAllReportDrafts(), getAllProjects()]);
+  const projectById = new Map(allProjects.map((p) => [p.id, p]));
+  const visible = drafts.filter((d) => !d.projectId || projectInScope(d.projectId, room));
+
+  const section = $('#unsaved-drafts');
+  section.hidden = visible.length === 0;
+  if (visible.length === 0) return;
+
+  $('#unsaved-drafts-list').innerHTML = visible.map((d) => {
+    const project = projectById.get(d.projectId);
+    const reportLabel = `Report #${escapeHtml(String(d.data.reportNo ?? '?'))}${d.data.date ? ` (${escapeHtml(d.data.date)})` : ''}`;
+    const linkHtml = project
+      ? `<a class="draft-link" href="report-editor.html?project=${d.projectId}&report=${d.reportId}">Finish ${reportLabel} &mdash; ${escapeHtml(project.name)}</a>`
+      : `<span class="draft-link draft-link-disabled">${reportLabel} (project no longer available)</span>`;
+    return `
+      <div class="draft-row">
+        ${linkHtml}
+        <button type="button" class="text-btn draft-discard" data-discard="${d.reportId}">Discard</button>
+      </div>`;
+  }).join('');
+
+  $$('.draft-discard', $('#unsaved-drafts-list')).forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Discard the unsaved changes on this report? The last saved version is kept.')) return;
+      await deleteReportDraft(btn.dataset.discard);
+      await renderUnsavedDrafts();
     });
   });
 }
@@ -285,6 +326,7 @@ async function handleIncomingSetup() {
   await handleIncomingSetup();
   await adoptOrphanReportsIfAny();
   await renderProjectCards();
+  await renderUnsavedDrafts();
   wireAutoPull();
 })();
 

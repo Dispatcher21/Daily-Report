@@ -2,11 +2,12 @@
 // photo/signature blobs) on-device. No library needed.
 
 const DB_NAME = 'daily-report-app';
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 const REPORTS_STORE = 'reports';
 const PROJECTS_STORE = 'projects';
 const SETTINGS_STORE = 'settings';
 const AUDIT_STORE = 'auditLog';
+const REPORT_DRAFTS_STORE = 'reportDrafts';
 const LOGO_SETTING_KEY = 'reportLogo';
 const USER_NAME_SETTING_KEY = 'userName';
 
@@ -26,6 +27,9 @@ function openDb() {
       }
       if (!db.objectStoreNames.contains(AUDIT_STORE)) {
         db.createObjectStore(AUDIT_STORE, { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains(REPORT_DRAFTS_STORE)) {
+        db.createObjectStore(REPORT_DRAFTS_STORE, { keyPath: 'reportId' });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -189,6 +193,7 @@ async function deleteReport(id) {
   const needsExisting = typeof onCompanySyncReportChanged === 'function' || typeof logAuditableChange === 'function';
   const report = needsExisting ? await getReport(id) : null;
   await withStore(REPORTS_STORE, 'readwrite', (store) => store.delete(id));
+  await deleteReportDraft(id);
   if (report) {
     if (typeof onCompanySyncReportChanged === 'function') {
       onCompanySyncReportChanged(report, true).catch((err) => console.error('company sync mirror:', err));
@@ -197,6 +202,49 @@ async function deleteReport(id) {
       logAuditableChange('report', report, null, true).catch((err) => console.error('audit log:', err));
     }
   }
+}
+
+// ---------- Report drafts ----------
+//
+// report-editor.html's in-progress edits land here, not in the reports
+// store itself -- keeps "the committed report" and "what's currently on
+// screen, unsaved" separate, so Discard is just deleting the draft (the
+// committed report underneath was never touched), and index.html can list
+// "still has unsaved work" reports without disturbing the real record.
+// Never synced to the company by design -- an in-progress edit on one
+// device has no business showing up, half-finished, on another.
+
+async function saveReportDraft(report) {
+  await withStore(REPORT_DRAFTS_STORE, 'readwrite', (store) => store.put({
+    reportId: report.id,
+    projectId: report.projectId,
+    updatedAt: Date.now(),
+    data: report,
+  }));
+}
+
+async function getReportDraft(reportId) {
+  return withStore(REPORT_DRAFTS_STORE, 'readonly', (store) => {
+    return new Promise((resolve, reject) => {
+      const req = store.get(reportId);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+    });
+  });
+}
+
+async function deleteReportDraft(reportId) {
+  await withStore(REPORT_DRAFTS_STORE, 'readwrite', (store) => store.delete(reportId));
+}
+
+function getAllReportDrafts() {
+  return withStore(REPORT_DRAFTS_STORE, 'readonly', (store) => {
+    return new Promise((resolve, reject) => {
+      const req = store.getAll();
+      req.onsuccess = () => resolve(req.result.sort((a, b) => b.updatedAt - a.updatedAt));
+      req.onerror = () => reject(req.error);
+    });
+  });
 }
 
 function getAllReports() {

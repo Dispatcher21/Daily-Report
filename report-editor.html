@@ -115,11 +115,12 @@ let saveTimer = null;
 let payItemSearch = '';
 let manualPayOpen = false;
 let editable = true;
+let hasRestoredDraft = false;
 
 // Edits only land in the real, synced/audit-logged record once the Save
 // button is pressed -- scheduleSave, called from every field on the page,
-// just keeps a local draft (putReportRaw, not saveReport) so nothing's lost
-// to a refresh or crash in the meantime.
+// just keeps a local draft (saveReportDraft, not saveReport) so nothing's
+// lost to a refresh or crash in the meantime.
 let reportDirty = false;
 function setDirty(dirty) {
   reportDirty = dirty;
@@ -143,7 +144,7 @@ function scheduleSave() {
   if (!report || !editable) return;
   setDirty(true);
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => putReportRaw(report).catch(console.error), 400);
+  saveTimer = setTimeout(() => saveReportDraft(report).catch(console.error), 400);
 }
 
 // The real, committed save -- stamps who/when, mirrors to the company, and
@@ -152,6 +153,7 @@ function scheduleSave() {
 // uncommitted draft).
 async function commitSave() {
   await saveReport(report);
+  await deleteReportDraft(report.id);
   setDirty(false);
 }
 
@@ -214,11 +216,19 @@ async function init() {
     // whether this device's logged-in name matches who created it.
     editable = canEditReportWithContext(report, await getReportPermissionContext());
 
-    // Photos sync lazily -- a report pulled from a company doesn't carry
-    // its photo bytes until something actually opens it (see
-    // fetchReportMedia in firebase-sync.js). Resolve them now, before the
-    // first render, so the grid never shows a stale/empty state.
-    if ((report.photosFetched || []).some((f) => !f) || report.signatureFetched === false) {
+    // A draft left over from last time (page closed/crashed before Save) --
+    // it's a full snapshot taken after photos were already resolved (see
+    // scheduleSave), so it stands in for both the fetch below and the
+    // committed report, and picks the edit right back up where it left off.
+    const draft = editable ? await getReportDraft(report.id) : null;
+    if (draft) {
+      report = draft.data;
+      hasRestoredDraft = true;
+    } else if ((report.photosFetched || []).some((f) => !f) || report.signatureFetched === false) {
+      // Photos sync lazily -- a report pulled from a company doesn't carry
+      // its photo bytes until something actually opens it (see
+      // fetchReportMedia in firebase-sync.js). Resolve them now, before the
+      // first render, so the grid never shows a stale/empty state.
       $('#editor-title').textContent = 'Loading photos…';
       report = await fetchReportMedia(report);
       // putReportRaw, not saveReport -- merely opening a report to view it
@@ -236,6 +246,7 @@ async function init() {
   // (locked) if rendering throws for any reason, not silently fail open.
   try {
     renderEditor();
+    if (hasRestoredDraft) setDirty(true);
   } finally {
     if (!editable) lockReportEditor();
   }
