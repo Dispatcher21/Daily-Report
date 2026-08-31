@@ -43,7 +43,7 @@
         <div class="step-header"><span class="step-num">BASICS</span><h2>Report Info</h2></div>
         <div class="step-body">
           <div class="field-grid">
-            <label>Report No. <input type="number" id="f-reportNo"></label>
+            <label>Report No. <input type="number" inputmode="numeric" id="f-reportNo"></label>
             <label>Date <input type="date" id="f-date"></label>
           </div>
 
@@ -60,7 +60,7 @@
                 <span>Total Hours</span>
                 <span id="total-hours-value" class="total-hours-value">0.00</span>
               </div>
-              <label class="hours-override">Hours (auto-filled, editable) <input type="number" step="0.25" id="f-hours"></label>
+              <label class="hours-override">Hours (auto-filled, editable) <input type="number" inputmode="decimal" step="0.25" id="f-hours"></label>
             </div>
           </div>
         </div>
@@ -912,7 +912,7 @@ function renderContractorPanel() {
       (row, i) => `
       <div class="equip-row">
         <input type="text" data-row="${i}" class="equip-label" value="${escapeHtml(row.label)}" placeholder="(row ${i + 1} label)">
-        <input type="number" data-row="${i}" class="equip-qty" value="${row.qty[idx] ?? ''}" min="0">
+        <input type="number" inputmode="numeric" data-row="${i}" class="equip-qty" value="${row.qty[idx] ?? ''}" min="0">
       </div>`
     )
     .join('');
@@ -1080,11 +1080,11 @@ function renderSelectedPayItems() {
             </select>
           ` : ''}
           ${hasComputed ? `
-            <input type="number" step="0.01" class="si-length" data-idx="${i}" value="${item.length || ''}" placeholder="Length">
-            <input type="number" step="0.01" class="si-width" data-idx="${i}" value="${item.width || ''}" placeholder="Width">
+            <input type="number" inputmode="decimal" step="0.01" class="si-length" data-idx="${i}" value="${item.length || ''}" placeholder="Length">
+            <input type="number" inputmode="decimal" step="0.01" class="si-width" data-idx="${i}" value="${item.width || ''}" placeholder="Width">
           ` : ''}
           ${hasTheoretical ? `
-            <input type="number" step="0.01" class="si-theoretical" data-idx="${i}" value="${item.theoreticalQty || ''}" placeholder="Theoretical Qty">
+            <input type="number" inputmode="decimal" step="0.01" class="si-theoretical" data-idx="${i}" value="${item.theoreticalQty || ''}" placeholder="Theoretical Qty">
             <span class="si-overrun" data-idx="${i}">${overrunLabel(computeOverrun(item.qty, item.theoreticalQty))}</span>
           ` : ''}
         </div>`
@@ -1093,7 +1093,7 @@ function renderSelectedPayItems() {
       <div class="selected-item-row-wrap">
         <div class="selected-item-row">
           <div class="si-desc"><span class="si-num">${escapeHtml(item.itemNumber)}</span> ${escapeHtml(item.description)}${item.unit ? ` <span style="color:var(--text-dim);">(${escapeHtml(item.unit)})</span>` : ''}</div>
-          <input type="number" class="si-qty" data-idx="${i}" value="${item.qty}" placeholder="Qty">
+          <input type="number" inputmode="decimal" class="si-qty" data-idx="${i}" value="${item.qty}" placeholder="Qty">
           <button type="button" class="si-remove" data-idx="${i}" title="Remove">&times;</button>
         </div>
         ${extra}

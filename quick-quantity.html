@@ -181,7 +181,7 @@ function renderCatalogList() {
           <div class="qq-item-desc">${escapeHtml(it.description || '')}</div>
         </div>
         <div class="qq-qty-wrap">
-          <input type="number" step="any" class="qq-qty" id="qty-${i}" data-item-number="${escapeHtml(it.itemNumber)}">
+          <input type="number" inputmode="decimal" step="any" class="qq-qty" id="qty-${i}" data-item-number="${escapeHtml(it.itemNumber)}">
           <span class="qq-unit">${escapeHtml(it.unit || '')}</span>
         </div>
       </div>`;
@@ -209,7 +209,7 @@ function renderMultiEntries(catalogItem, idx) {
   container.innerHTML = entries
     .map((entry, ei) => `
       <div class="qq-multi-entry" data-entry-idx="${ei}">
-        <input type="number" step="any" class="qq-qty me-field" data-field="qty" placeholder="Qty" value="${escapeHtml(entry.qty || '')}">
+        <input type="number" inputmode="decimal" step="any" class="qq-qty me-field" data-field="qty" placeholder="Qty" value="${escapeHtml(entry.qty || '')}">
         <span class="qq-unit">${escapeHtml(catalogItem.unit || '')}</span>
         ${catalogItem.stations ? `
           <input type="text" class="me-field" data-field="startStation" placeholder="Start Station (e.g. 120+15)" value="${escapeHtml(entry.startStation || '')}">
@@ -228,11 +228,11 @@ function renderMultiEntries(catalogItem, idx) {
           </select>
         ` : ''}
         ${catalogItem.computed ? `
-          <input type="number" step="0.01" class="me-field" data-field="length" placeholder="Length" value="${escapeHtml(entry.length || '')}">
-          <input type="number" step="0.01" class="me-field" data-field="width" placeholder="Width" value="${escapeHtml(entry.width || '')}">
+          <input type="number" inputmode="decimal" step="0.01" class="me-field" data-field="length" placeholder="Length" value="${escapeHtml(entry.length || '')}">
+          <input type="number" inputmode="decimal" step="0.01" class="me-field" data-field="width" placeholder="Width" value="${escapeHtml(entry.width || '')}">
         ` : ''}
         ${catalogItem.theoretical ? `
-          <input type="number" step="0.01" class="me-field" data-field="theoreticalQty" placeholder="Theoretical Qty" value="${escapeHtml(entry.theoreticalQty || '')}">
+          <input type="number" inputmode="decimal" step="0.01" class="me-field" data-field="theoreticalQty" placeholder="Theoretical Qty" value="${escapeHtml(entry.theoreticalQty || '')}">
           <span class="qq-overrun">${overrunLabel(computeOverrun(entry.qty, entry.theoreticalQty))}</span>
         ` : ''}
         <button type="button" class="qq-multi-remove" data-remove-entry="${ei}" title="Remove">&times;</button>
@@ -288,7 +288,7 @@ function renderManualList() {
           <div class="qq-item-desc">${escapeHtml(it.description || '')}</div>
         </div>
         <div class="qq-qty-wrap">
-          <input type="number" step="any" class="qq-qty" id="manual-qty-${i}">
+          <input type="number" inputmode="decimal" step="any" class="qq-qty" id="manual-qty-${i}">
           <span class="qq-unit">${escapeHtml(it.unit || '')}</span>
         </div>
         <button type="button" class="text-btn qq-manual-remove" data-remove-manual="${i}" style="color:var(--danger);">&times;</button>
