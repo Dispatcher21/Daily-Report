@@ -704,7 +704,7 @@ function renderWeatherSchedule(dated) {
   // report-editor.html button) -- included here too now so it can be
   // annotated in the list/calendar, not just counted in the stat card.
   const loggable = dated.filter((r) =>
-    r.weatherDesc || r.tempHigh || r.tempLow || r.trafficControlSelect || r.controllingItem || r.commentsOnTime || isNoWorkDayReport(r)
+    r.weatherDesc || r.tempHigh || r.tempLow || r.trafficControlSelect || r.controllingItem || r.commentsOnTime || r.activity || isNoWorkDayReport(r)
   );
   const noWorkDays = dated.filter(isNoWorkDayReport).length;
   step.hidden = loggable.length === 0 && noWorkDays === 0;
@@ -749,6 +749,7 @@ function renderWeatherLogList(loggable) {
         <div class="wlog-row">
           <div class="wlog-date">${escapeHtml(r.date)}</div>
           <div class="wlog-body">
+            ${r.activity ? `<div class="wlog-activity">${escapeHtml(r.activity)}</div>` : ''}
             ${weatherText ? `<div class="wlog-weather">${isAdverse ? '<span title="Adverse weather">⛈️</span> ' : ''}${escapeHtml(weatherText)}</div>` : ''}
             ${r.trafficControlSelect ? `<div class="wlog-tc"><span class="status-dot ${isAttention ? 'status-over' : 'status-near'}"></span>Traffic Control: ${isAttention ? 'Attention Required' : 'In Place'}</div>` : ''}
             ${r.controllingItem ? `<div><strong>Controlling Item:</strong> ${escapeHtml(r.controllingItem)}</div>` : ''}
@@ -772,9 +773,11 @@ function weatherCalDayHtml(dayNum, r) {
   }
   const isAttention = r.trafficControlSelect === 'ATTENTION_REQUIRED';
   const isAdverse = ADVERSE_WEATHER_RE.test(r.weatherDesc || '');
+  const hasActivity = !!String(r.activity || '').trim();
   const temps = (r.tempHigh || r.tempLow) ? `${r.tempHigh || '—'}°/${r.tempLow || '—'}°F` : '';
   const weatherText = [r.weatherDesc, temps].filter(Boolean).join(' · ');
   const tipParts = [
+    hasActivity ? `Activity: ${r.activity}` : '',
     weatherText,
     r.trafficControlSelect ? `Traffic Control: ${isAttention ? 'Attention Required' : 'In Place'}` : '',
     r.controllingItem ? `Controlling Item: ${r.controllingItem}` : '',
@@ -782,11 +785,17 @@ function weatherCalDayHtml(dayNum, r) {
   const cls = ['wcal-day'];
   if (isAdverse) cls.push('wcal-adverse');
   if (isAttention) cls.push('wcal-attention');
+  // Icons stay small and iconic rather than showing activity text inline --
+  // a day's Activity write-up can run to paragraphs, which would blow out a
+  // grid cell sized for a two-digit date. Full text lives in the tooltip.
   return `
     <div class="${cls.join(' ')}"${tipParts.length ? ` data-tip="${escapeHtml(tipParts.join(' — '))}" tabindex="0"` : ''}>
       <span class="wcal-day-num">${dayNum}</span>
-      ${isAdverse ? '<span class="wcal-icon" title="Adverse weather">⛈️</span>' : ''}
-      ${r.trafficControlSelect ? `<span class="wcal-dot ${isAttention ? 'wcal-dot-attention' : 'wcal-dot-ok'}"></span>` : ''}
+      <div class="wcal-day-icons">
+        ${isAdverse ? '<span class="wcal-icon" title="Adverse weather">⛈️</span>' : ''}
+        ${hasActivity ? '<span class="wcal-icon" title="Activity logged">📝</span>' : ''}
+        ${r.trafficControlSelect ? `<span class="wcal-dot ${isAttention ? 'wcal-dot-attention' : 'wcal-dot-ok'}"></span>` : ''}
+      </div>
     </div>`;
 }
 
