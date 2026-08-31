@@ -188,6 +188,15 @@ const TREND_LINE_COLORS = ['#3d6fa8', '#c9622f', '#2f9e6f', '#a13d8f', '#c9a227'
 // since overlapping filled areas from several projects would just be
 // visual noise. `opts.w`/`opts.h` override the default viewBox size --
 // e.g. a shorter `h` for a chart that needs to take up less vertical room.
+//
+// `opts.xAxis === 'daysSinceStart'` switches the x-axis from actual
+// calendar date to elapsed days since each point's own `.day` (e.g. days
+// since that project's NTP date) -- every series then starts at the same
+// left edge (day 0) instead of at wherever its first report happened to
+// fall on the calendar, which is the whole point when comparing several
+// projects' pace against each other. `opts.xMax` sets the right edge (e.g.
+// today's elapsed day count for the longest-running project); points
+// still carry `.date` for the tooltip even in this mode.
 function renderTrendSvg(container, series, opts) {
   series = (series || []).filter((s) => s.points && s.points.length > 0);
   if (series.length === 0) { container.innerHTML = ''; return; }
@@ -195,17 +204,29 @@ function renderTrendSvg(container, series, opts) {
   const w = (opts && opts.w) || 640, h = (opts && opts.h) || 220;
   const padL = 38, padR = 12, padT = 14, padB = 26;
   const innerW = w - padL - padR, innerH = h - padT - padB;
+  const daysMode = opts && opts.xAxis === 'daysSinceStart';
 
-  // Positioned by actual calendar date, not point index -- with more than
-  // one series, different projects' report dates rarely line up, so index
-  // position alone would misalign them.
-  const allDates = [...new Set(series.flatMap((s) => s.points.map((p) => p.date)))].sort();
-  const minMs = new Date(allDates[0] + 'T00:00:00').getTime();
-  const maxMs = new Date(allDates[allDates.length - 1] + 'T00:00:00').getTime();
-  const span = Math.max(1, maxMs - minMs);
-  const x = (dateIso) => minMs === maxMs
-    ? padL + innerW / 2
-    : padL + innerW * ((new Date(dateIso + 'T00:00:00').getTime() - minMs) / span);
+  let x, xStartLabel, xEndLabel;
+  if (daysMode) {
+    const maxDay = Math.max(1, (opts && opts.xMax) || 0, ...series.flatMap((s) => s.points.map((p) => p.day || 0)));
+    x = (day) => padL + innerW * (Math.max(0, day || 0) / maxDay);
+    xStartLabel = 'NTP';
+    xEndLabel = 'Today';
+  } else {
+    // Positioned by actual calendar date, not point index -- with more than
+    // one series, different projects' report dates rarely line up, so index
+    // position alone would misalign them.
+    var allDates = [...new Set(series.flatMap((s) => s.points.map((p) => p.date)))].sort();
+    const minMs = new Date(allDates[0] + 'T00:00:00').getTime();
+    const maxMs = new Date(allDates[allDates.length - 1] + 'T00:00:00').getTime();
+    const span = Math.max(1, maxMs - minMs);
+    x = (dateIso) => minMs === maxMs
+      ? padL + innerW / 2
+      : padL + innerW * ((new Date(dateIso + 'T00:00:00').getTime() - minMs) / span);
+    xStartLabel = trendDateLabel(allDates[0]);
+    xEndLabel = allDates.length > 1 ? trendDateLabel(allDates[allDates.length - 1]) : null;
+  }
+  const xOf = (p) => daysMode ? x(p.day) : x(p.date);
   const y = (pct) => padT + innerH * (1 - Math.max(0, Math.min(1, pct || 0)));
 
   const gridLines = [0, 0.25, 0.5, 0.75, 1].map((f) => {
@@ -217,7 +238,7 @@ function renderTrendSvg(container, series, opts) {
   const singlePlainSeries = series.length === 1 && !series[0].color;
   const seriesSvg = series.map((s) => {
     const color = s.color || 'var(--brand)';
-    const coords = s.points.map((p) => [x(p.date), y(p.pct)]);
+    const coords = s.points.map((p) => [xOf(p), y(p.pct)]);
     let pathSection = '';
     if (coords.length > 1) {
       const linePath = 'M' + coords.map((c) => c.join(',')).join(' L');
@@ -230,14 +251,15 @@ function renderTrendSvg(container, series, opts) {
     }
     const dots = s.points.map((p, i) => {
       const [cx, cy] = coords[i];
-      const tip = `${s.label ? s.label + ' — ' : ''}${p.date}: ${p.pct != null ? (p.pct * 100).toFixed(1) + '% complete' : 'no target set yet'}${p.earned != null ? ', ' + fmtMoney(p.earned) + ' earned' : ''}`;
+      const when = daysMode ? `Day ${p.day} (${p.date})` : p.date;
+      const tip = `${s.label ? s.label + ' — ' : ''}${when}: ${p.pct != null ? (p.pct * 100).toFixed(1) + '% complete' : 'no target set yet'}${p.earned != null ? ', ' + fmtMoney(p.earned) + ' earned' : ''}`;
       return `<circle cx="${cx}" cy="${cy}" r="${singlePlainSeries ? 4 : 3}" class="trend-dot" style="fill:${color}"><title>${escapeHtml(tip)}</title></circle>`;
     }).join('');
     return pathSection + dots;
   }).join('');
 
-  const xLabels = `<text x="${x(allDates[0])}" y="${h - 6}" class="trend-axis-label" text-anchor="start">${trendDateLabel(allDates[0])}</text>` +
-    (allDates.length > 1 ? `<text x="${x(allDates[allDates.length - 1])}" y="${h - 6}" class="trend-axis-label" text-anchor="end">${trendDateLabel(allDates[allDates.length - 1])}</text>` : '');
+  const xLabels = `<text x="${padL}" y="${h - 6}" class="trend-axis-label" text-anchor="start">${xStartLabel}</text>` +
+    (xEndLabel ? `<text x="${w - padR}" y="${h - 6}" class="trend-axis-label" text-anchor="end">${xEndLabel}</text>` : '');
 
   const legendHtml = series.length > 1
     ? `<div class="trend-legend">${series.map((s) => `

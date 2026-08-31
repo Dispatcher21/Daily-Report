@@ -49,9 +49,9 @@
         <div class="step step-collapsible" id="md-trend-step" hidden>
           <div class="step-header"><span class="step-num">TREND</span><h2>Progress Over Time</h2></div>
           <div class="step-body">
-            <p class="hint" style="margin-top:0;">Each included project's own percent complete, weighted by planned quantity within that project.</p>
+            <p class="hint" style="margin-top:0;">Each included project's own percent complete, weighted by planned quantity within that project -- lined up by days since that project's own NTP Date (day 0) rather than the calendar, so pace is comparable side by side. Projects without an NTP Date on file aren't shown here.</p>
             <div id="md-trend-chart"></div>
-            <p class="hint" id="md-trend-hint" hidden style="margin-top:0.5rem;">Only one dated point on file so far for every included project &mdash; a trend line will appear once at least one has more than one date to compare.</p>
+            <p class="hint" id="md-trend-hint" hidden style="margin-top:0.5rem;">Only one dated point on file so far for every included project with an NTP Date &mdash; a trend line will appear once at least one has more than one date to compare.</p>
           </div>
         </div>
 
@@ -327,7 +327,7 @@ async function renderManagerDashboard() {
   });
 
   renderMdStats(projectStats, reports);
-  renderMdTrendChart(projectStats, included, reports);
+  renderMdTrendChart(projectStats, included, reports, today);
   renderMdHoursBars(reports);
   renderMdProjectStatus(projectStats);
   renderMdFeed(reports);
@@ -423,20 +423,27 @@ function renderMdStats(projectStats, reports) {
 // complete (same math as project.html's own trend chart), so unlike a
 // combined portfolio figure, these don't need to be blended through dollar
 // value first to make sense side by side -- every line just is that
-// project's own real progress.
-function renderMdTrendChart(projectStats, included, reports) {
+// project's own real progress. Positioned by days since each project's own
+// NTP Date rather than the calendar, so every line starts at the same left
+// edge (day 0) and pace is directly comparable -- a project with no NTP
+// Date on file has no day-0 to anchor to, so it's left out of this chart
+// (it still counts everywhere else on the dashboard).
+function renderMdTrendChart(projectStats, included, reports, today) {
   const step = $('#md-trend-step');
-  const series = included.map((project, i) => ({
-    label: project.name,
-    color: TREND_LINE_COLORS[i % TREND_LINE_COLORS.length],
-    points: progressOverTime(reports.filter((r) => r.projectId === project.id && r.date), project.payItemCatalog || []),
-  })).filter((s) => s.points.length > 0);
+  const withNtp = included.filter((project) => /^\d{4}-\d{2}-\d{2}$/.test((project.meta || {}).ntpDate || ''));
+  const series = withNtp.map((project, i) => {
+    const ntpDate = project.meta.ntpDate;
+    const points = progressOverTime(reports.filter((r) => r.projectId === project.id && r.date), project.payItemCatalog || [])
+      .map((p) => ({ ...p, day: Math.max(0, daysBetween(ntpDate, p.date)) }));
+    return { label: project.name, color: TREND_LINE_COLORS[i % TREND_LINE_COLORS.length], points, ntpDate };
+  }).filter((s) => s.points.length > 0);
 
   step.hidden = series.length === 0;
   if (series.length === 0) return;
 
   $('#md-trend-hint').hidden = series.some((s) => s.points.length > 1);
-  renderTrendSvg($('#md-trend-chart'), series, { h: 150 });
+  const xMax = Math.max(1, ...series.map((s) => daysBetween(s.ntpDate, today)));
+  renderTrendSvg($('#md-trend-chart'), series, { h: 150, xAxis: 'daysSinceStart', xMax });
 }
 
 function renderMdHoursBars(reports) {
