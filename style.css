@@ -1418,6 +1418,7 @@ input[type="file"] { min-height: 0; }
 /* ---------- Weather & schedule log ---------- */
 
 .weather-log { display: flex; flex-direction: column; gap: 0.6rem; max-height: 460px; overflow-y: auto; padding-right: 0.25rem; }
+.weather-log[hidden] { display: none; }
 .wlog-row { display: flex; gap: 0.75rem; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.65rem 0.8rem; background: var(--surface); }
 .wlog-date { flex: 0 0 auto; width: 60px; font-weight: 700; font-size: 0.8rem; color: var(--text); }
 .wlog-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.82rem; color: var(--text-dim); }
@@ -1437,6 +1438,7 @@ input[type="file"] { min-height: 0; }
    more than a handful of months, so this reads better than paging through a
    single always-current-month calendar the way a scheduling app would. */
 .weather-calendar { display: flex; flex-direction: column; gap: 1.1rem; max-height: 460px; overflow-y: auto; padding-right: 0.25rem; }
+.weather-calendar[hidden] { display: none; }
 .wcal-month-label { font-weight: 700; font-size: 0.85rem; margin-bottom: 0.5rem; }
 .wcal-weekdays, .wcal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
 .wcal-weekdays { margin-bottom: 4px; text-align: center; font-size: 0.68rem; font-weight: 700; color: var(--text-dim); }
