@@ -435,46 +435,40 @@ function renderDashboard(reports, project) {
   }
 
   $('#dash-stats').innerHTML =
-    `<div class="dash-card dc-headline" data-tip="${escapeHtml(overallTip)}" tabindex="0">
+    (overall != null ? `<div class="dash-card dc-headline" data-tip="${escapeHtml(overallTip)}" tabindex="0">
       ${ringSvg(overall)}
       <div>
         <span class="dc-label">Overall % Complete</span>
-        <span class="dc-sub">${overall == null ? 'No pay items with a Per Plans Total yet' : 'Weighted by planned quantity'}</span>
+        <span class="dc-sub">Weighted by planned quantity</span>
       </div>
-    </div>` +
+    </div>` : '') +
     scheduleCardHtml +
     statCard(reports.length, 'Reports Filed', '', 'Number of daily reports saved for this project.', null, 'int') +
-    statCard(
-      daysSinceNtp != null ? daysSinceNtp : '—',
+    (daysSinceNtp != null ? statCard(
+      daysSinceNtp,
       'Days Since NTP',
-      daysSinceNtp == null ? 'No NTP date on file' : '',
-      daysSinceNtp != null
-        ? `Calendar days from the NTP Date (${ntpDate}) to today.` +
-          (hasContractLength ? '' : ' Not a days-remaining-in-contract figure -- there\'s no total contract length on file.')
-        : 'No usable NTP Date is set in this project\'s data file, so elapsed days can\'t be calculated.',
+      '',
+      `Calendar days from the NTP Date (${ntpDate}) to today.` +
+        (hasContractLength ? '' : ' Not a days-remaining-in-contract figure -- there\'s no total contract length on file.'),
       null, 'int'
-    ) +
-    statCard(
-      daysRemaining != null ? daysRemaining : '—',
+    ) : '') +
+    (daysRemaining != null ? statCard(
+      daysRemaining,
       'Days Remaining (Contract)',
-      daysRemaining == null ? 'No total contract length on file' : (daysRemaining < 0 ? 'Past contract length' : ''),
-      daysRemaining != null
-        ? `Total Contract Length (${contractLength} days) minus Days Since NTP. Negative means the contract's allotted days have been exceeded.`
-        : 'Add "TOTAL CONTRACT LENGTH (DAYS)" to the PROJECT INFO sheet in this project\'s data file, alongside an NTP Date, to see days remaining.',
+      daysRemaining < 0 ? 'Past contract length' : '',
+      `Total Contract Length (${contractLength} days) minus Days Since NTP. Negative means the contract's allotted days have been exceeded.`,
       null, 'int'
-    ) +
+    ) : '') +
     statCard(
       totalHours, 'Total Hours Worked', '',
       'Sum of the Hours field across every report on file for this project.',
       null, 'decimal1'
     ) +
-    statCard(
-      avgHoursPerWeek != null ? avgHoursPerWeek : '—', 'Avg Hours / Week', '',
-      avgHoursPerWeek != null
-        ? 'Total hours worked, divided by the number of weeks between the earliest and latest dated report.'
-        : 'No dated reports yet to measure a week span from.',
+    (avgHoursPerWeek ? statCard(
+      avgHoursPerWeek, 'Avg Hours / Week', '',
+      'Total hours worked, divided by the number of weeks between the earliest and latest dated report.',
       null, 'decimal1'
-    ) +
+    ) : '') +
     statCard(
       items.length, 'Pay Items in Catalog', '',
       'Number of distinct pay item numbers on this project, whether or not they\'ve shown up on a report yet.',
