@@ -170,16 +170,25 @@ async function renderUnsavedDrafts() {
 
   $('#unsaved-drafts-list').innerHTML = visible.map((d) => {
     const project = projectById.get(d.projectId);
-    const reportLabel = `Report #${escapeHtml(String(d.data.reportNo ?? '?'))}${d.data.date ? ` (${escapeHtml(d.data.date)})` : ''}`;
-    const linkHtml = project
-      ? `<a class="draft-link" href="report-editor.html?project=${d.projectId}&report=${d.reportId}">Finish ${reportLabel} &mdash; ${escapeHtml(project.name)}</a>`
-      : `<span class="draft-link draft-link-disabled">${reportLabel} (project no longer available)</span>`;
+    const reportLabel = `Report #${escapeHtml(String(d.data.reportNo ?? '?'))}${d.data.date ? ` (${escapeHtml(d.data.date)})` : ''}${project ? ` — ${escapeHtml(project.name)}` : ' (project no longer available)'}`;
+    const finishBtn = project
+      ? `<button type="button" class="btn-primary draft-finish" data-project="${d.projectId}" data-report="${d.reportId}">Finish Report</button>`
+      : '';
     return `
       <div class="draft-row">
-        ${linkHtml}
-        <button type="button" class="text-btn draft-discard" data-discard="${d.reportId}">Discard</button>
+        <div class="draft-info">${reportLabel}</div>
+        <div class="draft-actions">
+          ${finishBtn}
+          <button type="button" class="btn-danger draft-discard" data-discard="${d.reportId}">Discard</button>
+        </div>
       </div>`;
   }).join('');
+
+  $$('.draft-finish', $('#unsaved-drafts-list')).forEach((btn) => {
+    btn.addEventListener('click', () => {
+      location.href = `report-editor.html?project=${btn.dataset.project}&report=${btn.dataset.report}`;
+    });
+  });
 
   $$('.draft-discard', $('#unsaved-drafts-list')).forEach((btn) => {
     btn.addEventListener('click', async () => {
