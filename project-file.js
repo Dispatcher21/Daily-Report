@@ -21,6 +21,7 @@ const PROJECT_INFO_FIELDS = [
   { key: 'name', label: 'PROJECT DISPLAY NAME' },
   { key: 'projectNo', label: 'PROJECT NO.' },
   { key: 'projectName', label: 'PROJECT NAME' },
+  { key: 'location', label: 'PROJECT LOCATION (CITY, STATE)' },
   { key: 'ntpDate', label: 'NTP DATE' },
   { key: 'contractLength', label: 'TOTAL CONTRACT LENGTH (DAYS)' },
   { key: 'representative', label: 'REPRESENTATIVE' },

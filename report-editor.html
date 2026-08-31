@@ -348,6 +348,95 @@ function blockFieldBodyHtml(key, def) {
   return `<div class="rb-field rb-field-block" id="step-${key}"><div class="rb-field-hd"><span>${escapeHtml(def.label)}</span>${tag}</div>${inner}</div>`;
 }
 
+// ---------- Weather auto-fill ----------
+//
+// Open-Meteo (open-meteo.com) -- free, no API key, and its geocoding/
+// forecast endpoints both allow direct browser requests (CORS-friendly),
+// which matters since this app has no backend server of its own to proxy
+// through. The forecast endpoint alone covers up to 92 days in the past
+// and 16 ahead via start_date/end_date, which is plenty for a daily field
+// report; older reports just won't have anything to fetch.
+const WMO_WEATHER_DESCRIPTIONS = {
+  0: 'Clear sky', 1: 'Mainly clear', 2: 'Partly cloudy', 3: 'Overcast',
+  45: 'Fog', 48: 'Depositing rime fog',
+  51: 'Light drizzle', 53: 'Moderate drizzle', 55: 'Dense drizzle',
+  56: 'Light freezing drizzle', 57: 'Dense freezing drizzle',
+  61: 'Slight rain', 63: 'Moderate rain', 65: 'Heavy rain',
+  66: 'Light freezing rain', 67: 'Heavy freezing rain',
+  71: 'Slight snow fall', 73: 'Moderate snow fall', 75: 'Heavy snow fall',
+  77: 'Snow grains',
+  80: 'Slight rain showers', 81: 'Moderate rain showers', 82: 'Violent rain showers',
+  85: 'Slight snow showers', 86: 'Heavy snow showers',
+  95: 'Thunderstorm', 96: 'Thunderstorm with slight hail', 99: 'Thunderstorm with heavy hail',
+};
+
+async function geocodeLocation(name) {
+  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1&language=en`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("Couldn't look up that location.");
+  const data = await res.json();
+  const r = (data.results || [])[0];
+  return r ? { latitude: r.latitude, longitude: r.longitude, name: [r.name, r.admin1].filter(Boolean).join(', ') } : null;
+}
+
+async function fetchWeatherForDate(lat, lon, dateIso) {
+  const params = new URLSearchParams({
+    latitude: lat, longitude: lon,
+    daily: 'temperature_2m_max,temperature_2m_min,weather_code',
+    temperature_unit: 'fahrenheit',
+    timezone: 'auto',
+    start_date: dateIso, end_date: dateIso,
+  });
+  const res = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
+  if (!res.ok) throw new Error("Couldn't fetch weather for that date.");
+  const data = await res.json();
+  const d = data.daily;
+  if (!d || !d.time || d.time.length === 0) return null;
+  return {
+    description: WMO_WEATHER_DESCRIPTIONS[d.weather_code[0]] || '',
+    tempHigh: d.temperature_2m_max[0] != null ? Math.round(d.temperature_2m_max[0]) : '',
+    tempLow: d.temperature_2m_min[0] != null ? Math.round(d.temperature_2m_min[0]) : '',
+  };
+}
+
+async function fetchWeatherForReport() {
+  const btn = $('#btn-fetch-weather');
+  const status = $('#fetch-weather-status');
+  const location = (project.meta || {}).location;
+  if (!location) {
+    status.textContent = 'Add a Location to this project in Project Setup first.';
+    return;
+  }
+  if (!report.date) {
+    status.textContent = 'Set the report Date first.';
+    return;
+  }
+
+  btn.disabled = true;
+  status.textContent = 'Looking up…';
+  try {
+    const geo = await geocodeLocation(location);
+    if (!geo) throw new Error(`Couldn't find "${location}" -- try a nearby city instead.`);
+    const weather = await fetchWeatherForDate(geo.latitude, geo.longitude, report.date);
+    if (!weather) throw new Error('No weather data for that date -- only the last ~92 days and next 16 are available.');
+
+    report.weatherDesc = weather.description;
+    report.tempHigh = weather.tempHigh;
+    report.tempLow = weather.tempLow;
+    const descEl = $('#f-weatherDesc'); if (descEl) descEl.value = weather.description;
+    const highEl = $('#f-tempHigh'); if (highEl) highEl.value = weather.tempHigh;
+    const lowEl = $('#f-tempLow'); if (lowEl) lowEl.value = weather.tempLow;
+    scheduleSave();
+
+    status.textContent = `Filled in from ${geo.name}.`;
+  } catch (err) {
+    console.error(err);
+    status.textContent = err.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 // One collapsible card per REPORT_BUILDER_GROUPS entry, skipped entirely
 // when every key inside it is hidden for this project. Fields within a
 // group still render in whatever order the admin set (getFieldOrder), the
@@ -367,6 +456,14 @@ function renderGroups() {
           return def.kind === 'simple' ? simpleFieldBodyHtml(key, def) : blockFieldBodyHtml(key, def);
         })
         .join('');
+      // Weather group only: an explicit fetch button, not automatic --
+      // never overwrite something already typed in without the inspector
+      // asking for it.
+      const weatherFetchHtml = group.id === 'weather' ? `
+        <div class="rb-field-block rb-weather-fetch">
+          <button type="button" class="btn-secondary" id="btn-fetch-weather">&#127780;&#65039; Fetch Weather for This Date</button>
+          <span class="hint" id="fetch-weather-status" style="margin:0.4rem 0 0;"></span>
+        </div>` : '';
       return `
         <div class="rb-group" id="rb-group-${group.id}" data-group="${group.id}">
           <div class="rb-group-hd" data-toggle-group="${group.id}">
@@ -374,7 +471,7 @@ function renderGroups() {
             <div class="rb-titles"><div class="t">${escapeHtml(group.label)}</div></div>
             <span class="rb-chev">&#9656;</span>
           </div>
-          <div class="rb-group-bd">${body}</div>
+          <div class="rb-group-bd">${weatherFetchHtml}${body}</div>
         </div>`;
     })
     .join('');
@@ -616,6 +713,8 @@ function renderEditor() {
   bindDynamicFields();
   applyRequiredFieldHighlights();
   setupLivePreview();
+
+  if ($('#btn-fetch-weather')) $('#btn-fetch-weather').addEventListener('click', fetchWeatherForReport);
 
   $('#btn-save-report').onclick = async () => {
     const btn = $('#btn-save-report');
