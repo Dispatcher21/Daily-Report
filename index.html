@@ -93,7 +93,10 @@
         <div id="unsaved-drafts-list"></div>
       </div>
 
-      <div class="eyebrow">Your Projects</div>
+      <div class="eyebrow-row">
+        <div class="eyebrow">Your Projects</div>
+        <button type="button" class="view-toggle-btn" id="btn-refresh-home" title="Refresh company data" aria-label="Refresh company data">&#8635;</button>
+      </div>
       <div id="hub-grid" class="hub-grid"></div>
 
       <!-- ADD PROJECT PANEL (revealed in place, no separate page) -->
@@ -158,7 +161,7 @@ async function renderProjectCards() {
   const [allProjects, reports, favoriteIds] = await Promise.all([getAllProjects(), getAllReports(), getFavoriteProjectIds()]);
   // A custom setup's password scopes which projects are even visible, not
   // just what can be edited -- see projectInScope in firebase-sync.js.
-  const projects = allProjects.filter((p) => projectInScope(p.id, room));
+  const projects = allProjects.filter((p) => projectInScope(p, room));
   const favoriteSet = new Set(favoriteIds);
   // Favorited projects first (each list keeps its original order otherwise).
   projects.sort((a, b) => (favoriteSet.has(b.id) ? 1 : 0) - (favoriteSet.has(a.id) ? 1 : 0));
@@ -225,7 +228,7 @@ async function renderUnsavedDrafts() {
   const room = await getCompanyRoom();
   const [drafts, allProjects] = await Promise.all([getAllReportDrafts(), getAllProjects()]);
   const projectById = new Map(allProjects.map((p) => [p.id, p]));
-  const visible = drafts.filter((d) => !d.projectId || projectInScope(d.projectId, room));
+  const visible = drafts.filter((d) => !d.projectId || reportInScope(d.data, room));
 
   const section = $('#unsaved-drafts');
   section.hidden = visible.length === 0;
@@ -304,7 +307,7 @@ async function renderManagerDashboard() {
   const cfg = await getManagerDashboardConfig();
 
   const [allProjects, allReports] = await Promise.all([getAllProjects(), getAllReports()]);
-  mdScopedProjects = allProjects.filter((p) => projectInScope(p.id, room));
+  mdScopedProjects = allProjects.filter((p) => projectInScope(p, room));
   mdExcluded = new Set(cfg.excludedProjectIds || []);
   renderMdChecklist();
 
@@ -570,7 +573,7 @@ $('#btn-save-new-project').addEventListener('click', async () => {
   btn.disabled = true;
   btn.textContent = 'Saving...';
   try {
-    const project = makeProjectFromParsedFile(pendingParsed);
+    const project = await makeProjectFromParsedFile(pendingParsed);
     await saveProject(project);
     resetAddProjectPanel();
     await renderProjectCards();
@@ -666,6 +669,32 @@ async function handleIncomingSetup() {
 window.addEventListener('company-data-pulled', () => {
   renderProjectCards();
   renderManagerDashboard();
+});
+
+// Manual "Refresh" -- same concept as reports.html's own refresh button,
+// just pulling company-wide instead of one project's reports. Pull-only
+// (autoPullCompanyData), not a full Sync Now: this is about seeing a
+// teammate's latest work sooner, not pushing local changes. The actual
+// re-render happens via the 'company-data-pulled' listener above, same as
+// any other pull -- no need to call the render functions again here.
+$('#btn-refresh-home').addEventListener('click', async () => {
+  const btn = $('#btn-refresh-home');
+  btn.disabled = true;
+  btn.classList.add('spinning');
+  startProgressBanner();
+  try {
+    if (await getCompanyRoom()) {
+      progressStep('pulling', 'Getting the latest');
+      await autoPullCompanyData(true);
+    }
+    finishProgressBanner('Refreshed!');
+  } catch (err) {
+    console.error(err);
+    progressBannerError(userError("Couldn't refresh: " + err.message, 'REFRESH_HOME'));
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove('spinning');
+  }
 });
 
 // The logo and project background photos sync in the background (see

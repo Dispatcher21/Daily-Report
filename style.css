@@ -456,6 +456,16 @@ main { max-width: min(1400px, 94vw); margin: 0 auto; padding: 1rem; }
   margin: 1.4rem 0 0.5rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--border);
 }
 
+/* Same idea as .eyebrow (label + underline), just with room for a small
+   action button flush against the right end of that underline instead of
+   plain text alone -- see #btn-refresh-home. */
+.eyebrow-row {
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 0.5rem;
+  margin: 1.4rem 0 0.5rem; padding-bottom: 0.3rem; border-bottom: 1px solid var(--border);
+}
+.eyebrow-row .eyebrow { margin: 0; padding-bottom: 0; border-bottom: none; }
+.eyebrow-row .view-toggle-btn { width: 1.7rem; height: 1.7rem; flex: 0 0 auto; }
+
 .unsaved-drafts[hidden] { display: none; }
 .unsaved-drafts .eyebrow { margin-top: 0; }
 .draft-row {

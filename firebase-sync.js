@@ -54,6 +54,14 @@ const FIRESTORE_SDK = 'https://www.gstatic.com/firebasejs/10.14.1/firebase-fires
 const STORAGE_SDK = 'https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js';
 const REPORT_PHOTO_SLOTS = 6;
 
+// Stamped onto a locally-cached project/report during pullAllCompanyData's
+// reconciliation pass when it turns out not to belong to the company just
+// pulled and never carried a real companyCode to begin with (pre-fix-vintage
+// local data) -- see _inCompanyScope in projectInScope/reportInScope. Never
+// matches a real company code, so it's simply excluded everywhere, without
+// needing to know which company it actually belongs to.
+const FOREIGN_COMPANY_SENTINEL = '__foreign__';
+
 const COMPANY_CODE_SETTING = 'companyRoomCode';
 const COMPANY_NAME_SETTING = 'companyRoomName';
 const COMPANY_ADMIN_SETTING = 'companyRoomIsAdmin';
@@ -166,10 +174,27 @@ async function getCompanyRoom() {
   };
 }
 
-// True if this device may see `projectId` -- unrestricted (null scope,
-// the normal admin/member case) unless a custom setup narrowed it down.
-function projectInScope(projectId, room) {
-  return !room || !room.projectScope || room.projectScope.includes(projectId);
+// True if this device may see a given project/report -- two independent
+// gates. Company identity: local storage has no separate cache per company,
+// so a device that's ever joined more than one company mixes them in the
+// same IndexedDB stores; a record's own `companyCode` (stamped when pulled
+// from a company or created locally, see makeBlankReport/
+// makeProjectFromParsedFile in defaults.js) is what keeps them apart. An
+// untagged record (pre-fix-vintage local data) falls through this check --
+// pullAllCompanyData's reconciliation pass is what cleans those up, not
+// this function. Role scope: unrestricted (null `projectScope`, the normal
+// admin/member case) unless a custom setup narrowed it down to specific
+// project ids.
+function _inCompanyScope(companyCode, scopeId, room) {
+  if (!room) return true; // local-only device -- nothing to compare against
+  if (room.code && companyCode && companyCode !== room.code) return false;
+  return !room.projectScope || room.projectScope.includes(scopeId);
+}
+function projectInScope(project, room) {
+  return !!project && _inCompanyScope(project.companyCode, project.id, room);
+}
+function reportInScope(report, room) {
+  return !!report && _inCompanyScope(report.companyCode, report.projectId, room);
 }
 
 // Creates a brand-new company room, joins it locally as admin (whoever sets
@@ -798,7 +823,7 @@ async function pullCompanyLogo() {
 // pullCompanyMediaInBackground below).
 async function pullAllCompanyMediaBlocking(code) {
   await pullCompanyLogo();
-  const projects = await getAllProjects();
+  const projects = (await getAllProjects()).filter((p) => projectInScope(p, { code }));
   for (const project of projects) {
     if (project.backgroundImageFetched === false) {
       await putProjectRaw(await fetchProjectBackground(code, project));
@@ -823,7 +848,7 @@ function pullCompanyMediaInBackground(code) {
 
   getAllProjects().then((projects) => {
     projects
-      .filter((p) => p.backgroundImageFetched === false)
+      .filter((p) => projectInScope(p, { code }) && p.backgroundImageFetched === false)
       .forEach((project) => {
         fetchProjectBackground(code, project)
           .then((updated) => putProjectRaw(updated))
@@ -1067,7 +1092,7 @@ async function pullAllCompanyData(code, onProgress) {
   const projectsSnap = await getDocs(collection(db, 'companies', code, 'projects'));
   for (const d of projectsSnap.docs) {
     const data = d.data();
-    const project = { ...data, id: d.id };
+    const project = { ...data, id: d.id, companyCode: code };
     delete project.hasBackgroundImage;
 
     const existing = await getProject(d.id);
@@ -1104,7 +1129,7 @@ async function pullAllCompanyData(code, onProgress) {
     if (onProgress) onProgress({ phase: 'reports', index: i + 1, total: reportDocs.length });
 
     const data = d.data();
-    const report = { ...data, id: d.id };
+    const report = { ...data, id: d.id, companyCode: code };
     delete report.photoSlots;
     delete report.hasSignature;
 
@@ -1152,6 +1177,34 @@ async function pullAllCompanyData(code, onProgress) {
 
     const result = await mergeReportRecord(report);
     if (result !== 'skipped') summary.reportsPulled++;
+  }
+
+  // Reconcile local cache against this company's real, authoritative set --
+  // a pre-fix-vintage local project/report with no companyCode tag at all
+  // would otherwise pass _inCompanyScope's backward-compatible fallback
+  // forever, even if it actually belongs to a different company entirely.
+  // Every untagged record gets settled one way or the other here: tagged as
+  // this company if it's actually part of what was just pulled, tagged
+  // foreign otherwise so the scope check hides it from now on. Needed even
+  // for this company's OWN untagged records -- mergeProjectRecord/
+  // mergeReportRecord above skip the write entirely for a record that's
+  // already fully up to date, so the companyCode stamped onto the pulled
+  // copy earlier in this function never actually lands for anything that
+  // didn't otherwise change. A local-only write either way (bypasses
+  // saveProject/saveReport's sync hook, so this never gets pushed anywhere),
+  // never deleted, since the real record is still safe wherever it
+  // actually belongs.
+  const authoritativeProjectIds = new Set(projectsSnap.docs.map((d) => d.id));
+  const authoritativeReportIds = new Set(reportDocs.map((d) => d.id));
+  for (const p of await getAllProjects()) {
+    if (!p.companyCode) {
+      await putProjectRaw({ ...p, companyCode: authoritativeProjectIds.has(p.id) ? code : FOREIGN_COMPANY_SENTINEL });
+    }
+  }
+  for (const r of await getAllReports()) {
+    if (!r.companyCode) {
+      await putReportRaw({ ...r, companyCode: authoritativeReportIds.has(r.id) ? code : FOREIGN_COMPANY_SENTINEL });
+    }
   }
 
   if (onProgress) onProgress({ phase: 'audit' });
@@ -1203,11 +1256,17 @@ async function fetchReportMedia(report) {
 }
 
 async function pushAllLocalData(code, onProgress) {
-  const projects = await getAllProjects();
+  // Filtered against `code`, not pushed wholesale -- local storage has no
+  // separate cache per company, so a device that's ever cached another
+  // company's projects/reports (see _inCompanyScope) would otherwise bulk-
+  // write that foreign data straight into this company's real records on
+  // every "Sync Now". An untagged (pre-fix-vintage) record still passes,
+  // same fallback as everywhere else this check is used.
+  const projects = (await getAllProjects()).filter((p) => projectInScope(p, { code }));
   await Promise.all(projects.map((project) => pushProjectToCompany(code, project)));
   if (onProgress) onProgress({ phase: 'projects', count: projects.length });
 
-  const reports = await getAllReports();
+  const reports = (await getAllReports()).filter((r) => reportInScope(r, { code }));
   for (let i = 0; i < reports.length; i++) {
     await pushReportToCompany(code, reports[i]);
     if (onProgress) onProgress({ phase: 'reports', index: i + 1, total: reports.length });

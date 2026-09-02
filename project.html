@@ -201,7 +201,7 @@ function showPageBackground(p) {
 async function init() {
   const id = queryParam('id');
   project = id ? await getProject(id) : null;
-  if (!project || !projectInScope(project.id, await getCompanyRoom())) {
+  if (!project || !projectInScope(project, await getCompanyRoom())) {
     location.href = 'index.html';
     return;
   }
@@ -681,9 +681,10 @@ $('#f-reupload').addEventListener('change', async (e) => {
   if (!file) return;
   try {
     const parsed = await parseProjectDataFile(file);
-    const updated = makeProjectFromParsedFile(parsed);
+    const updated = await makeProjectFromParsedFile(parsed);
     updated.id = project.id; // keep the same project, just refresh its data
     updated.createdAt = project.createdAt;
+    updated.companyCode = project.companyCode; // this project's own tag is authoritative, not "whatever's currently joined"
     await saveProject(updated);
     $('#uz-reupload').classList.add('has');
     $('#fn-reupload').textContent = file.name;

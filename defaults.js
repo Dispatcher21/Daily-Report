@@ -138,10 +138,17 @@ async function makeBlankReport(nextReportNo, project, previous) {
   // for "same person, next day"; a real identity is a better answer to the
   // same question, and covers a different person picking up the project too.
   const loggedInName = typeof getUserName === 'function' ? await getUserName() : null;
+  // Prefer the project's own tag (it's the authority on which company a
+  // report under it belongs to) over the currently-joined room, though in
+  // the normal case of creating a report for an already-in-scope project
+  // these are the same thing -- see projectInScope/reportInScope.
+  const room = typeof getCompanyRoom === 'function' ? await getCompanyRoom() : null;
+  const companyCode = (project && project.companyCode) || (room && room.code) || null;
 
   return {
     id: crypto.randomUUID(),
     projectId: project ? project.id : null,
+    companyCode,
     reportNo: nextReportNo,
     date: todayIso(),
     hours: previous ? previous.hours : '',
@@ -260,11 +267,13 @@ function normalizeReport(report) {
 // Projects used to carry a copy of the report template .xlsx. Nothing reads it
 // any more -- the PDF is drawn entirely from print-layout.json -- so it's no
 // longer stored, which also keeps it out of shared setups.
-function makeProjectFromParsedFile(parsed) {
+async function makeProjectFromParsedFile(parsed) {
   const meta = parsed.meta || {};
   const displayName = meta.name || (meta.projectNo ? `PR#${meta.projectNo} - ${meta.projectName || 'Project'}` : 'New Project');
+  const room = typeof getCompanyRoom === 'function' ? await getCompanyRoom() : null;
   return {
     id: crypto.randomUUID(),
+    companyCode: room ? room.code : null,
     name: displayName,
     meta: {
       projectNo: meta.projectNo || '',

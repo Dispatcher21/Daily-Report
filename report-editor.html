@@ -235,8 +235,9 @@ function lockReportEditor() {
 }
 
 async function init() {
+  const room = await getCompanyRoom();
   project = projectId ? await getProject(projectId) : null;
-  if (!project || !projectInScope(project.id, await getCompanyRoom())) {
+  if (!project || !projectInScope(project, room)) {
     location.href = 'index.html';
     return;
   }
@@ -259,7 +260,12 @@ async function init() {
     history.replaceState(null, '', `report-editor.html?project=${project.id}&report=${report.id}`);
   } else {
     report = await getReport(reportParam);
-    if (!report) {
+    // report.projectId !== project.id catches a URL naming two mismatched
+    // ids; reportInScope catches a report that's foreign to this company
+    // (see firebase-sync.js) even if it happens to share a company-scoped
+    // project id by coincidence -- getReport itself is a flat, store-wide
+    // lookup with no scoping of its own.
+    if (!report || report.projectId !== project.id || !reportInScope(report, room)) {
       location.href = `reports.html?project=${project.id}`;
       return;
     }

@@ -422,12 +422,12 @@ async function init() {
       location.href = 'index.html';
       return;
     }
-    project = makeProjectFromParsedFile({ meta: {}, payItemCatalog: [], contractors: [], equipmentLabels: [] });
+    project = await makeProjectFromParsedFile({ meta: {}, payItemCatalog: [], contractors: [], equipmentLabels: [] });
     await saveProject(project);
     history.replaceState(null, '', `project-setup.html?id=${project.id}`);
   } else {
     project = await getProject(idParam);
-    if (!project || !projectInScope(project.id, await getCompanyRoom())) {
+    if (!project || !projectInScope(project, await getCompanyRoom())) {
       location.href = 'index.html';
       return;
     }

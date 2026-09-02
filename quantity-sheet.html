@@ -176,7 +176,7 @@ let selectedEstimateId = null;
 
 async function init() {
   project = projectId ? await getProject(projectId) : null;
-  if (!project || !projectInScope(project.id, await getCompanyRoom())) {
+  if (!project || !projectInScope(project, await getCompanyRoom())) {
     location.href = 'index.html';
     return;
   }

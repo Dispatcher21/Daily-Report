@@ -111,8 +111,9 @@ function isMobileDevice() {
   const reportIdsParam = queryParam('report') || '';
   const reportIds = reportIdsParam.split(',').filter(Boolean);
 
+  const room = await getCompanyRoom();
   const project = projectId ? await getProject(projectId) : null;
-  if (!project || reportIds.length === 0 || !projectInScope(project.id, await getCompanyRoom())) {
+  if (!project || reportIds.length === 0 || !projectInScope(project, room)) {
     $('#pdf-status').textContent = 'Nothing to download.';
     return;
   }
@@ -123,7 +124,10 @@ function isMobileDevice() {
   const reports = [];
   for (const id of reportIds) {
     let r = await getReport(id);
-    if (!r) continue;
+    // Same reasoning as report-editor.html's init(): getReport is a flat,
+    // store-wide lookup, so confirm this id actually belongs to the
+    // already-scoped project and company before including it in the PDF.
+    if (!r || r.projectId !== project.id || !reportInScope(r, room)) continue;
     normalizeReport(r);
     // Same lazy-photo story as report-editor.html -- a PDF needs the
     // actual bytes, not just knowing a photo exists, so resolve any

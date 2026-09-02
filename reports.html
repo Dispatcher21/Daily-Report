@@ -316,7 +316,7 @@ $$('#view-toggle .view-toggle-btn').forEach((btn) => {
 
 async function init() {
   project = projectId ? await getProject(projectId) : null;
-  if (!project || !projectInScope(project.id, await getCompanyRoom())) {
+  if (!project || !projectInScope(project, await getCompanyRoom())) {
     location.href = 'index.html';
     return;
   }

@@ -416,7 +416,7 @@ function attachReorderCardHandlers() {
 async function init() {
   project = projectId ? await getProject(projectId) : null;
   const room = await getCompanyRoom();
-  if (!project || !room || !room.isAdmin) {
+  if (!project || !room || !room.isAdmin || !projectInScope(project, room)) {
     location.href = 'index.html';
     return;
   }
@@ -430,7 +430,7 @@ async function init() {
   pendingHidden = new Set(originalHidden);
   pendingRequired = new Set(originalRequired);
 
-  const allProjects = await getAllProjects();
+  const allProjects = (await getAllProjects()).filter((p) => projectInScope(p, room));
   $('#rf-project-picker').innerHTML = allProjects
     .map((p) => `<option value="${p.id}"${p.id === project.id ? ' selected' : ''}>${escapeHtml(p.name)}</option>`)
     .join('');

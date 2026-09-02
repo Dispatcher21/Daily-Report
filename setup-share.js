@@ -59,7 +59,8 @@ function describeSetupPayload(payload) {
 // updated, a new one added. Reports are never touched, and a logo already set
 // on this device is left alone.
 async function applySetupPayload(payload) {
-  const existing = await getAllProjects();
+  const room = typeof getCompanyRoom === 'function' ? await getCompanyRoom() : null;
+  const existing = (await getAllProjects()).filter((p) => typeof projectInScope !== 'function' || projectInScope(p, room));
   const byId = new Map(existing.map((p) => [p.id, p]));
 
   let added = 0;

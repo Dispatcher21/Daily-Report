@@ -417,7 +417,8 @@ $('#btn-remove-cm-logo').addEventListener('click', async () => {
 // ---------- Projects ----------
 
 async function renderCmProjects() {
-  const projects = await getAllProjects();
+  const room = await getCompanyRoom();
+  const projects = (await getAllProjects()).filter((p) => projectInScope(p, room));
   $('#cm-projects-empty').hidden = projects.length > 0;
   $('#cm-project-list').innerHTML = projects
     .map(
@@ -443,7 +444,11 @@ async function renderCmProjects() {
 }
 
 async function renderRequiredFieldsPicker(projects) {
-  const list = projects || (await getAllProjects());
+  let list = projects;
+  if (!list) {
+    const room = await getCompanyRoom();
+    list = (await getAllProjects()).filter((p) => projectInScope(p, room));
+  }
   $('#rf-projects-empty').hidden = list.length > 0;
   $('#rf-project-label').hidden = list.length === 0;
   $('#rf-open-link').hidden = list.length === 0;
@@ -462,7 +467,8 @@ $('#cm-project-list').addEventListener('click', async (e) => {
   const deleteBtn = e.target.closest('[data-delete-project]');
   if (deleteBtn) {
     const id = deleteBtn.dataset.deleteProject;
-    const projects = await getAllProjects();
+    const room = await getCompanyRoom();
+    const projects = (await getAllProjects()).filter((p) => projectInScope(p, room));
     const project = projects.find((p) => p.id === id);
     if (!project) return;
     if (!confirm(`Delete "${project.name}"? Its reports go with it. This cannot be undone.`)) return;
@@ -476,7 +482,8 @@ $('#cm-project-list').addEventListener('click', async (e) => {
   const removeBgBtn = e.target.closest('[data-remove-bg]');
   if (removeBgBtn) {
     const id = removeBgBtn.dataset.removeBg;
-    const project = (await getAllProjects()).find((p) => p.id === id);
+    const room = await getCompanyRoom();
+    const project = (await getAllProjects()).filter((p) => projectInScope(p, room)).find((p) => p.id === id);
     if (!project) return;
     project.backgroundImage = null;
     project.backgroundImageFetched = true; // deliberately removed, not "unknown"
@@ -495,7 +502,8 @@ $('#cm-project-list').addEventListener('change', async (e) => {
     return;
   }
   const id = input.dataset.bgUpload;
-  const project = (await getAllProjects()).find((p) => p.id === id);
+  const room = await getCompanyRoom();
+  const project = (await getAllProjects()).filter((p) => projectInScope(p, room)).find((p) => p.id === id);
   if (!project) return;
   try {
     project.backgroundImage = await compressImage(file, { maxDim: 1600, quality: 0.75 });
@@ -515,11 +523,12 @@ $('#cm-f-projects').addEventListener('change', async (e) => {
 
   const names = [];
   const errors = [];
-  const existingProjects = await getAllProjects();
+  const cmRoom = await getCompanyRoom();
+  const existingProjects = (await getAllProjects()).filter((p) => projectInScope(p, cmRoom));
   for (const file of files) {
     try {
       const parsed = await parseProjectDataFile(file);
-      const candidate = makeProjectFromParsedFile(parsed);
+      const candidate = await makeProjectFromParsedFile(parsed);
       const match = findSimilarProject(existingProjects, candidate);
 
       let project = candidate;
@@ -630,7 +639,9 @@ function csPermissionSummary(perms) {
 }
 
 async function renderCsList() {
-  const [roles, projects] = await Promise.all([listCustomRoles(), getAllProjects()]);
+  const room = await getCompanyRoom();
+  const [roles, allProjects] = await Promise.all([listCustomRoles(), getAllProjects()]);
+  const projects = allProjects.filter((p) => projectInScope(p, room));
   const projectNameById = new Map(projects.map((p) => [p.id, p.name]));
 
   $('#cs-list-empty').hidden = roles.length > 0;
@@ -821,7 +832,10 @@ $('#btn-change-company-password').addEventListener('click', async () => {
 // before that existed, so older data still shows up here rather than
 // vanishing into "Unknown".
 async function renderCmActivity() {
-  const [reports, projects] = await Promise.all([getAllReports(), getAllProjects()]);
+  const room = await getCompanyRoom();
+  const [allReports, allProjects] = await Promise.all([getAllReports(), getAllProjects()]);
+  const reports = allReports.filter((r) => reportInScope(r, room));
+  const projects = allProjects.filter((p) => projectInScope(p, room));
   const projectNameById = new Map(projects.map((p) => [p.id, p.name]));
 
   const byAuthor = new Map();

@@ -463,7 +463,7 @@ $('#cc-f-projects').addEventListener('change', async (e) => {
   for (const file of files) {
     try {
       const parsed = await parseProjectDataFile(file);
-      const candidate = makeProjectFromParsedFile(parsed);
+      const candidate = await makeProjectFromParsedFile(parsed);
 
       const stagedMatch = findSimilarProject(ccPendingProjects, candidate);
       const match = stagedMatch || findSimilarProject(existingProjects, candidate);
@@ -609,11 +609,12 @@ $('#f-company-projects').addEventListener('change', async (e) => {
 
   const names = [];
   const errors = [];
-  const existingProjects = await getAllProjects();
+  const fcpRoom = await getCompanyRoom();
+  const existingProjects = (await getAllProjects()).filter((p) => projectInScope(p, fcpRoom));
   for (const file of files) {
     try {
       const parsed = await parseProjectDataFile(file);
-      const candidate = makeProjectFromParsedFile(parsed);
+      const candidate = await makeProjectFromParsedFile(parsed);
       const match = findSimilarProject(existingProjects, candidate);
 
       let project = candidate;
