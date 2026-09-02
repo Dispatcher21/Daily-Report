@@ -126,6 +126,14 @@ const projectId = queryParam('project');
 let project = null;
 let report = null;
 let activeContractorTab = 0;
+// How many of the CONTRACTOR_COUNT/EQUIPMENT_ROW_COUNT fixed slots to
+// actually show -- computed once per report load (see computeVisibleCounts)
+// from how many are already filled in, then grown by the "+ Add" buttons.
+// The underlying report.contractors/equipmentRows arrays stay full-length
+// always (the print template needs fixed row positions); this is purely
+// how many of them the editor bothers showing.
+let contractorVisibleCount = 1;
+let equipVisibleCount = 0;
 let saveTimer = null;
 let payItemSearch = '';
 let manualPayOpen = false;
@@ -356,7 +364,7 @@ function blockFieldBodyHtml(key, def) {
     inner = `
       <div id="contractor-tabs" class="tab-row"></div>
       <div id="contractor-panel"></div>
-      <p class="hint">22 personnel/equipment rows are fixed by the template &mdash; you can rename any row, and quantities are per contractor tab.</p>`;
+      <p class="hint">22 personnel/equipment rows are fixed by the template, but only ones already in use show by default &mdash; use the "+" buttons to reveal more. You can rename any row, and quantities are per contractor tab.</p>`;
   } else if (key === 'payItems') {
     tag = `<span class="step-tag" id="pay-items-tag">0 / ${PAY_ITEM_ROW_COUNT}</span>`;
     inner = `
@@ -751,7 +759,10 @@ function bindDynamicFields() {
     });
   }
 
-  if ($('#contractor-tabs')) renderContractorTabs();
+  if ($('#contractor-tabs')) {
+    computeVisibleCounts();
+    renderContractorTabs();
+  }
 
   if ($('#pay-catalog-list')) {
     renderPayItemsStep();
@@ -977,18 +988,60 @@ $('#btn-add-time-entry').addEventListener('click', () => {
 
 // ---------- Contractors / equipment matrix ----------
 
+// report.contractors/equipmentRows are always the full fixed-length arrays
+// (CONTRACTOR_COUNT/EQUIPMENT_ROW_COUNT -- the print template needs those
+// exact row positions), but showing all 6 contractor tabs and all 22
+// equipment rows on a mostly-blank report is a wall of empty inputs. Run
+// once per report load: reveal only up through the last slot that already
+// has something in it, plus a "+" to reveal one more at a time from there.
+function computeVisibleCounts() {
+  let lastContractor = -1;
+  report.contractors.forEach((c, i) => {
+    const hasName = !!(c.name || '').trim();
+    const hasQty = report.equipmentRows.some((row) => String(row.qty[i] ?? '').trim() !== '');
+    if (hasName || hasQty) lastContractor = i;
+  });
+  contractorVisibleCount = Math.min(CONTRACTOR_COUNT, Math.max(1, lastContractor + 1));
+
+  let lastEquip = -1;
+  report.equipmentRows.forEach((row, i) => {
+    const hasLabel = !!(row.label || '').trim();
+    const hasQty = row.qty.some((q) => String(q ?? '').trim() !== '');
+    if (hasLabel || hasQty) lastEquip = i;
+  });
+  equipVisibleCount = Math.min(EQUIPMENT_ROW_COUNT, Math.max(0, lastEquip + 1));
+}
+
 function renderContractorTabs() {
   const tabRow = $('#contractor-tabs');
-  tabRow.innerHTML = report.contractors
+  const tabs = report.contractors
+    .slice(0, contractorVisibleCount)
     .map((c, i) => `<button class="tab-btn${i === activeContractorTab ? ' active' : ''}" data-idx="${i}">${escapeHtml(c.name || 'Contractor ' + (i + 1))}</button>`)
     .join('');
-  $$('.tab-btn', tabRow).forEach((btn) => {
+  const addBtn = contractorVisibleCount < CONTRACTOR_COUNT
+    ? `<button type="button" class="tab-btn tab-btn-add" id="btn-add-contractor" title="Add another contractor">+</button>`
+    : '';
+  tabRow.innerHTML = tabs + addBtn;
+
+  $$('.tab-btn[data-idx]', tabRow).forEach((btn) => {
     btn.addEventListener('click', () => {
       activeContractorTab = Number(btn.dataset.idx);
       renderContractorTabs();
       renderContractorPanel();
     });
   });
+  const addContractorBtn = $('#btn-add-contractor');
+  if (addContractorBtn) {
+    addContractorBtn.addEventListener('click', () => {
+      // Nothing about the report's data changes by revealing a slot that
+      // was already there blank -- no scheduleSave needed until something
+      // actually gets typed into it.
+      activeContractorTab = contractorVisibleCount;
+      contractorVisibleCount = Math.min(CONTRACTOR_COUNT, contractorVisibleCount + 1);
+      renderContractorTabs();
+      renderContractorPanel();
+    });
+  }
   renderContractorPanel();
 }
 
@@ -1002,6 +1055,7 @@ function renderContractorPanel() {
       <input type="text" id="contractor-name-input" value="${escapeHtml(contractor.name || '')}" placeholder="e.g. ABC Trucking">
     </label>
     <div id="equip-rows"></div>
+    ${equipVisibleCount < EQUIPMENT_ROW_COUNT ? `<button type="button" class="btn-secondary" id="btn-add-equip-row">+ Add Equipment Row</button>` : ''}
   `;
 
   $('#contractor-name-input').addEventListener('input', (e) => {
@@ -1013,6 +1067,7 @@ function renderContractorPanel() {
 
   const rowsEl = $('#equip-rows');
   rowsEl.innerHTML = report.equipmentRows
+    .slice(0, equipVisibleCount)
     .map(
       (row, i) => `
       <div class="equip-row">
@@ -1034,6 +1089,14 @@ function renderContractorPanel() {
       scheduleSave();
     });
   });
+
+  const addEquipBtn = $('#btn-add-equip-row');
+  if (addEquipBtn) {
+    addEquipBtn.addEventListener('click', () => {
+      equipVisibleCount = Math.min(EQUIPMENT_ROW_COUNT, equipVisibleCount + 1);
+      renderContractorPanel();
+    });
+  }
 }
 
 // ---------- Pay items (rich catalog selector) ----------

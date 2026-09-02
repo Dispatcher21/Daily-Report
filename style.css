@@ -1026,6 +1026,7 @@ input[type="file"] { min-height: 0; }
   cursor: pointer; white-space: nowrap; min-height: var(--tap);
 }
 .tab-btn.active { background: var(--brand); color: var(--on-brand); border-color: var(--brand); }
+.tab-btn-add { padding: 0.6rem 0.9rem; border-style: dashed; color: var(--text-dim); font-size: 1.05rem; }
 .contractor-name-input { margin-bottom: 0.75rem; }
 .equip-row {
   display: grid; grid-template-columns: 1fr 90px; gap: 0.5rem; align-items: center;
