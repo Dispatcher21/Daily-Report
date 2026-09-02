@@ -884,7 +884,18 @@ function renderEditor() {
   });
 
   $('#btn-no-work-day').onclick = () => markBlankDay(NO_WORK_DAY_NOTE);
-  $('#btn-weather-day').onclick = () => markBlankDay(WEATHER_DAY_NOTE);
+  $('#btn-weather-day').onclick = async () => {
+    markBlankDay(WEATHER_DAY_NOTE);
+    // A Weather Day is specifically about the weather, so pull the actual
+    // conditions for the report's date right away instead of leaving that
+    // for a separate manual step -- same fetch as the Weather group's own
+    // button, just triggered here too. Only if that button (and the
+    // Location it depends on) actually exist for this project/report.
+    if ($('#btn-fetch-weather')) {
+      setGroupOpen('weather', true);
+      await fetchWeatherForReport();
+    }
+  };
 }
 
 // Shared by the No Work Day and Weather Day buttons -- both fill Notes with
