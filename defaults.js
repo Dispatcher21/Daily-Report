@@ -475,10 +475,14 @@ function isFieldHidden(project, key) {
 // Which of a project's marked-required fields this particular report hasn't
 // filled in yet -- empty array means it's good to generate. A required field
 // whose block the admin later hid is never enforced -- there'd be no way
-// left on the form to satisfy it.
+// left on the form to satisfy it. A No Work Day/Weather Day report is
+// deliberately blank apart from Notes and Hours (see the report-editor.html
+// buttons) -- required-field checks would otherwise block generating one on
+// any project that requires, say, Activity or Pay Items, which defeats the
+// point of marking a day as one in the first place.
 function getMissingRequiredFields(report, project) {
   const required = (project && project.requiredFields) || [];
-  if (!required.length || !report) return [];
+  if (!required.length || !report || isNoWorkDayReport(report) || isWeatherDayReport(report)) return [];
   return REQUIRED_FIELD_DEFS.filter(
     (def) => required.includes(def.key) && !isFieldHidden(project, def.key) && def.isEmpty(report)
   );
