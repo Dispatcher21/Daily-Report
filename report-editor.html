@@ -418,11 +418,27 @@ const WMO_WEATHER_DESCRIPTIONS = {
   95: 'Thunderstorm', 96: 'Thunderstorm with slight hail', 99: 'Thunderstorm with heavy hail',
 };
 
+// fetch() resolving and res.ok being true doesn't guarantee a JSON body --
+// a captive wifi portal, a proxy, or the API itself having a bad moment can
+// all hand back a plain-text/HTML response on a 200. res.json() throws its
+// raw "Unexpected token" SyntaxError straight at the user in that case,
+// which reads like the app is broken rather than a network hiccup worth
+// retrying -- parse manually so that case gets the same friendly wording
+// as any other fetch failure here.
+async function readJsonResponse(res, friendlyMessage) {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(friendlyMessage);
+  }
+}
+
 async function geocodeLocation(name) {
   const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1&language=en`;
   const res = await fetch(url);
   if (!res.ok) throw new Error("Couldn't look up that location.");
-  const data = await res.json();
+  const data = await readJsonResponse(res, "Couldn't look up that location -- try again in a moment.");
   const r = (data.results || [])[0];
   return r ? { latitude: r.latitude, longitude: r.longitude, name: [r.name, r.admin1].filter(Boolean).join(', ') } : null;
 }
@@ -437,7 +453,7 @@ async function fetchWeatherForDate(lat, lon, dateIso) {
   });
   const res = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`);
   if (!res.ok) throw new Error("Couldn't fetch weather for that date.");
-  const data = await res.json();
+  const data = await readJsonResponse(res, "Couldn't fetch weather for that date -- try again in a moment.");
   const d = data.daily;
   if (!d || !d.time || d.time.length === 0) return null;
   return {
