@@ -927,12 +927,43 @@ function timeToMinutes(hhmm) {
 }
 function entryHours(entry) {
   const start = timeToMinutes(entry.start);
-  const end = timeToMinutes(entry.end);
-  if (start === null || end === null || end <= start) return null;
+  let end = timeToMinutes(entry.end);
+  if (start === null || end === null) return null;
+  // An overnight shift (e.g. 6:30 PM to 5:30 AM) has an end time that's
+  // numerically earlier than its start -- that's not invalid, it just
+  // crossed midnight, so roll it into the next day rather than rejecting it.
+  if (end <= start) end += 24 * 60;
   return (end - start) / 60;
 }
 function totalHours(timeEntries) {
   return timeEntries.reduce((sum, e) => sum + (entryHours(e) || 0), 0);
+}
+
+// Work Begin/Work End (Site Conditions) are the fixed cells on the actual
+// printed form -- free text, since that's what the paper template always
+// was. Time Worked (right above, in Basics) is the app's own multi-segment
+// hours calculator. A crew that fills in Time Worked shouldn't also have to
+// retype the same start/end as free text a second time in a different
+// format, so mirror the first segment's start / last segment's end into
+// Work Begin/End automatically -- but only into whichever of those two is
+// still blank, never overwriting something typed in by hand.
+function formatTimeForDisplay(hhmm) {
+  const [h, m] = hhmm.split(':').map(Number);
+  const period = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${String(m).padStart(2, '0')} ${period}`;
+}
+function autofillWorkBeginEnd() {
+  const valid = report.timeEntries.filter((e) => e.start && e.end && entryHours(e) !== null);
+  if (!valid.length) return;
+  if (!report.workBegin) {
+    report.workBegin = formatTimeForDisplay(valid[0].start);
+    const el = $('#f-workBegin'); if (el) el.value = report.workBegin;
+  }
+  if (!report.workEnd) {
+    report.workEnd = formatTimeForDisplay(valid[valid.length - 1].end);
+    const el = $('#f-workEnd'); if (el) el.value = report.workEnd;
+  }
 }
 
 function renderTimeEntries() {
@@ -973,6 +1004,7 @@ function onTimeEntriesChanged() {
   const total = totalHours(report.timeEntries);
   report.hours = total > 0 ? Number(total.toFixed(2)) : report.hours;
   $('#f-hours').value = report.hours;
+  autofillWorkBeginEnd();
   scheduleSave();
 }
 
