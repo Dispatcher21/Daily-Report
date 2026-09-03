@@ -189,17 +189,29 @@ async function saveReport(report) {
   }
 }
 
+// Unlike saveReport's fire-and-forget mirror (deliberately non-blocking, so
+// typing/auto-save stays instant offline), a delete's sync call is awaited.
+// autoPullCompanyData fires on every regained tab focus, and a pull that
+// lands before a fire-and-forget delete has actually committed in Firestore
+// can't tell "genuinely still there" apart from "deleted, but not synced
+// yet" -- it just re-imports the report right back. Deleting is deliberate
+// and rare enough that the extra round-trip is worth it. The local delete
+// above still always happens first and stands regardless of whether the
+// sync succeeds; a sync failure (offline, etc.) is thrown here so the
+// caller can tell the user it may not have taken everywhere yet, rather
+// than the old behavior of failing silently to the console and letting it
+// quietly reappear later with no explanation.
 async function deleteReport(id) {
   const needsExisting = typeof onCompanySyncReportChanged === 'function' || typeof logAuditableChange === 'function';
   const report = needsExisting ? await getReport(id) : null;
   await withStore(REPORTS_STORE, 'readwrite', (store) => store.delete(id));
   await deleteReportDraft(id);
   if (report) {
-    if (typeof onCompanySyncReportChanged === 'function') {
-      onCompanySyncReportChanged(report, true).catch((err) => console.error('company sync mirror:', err));
-    }
     if (typeof logAuditableChange === 'function') {
       logAuditableChange('report', report, null, true).catch((err) => console.error('audit log:', err));
+    }
+    if (typeof onCompanySyncReportChanged === 'function') {
+      await onCompanySyncReportChanged(report, true);
     }
   }
 }
@@ -306,22 +318,43 @@ async function getProject(id) {
   return all.find((p) => p.id === id) || null;
 }
 
-// Deletes a project and every report that belongs to it.
+// Deletes a project and every report that belongs to it. Every local delete
+// below always happens, report or project, sync failures notwithstanding --
+// a report whose own sync fails doesn't stop the rest from deleting, or the
+// project itself from going too. Sync failures are collected instead and
+// thrown together at the end (see deleteReport's own comment for why a
+// delete's sync is awaited at all, unlike a save's), so the caller can warn
+// that some of this may not have taken everywhere yet, without leaving any
+// of it undeleted on this device.
 async function deleteProject(id) {
   const needsExisting = typeof onCompanySyncProjectChanged === 'function' || typeof logAuditableChange === 'function';
   const project = needsExisting ? await getProject(id) : null;
   const reports = await getReportsForProject(id);
+  const syncErrors = [];
   for (const r of reports) {
-    await deleteReport(r.id); // also mirrors and audit-logs each report's own deletion, see above
+    try {
+      await deleteReport(r.id); // also mirrors and audit-logs each report's own deletion, see above
+    } catch (err) {
+      console.error('company sync mirror:', err);
+      syncErrors.push(err);
+    }
   }
   await withStore(PROJECTS_STORE, 'readwrite', (store) => store.delete(id));
   if (project) {
-    if (typeof onCompanySyncProjectChanged === 'function') {
-      onCompanySyncProjectChanged(project, true).catch((err) => console.error('company sync mirror:', err));
-    }
     if (typeof logAuditableChange === 'function') {
       logAuditableChange('project', project, null, true).catch((err) => console.error('audit log:', err));
     }
+    if (typeof onCompanySyncProjectChanged === 'function') {
+      try {
+        await onCompanySyncProjectChanged(project, true);
+      } catch (err) {
+        console.error('company sync mirror:', err);
+        syncErrors.push(err);
+      }
+    }
+  }
+  if (syncErrors.length) {
+    throw new Error(`Deleted locally, but ${syncErrors.length} item(s) didn't sync -- they may come back on next sync: ${syncErrors[0].message}`);
   }
 }
 

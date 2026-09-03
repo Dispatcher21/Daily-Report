@@ -675,12 +675,25 @@ $('#btn-delete-selected').addEventListener('click', async () => {
   btn.textContent = 'Deleting...';
   btn.disabled = true;
   try {
+    // Each iteration always deletes locally regardless of the others --
+    // deleteReport only throws over its own sync failure, after its own
+    // local delete already happened -- so one report's bad connection
+    // moment doesn't leave the rest of the batch untouched.
+    const syncErrors = [];
     for (const r of selected) {
-      await deleteReport(r.id);
+      try {
+        await deleteReport(r.id);
+      } catch (err) {
+        console.error(err);
+        syncErrors.push(err);
+      }
     }
     selectedIds.clear();
     allReports = await getReportsForProject(project.id);
     render();
+    if (syncErrors.length) {
+      alert(userError(`Deleted locally, but ${syncErrors.length} report(s) didn't sync -- they may come back on next sync: ${syncErrors[0].message}`, 'DELETE_REPORTS'));
+    }
   } catch (err) {
     console.error(err);
     alert(userError("Couldn't delete: " + err.message, 'DELETE_REPORTS'));

@@ -780,7 +780,14 @@ $('#btn-delete-project').addEventListener('click', async () => {
       ? `Delete "${project.name}" and all ${reports.length} of its reports? This cannot be undone.`
       : `Delete "${project.name}"? This cannot be undone.`;
   if (!confirm(msg)) return;
-  await deleteProject(project.id);
+  try {
+    await deleteProject(project.id);
+  } catch (err) {
+    // Still deleted locally regardless -- deleteProject only throws over a
+    // sync failure, after every local delete already happened.
+    console.error(err);
+    alert(userError(err.message, 'DELETE_PROJECT'));
+  }
   location.href = 'index.html';
 });
 

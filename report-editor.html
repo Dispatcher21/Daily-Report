@@ -883,7 +883,14 @@ function renderEditor() {
 
   $('#btn-delete-report').onclick = async () => {
     if (!confirm('Delete this report? This cannot be undone.')) return;
-    await deleteReport(report.id);
+    try {
+      await deleteReport(report.id);
+    } catch (err) {
+      // Still deleted locally regardless -- deleteReport only throws over
+      // its own sync failure, after the local delete already happened.
+      console.error(err);
+      alert(userError(err.message, 'DELETE_REPORT'));
+    }
     location.href = `reports.html?project=${project.id}`;
   };
 

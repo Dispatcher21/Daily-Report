@@ -471,7 +471,17 @@ $('#cm-project-list').addEventListener('click', async (e) => {
     const project = projects.find((p) => p.id === id);
     if (!project) return;
     if (!confirm(`Delete "${project.name}"? Its reports go with it. This cannot be undone.`)) return;
-    await deleteProject(id);
+    deleteBtn.disabled = true;
+    try {
+      await deleteProject(id);
+    } catch (err) {
+      // Still deleted locally by this point regardless -- deleteProject only
+      // throws over a sync failure, after every local delete already
+      // happened. Render below reflects that either way; this just tells
+      // the admin it may not have taken everywhere yet.
+      console.error(err);
+      cmError(userError(err.message, 'DELETE_PROJECT'));
+    }
     await renderCmProjects();
     await renderCmActivity();
     await renderCsList();
