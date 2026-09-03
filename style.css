@@ -1544,6 +1544,27 @@ input[type="file"] { min-height: 0; }
   }
 }
 
+/* Below 1100px .index-layout stacks the dashboard above the project list
+   (see that rule) instead of beside it, so on a phone it's the first
+   screenful or three before "Your Projects" -- the thing almost every
+   mobile visit is actually here for -- ever comes into view. Collapsed by
+   default there, behind one tap; at 1100px+ the dashboard already sits in
+   its own side column out of the project list's way, so the toggle never
+   shows and .md-body is never hidden by it. */
+.md-mobile-toggle { display: none; }
+@media (max-width: 1099.98px) {
+  .md-mobile-toggle {
+    display: flex; align-items: center; justify-content: space-between; width: 100%;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 0.9rem 1rem; margin-bottom: 1rem; box-shadow: var(--shadow);
+    font-size: 0.95rem; font-weight: 700; color: var(--text); cursor: pointer;
+  }
+  .md-mobile-toggle-chev { color: var(--text-dim); transition: transform 0.15s; }
+  #manager-dashboard-col.md-expanded .md-mobile-toggle-chev { transform: rotate(90deg); }
+  .md-body { display: none; }
+  #manager-dashboard-col.md-expanded .md-body { display: block; }
+}
+
 .md-topbar { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
 .md-topbar .eyebrow { margin: 0; padding: 0; border: none; }
 

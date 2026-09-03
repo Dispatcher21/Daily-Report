@@ -36,6 +36,12 @@
   <div class="index-layout" id="index-layout">
 
     <div class="index-dashboard-col" id="manager-dashboard-col" hidden>
+      <button type="button" class="md-mobile-toggle" id="md-mobile-toggle" aria-expanded="false" aria-controls="md-body">
+        <span>&#128202; Manager Dashboard</span>
+        <span class="md-mobile-toggle-chev">&#9656;</span>
+      </button>
+
+      <div class="md-body" id="md-body">
       <div class="md-topbar">
         <div class="eyebrow" style="margin-top:0;">Manager Dashboard</div>
         <button type="button" class="btn-secondary" id="md-manage-btn">&#9881;&#65039; Manage Included Projects</button>
@@ -81,6 +87,7 @@
             <p class="hint" id="md-feed-empty" hidden style="margin:0;">No reports on file yet.</p>
           </div>
         </div>
+      </div>
       </div>
     </div>
 
@@ -296,6 +303,11 @@ async function renderManagerDashboard() {
   // Management, same as every other member permission.
   if (!(await companyCan('viewManagerDashboard'))) { col.hidden = true; return; }
   col.hidden = false;
+  let rememberedExpanded = false;
+  try {
+    rememberedExpanded = !!localStorage.getItem(MD_MOBILE_EXPANDED_KEY);
+  } catch (e) {}
+  setMdMobileExpanded(rememberedExpanded);
 
   // Only an admin can edit which projects are included -- everyone else
   // who can see the dashboard sees the same admin-chosen set.
@@ -517,6 +529,26 @@ function renderMdFeed(reports) {
 
 $('#md-manage-btn').addEventListener('click', () => {
   $('#md-manage-panel').hidden = !$('#md-manage-panel').hidden;
+});
+
+// Collapsed by default on the mobile stacked layout on every visit (that's
+// the point -- most mobile visits want the project list, not this), but a
+// deliberate tap to open it is remembered so someone who *does* want it on
+// their phone isn't stuck re-opening it every single time. Device-local by
+// design, like the theme/accent picks in Settings -- not a company setting.
+const MD_MOBILE_EXPANDED_KEY = 'md-mobile-dashboard-expanded';
+function setMdMobileExpanded(expanded) {
+  const col = $('#manager-dashboard-col');
+  col.classList.toggle('md-expanded', expanded);
+  $('#md-mobile-toggle').setAttribute('aria-expanded', String(expanded));
+}
+$('#md-mobile-toggle').addEventListener('click', () => {
+  const expanded = !$('#manager-dashboard-col').classList.contains('md-expanded');
+  setMdMobileExpanded(expanded);
+  try {
+    if (expanded) localStorage.setItem(MD_MOBILE_EXPANDED_KEY, '1');
+    else localStorage.removeItem(MD_MOBILE_EXPANDED_KEY);
+  } catch (e) {}
 });
 
 function showAddProjectPanel() {
