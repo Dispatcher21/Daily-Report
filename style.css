@@ -1395,6 +1395,13 @@ input[type="file"] { min-height: 0; }
    floats it to the top-right corner on its own row, same corner every
    other .info-tip lands in. */
 .panel-tip-row { display: flex; justify-content: flex-end; margin-bottom: 0.4rem; }
+/* A label here is display:flex;flex-direction:column (caption line, then
+   its input, stacked) -- an .info-tip dropped in directly between the
+   caption text and the input became a third stacked row of its own
+   instead of sitting on the caption line. Wrapping {caption text}{icon}
+   in one inline-flex span keeps them as a single row, so the label goes
+   back to its normal two rows (caption, then field). */
+.label-tip { display: inline-flex; align-items: center; gap: 0.3rem; }
 
 /* .bar-row-top (project.html pay item list) sits flush with its scrollable
    container's top edge, so the usual upward-opening bubble pops out above

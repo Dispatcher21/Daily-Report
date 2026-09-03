@@ -223,7 +223,7 @@ function renderInfoTab() {
     .join('');
 
   $('#ps-panel').innerHTML = `
-    <label>Project Display Name <button type="button" class="info-tip" data-tip="These match the PROJECT INFO sheet in the Excel file -- editing here or there keeps both in sync on save." aria-label="What this does">i</button> <input type="text" id="ps-name" value="${escapeHtml(project.name || '')}" placeholder="Shown on the project list"></label>
+    <label><span class="label-tip">Project Display Name <button type="button" class="info-tip" data-tip="These match the PROJECT INFO sheet in the Excel file -- editing here or there keeps both in sync on save." aria-label="What this does">i</button></span> <input type="text" id="ps-name" value="${escapeHtml(project.name || '')}" placeholder="Shown on the project list"></label>
     <div class="field-grid">${fieldsHtml}</div>
   `;
 

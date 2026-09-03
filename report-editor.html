@@ -360,7 +360,8 @@ function simpleFieldBodyHtml(key, def) {
     ? `<textarea id="f-${key}" rows="${cfg.rows || 3}"></textarea>`
     : `<input type="${cfg.type}" id="f-${key}"${cfg.placeholder ? ` placeholder="${cfg.placeholder}"` : ''}>`;
   const tip = cfg.hint ? ` <button type="button" class="info-tip" data-tip="${escapeHtml(cfg.hint)}" aria-label="What this does">i</button>` : '';
-  return `<div class="rb-field" id="step-${key}"><label>${escapeHtml(def.label)}${tip}${tag}</label></div>`;
+  const labelText = tip ? `<span class="label-tip">${escapeHtml(def.label)}${tip}</span>` : escapeHtml(def.label);
+  return `<div class="rb-field" id="step-${key}"><label>${labelText}${tag}</label></div>`;
 }
 
 function blockFieldBodyHtml(key, def) {
