@@ -1678,6 +1678,12 @@ input[type="file"] { min-height: 0; }
 .step-collapsible > .step-header .step-chevron {
   margin-left: auto; flex-shrink: 0; transition: transform 0.15s;
 }
+/* Two auto margins in the same row (this one, and .info-tip's own -- see
+   that rule) split the free space between them instead of both landing
+   at the right edge, leaving the icon stranded mid-header. Same fix as
+   the .step-tag/.info-tip pair: whichever comes first does the pushing,
+   so reset this one back to 0 when it does. */
+.step-header > .info-tip ~ .step-chevron { margin-left: 0; }
 .step-collapsible.collapsed > .step-header .step-chevron { transform: rotate(-90deg); }
 .step-collapsible.collapsed > .step-body { display: none; }
 

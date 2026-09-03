@@ -372,18 +372,24 @@ function positionTip(el) {
 
   // Same idea, vertically: the bubble opens upward by default, which
   // clips against the top of the viewport -- or renders in front of the
-  // sticky app header instead of behind it, since the bubble's z-index
+  // sticky app header, or the trigger's own card's .step-header/
+  // .rb-group-hd bar, instead of behind it, since the bubble's z-index
   // has to beat ordinary page content to escape its own card -- for
-  // anything sitting near the top of the page. style.css already has this
+  // anything sitting near the top of the page, or just near the top of a
+  // card whose own colored header bar is right above it (the very first
+  // field in a card's body, for instance). style.css already has this
   // exact fix hand-coded for two specific known containers (.bar-row-top,
   // the weather calendar's first row); this is the same flip, but
-  // measured against the real viewport (and the sticky header's actual
-  // rendered height, not a guess) so it also covers a trigger in an
-  // arbitrary header instead of needing its own one-off selector added
-  // every time.
+  // measured against the real viewport -- and both header patterns'
+  // actual rendered height, not a guess -- so it also covers a trigger in
+  // an arbitrary header/card without needing its own one-off selector
+  // added every time.
   const header = document.querySelector('.app-header');
   const headerBottom = header ? header.getBoundingClientRect().bottom : 0;
-  const BUBBLE_CLEARANCE = Math.max(60, headerBottom + 20);
+  const card = el.closest('.step, .rb-group');
+  const cardHeader = card ? card.querySelector(':scope > .step-header, :scope > .rb-group-hd') : null;
+  const cardHeaderBottom = cardHeader ? cardHeader.getBoundingClientRect().bottom : 0;
+  const BUBBLE_CLEARANCE = Math.max(60, headerBottom + 20, cardHeaderBottom + 20);
   el.classList.toggle('tip-flip-down', rect.top < BUBBLE_CLEARANCE);
 }
 document.addEventListener('pointerover', (e) => {
