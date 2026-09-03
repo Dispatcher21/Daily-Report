@@ -1350,16 +1350,14 @@ input[type="file"] { min-height: 0; }
 [data-tip].tip-flip-down:hover::before, [data-tip].tip-flip-down:focus-visible::before, [data-tip].tip-flip-down.tip-open::before {
   transform: translateX(-50%) translateY(0);
 }
-/* A touch device has no hover, so these can never actually be triggered --
-   and being visibility:hidden rather than display:none, they still occupy
-   layout space and were quietly widening the whole page's scrollable area
-   on narrow screens even while invisible. Drop them outright where hover
-   doesn't exist rather than carry dead, overflow-causing boxes around --
-   except .info-tip, which opens by tap instead of hover and still needs
-   its bubble's content to exist for that tap to have something to show. */
-@media (hover: none) {
-  [data-tip]:not(.info-tip)::after, [data-tip]:not(.info-tip)::before { content: none; }
-}
+/* Used to drop every non-.info-tip bubble's content outright on a touch
+   device (no hover there to ever trigger them), back when .info-tip was
+   the only [data-tip] with a tap-to-open path -- now common.js's click
+   handler opens any [data-tip] by tap, so a dashboard stat card or a
+   weather calendar day needs its bubble content on touch same as
+   .info-tip always did. The overflow risk that carve-out also guarded
+   against (a hidden bubble still occupying layout space near a viewport
+   edge) is handled generally now by positionTip's --tip-offset instead. */
 
 /* A small "i" standing in for a .hint paragraph that would otherwise always
    sit on the page -- the explanation is still exactly one tap or hover

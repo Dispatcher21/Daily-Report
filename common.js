@@ -436,35 +436,38 @@ new MutationObserver((mutations) => {
   }
 }).observe(document.documentElement, { attributes: true, attributeFilter: ['hidden'], subtree: true });
 
-// ---------- .info-tip: a small "i" that opens [data-tip]'s bubble by tap ----------
+// ---------- Tap-to-open: every [data-tip]'s bubble opens by tap, not just hover ----------
 //
-// [data-tip] only shows on :hover/:focus-visible, which -- deliberately,
-// see the CSS comment on .report-warn-btn -- is completely inert on a
-// touch device: there's no hover on a phone, and this app mostly runs on
-// one. A plain descriptive paragraph is always readable regardless, but an
-// .info-tip button carries its explanation ONLY in that bubble, so it
-// needs a tap-to-open path or the explanation simply doesn't exist for a
-// touch user. This adds that, without changing how [data-tip] behaves
-// anywhere else it's already used (plain hover/focus, unchanged).
+// [data-tip] showing only on :hover/:focus-visible left it with no path at
+// all on a touch device -- there's no hover on a phone, and this app mostly
+// runs on one. An .info-tip button carries its explanation ONLY in that
+// bubble, so it's the clearest case, but a dashboard stat card, a pay item
+// bar, or a weather calendar day (all [data-tip], none .info-tip) are just
+// as unreachable by touch without this. Tapping any of them now opens the
+// same bubble hovering would, closing on a tap elsewhere or on Escape --
+// see the matching carve-out in style.css's touch media query, which used
+// to hide these bubbles' content on touch instead of relying on this.
 document.addEventListener('click', (e) => {
-  const tip = e.target.closest('.info-tip');
+  const tip = e.target.closest('[data-tip]');
   if (tip) {
     const wasOpen = tip.classList.contains('tip-open');
-    $$('.info-tip.tip-open').forEach((el) => el.classList.remove('tip-open'));
+    $$('[data-tip].tip-open').forEach((el) => el.classList.remove('tip-open'));
     if (!wasOpen) {
       positionTip(tip);
       tip.classList.add('tip-open');
     }
-    // Always type="button", so there's no default action of its own to
-    // preserve -- preventDefault guards against one belonging to whatever
-    // it's nested inside instead, e.g. a <summary> toggling its <details>
-    // closed, or a .rb-group-hd/[data-toggle-group] row collapsing a card.
+    // None of these (.info-tip, or a plain tabindex="0" div like a
+    // dashboard stat card/weather calendar day) have a default action of
+    // their own to preserve -- preventDefault guards against one
+    // belonging to whatever it's nested inside instead, e.g. a <summary>
+    // toggling its <details> closed, or a .rb-group-hd/[data-toggle-group]
+    // row collapsing a card.
     e.preventDefault();
     e.stopPropagation();
     return;
   }
-  if (!e.target.closest('[data-tip]')) $$('.info-tip.tip-open').forEach((el) => el.classList.remove('tip-open'));
+  $$('[data-tip].tip-open').forEach((el) => el.classList.remove('tip-open'));
 });
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') $$('.info-tip.tip-open').forEach((el) => el.classList.remove('tip-open'));
+  if (e.key === 'Escape') $$('[data-tip].tip-open').forEach((el) => el.classList.remove('tip-open'));
 });
