@@ -26,13 +26,15 @@
   .logo-preview-box .lp-empty { color: #8b96a1; font-size: 0.8rem; }
 
   .cm-project-row {
-    display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+    display: flex; align-items: center; justify-content: space-between; gap: 0.6rem 0.75rem;
     padding: 0.6rem 0; border-bottom: 1px solid var(--border);
+    flex-wrap: wrap; /* actions drop to their own full-width row below the name once they no longer both fit on one line -- see F-1 in the UI audit */
   }
   .cm-project-row:last-child { border-bottom: none; }
-  .cm-project-name { font-weight: 600; }
+  .cm-project-row > div:first-child { min-width: 0; flex: 1 1 auto; }
+  .cm-project-name { font-weight: 600; overflow-wrap: break-word; }
   .cm-project-sub { font-size: 0.8rem; color: var(--text-dim); }
-  .cm-project-actions { display: flex; gap: 0.5rem; flex: 0 0 auto; }
+  .cm-project-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; flex: 1 1 auto; justify-content: flex-end; }
 
   .cc-project-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.5rem 0 0; }
   .cc-chip {
@@ -144,11 +146,11 @@
     <div class="step-header">
       <span class="step-num">FORM RULES</span>
       <h2>Required Fields</h2>
+      <button type="button" class="info-tip" data-tip="Pick a project, then mark which report fields must be filled in before that project's reports can be generated as a PDF. Configured per project -- different projects often need different things documented." aria-label="What this does">i</button>
     </div>
     <div class="step-body">
       <details class="company-details" id="rf-details">
         <summary>Configure Required Fields</summary>
-        <p class="hint" style="margin-top:0.6rem;">Pick a project, then mark which report fields must be filled in before that project's reports can be generated as a PDF. Configured per project -- different projects often need different things documented.</p>
         <div class="empty-state" id="rf-projects-empty" hidden style="padding:1.25rem;">No projects yet.</div>
         <label id="rf-project-label">Project
           <select id="rf-project-select"></select>
@@ -162,9 +164,9 @@
     <div class="step-header">
       <span class="step-num">ACCESS</span>
       <h2>Member Permissions</h2>
+      <button type="button" class="info-tip" data-tip="Off means admin-only. On lets any member (not just admins) do this." aria-label="What this does">i</button>
     </div>
     <div class="step-body">
-      <p class="hint" style="margin-top:0;">Off means admin-only. On lets any member (not just admins) do this.</p>
       <label class="toggle-row" for="cm-perm-reports-own" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-bottom:0.75rem;">
         <input type="checkbox" id="cm-perm-reports-own">
         <span>Members can edit/delete their own reports</span>
@@ -193,9 +195,9 @@
     <div class="step-header">
       <span class="step-num">ACTIVITY</span>
       <h2>Who's Done What</h2>
+      <button type="button" class="info-tip" data-tip="Reports grouped by whoever's logged in as on the device that created them. Only reflects data this device has synced -- tap Refresh to pull in the latest first." aria-label="What this does">i</button>
     </div>
     <div class="step-body">
-      <p class="hint" style="margin-top:0;">Reports grouped by whoever's logged in as on the device that created them. Only reflects data this device has synced -- tap Refresh to pull in the latest first.</p>
       <button type="button" class="btn-secondary" id="btn-refresh-activity" style="margin-bottom:0.75rem;">Refresh</button>
       <div class="empty-state" id="cm-activity-empty" hidden style="padding:1.25rem;">No reports yet.</div>
       <div id="cm-activity-list"></div>
@@ -210,13 +212,11 @@
     </div>
     <div class="step-body">
 
-      <div class="cm-sub-eyebrow">Saved Passwords</div>
-      <p class="hint" style="margin-top:0;">The company password and every custom setup's password, kept in a form only someone who knows the admin password can read back -- an alternative to writing them down. Confirmed fresh every time, never remembered on this device.</p>
+      <div class="cm-sub-eyebrow">Saved Passwords <button type="button" class="info-tip" data-tip="The company password and every custom setup's password, kept in a form only someone who knows the admin password can read back -- an alternative to writing them down. Confirmed fresh every time, never remembered on this device." aria-label="What this does">i</button></div>
       <button type="button" class="btn-secondary" id="btn-reveal-passwords">View Saved Passwords</button>
       <div id="cm-passwords-list" hidden></div>
 
-      <div class="cm-sub-eyebrow">Custom Setups</div>
-      <p class="hint" style="margin-top:0;">A named, project-scoped password -- e.g. an inspector who should only ever see one project. Same permission options as Member Permissions above, applied only within the project(s) checked below.</p>
+      <div class="cm-sub-eyebrow">Custom Setups <button type="button" class="info-tip" data-tip="A named, project-scoped password -- e.g. an inspector who should only ever see one project. Same permission options as Member Permissions above, applied only within the project(s) checked below." aria-label="What this does">i</button></div>
 
       <div id="cs-list-empty" class="empty-state" hidden style="padding:1.25rem;">No custom setups yet.</div>
       <div id="cs-list"></div>
@@ -272,8 +272,7 @@
       <div class="cm-sub-eyebrow">Change Passwords</div>
       <div class="cm-password-grid">
         <div class="cm-password-col" id="cm-admin-password-col">
-          <h3>Admin Password</h3>
-          <p class="hint" style="margin-top:0;">Changes who can unlock admin access on a device -- doesn't affect anyone already unlocked, and doesn't affect the company password. You'll be asked to confirm the current admin password to make this change.</p>
+          <h3>Admin Password <button type="button" class="info-tip" data-tip="Changes who can unlock admin access on a device -- doesn't affect anyone already unlocked, and doesn't affect the company password. You'll be asked to confirm the current admin password to make this change." aria-label="What this does">i</button></h3>
           <label>New Admin Password
             <input type="password" id="cm-admin-password" autocomplete="new-password">
           </label>

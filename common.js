@@ -342,3 +342,123 @@ function isAppInstalled() {
     navigator.standalone === true
   );
 }
+
+// ---------- [data-tip] hover tooltips: keep the bubble on-screen ----------
+//
+// [data-tip]'s bubble (style.css) centers itself on whatever it's attached
+// to -- fine in the middle of a page, but a trigger sitting close to the
+// left or right edge (a narrow dashboard card, a small icon near a column
+// edge) centers a bubble that runs off the edge of the screen with the
+// first word or two clipped and unreadable (see the UI audit, finding F-2).
+// There's no way to know how close to an edge a trigger will land until
+// it's actually on screen, so this measures it the moment a tooltip is
+// about to show and nudges the bubble back on screen with a CSS custom
+// property, instead of hand-tuning a fixed offset per instance the way the
+// handful of existing top-row-clipping overrides in style.css already do
+// for the vertical case.
+function positionTip(el) {
+  const BUBBLE_WIDTH = 230; // matches [data-tip]::after's max-width
+  const MARGIN = 8;
+  // clientWidth, not window.innerWidth -- innerWidth includes the vertical
+  // scrollbar's own gutter, which isn't actually available for content, so
+  // using it here left the bubble up to a scrollbar-width too far right.
+  const viewportWidth = document.documentElement.clientWidth;
+  const rect = el.getBoundingClientRect();
+  const center = rect.left + rect.width / 2;
+  let offset = 0;
+  if (center - BUBBLE_WIDTH / 2 < MARGIN) offset = MARGIN - (center - BUBBLE_WIDTH / 2);
+  else if (center + BUBBLE_WIDTH / 2 > viewportWidth - MARGIN) offset = (viewportWidth - MARGIN) - (center + BUBBLE_WIDTH / 2);
+  el.style.setProperty('--tip-offset', offset + 'px');
+
+  // Same idea, vertically: the bubble opens upward by default, which
+  // clips against the top of the viewport -- or renders in front of the
+  // sticky app header instead of behind it, since the bubble's z-index
+  // has to beat ordinary page content to escape its own card -- for
+  // anything sitting near the top of the page. style.css already has this
+  // exact fix hand-coded for two specific known containers (.bar-row-top,
+  // the weather calendar's first row); this is the same flip, but
+  // measured against the real viewport (and the sticky header's actual
+  // rendered height, not a guess) so it also covers a trigger in an
+  // arbitrary header instead of needing its own one-off selector added
+  // every time.
+  const header = document.querySelector('.app-header');
+  const headerBottom = header ? header.getBoundingClientRect().bottom : 0;
+  const BUBBLE_CLEARANCE = Math.max(60, headerBottom + 20);
+  el.classList.toggle('tip-flip-down', rect.top < BUBBLE_CLEARANCE);
+}
+document.addEventListener('pointerover', (e) => {
+  const el = e.target.closest('[data-tip]');
+  if (el) positionTip(el);
+});
+document.addEventListener('focusin', (e) => {
+  const el = e.target.closest('[data-tip]');
+  if (el) positionTip(el);
+});
+
+// [data-tip]'s bubble is only hidden via opacity/visibility (so it can
+// transition in), never display:none -- so even closed, it's still laid
+// out at its default centered position and counts toward the page's
+// scrollable width. That's invisible and harmless for a trigger away from
+// the edges, but an .info-tip pinned to a card's top-right corner defaults
+// to a bubble centered on itself, which reaches well past the right edge
+// before anything has ever been hovered/tapped to correct it with
+// --tip-offset. Positioning every trigger once up front (and again on
+// resize) means that corrected offset is already in place before it's
+// ever needed, so a never-touched icon doesn't silently widen the page.
+function positionAllTips() {
+  $$('[data-tip]').forEach(positionTip);
+}
+document.addEventListener('DOMContentLoaded', positionAllTips);
+let tipResizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(tipResizeTimer);
+  tipResizeTimer = setTimeout(positionAllTips, 150);
+});
+// A card that's [hidden] until its data finishes loading (several of the
+// Manager Dashboard's) is display:none at the DOMContentLoaded pass above,
+// so any tip inside it lays out at zero size and gets --tip-offset: 0 --
+// harmless while still hidden, since display:none excludes it from the
+// page's scrollable width entirely, but wrong the instant it's revealed at
+// its real position without ever having been re-measured. Watching for
+// `hidden` coming off anywhere covers every such card on every page
+// without needing a re-positioning call added at each one's own reveal
+// point.
+new MutationObserver((mutations) => {
+  if (mutations.some((m) => m.target.hasAttribute && !m.target.hasAttribute('hidden'))) {
+    clearTimeout(tipResizeTimer);
+    tipResizeTimer = setTimeout(positionAllTips, 50);
+  }
+}).observe(document.documentElement, { attributes: true, attributeFilter: ['hidden'], subtree: true });
+
+// ---------- .info-tip: a small "i" that opens [data-tip]'s bubble by tap ----------
+//
+// [data-tip] only shows on :hover/:focus-visible, which -- deliberately,
+// see the CSS comment on .report-warn-btn -- is completely inert on a
+// touch device: there's no hover on a phone, and this app mostly runs on
+// one. A plain descriptive paragraph is always readable regardless, but an
+// .info-tip button carries its explanation ONLY in that bubble, so it
+// needs a tap-to-open path or the explanation simply doesn't exist for a
+// touch user. This adds that, without changing how [data-tip] behaves
+// anywhere else it's already used (plain hover/focus, unchanged).
+document.addEventListener('click', (e) => {
+  const tip = e.target.closest('.info-tip');
+  if (tip) {
+    const wasOpen = tip.classList.contains('tip-open');
+    $$('.info-tip.tip-open').forEach((el) => el.classList.remove('tip-open'));
+    if (!wasOpen) {
+      positionTip(tip);
+      tip.classList.add('tip-open');
+    }
+    // Always type="button", so there's no default action of its own to
+    // preserve -- preventDefault guards against one belonging to whatever
+    // it's nested inside instead, e.g. a <summary> toggling its <details>
+    // closed, or a .rb-group-hd/[data-toggle-group] row collapsing a card.
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
+  if (!e.target.closest('[data-tip]')) $$('.info-tip.tip-open').forEach((el) => el.classList.remove('tip-open'));
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') $$('.info-tip.tip-open').forEach((el) => el.classList.remove('tip-open'));
+});

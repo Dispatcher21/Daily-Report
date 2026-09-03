@@ -35,9 +35,9 @@
     <div class="step-header">
       <span class="step-num">RANGE</span>
       <h2>Choose Which Reports to Include</h2>
+      <button type="button" class="info-tip" data-tip="Quantities logged across the reports in range, combined by day. Days sharing the same date are treated as one." aria-label="What this does">i</button>
     </div>
     <div class="step-body">
-      <p class="hint" style="margin-top:0;">Quantities logged across the reports in range, combined by day. Days sharing the same date are treated as one.</p>
 
       <div class="segmented" id="range-mode-picker">
         <button type="button" data-mode="range">Date Range</button>
@@ -60,9 +60,9 @@
     <div class="step-header">
       <span class="step-num">BILLING</span>
       <h2>Estimates</h2>
+      <button type="button" class="info-tip" data-tip="Record a checkpoint each time a pay estimate goes out, so the quantities billed since the last one -- and since the start -- stay on file." aria-label="What this does">i</button>
     </div>
     <div class="step-body">
-      <p class="hint" style="margin-top:0;">Record a checkpoint each time a pay estimate goes out, so the quantities billed since the last one -- and since the start -- stay on file.</p>
       <div id="estimate-history"></div>
       <div class="field-grid" id="estimate-form" style="margin-top:0.75rem;">
         <label>Estimate No. <input type="text" id="f-est-no"></label>
@@ -117,13 +117,13 @@
       </div>
 
       <div id="view-byDay" style="margin-top:0.9rem;" hidden>
-        <p class="hint" style="margin-top:0;">Each item's own quantity for that day -- not a running total.</p>
+        <div class="panel-tip-row"><button type="button" class="info-tip" data-tip="Each item's own quantity for that day -- not a running total." aria-label="What this does">i</button></div>
         <div class="table-scroll"><table class="data-table" id="byday-table"></table></div>
         <p class="hint" id="byday-empty" hidden style="margin:0;">No pay items logged on any report in this range.</p>
       </div>
 
       <div id="view-byEstimate" style="margin-top:0.9rem;" hidden>
-        <p class="hint" style="margin-top:0;">Each item's quantity billed in that period (since the previous estimate, or since the start for the first one).</p>
+        <div class="panel-tip-row"><button type="button" class="info-tip" data-tip="Each item's quantity billed in that period (since the previous estimate, or since the start for the first one)." aria-label="What this does">i</button></div>
         <div class="table-scroll"><table class="data-table" id="byestimate-table"></table></div>
         <p class="hint" id="byestimate-empty" hidden style="margin:0;">No estimates recorded yet -- add one in the Billing section above.</p>
       </div>
@@ -147,8 +147,8 @@
         <p class="hint" id="detail-summary" style="margin-bottom:0;"></p>
       </div>
 
+      <div class="panel-tip-row" style="margin-top:1rem;margin-bottom:-0.4rem;"><button type="button" class="info-tip" data-tip="Includes a Cover page, By Day and By Estimate breakdowns, and a filterable Detail Log of every entry, alongside these totals." aria-label="What this does">i</button></div>
       <button type="button" class="btn-primary" id="btn-generate" disabled style="margin-top:1rem;">Download as Excel</button>
-      <p class="hint" id="btn-generate-hint" style="margin-bottom:0;">Includes a Cover page, By Day and By Estimate breakdowns, and a filterable Detail Log of every entry, alongside these totals.</p>
     </div>
   </div>
 </main>

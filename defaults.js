@@ -448,9 +448,9 @@ const DEFAULT_FIELD_ORDER = ORDERABLE_FIELD_DEFS.map((d) => d.key);
 // appear in exactly one group here.
 const REPORT_BUILDER_GROUPS = [
   { id: 'overview', icon: '\u{1F4DD}', label: 'Overview', keys: ['activity', 'notes', 'representative', 'peName', 'ntpDate'] },
-  { id: 'contractorsEquipment', icon: '\u{1F477}', label: 'Contractors & Equipment', keys: ['contractorsEquipment'] },
+  { id: 'contractorsEquipment', icon: '\u{1F477}', label: 'Contractors & Equipment', keys: ['contractorsEquipment'], hint: '22 personnel/equipment rows are fixed by the template, but only ones already in use show by default -- use the "+" buttons to reveal more. You can rename any row, and quantities are per contractor tab.' },
   { id: 'workSummary', icon: '\u{270D}\u{FE0F}', label: 'Work Summary', keys: ['workSummaryHeader', 'trafficControlNote', 'workSummary'] },
-  { id: 'payItems', icon: '\u{1F4CA}', label: 'Pay Items', keys: ['payItems'] },
+  { id: 'payItems', icon: '\u{1F4CA}', label: 'Pay Items', keys: ['payItems'], hint: "No limit on how many you add. The printed template has room for 6 in the table itself; anything past that lists automatically at the end of the Summary of Work Performed, the same way it'd be written in by hand." },
   { id: 'controllingItem', icon: '\u{23F1}\u{FE0F}', label: 'Controlling Item & Time Charged', keys: ['controllingItem', 'commentsOnTime', 'controllingItemTimeFrom', 'controllingItemTimeTo'] },
   { id: 'siteConditions', icon: '\u{1F6A7}', label: 'Site Conditions', keys: ['workingConditions', 'trafficControlSelect', 'workBegin', 'workEnd'] },
   { id: 'weather', icon: '\u{1F324}\u{FE0F}', label: 'Weather', keys: ['weatherDesc', 'tempHigh', 'tempLow'] },

@@ -42,7 +42,7 @@
       </div>
 
       <div class="md-manage-panel" id="md-manage-panel" hidden>
-        <p class="hint" style="margin-top:0;">Uncheck a project to leave it out of every stat below &mdash; it still works normally everywhere else.</p>
+        <div class="panel-tip-row"><button type="button" class="info-tip" data-tip="Uncheck a project to leave it out of every stat below -- it still works normally everywhere else." aria-label="What this does">i</button></div>
         <div id="md-project-checks"></div>
       </div>
 
@@ -51,18 +51,16 @@
 
       <div id="md-content">
         <div class="step step-collapsible" id="md-trend-step" hidden>
-          <div class="step-header"><span class="step-num">TREND</span><h2>Progress Over Time</h2></div>
+          <div class="step-header"><span class="step-num">TREND</span><h2>Progress Over Time</h2><button type="button" class="info-tip" data-tip="Each included project's own percent complete, weighted by planned quantity within that project -- lined up by days since that project's own NTP Date (day 0) rather than the calendar, so pace is comparable side by side. Projects without an NTP Date on file aren't shown here." aria-label="What this does">i</button></div>
           <div class="step-body">
-            <p class="hint" style="margin-top:0;">Each included project's own percent complete, weighted by planned quantity within that project -- lined up by days since that project's own NTP Date (day 0) rather than the calendar, so pace is comparable side by side. Projects without an NTP Date on file aren't shown here.</p>
             <div id="md-trend-chart"></div>
             <p class="hint" id="md-trend-hint" hidden style="margin-top:0.5rem;">Only one dated point on file so far for every included project with an NTP Date &mdash; a trend line will appear once at least one has more than one date to compare.</p>
           </div>
         </div>
 
         <div class="step step-collapsible">
-          <div class="step-header"><span class="step-num">TEAM</span><h2>Hours per Employee</h2></div>
+          <div class="step-header"><span class="step-num">TEAM</span><h2>Hours per Employee</h2><button type="button" class="info-tip" data-tip="Last 30 days, by Representative on file." aria-label="What this does">i</button></div>
           <div class="step-body">
-            <p class="hint" style="margin-top:0;">Last 30 days, by Representative on file.</p>
             <div class="md-bars" id="md-hours-bars"></div>
             <p class="hint" id="md-hours-empty" hidden style="margin:0;">No hours logged in the last 30 days.</p>
           </div>
@@ -71,9 +69,8 @@
         <div class="step step-collapsible">
           <div class="step-header"><span class="step-num">STATUS</span><h2>Projects: Ahead / Behind</h2></div>
           <div class="step-body">
-            <p class="hint" style="margin-top:0;">Needs an NTP Date, Total Contract Length, and at least one priced pay item to classify.</p>
             <div class="md-projlist" id="md-proj-status"></div>
-            <p class="hint" id="md-proj-status-empty" hidden style="margin:0;">No included project has enough data on file to classify yet.</p>
+            <p class="hint" id="md-proj-status-empty" hidden style="margin:0;">No included project has enough data on file to classify yet -- needs an NTP Date, Total Contract Length, and at least one priced pay item.</p>
           </div>
         </div>
 
@@ -104,10 +101,10 @@
         <div class="step-header">
           <span class="step-num">NEW PROJECT</span>
           <h2>Add a Project</h2>
+          <button type="button" class="info-tip" data-tip="Fill out project info, pay items, contractors, and equipment right here, with a live preview -- no spreadsheet needed." aria-label="What this does">i</button>
         </div>
         <div class="step-body">
           <button type="button" class="btn-primary" id="btn-setup-manually" style="margin-bottom:1rem;">&#9998; Set Up Manually</button>
-          <p class="hint" style="margin:0 0 1rem;">Fill out project info, pay items, contractors, and equipment right here, with a live preview &mdash; no spreadsheet needed.</p>
 
           <div style="display:flex;align-items:center;gap:1rem;margin-bottom:0.75rem;flex-wrap:wrap;">
             <span class="hint" style="margin:0;">Or, as a fallback, upload an Excel file with this project's info and pay items.</span>

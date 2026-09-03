@@ -359,8 +359,8 @@ function simpleFieldBodyHtml(key, def) {
   const tag = cfg.type === 'textarea'
     ? `<textarea id="f-${key}" rows="${cfg.rows || 3}"></textarea>`
     : `<input type="${cfg.type}" id="f-${key}"${cfg.placeholder ? ` placeholder="${cfg.placeholder}"` : ''}>`;
-  const hint = cfg.hint ? `<span class="hint">${cfg.hint}</span>` : '';
-  return `<div class="rb-field" id="step-${key}"><label>${escapeHtml(def.label)}${tag}${hint}</label></div>`;
+  const tip = cfg.hint ? ` <button type="button" class="info-tip" data-tip="${escapeHtml(cfg.hint)}" aria-label="What this does">i</button>` : '';
+  return `<div class="rb-field" id="step-${key}"><label>${escapeHtml(def.label)}${tip}${tag}</label></div>`;
 }
 
 function blockFieldBodyHtml(key, def) {
@@ -369,12 +369,10 @@ function blockFieldBodyHtml(key, def) {
   if (key === 'contractorsEquipment') {
     inner = `
       <div id="contractor-tabs" class="tab-row"></div>
-      <div id="contractor-panel"></div>
-      <p class="hint">22 personnel/equipment rows are fixed by the template, but only ones already in use show by default &mdash; use the "+" buttons to reveal more. You can rename any row, and quantities are per contractor tab.</p>`;
+      <div id="contractor-panel"></div>`;
   } else if (key === 'payItems') {
     tag = `<span class="step-tag" id="pay-items-tag">0 / ${PAY_ITEM_ROW_COUNT}</span>`;
     inner = `
-      <p class="hint" style="margin-top:0;">No limit on how many you add. The printed template has room for 6 in the table itself; anything past that lists automatically at the end of the Summary of Work Performed, the same way it'd be written in by hand.</p>
       <label>Search Catalog <input type="text" id="pi-search" placeholder="Search by item # or description..."></label>
       <div id="pay-catalog-list" class="check-list"></div>
 
@@ -407,7 +405,16 @@ function blockFieldBodyHtml(key, def) {
   } else if (key === 'photos') {
     inner = `<div id="photo-grid" class="photo-grid"></div>`;
   }
-  return `<div class="rb-field rb-field-block" id="step-${key}"><div class="rb-field-hd"><span>${escapeHtml(def.label)}</span>${tag}</div>${inner}</div>`;
+  // contractorsEquipment, payItems, and photos are each the lone field in a
+  // REPORT_BUILDER_GROUPS group whose own label is this field's label,
+  // word for word -- the group card's own header already says it, so
+  // repeating it here just prints the same title twice in a row. Only the
+  // tag (payItems' n/6 count), if any, still needs a header row of its own.
+  const dupesGroupLabel = key === 'contractorsEquipment' || key === 'payItems' || key === 'photos';
+  const hd = dupesGroupLabel
+    ? (tag ? `<div class="rb-field-hd">${tag}</div>` : '')
+    : `<div class="rb-field-hd"><span>${escapeHtml(def.label)}</span>${tag}</div>`;
+  return `<div class="rb-field rb-field-block" id="step-${key}">${hd}${inner}</div>`;
 }
 
 // ---------- Weather auto-fill ----------
@@ -547,6 +554,7 @@ function renderGroups() {
           <div class="rb-group-hd" data-toggle-group="${group.id}">
             <span class="rb-icon">${group.icon}</span>
             <div class="rb-titles"><div class="t">${escapeHtml(group.label)}</div></div>
+            ${group.hint ? `<button type="button" class="info-tip" data-tip="${escapeHtml(group.hint)}" aria-label="What this does">i</button>` : ''}
             <span class="rb-chev">&#9656;</span>
           </div>
           <div class="rb-group-bd">${weatherFetchHtml}${body}</div>
@@ -570,6 +578,7 @@ function toggleGroup(groupId) {
 }
 
 $('#rb-groups').addEventListener('click', (e) => {
+  if (e.target.closest('.info-tip')) return;
   const hd = e.target.closest('[data-toggle-group]');
   if (!hd) return;
   const groupId = hd.dataset.toggleGroup;

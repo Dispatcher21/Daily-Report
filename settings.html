@@ -86,9 +86,9 @@
     <div class="step-header">
       <span class="step-num">YOU</span>
       <h2>Your Name</h2>
+      <button type="button" class="info-tip" data-tip="Fills in as Representative on new reports you file, and lets an admin tell whose work is whose." aria-label="What this does">i</button>
     </div>
     <div class="step-body">
-      <p class="hint" style="margin-top:0;">Fills in as Representative on new reports you file, and lets an admin tell whose work is whose.</p>
       <label>Your Name
         <input type="text" id="f-user-name" autocomplete="name">
       </label>
@@ -101,16 +101,16 @@
     <div class="step-header">
       <span class="step-num">DISPLAY</span>
       <h2>Appearance</h2>
+      <button type="button" class="info-tip" data-tip="Auto follows your device. Pick Light for bright sun, Dark for night work." aria-label="What this does">i</button>
     </div>
     <div class="step-body">
-      <p class="hint" style="margin-top:0;">Auto follows your device. Pick Light for bright sun, Dark for night work.</p>
       <div class="segmented" id="theme-picker">
         <button type="button" data-mode="light">&#9728; Light</button>
         <button type="button" data-mode="dark">&#9790; Dark</button>
         <button type="button" data-mode="auto">&#9680; Auto</button>
       </div>
 
-      <p class="hint" style="margin:1.1rem 0 0.3rem;">Accent colour &mdash; used for buttons, headers, and highlights throughout the app.</p>
+      <p class="hint" style="margin:1.1rem 0 0.3rem; display:flex; align-items:center; gap:0.4rem;">Accent Colour <button type="button" class="info-tip" data-tip="Used for buttons, headers, and highlights throughout the app." aria-label="What this does">i</button></p>
       <div class="color-swatches" id="accent-swatches"></div>
       <button type="button" class="text-btn" id="btn-reset-accent" style="padding:0;">Reset to default</button>
     </div>
@@ -122,10 +122,9 @@
     <div class="step-header">
       <span class="step-num">INSTALL</span>
       <h2>Install as App</h2>
+      <button type="button" class="info-tip" data-tip="Adds Daily Reports to your home screen so it opens full-screen, without browser bars, and keeps working with no signal." aria-label="What this does">i</button>
     </div>
     <div class="step-body">
-      <p class="hint" style="margin-top:0;">Adds Daily Reports to your home screen so it opens full-screen, without browser bars, and keeps working with no signal.</p>
-
       <div class="success" id="install-done" hidden style="margin-bottom:0;">Installed &mdash; you're running the app version.</div>
 
       <button type="button" class="btn-primary" id="btn-install" hidden>Install App</button>

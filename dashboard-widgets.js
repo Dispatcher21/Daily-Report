@@ -302,7 +302,8 @@ function setupCollapsibleSteps(container) {
     if (header.dataset.collapsibleWired) return;
     header.dataset.collapsibleWired = '1';
     header.insertAdjacentHTML('beforeend', '<span class="step-chevron">&#9656;</span>');
-    header.addEventListener('click', () => {
+    header.addEventListener('click', (e) => {
+      if (e.target.closest('.info-tip')) return;
       header.closest('.step-collapsible').classList.toggle('collapsed');
     });
   });

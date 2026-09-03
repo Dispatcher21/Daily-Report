@@ -223,8 +223,7 @@ function renderInfoTab() {
     .join('');
 
   $('#ps-panel').innerHTML = `
-    <p class="hint" style="margin-top:0;">These match the PROJECT INFO sheet in the Excel file &mdash; editing here or there keeps both in sync on save.</p>
-    <label>Project Display Name <input type="text" id="ps-name" value="${escapeHtml(project.name || '')}" placeholder="Shown on the project list"></label>
+    <label>Project Display Name <button type="button" class="info-tip" data-tip="These match the PROJECT INFO sheet in the Excel file -- editing here or there keeps both in sync on save." aria-label="What this does">i</button> <input type="text" id="ps-name" value="${escapeHtml(project.name || '')}" placeholder="Shown on the project list"></label>
     <div class="field-grid">${fieldsHtml}</div>
   `;
 
@@ -270,7 +269,7 @@ function renderPayItemsTab() {
     .join('');
 
   $('#ps-panel').innerHTML = `
-    <p class="hint" style="margin-top:0;">Same fields as the PAY ITEMS sheet. Enabling Stations, Side, Computed, Theoretical, and/or Locations lets this item be logged more than once per report (different segments/sides/measurements the same day).</p>
+    <div class="panel-tip-row"><button type="button" class="info-tip" data-tip="Same fields as the PAY ITEMS sheet. Enabling Stations, Side, Computed, Theoretical, and/or Locations lets this item be logged more than once per report (different segments/sides/measurements the same day)." aria-label="What this does">i</button></div>
     ${rowsHtml || '<p class="hint">No pay items yet.</p>'}
     <button type="button" class="btn-secondary" id="ps-add-item">+ Add Pay Item</button>
   `;
@@ -313,7 +312,7 @@ function renderContractorsTab() {
   ).join('');
 
   $('#ps-panel').innerHTML = `
-    <p class="hint" style="margin-top:0;">Up to ${CONTRACTOR_COUNT} contractor columns, fixed by the report template. Leave any blank &mdash; they're just typed fresh on each report if left empty here.</p>
+    <div class="panel-tip-row"><button type="button" class="info-tip" data-tip="Up to ${CONTRACTOR_COUNT} contractor columns, fixed by the report template. Leave any blank -- they're just typed fresh on each report if left empty here." aria-label="What this does">i</button></div>
     <div class="field-grid">${rowsHtml}</div>
   `;
   $$('#ps-panel [data-idx]').forEach((el) => {
@@ -338,7 +337,7 @@ function renderEquipmentTab() {
   ).join('');
 
   $('#ps-panel').innerHTML = `
-    <p class="hint" style="margin-top:0;">${EQUIPMENT_ROW_COUNT} personnel/equipment rows, fixed by the template. Leave every row blank to use the app's standard list (shown as placeholder text) &mdash; typing in any row switches every row to only what's entered here.</p>
+    <div class="panel-tip-row"><button type="button" class="info-tip" data-tip="${EQUIPMENT_ROW_COUNT} personnel/equipment rows, fixed by the template. Leave every row blank to use the app's standard list (shown as placeholder text) -- typing in any row switches every row to only what's entered here." aria-label="What this does">i</button></div>
     <div class="field-grid">${rowsHtml}</div>
   `;
   $$('#ps-panel [data-idx]').forEach((el) => {
