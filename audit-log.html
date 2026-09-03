@@ -84,7 +84,7 @@ async function init() {
   }
   $('#al-company-sub').textContent = `Admin — ${room.name || 'Audit Log'}`;
 
-  allEntries = await getAllAuditEntries();
+  allEntries = (await getAllAuditEntries()).filter((e) => auditEntryInCompany(e, room));
 
   // A report entry's label already carries its project name ("Report #14
   // — PR#439 ..."); a project entry's label IS the project name. Either way,

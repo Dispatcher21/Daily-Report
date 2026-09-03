@@ -218,7 +218,8 @@ function projectEntityLabel(project) {
 
 async function writeAuditEntry(entityType, entityId, entityLabel, action, changes) {
   const userName = (await getUserName()) || 'Unknown User';
-  const entry = { id: crypto.randomUUID(), timestamp: Date.now(), userName, action, entityType, entityId, entityLabel, changes: changes || [] };
+  const room = typeof getCompanyRoom === 'function' ? await getCompanyRoom() : null;
+  const entry = { id: crypto.randomUUID(), timestamp: Date.now(), userName, action, entityType, entityId, entityLabel, changes: changes || [], companyCode: room ? room.code : null };
   await saveAuditEntry(entry);
   if (typeof onCompanySyncAuditEntry === 'function') {
     onCompanySyncAuditEntry(entry).catch((err) => console.error('audit sync:', err));

@@ -196,6 +196,14 @@ function projectInScope(project, room) {
 function reportInScope(report, room) {
   return !!report && _inCompanyScope(report.companyCode, report.projectId, room);
 }
+// Audit entries have no meaningful role-scope dimension of their own (a
+// scoped custom setup can't reach audit-log.html at all -- it's admin-only),
+// so this only checks company identity, not _inCompanyScope's projectScope
+// clause.
+function auditEntryInCompany(entry, room) {
+  if (!entry || !room) return !!entry;
+  return !entry.companyCode || entry.companyCode === room.code;
+}
 
 // Creates a brand-new company room, joins it locally as admin (whoever sets
 // the admin password is trivially the first admin), and pushes everything
@@ -1211,8 +1219,21 @@ async function pullAllCompanyData(code, onProgress) {
   const auditSnap = await getDocs(collection(db, 'companies', code, 'auditLog'));
   summary.auditEntriesPulled = 0;
   for (const d of auditSnap.docs) {
-    const result = await mergeAuditEntry({ ...d.data(), id: d.id });
+    const result = await mergeAuditEntry({ ...d.data(), id: d.id, companyCode: code });
     if (result !== 'skipped') summary.auditEntriesPulled++;
+  }
+  // Same reconciliation as projects/reports above, and for the same reason:
+  // mergeAuditEntry skips the write entirely for an id already cached
+  // locally (audit entries are immutable, so "skip if present" is exactly
+  // right there), which means the companyCode stamped on the incoming copy
+  // just above never lands for an entry that was already on file --
+  // including one that's actually foreign, cached here from a different
+  // company entirely. Settle every untagged entry one way or the other.
+  const authoritativeAuditIds = new Set(auditSnap.docs.map((d) => d.id));
+  for (const e of await getAllAuditEntries()) {
+    if (!e.companyCode) {
+      await saveAuditEntry({ ...e, companyCode: authoritativeAuditIds.has(e.id) ? code : FOREIGN_COMPANY_SENTINEL });
+    }
   }
 
   return summary;
@@ -1272,7 +1293,7 @@ async function pushAllLocalData(code, onProgress) {
     if (onProgress) onProgress({ phase: 'reports', index: i + 1, total: reports.length });
   }
 
-  const auditEntries = await getAllAuditEntries();
+  const auditEntries = (await getAllAuditEntries()).filter((e) => auditEntryInCompany(e, { code }));
   await Promise.all(auditEntries.map((entry) => pushAuditEntryToCompany(code, entry)));
   if (onProgress) onProgress({ phase: 'audit', count: auditEntries.length });
 }
