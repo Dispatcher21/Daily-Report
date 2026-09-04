@@ -592,7 +592,7 @@ function renderPayAppItemsTable() {
     return;
   }
   table.innerHTML = `
-    <thead><tr><th>Item</th><th>Description</th><th>Unit</th><th class="dt-num">Inspector Total</th><th class="dt-num">Pay App Total</th></tr></thead>
+    <thead><tr><th>Item</th><th>Description</th><th>Unit</th><th class="dt-num">Inspector Total</th><th class="dt-num">Pay App Total</th><th class="dt-num">% Diff</th><th class="dt-num">$ Diff</th></tr></thead>
     <tbody>
       ${items.map((it) => {
         // A Lump Sum item's "quantity" is already a dollar figure (see
@@ -615,6 +615,17 @@ function renderPayAppItemsTable() {
           ? Number(editing.itemTotals[it.itemNumber])
           : null;
         const prefill = savedRaw != null ? (isLump ? (savedRaw / it.unitPrice) * 100 : savedRaw) : (isLump ? pct : it.total);
+        // % Diff/$ Diff (updatePayAppDiffs, below) compare this row's Pay
+        // App Total -- typed in straight off whatever pay application the
+        // contractor actually submitted, same field, no separate
+        // "contractor" input -- against Inspector Total, live as it's
+        // typed. Needs each input to carry what updatePayAppDiffs can't
+        // otherwise get back to: the item's Unit Price, to turn a plain
+        // quantity into a dollar figure, and Inspector Total's own dollar
+        // figure to diff against.
+        const dataAttrs = isLump
+          ? `data-lump-price="${it.unitPrice}"`
+          : `data-unit-price="${it.unitPrice != null ? it.unitPrice : ''}"`;
         return `
         <tr>
           <td>${escapeHtml(it.itemNumber)}</td>
@@ -622,11 +633,71 @@ function renderPayAppItemsTable() {
           <td>${escapeHtml(it.unit || '')}</td>
           <td class="dt-num">${isLump ? pct.toFixed(1) + '%' : it.total.toLocaleString()}</td>
           <td class="dt-num">${isLump
-            ? `<input type="number" step="any" min="0" max="100" class="payapp-qty-input" data-item="${escapeHtml(it.itemNumber)}" data-lump-price="${it.unitPrice}" value="${prefill.toFixed(1)}">%`
-            : `<input type="number" step="any" class="payapp-qty-input" data-item="${escapeHtml(it.itemNumber)}" value="${prefill}">`}</td>
+            ? `<input type="number" step="any" min="0" max="100" class="payapp-qty-input" data-item="${escapeHtml(it.itemNumber)}" ${dataAttrs} data-inspector-cost="${it.earnedTotal != null ? it.earnedTotal : ''}" value="${prefill.toFixed(1)}">%`
+            : `<input type="number" step="any" class="payapp-qty-input" data-item="${escapeHtml(it.itemNumber)}" ${dataAttrs} data-inspector-cost="${it.earnedTotal != null ? it.earnedTotal : ''}" value="${prefill}">`}</td>
+          <td class="dt-num payapp-diff-pct"></td>
+          <td class="dt-num payapp-diff-cost"></td>
         </tr>`;
       }).join('')}
-    </tbody>`;
+    </tbody>
+    <tfoot>
+      <tr class="dt-group-row">
+        <td colspan="4">Total</td>
+        <td class="dt-num" id="payapp-total-contractor"></td>
+        <td class="dt-num" id="payapp-total-pctdiff"></td>
+        <td class="dt-num" id="payapp-total-costdiff"></td>
+      </tr>
+    </tfoot>`;
+  $$('.payapp-qty-input', table).forEach((input) => input.addEventListener('input', updatePayAppDiffs));
+  updatePayAppDiffs();
+}
+
+// A row's contractor-side dollar cost from its Pay App Total input's
+// current value -- null when there's nothing to compute it from (no Unit
+// Price on file, or the field's not a valid number), same "can't compute,
+// don't pretend to" rule as the rest of this app's earned-value math.
+function payAppRowContractorCost(input) {
+  const v = Number(input.value);
+  if (!isFinite(v) || input.value.trim() === '') return null;
+  if (input.dataset.lumpPrice != null) return (v / 100) * Number(input.dataset.lumpPrice);
+  const unitPrice = input.dataset.unitPrice;
+  return unitPrice ? v * Number(unitPrice) : null;
+}
+
+// Same formula as the reference comparison sheet this was built to match:
+// $ Diff = Inspector Total - Pay App (contractor) Total, % Diff = that
+// difference's size relative to Inspector Total. Recomputed on every
+// keystroke in any row (see renderPayAppItemsTable's own input listeners)
+// rather than only at render time, so it reads as genuinely live instead
+// of a snapshot that goes stale the moment something's typed.
+function updatePayAppDiffs() {
+  const table = $('#payapp-items-table');
+  let totalContractor = 0, totalInspector = 0, hasAny = false;
+  $$('.payapp-qty-input', table).forEach((input) => {
+    const row = input.closest('tr');
+    const contractorCost = payAppRowContractorCost(input);
+    const inspectorCostRaw = input.dataset.inspectorCost;
+    const inspectorCost = inspectorCostRaw !== '' ? Number(inspectorCostRaw) : null;
+    const pctCell = row.querySelector('.payapp-diff-pct');
+    const costCell = row.querySelector('.payapp-diff-cost');
+    if (contractorCost == null || inspectorCost == null) {
+      pctCell.textContent = '—';
+      costCell.textContent = '—';
+      return;
+    }
+    const costDiff = inspectorCost - contractorCost;
+    const pctDiff = inspectorCost !== 0 ? Math.abs(costDiff) / inspectorCost : (costDiff === 0 ? 0 : null);
+    pctCell.textContent = pctDiff != null ? (pctDiff * 100).toFixed(1) + '%' : '—';
+    costCell.textContent = fmtMoney(costDiff);
+    totalContractor += contractorCost;
+    totalInspector += inspectorCost;
+    hasAny = true;
+  });
+  const totalCostDiff = totalInspector - totalContractor;
+  const totalPctDiff = totalInspector !== 0 ? Math.abs(totalCostDiff) / totalInspector : null;
+  $('#payapp-total-contractor').textContent = hasAny ? fmtMoney(totalContractor) : '—';
+  $('#payapp-total-pctdiff').textContent = totalPctDiff != null ? (totalPctDiff * 100).toFixed(1) + '%' : '—';
+  $('#payapp-total-costdiff').textContent = hasAny ? fmtMoney(totalCostDiff) : '—';
 }
 
 $('#btn-record-estimate').addEventListener('click', async () => {
