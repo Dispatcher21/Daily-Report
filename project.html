@@ -299,7 +299,7 @@ function renderDashboard(reports, project) {
 
   const overallTip = overall == null
     ? 'No pay item on this project has both a Per Plans Total and any usage yet, so there\'s nothing to weight.'
-    : `Total quantity used across every pay item that has a Per Plans Total on file, divided by their combined planned quantity -- a physical measure, not a dollar one. Items with no Per Plans Total aren't counted either way, and neither are Lump Sum items, which aren't measured on a comparable scale (see Lump Sum Value below if this project has any).`;
+    : `Total quantity used across every pay item that has a Per Plans Total on file, divided by their combined planned quantity -- a physical measure, not a dollar one. Items with no Per Plans Total aren't counted either way, and neither are Lump Sum items, which aren't measured on a comparable scale.`;
 
   // A dollar-based ring, deliberately built only from the latest recorded
   // Pay App -- not effectivePayItemFlatEntries' blended live figure (that's
@@ -404,13 +404,6 @@ function renderDashboard(reports, project) {
         : '',
       'Sum of quantity used × Unit Price across every pay item that has a Unit Price on file -- unlike Estimated Pay Item Usage, this includes Lump Sum items at their full dollar value.',
       pctByValue, 'money'
-    ) : '') +
-    (lumpSum.contract != null ? statCard(
-      lumpSum.contract,
-      'Lump Sum Value',
-      lumpSum.pct != null ? `${(lumpSum.pct * 100).toFixed(1)}% billed` : '',
-      'Total Unit Price across this project\'s Lump Sum pay items, and how much of it has been billed to date. Already included in Total Contract Value and Earned to Date above -- broken out here since it\'s exactly what\'s left out of Estimated Pay Item Usage, and usually explains why that number and Earned to Date\'s % of contract value don\'t match.',
-      lumpSum.pct, 'money'
     ) : '');
 
   renderPayItems(items);
