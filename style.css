@@ -870,11 +870,6 @@ input[type="file"] { min-height: 0; }
 .data-table tbody tr:hover { background: var(--surface-2); }
 .data-table .dt-group-row td { background: var(--surface-2); font-weight: 700; }
 .data-table .dt-group-row td.dt-num { font-weight: 700; }
-/* The Pay App table's editable column -- a compact right-aligned number
-   field instead of the full-width, tap-height default every other input
-   on the site uses, since a whole column of those would make each row as
-   tall as a normal form field instead of a normal table row. */
-.data-table .payapp-qty-input { width: 7rem; min-height: 0; padding: 0.3rem 0.5rem; text-align: right; }
 
 .detail-group-toggle { display: flex; align-items: center; gap: 0.4rem; flex: 0 0 auto; font-size: 0.85rem; color: var(--text-dim); margin-bottom: 0; }
 .detail-group-toggle input { width: 1.1rem; height: 1.1rem; }
@@ -1679,6 +1674,51 @@ input[type="file"] { min-height: 0; }
 .pi-controls { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.9rem; }
 .pi-controls input[type="text"] { flex: 1 1 220px; margin-bottom: 0; }
 .pi-controls select { flex: 0 0 auto; width: auto; min-width: 210px; margin-bottom: 0; }
+
+/* ---------- Pay App item cards ----------
+   Started as a table -- Item/Description/Unit/Inspector Qty/Pay App Qty/
+   Inspector $/Pay App $/% Diff/$ Diff is 9 columns, which meant permanent
+   horizontal scrolling to see anything past the first three. A card per
+   item instead, modeled on .bar-row's own label/pill-then-detail shape
+   used elsewhere on this same page, so nothing here needs to scroll
+   sideways to be read. */
+.payapp-list { display: flex; flex-direction: column; gap: 0.75rem; }
+@media (min-width: 900px) {
+  .payapp-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 0.75rem 1rem; align-items: start; }
+}
+.payapp-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.75rem 0.9rem; }
+.payapp-card .pac-top { display: flex; justify-content: space-between; align-items: baseline; gap: 0.6rem; margin-bottom: 0.65rem; }
+.payapp-card .pac-label { font-weight: 700; min-width: 0; overflow-wrap: break-word; }
+.payapp-card .pac-desc { display: block; font-weight: 400; color: var(--text-dim); font-size: 0.82rem; margin-top: 0.1rem; }
+.payapp-card .pac-unit { flex: 0 0 auto; font-size: 0.74rem; color: var(--text-dim); white-space: nowrap; }
+
+.pac-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 0 0.75rem; }
+.pac-field-label { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-dim); }
+.pac-field-value { font-size: 0.95rem; font-weight: 700; margin: 0.15rem 0 0.05rem; }
+.pac-field-money { font-size: 0.78rem; color: var(--text-dim); }
+.pac-field-input-row { display: flex; align-items: center; gap: 0.3rem; margin: 0.15rem 0 0.05rem; }
+.pac-field-input-row input.payapp-qty-input { padding: 0.35rem 0.5rem; min-height: 0; font-size: 0.95rem; font-weight: 700; }
+
+.pac-diff {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;
+  margin-top: 0.65rem; padding-top: 0.6rem; border-top: 1px dashed var(--border);
+}
+.pac-diff-cost { font-weight: 700; font-size: 0.85rem; }
+.pill.payapp-diff-match { background: var(--surface-3); color: var(--text-dim); border: 1px solid var(--border); }
+.pill.payapp-diff-ok { background: var(--ok-bg); color: var(--ok); }
+.pill.payapp-diff-warn { background: var(--warn-bg); color: var(--warn); border: 1px solid var(--warn-border); }
+.pill.payapp-diff-over { background: var(--danger-bg); color: var(--danger); }
+
+/* Grand-total strip above the card list -- same figures the old table
+   footer had, just styled to actually stand out as the headline number a
+   reviewer cares about most, not one more table row. */
+.payapp-summary {
+  display: flex; flex-wrap: wrap; gap: 0.4rem 1.5rem; align-items: baseline;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 0.75rem 0.9rem; margin-bottom: 0.9rem;
+}
+.payapp-summary .ps-label { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-dim); margin-right: 0.35rem; }
+.payapp-summary .ps-value { font-weight: 700; font-size: 1.05rem; }
 
 /* ---------- Progress-over-time chart ---------- */
 
