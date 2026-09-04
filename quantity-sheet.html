@@ -543,14 +543,30 @@ function renderPayAppItemsTable() {
   table.innerHTML = `
     <thead><tr><th>Item</th><th>Description</th><th>Unit</th><th class="dt-num">Inspector Total</th><th class="dt-num">Pay App Total</th></tr></thead>
     <tbody>
-      ${items.map((it) => `
+      ${items.map((it) => {
+        // A Lump Sum item's "quantity" is already a dollar figure (see
+        // earnedTotalFor) -- editing/showing that directly here would mean
+        // typing a raw dollar amount instead of the percent complete a
+        // Lump Sum is actually billed by. Converted to/from percent of its
+        // Unit Price (already that item's whole contract value for Lump
+        // Sum, see contractTotalFor) purely at this UI layer -- what
+        // actually gets stored in itemTotals stays a dollar figure, same
+        // as every other unit, so none of the earned-value math elsewhere
+        // needs to know the difference. Falls back to a plain dollar entry
+        // if the item has no Unit Price on file to compute a percent of.
+        const isLump = isLumpSumUnit(it.unit) && it.unitPrice != null && it.unitPrice > 0;
+        const pct = isLump ? (it.total / it.unitPrice) * 100 : null;
+        return `
         <tr>
           <td>${escapeHtml(it.itemNumber)}</td>
           <td>${escapeHtml(it.description)}</td>
           <td>${escapeHtml(it.unit || '')}</td>
-          <td class="dt-num">${it.total.toLocaleString()}</td>
-          <td class="dt-num"><input type="number" step="any" class="payapp-qty-input" data-item="${escapeHtml(it.itemNumber)}" value="${it.total}"></td>
-        </tr>`).join('')}
+          <td class="dt-num">${isLump ? pct.toFixed(1) + '%' : it.total.toLocaleString()}</td>
+          <td class="dt-num">${isLump
+            ? `<input type="number" step="any" min="0" max="100" class="payapp-qty-input" data-item="${escapeHtml(it.itemNumber)}" data-lump-price="${it.unitPrice}" value="${pct.toFixed(1)}">%`
+            : `<input type="number" step="any" class="payapp-qty-input" data-item="${escapeHtml(it.itemNumber)}" value="${it.total}">`}</td>
+        </tr>`;
+      }).join('')}
     </tbody>`;
 }
 
@@ -567,7 +583,12 @@ $('#btn-record-estimate').addEventListener('click', async () => {
   const itemTotals = {};
   $$('.payapp-qty-input').forEach((input) => {
     const v = input.value.trim();
-    if (v !== '') itemTotals[input.dataset.item] = Number(v);
+    if (v === '') return;
+    // Lump Sum rows collect a percent (see renderPayAppItemsTable) --
+    // converted back to the dollar figure itemTotals actually stores here,
+    // the one place that needs to know the input was a percent at all.
+    const lumpPrice = input.dataset.lumpPrice;
+    itemTotals[input.dataset.item] = lumpPrice != null ? (Number(v) / 100) * Number(lumpPrice) : Number(v);
   });
   if (!project.billingEstimates) project.billingEstimates = [];
   const newEstimate = { id: crypto.randomUUID(), estimateNo, date, note, itemTotals };
