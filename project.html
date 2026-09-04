@@ -188,6 +188,7 @@
 <script>
 let project = null;
 let pageBgUrl = null;
+let dashFunFactTimer = null; // rotation interval for the fun-fact card, see renderDashboard
 
 function showPageBackground(p) {
   if (!p.backgroundImage) return;
@@ -261,6 +262,7 @@ async function init() {
 // index.html's Manager Dashboard.
 
 function renderDashboard(reports, project) {
+  if (dashFunFactTimer) { clearInterval(dashFunFactTimer); dashFunFactTimer = null; }
   const hasReports = reports.length > 0;
   $('#dash-empty').hidden = hasReports;
   $('#dash-content').hidden = !hasReports;
@@ -295,6 +297,7 @@ function renderDashboard(reports, project) {
   const items = fullPayItemCatalogOverview(flatItems, project.payItemCatalog);
   const overall = overallPercentComplete(items);
   const { totalContract } = contractValueSummary(items);
+  const funFacts = unitFunFacts(items);
 
   const overallTip = overall == null
     ? 'No pay item on this project has both a Per Plans Total and any usage yet, so there\'s nothing to weight.'
@@ -394,13 +397,51 @@ function renderDashboard(reports, project) {
       totalContract, 'Total Contract Value', '',
       'Sum of Per Plans Total × Unit Price across every pay item that has both on file.',
       null, 'money'
-    ) : '');
+    ) : '') +
+    funFactCardHtml(funFacts);
 
   renderPayItems(items);
   renderTrendChart(progressOverTime(dated, project.payItemCatalog, project.billingEstimates));
   renderWeatherSchedule(dated);
   fitDashboardValues();
   animateDashboardFills();
+  startDashFunFactRotation(funFacts);
+}
+
+// A full-width card, its own row at the bottom of the stat grid -- markup
+// only, no side effects, so it can be built and dropped into #dash-stats'
+// innerHTML the same way every other card here is. startDashFunFactRotation
+// (below) is what actually brings it to life afterward.
+function funFactCardHtml(funFacts) {
+  if (!funFacts.length) return '';
+  return `<div class="dash-card fun-fact-card" id="dash-fun-fact">
+    <span class="ff-icon" id="ff-icon" aria-hidden="true">${funFacts[0].icon}</span>
+    <div class="ff-body">
+      <span class="ff-headline" id="ff-headline">${escapeHtml(funFacts[0].headline)}</span>
+      <span class="ff-sub" id="ff-sub">${escapeHtml(funFacts[0].sub)}</span>
+    </div>
+  </div>`;
+}
+
+// Crossfades to the next fact every few seconds -- a no-op for zero or one
+// fact (nothing to rotate to). The timer is stashed on dashFunFactTimer so
+// the next renderDashboard call (a new report saved, a date range changed)
+// clears it rather than piling up a second interval underneath the first.
+function startDashFunFactRotation(funFacts) {
+  if (funFacts.length < 2) return;
+  let idx = 0;
+  dashFunFactTimer = setInterval(() => {
+    const card = $('#dash-fun-fact');
+    if (!card) { clearInterval(dashFunFactTimer); dashFunFactTimer = null; return; }
+    card.classList.add('ff-fade');
+    setTimeout(() => {
+      idx = (idx + 1) % funFacts.length;
+      $('#ff-icon').textContent = funFacts[idx].icon;
+      $('#ff-headline').textContent = funFacts[idx].headline;
+      $('#ff-sub').textContent = funFacts[idx].sub;
+      card.classList.remove('ff-fade');
+    }, 250);
+  }, 5000);
 }
 
 // ---------- Pay item completion (color-coded list + summary strip) ----------

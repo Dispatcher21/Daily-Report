@@ -19,6 +19,87 @@ function fmtMoney(n) {
   return n == null ? '—' : n.toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 }
 
+// Real-world comparisons for the physical quantities an inspector actually
+// records -- deliberately not dollars (see the project dashboard's rings for
+// that side of things). Matched against a pay item's own Unit field, several
+// common abbreviations per family; a unit with no natural physical
+// comparison (EA, LUMP SUM, HR, DAY...) just isn't included. compareValue is
+// in the item's own recorded unit, no cross-unit conversion, so each family
+// stays independent and simple.
+const UNIT_FUN_FACTS = [
+  {
+    match: /^(l\.?f\.?|lin\.?\s*ft\.?|linear\s*feet|linear\s*foot|feet|foot|ft\.?)$/i,
+    unitLabel: 'Linear Feet', icon: '🏈', compareValue: 300, // NFL field of play, goal line to goal line
+    sentence: (r) => `That's about ${fmtFunFactRatio(r)}× the length of a football field!`,
+  },
+  {
+    match: /^(mi\.?|miles?)$/i,
+    unitLabel: 'Miles', icon: '🏃', compareValue: 26.2, // marathon
+    sentence: (r) => `That's about ${fmtFunFactRatio(r)}× the length of a marathon!`,
+  },
+  {
+    match: /^(s\.?f\.?|sq\.?\s*ft\.?|square\s*feet|square\s*foot)$/i,
+    unitLabel: 'Square Feet', icon: '🏀', compareValue: 4700, // NBA court, 94x50 ft
+    sentence: (r) => `That's about ${fmtFunFactRatio(r)}× the size of an NBA basketball court!`,
+  },
+  {
+    match: /^(s\.?y\.?|sq\.?\s*yd\.?|square\s*yards?)$/i,
+    unitLabel: 'Square Yards', icon: '🏟️', compareValue: 6400, // football field incl. end zones, 360x160 ft / 9
+    sentence: (r) => `That's about ${fmtFunFactRatio(r)}× the size of a football field, end zones included!`,
+  },
+  {
+    match: /^(c\.?y\.?|cu\.?\s*yd\.?|cubic\s*yards?)$/i,
+    unitLabel: 'Cubic Yards', icon: '🚛', compareValue: 10, // standard dump truck load
+    sentence: (r) => `That's about ${fmtFunFactRatio(r)} standard dump truck loads!`,
+  },
+  {
+    match: /^(tons?)$/i,
+    unitLabel: 'Tons', icon: '🐘', compareValue: 6, // average adult elephant
+    sentence: (r) => `That's as much as ${fmtFunFactRatio(r)} adult elephants!`,
+  },
+  {
+    match: /^(gal\.?|gallons?)$/i,
+    unitLabel: 'Gallons', icon: '🛁', compareValue: 50, // full bathtub
+    sentence: (r) => `That's enough to fill ${fmtFunFactRatio(r)} bathtubs!`,
+  },
+  {
+    match: /^(ac\.?|acres?)$/i,
+    unitLabel: 'Acres', icon: '🌾', compareValue: 1.32, // football field incl. end zones, in acres
+    sentence: (r) => `That's about ${fmtFunFactRatio(r)}× the size of a football field!`,
+  },
+];
+
+function fmtFunFactRatio(r) {
+  if (r < 1) return r.toFixed(2).replace(/\.?0+$/, '') || '0';
+  if (r < 10) return (Math.round(r * 10) / 10).toLocaleString(undefined, { maximumFractionDigits: 1 });
+  return Math.round(r).toLocaleString();
+}
+function fmtFunFactQty(n) {
+  return (Math.round(n * 10) / 10).toLocaleString(undefined, { maximumFractionDigits: 1 });
+}
+
+// One fact per recognized unit family actually used on this project, built
+// from the same items list (fullPayItemCatalogOverview) the rest of the
+// dashboard already uses -- so it reflects whatever's currently recorded,
+// Pay App-superseded totals included, exactly like everything else here.
+function unitFunFacts(items) {
+  const totals = new Map(); // family index -> summed quantity
+  for (const it of items || []) {
+    if (!it.unit || !(it.total > 0)) continue;
+    const idx = UNIT_FUN_FACTS.findIndex((f) => f.match.test(String(it.unit).trim()));
+    if (idx === -1) continue;
+    totals.set(idx, (totals.get(idx) || 0) + it.total);
+  }
+  return [...totals.entries()].map(([idx, total]) => {
+    const family = UNIT_FUN_FACTS[idx];
+    return {
+      icon: family.icon,
+      headline: `${fmtFunFactQty(total)} ${family.unitLabel} Recorded`,
+      sub: family.sentence(total / family.compareValue),
+    };
+  });
+}
+
 // `strokeColorOverride` lets a caller encode its own health judgement (e.g.
 // a schedule ring: more elapsed isn't "good" the way more complete is, so
 // it can't reuse this function's default green-at-100% logic).

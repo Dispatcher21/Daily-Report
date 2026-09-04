@@ -1518,6 +1518,29 @@ input[type="file"] { min-height: 0; }
   font-variant-numeric: tabular-nums; /* keeps the % from jittering side to side while it counts up */
 }
 
+/* A real-world comparison for the quantities an inspector has actually
+   recorded -- deliberately not a $ figure, see the rings above for that.
+   Full-width so it doesn't compete with the numeric stat cards for column
+   space, and tinted rather than neutral so it reads as "fun aside" rather
+   than another hard metric. Rotates between unit types (see the interval in
+   project.html) with a plain opacity crossfade -- no movement, so it never
+   fights for attention against the counted-up numbers landing at the same
+   moment on first render. */
+.fun-fact-card {
+  grid-column: 1 / -1;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.9rem;
+  background: var(--brand-dim);
+  border-color: var(--brand);
+  transition: opacity 0.25s ease;
+}
+.fun-fact-card.ff-fade { opacity: 0; }
+.fun-fact-card .ff-icon { font-size: 1.9rem; line-height: 1; flex: 0 0 auto; }
+.fun-fact-card .ff-body { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.fun-fact-card .ff-headline { font-size: 1.05rem; font-weight: 800; color: var(--text); }
+.fun-fact-card .ff-sub { font-size: 0.85rem; color: var(--text-dim); }
+
 .dash-empty {
   text-align: center; color: var(--text-dim); padding: 2rem 1rem;
   background: var(--surface); border: 1.5px dashed var(--border); border-radius: var(--radius);
