@@ -406,11 +406,11 @@ function renderMdStats(projectStats, reports) {
   const portfolioPct = hasContract && hasEarned && totalContractSum > 0 ? totalEarnedSum / totalContractSum : null;
 
   $('#md-stats').innerHTML =
-    (portfolioPct != null ? `<div class="dash-card dc-headline" data-tip="Earned to date divided by total contract value, across every included project." tabindex="0">
+    (portfolioPct != null ? `<div class="dash-card dc-headline" data-tip="Earned to date divided by total contract value, across every included project. A dollar-based figure (includes Lump Sum items) -- not the same measure as a project's own Estimated Pay Item Usage, which is quantity-based and excludes Lump Sum." tabindex="0">
       ${ringSvg(portfolioPct)}
       <div>
-        <span class="dc-label">Overall % Complete</span>
-        <span class="dc-sub">By contract value, included projects</span>
+        <span class="dc-label">% of Contract Value Earned</span>
+        <span class="dc-sub">Included projects, combined</span>
       </div>
     </div>` : '') +
     statCard(projectStats.length, 'Active Projects', mdExcluded.size ? `${mdExcluded.size} excluded from this view` : '', 'Projects currently included in this dashboard.', null, 'int') +

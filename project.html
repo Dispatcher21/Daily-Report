@@ -295,10 +295,27 @@ function renderDashboard(reports, project) {
   const items = fullPayItemCatalogOverview(flatItems, project.payItemCatalog);
   const overall = overallPercentComplete(items);
   const { totalContract, totalEarned, pctByValue } = contractValueSummary(items);
+  const lumpSum = lumpSumValueSummary(items);
 
   const overallTip = overall == null
     ? 'No pay item on this project has both a Per Plans Total and any usage yet, so there\'s nothing to weight.'
-    : `Total quantity used across every pay item that has a Per Plans Total on file, divided by their combined planned quantity. Items with no Per Plans Total aren't counted either way, and neither are Lump Sum items, which aren't measured on a comparable scale.`;
+    : `Total quantity used across every pay item that has a Per Plans Total on file, divided by their combined planned quantity -- a physical measure, not a dollar one. Items with no Per Plans Total aren't counted either way, and neither are Lump Sum items, which aren't measured on a comparable scale (see Lump Sum Value below if this project has any).`;
+
+  // A dollar-based ring, deliberately built only from the latest recorded
+  // Pay App -- not effectivePayItemFlatEntries' blended live figure (that's
+  // still what Earned to Date below shows) -- since this one's meant to
+  // read as "what's officially been billed," a number that should hold
+  // still between Pay Apps rather than creep up with every inspector report
+  // filed on top of it.
+  const payAppFlat = latestPayAppFlatEntries(project.billingEstimates);
+  const payAppPctByValue = payAppFlat != null
+    ? contractValueSummary(fullPayItemCatalogOverview(payAppFlat, project.payItemCatalog)).pctByValue
+    : null;
+  const payAppValueTip = payAppFlat == null
+    ? 'No Pay App has been recorded for this project yet -- record one on the Quantity Sheet to track billed contract value here.'
+    : payAppPctByValue == null
+      ? 'The most recently recorded Pay App has no dollar value yet to weigh against contract value.'
+      : `Dollars billed in the most recently recorded Pay App, divided by total contract value. Based only on that Pay App -- unlike Earned to Date below, this doesn't include report activity filed since, since it's meant to reflect what's been formally billed rather than day-to-day progress.`;
 
   // A second ring, next to Overall % Complete, for the natural comparison a
   // PM actually wants: is the % of the contract's days used running ahead
@@ -331,8 +348,15 @@ function renderDashboard(reports, project) {
     (overall != null ? `<div class="dash-card dc-headline" data-tip="${escapeHtml(overallTip)}" tabindex="0">
       ${ringSvg(overall)}
       <div>
-        <span class="dc-label">Overall % Complete</span>
-        <span class="dc-sub">Weighted by planned quantity</span>
+        <span class="dc-label">Estimated Pay Item Usage</span>
+        <span class="dc-sub">By quantity, excludes Lump Sum</span>
+      </div>
+    </div>` : '') +
+    (payAppFlat != null ? `<div class="dash-card dc-headline" data-tip="${escapeHtml(payAppValueTip)}" tabindex="0">
+      ${ringSvg(payAppPctByValue)}
+      <div>
+        <span class="dc-label">Contract Value Used</span>
+        <span class="dc-sub">By dollars billed, latest Pay App only</span>
       </div>
     </div>` : '') +
     scheduleCardHtml +
@@ -375,9 +399,18 @@ function renderDashboard(reports, project) {
     (totalEarned != null ? statCard(
       totalEarned,
       'Earned to Date',
-      pctByValue != null ? `${(pctByValue * 100).toFixed(1)}% of contract value` : '',
-      'Sum of quantity used × Unit Price across every pay item that has a Unit Price on file.',
+      pctByValue != null
+        ? `${(pctByValue * 100).toFixed(1)}% of contract value${lumpSum.contract != null ? ', incl. Lump Sum' : ''}`
+        : '',
+      'Sum of quantity used × Unit Price across every pay item that has a Unit Price on file -- unlike Estimated Pay Item Usage, this includes Lump Sum items at their full dollar value.',
       pctByValue, 'money'
+    ) : '') +
+    (lumpSum.contract != null ? statCard(
+      lumpSum.contract,
+      'Lump Sum Value',
+      lumpSum.pct != null ? `${(lumpSum.pct * 100).toFixed(1)}% billed` : '',
+      'Total Unit Price across this project\'s Lump Sum pay items, and how much of it has been billed to date. Already included in Total Contract Value and Earned to Date above -- broken out here since it\'s exactly what\'s left out of Estimated Pay Item Usage, and usually explains why that number and Earned to Date\'s % of contract value don\'t match.',
+      lumpSum.pct, 'money'
     ) : '');
 
   renderPayItems(items);

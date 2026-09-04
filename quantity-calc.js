@@ -158,6 +158,30 @@ function contractValueSummary(items) {
   };
 }
 
+// Lump Sum items are folded into Total Contract Value / Earned to Date
+// above (their Unit Price already IS a dollar figure, see contractTotalFor)
+// but left out of overallPercentComplete entirely, since their "quantity"
+// isn't on the same physical scale as everything else being averaged --
+// that split is exactly why a project's dollar-based % and quantity-based %
+// can read very differently. Broken out here so a dashboard can show which
+// dollars account for the gap, rather than leaving it to a tooltip.
+function lumpSumValueSummary(items) {
+  let contract = 0;
+  let earned = 0;
+  let hasAny = false;
+  for (const it of items || []) {
+    if (!isLumpSumUnit(it.unit) || it.contractTotal == null) continue;
+    contract += it.contractTotal;
+    earned += it.earnedTotal != null ? it.earnedTotal : 0;
+    hasAny = true;
+  }
+  return {
+    contract: hasAny ? contract : null,
+    earned: hasAny ? earned : null,
+    pct: hasAny && contract > 0 ? earned / contract : null,
+  };
+}
+
 // Cumulative pay-item completion by calendar date, replaying each dated
 // report's quantities in date order -- powers the dashboard's progress trend
 // chart. Reports sharing a date are combined into one point, matching how
@@ -284,6 +308,24 @@ function effectivePayItemFlatEntries(reports, billingEstimates, excludeEstimateI
     .filter(([, qty]) => qty != null && qty !== '')
     .map(([itemNumber, qty]) => ({ itemNumber, qty: Number(qty) }));
   return payAppEntries.concat(reportEntries);
+}
+
+// Just the latest recorded Pay App's own item totals, with no report
+// activity filed since layered on top -- unlike effectivePayItemFlatEntries
+// above, which exists precisely to blend those in for the project's live
+// working numbers. This is for a figure that's supposed to mean "what's been
+// formally billed to date," which by definition freezes at the last Pay App
+// and shouldn't creep up between billing cycles just because inspectors kept
+// logging quantity. Returns null (not an empty array) when no Pay App has
+// ever been recorded, so a caller can tell "nothing billed yet" apart from
+// "no Pay App exists to measure at all."
+function latestPayAppFlatEntries(billingEstimates) {
+  const latest = sortedEstimates(billingEstimates).pop() || null;
+  if (!latest) return null;
+  if (!latest.itemTotals) return [];
+  return Object.entries(latest.itemTotals)
+    .filter(([, qty]) => qty != null && qty !== '')
+    .map(([itemNumber, qty]) => ({ itemNumber, qty: Number(qty) }));
 }
 
 function nextDayIso(iso) {
