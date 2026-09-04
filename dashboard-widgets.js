@@ -23,49 +23,95 @@ function fmtMoney(n) {
 // records -- deliberately not dollars (see the project dashboard's rings for
 // that side of things). Matched against a pay item's own Unit field, several
 // common abbreviations per family; a unit with no natural physical
-// comparison (EA, LUMP SUM, HR, DAY...) just isn't included. compareValue is
-// in the item's own recorded unit, no cross-unit conversion, so each family
-// stays independent and simple.
+// comparison (EA, LUMP SUM, HR, DAY...) just isn't included.
+//
+// Each family carries a list of comparisons rather than just one -- an
+// everyday object (football field, dump truck) plus, where a well-sourced
+// figure at a sane scale actually exists, a notorious engineering project.
+// compareValue is in the item's own recorded unit, no cross-unit conversion,
+// so each family stays independent and simple. A comparison whose ratio
+// would round away to nothing (see the 0.01 floor in unitFunFacts below) is
+// skipped for that render rather than shown as a meaningless "0.00x" --
+// mainly matters for the mega-project figures (Hoover Dam's 3.25M cubic
+// yards of concrete) against an ordinary-sized project's own quantities.
 const UNIT_FUN_FACTS = [
   {
     match: /^(l\.?f\.?|lin\.?\s*ft\.?|linear\s*feet|linear\s*foot|feet|foot|ft\.?)$/i,
-    unitLabel: 'Linear Feet', icon: '🏈', compareValue: 300, // NFL field of play, goal line to goal line
-    sentence: (r) => `That's about ${fmtFunFactRatio(r)}× the length of a football field!`,
+    unitLabel: 'Linear Feet',
+    comparisons: [
+      { icon: '🏈', compareValue: 300, // NFL field of play, goal line to goal line
+        sentence: (r) => `That's about ${fmtFunFactRatio(r)}× the length of a football field!` },
+      { icon: '🌉', compareValue: 8981, // Golden Gate Bridge, total length incl. approaches
+        sentence: (r) => `That's about ${fmtFunFactRatio(r)}× the length of the Golden Gate Bridge!` },
+    ],
   },
   {
     match: /^(mi\.?|miles?)$/i,
-    unitLabel: 'Miles', icon: '🏃', compareValue: 26.2, // marathon
-    sentence: (r) => `That's about ${fmtFunFactRatio(r)}× the length of a marathon!`,
+    unitLabel: 'Miles',
+    comparisons: [
+      { icon: '🏃', compareValue: 26.2, // marathon
+        sentence: (r) => `That's about ${fmtFunFactRatio(r)}× the length of a marathon!` },
+      { icon: '🚢', compareValue: 51, // Panama Canal, end to end
+        sentence: (r) => `That's about ${fmtFunFactRatio(r)}× the length of the Panama Canal!` },
+    ],
   },
   {
     match: /^(s\.?f\.?|sq\.?\s*ft\.?|square\s*feet|square\s*foot)$/i,
-    unitLabel: 'Square Feet', icon: '🏀', compareValue: 4700, // NBA court, 94x50 ft
-    sentence: (r) => `That's about ${fmtFunFactRatio(r)}× the size of an NBA basketball court!`,
+    unitLabel: 'Square Feet',
+    comparisons: [
+      { icon: '🏀', compareValue: 4700, // NBA court, 94x50 ft
+        sentence: (r) => `That's about ${fmtFunFactRatio(r)}× the size of an NBA basketball court!` },
+      { icon: '🏛️', compareValue: 6600000, // The Pentagon, total office floor area
+        sentence: (r) => `That's about ${fmtFunFactRatio(r)}× the floor area of the Pentagon!` },
+    ],
   },
   {
     match: /^(s\.?y\.?|sq\.?\s*yd\.?|square\s*yards?)$/i,
-    unitLabel: 'Square Yards', icon: '🏟️', compareValue: 6400, // football field incl. end zones, 360x160 ft / 9
-    sentence: (r) => `That's about ${fmtFunFactRatio(r)}× the size of a football field, end zones included!`,
+    unitLabel: 'Square Yards',
+    comparisons: [
+      { icon: '🏟️', compareValue: 6400, // football field incl. end zones, 360x160 ft / 9
+        sentence: (r) => `That's about ${fmtFunFactRatio(r)}× the size of a football field, end zones included!` },
+      { icon: '🔺', compareValue: 63500, // Great Pyramid of Giza, base footprint
+        sentence: (r) => `That's about ${fmtFunFactRatio(r)}× the footprint of the Great Pyramid of Giza!` },
+    ],
   },
   {
     match: /^(c\.?y\.?|cu\.?\s*yd\.?|cubic\s*yards?)$/i,
-    unitLabel: 'Cubic Yards', icon: '🚛', compareValue: 10, // standard dump truck load
-    sentence: (r) => `That's about ${fmtFunFactRatio(r)} standard dump truck loads!`,
+    unitLabel: 'Cubic Yards',
+    comparisons: [
+      { icon: '🚛', compareValue: 10, // standard dump truck load
+        sentence: (r) => `That's about ${fmtFunFactRatio(r)} standard dump truck loads!` },
+      { icon: '🏗️', compareValue: 3250000, // Hoover Dam, concrete in the dam itself
+        sentence: (r) => `That's about ${fmtFunFactRatio(r)}× the concrete poured for Hoover Dam!` },
+    ],
   },
   {
     match: /^(tons?)$/i,
-    unitLabel: 'Tons', icon: '🐘', compareValue: 6, // average adult elephant
-    sentence: (r) => `That's as much as ${fmtFunFactRatio(r)} adult elephants!`,
+    unitLabel: 'Tons',
+    comparisons: [
+      { icon: '🐘', compareValue: 6, // average adult elephant
+        sentence: (r) => `That's as much as ${fmtFunFactRatio(r)} adult elephants!` },
+      { icon: '🗽', compareValue: 225, // Statue of Liberty, total weight
+        sentence: (r) => `That's about ${fmtFunFactRatio(r)}× the weight of the Statue of Liberty!` },
+    ],
   },
   {
     match: /^(gal\.?|gallons?)$/i,
-    unitLabel: 'Gallons', icon: '🛁', compareValue: 50, // full bathtub
-    sentence: (r) => `That's enough to fill ${fmtFunFactRatio(r)} bathtubs!`,
+    unitLabel: 'Gallons',
+    comparisons: [
+      { icon: '🛁', compareValue: 50, // full bathtub
+        sentence: (r) => `That's enough to fill ${fmtFunFactRatio(r)} bathtubs!` },
+    ],
   },
   {
     match: /^(ac\.?|acres?)$/i,
-    unitLabel: 'Acres', icon: '🌾', compareValue: 1.32, // football field incl. end zones, in acres
-    sentence: (r) => `That's about ${fmtFunFactRatio(r)}× the size of a football field!`,
+    unitLabel: 'Acres',
+    comparisons: [
+      { icon: '🌾', compareValue: 1.32, // football field incl. end zones, in acres
+        sentence: (r) => `That's about ${fmtFunFactRatio(r)}× the size of a football field!` },
+      { icon: '🏛️', compareValue: 583, // The Pentagon, full site including parking
+        sentence: (r) => `That's about ${fmtFunFactRatio(r)}× the size of the Pentagon's entire site!` },
+    ],
   },
 ];
 
@@ -78,10 +124,12 @@ function fmtFunFactQty(n) {
   return (Math.round(n * 10) / 10).toLocaleString(undefined, { maximumFractionDigits: 1 });
 }
 
-// One fact per recognized unit family actually used on this project, built
-// from the same items list (fullPayItemCatalogOverview) the rest of the
-// dashboard already uses -- so it reflects whatever's currently recorded,
-// Pay App-superseded totals included, exactly like everything else here.
+// One fact per recognized (family, comparison) pair actually meaningful for
+// this project, built from the same items list (fullPayItemCatalogOverview)
+// the rest of the dashboard already uses -- so it reflects whatever's
+// currently recorded, Pay App-superseded totals included, exactly like
+// everything else here. A ratio under 0.01 is left out rather than shown as
+// a rounds-to-nothing "0.00x" -- see UNIT_FUN_FACTS' own comment.
 function unitFunFacts(items) {
   const totals = new Map(); // family index -> summed quantity
   for (const it of items || []) {
@@ -90,14 +138,17 @@ function unitFunFacts(items) {
     if (idx === -1) continue;
     totals.set(idx, (totals.get(idx) || 0) + it.total);
   }
-  return [...totals.entries()].map(([idx, total]) => {
+  const facts = [];
+  for (const [idx, total] of totals.entries()) {
     const family = UNIT_FUN_FACTS[idx];
-    return {
-      icon: family.icon,
-      headline: `${fmtFunFactQty(total)} ${family.unitLabel} Recorded`,
-      sub: family.sentence(total / family.compareValue),
-    };
-  });
+    const headline = `${fmtFunFactQty(total)} ${family.unitLabel} Recorded`;
+    for (const cmp of family.comparisons) {
+      const ratio = total / cmp.compareValue;
+      if (ratio < 0.01) continue;
+      facts.push({ icon: cmp.icon, headline, sub: cmp.sentence(ratio) });
+    }
+  }
+  return facts;
 }
 
 // `strokeColorOverride` lets a caller encode its own health judgement (e.g.
