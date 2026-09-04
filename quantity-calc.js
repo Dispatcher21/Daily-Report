@@ -158,30 +158,6 @@ function contractValueSummary(items) {
   };
 }
 
-// Lump Sum items are folded into Total Contract Value / Earned to Date
-// above (their Unit Price already IS a dollar figure, see contractTotalFor)
-// but left out of overallPercentComplete entirely, since their "quantity"
-// isn't on the same physical scale as everything else being averaged --
-// that split is exactly why a project's dollar-based % and quantity-based %
-// can read very differently. Broken out here so a dashboard can show which
-// dollars account for the gap, rather than leaving it to a tooltip.
-function lumpSumValueSummary(items) {
-  let contract = 0;
-  let earned = 0;
-  let hasAny = false;
-  for (const it of items || []) {
-    if (!isLumpSumUnit(it.unit) || it.contractTotal == null) continue;
-    contract += it.contractTotal;
-    earned += it.earnedTotal != null ? it.earnedTotal : 0;
-    hasAny = true;
-  }
-  return {
-    contract: hasAny ? contract : null,
-    earned: hasAny ? earned : null,
-    pct: hasAny && contract > 0 ? earned / contract : null,
-  };
-}
-
 // Cumulative pay-item completion by calendar date, replaying each dated
 // report's quantities in date order -- powers the dashboard's progress trend
 // chart. Reports sharing a date are combined into one point, matching how
