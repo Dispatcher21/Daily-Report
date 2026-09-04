@@ -262,6 +262,7 @@ function renderPayItemsTab() {
       <label class="ps-checkbox-label"><input type="checkbox" data-idx="${i}" data-field="side" ${it.side ? 'checked' : ''}> Track Side (Lt/Rt/Ctr) on this item</label>
       <label class="ps-checkbox-label"><input type="checkbox" data-idx="${i}" data-field="computed" ${it.computed ? 'checked' : ''}> Compute Qty from Length × Width on this item</label>
       <label class="ps-checkbox-label"><input type="checkbox" data-idx="${i}" data-field="theoretical" ${it.theoretical ? 'checked' : ''}> Track Theoretical Qty / Overrun on this item</label>
+      <label class="ps-checkbox-label"><input type="checkbox" data-idx="${i}" data-field="payAppOnly" ${it.payAppOnly ? 'checked' : ''}> Pay App only -- hide from the inspector's report form, quantity set only by a recorded Pay App</label>
       <label>Locations (one per line, leave blank if not used)<textarea data-idx="${i}" data-field="locations" rows="2">${escapeHtml((it.locations || []).join('\n'))}</textarea></label>
       <button type="button" class="text-btn ps-remove-item" data-idx="${i}" style="color:var(--danger);">&times; Remove This Pay Item</button>
     </div>`
@@ -297,7 +298,7 @@ function renderPayItemsTab() {
     });
   });
   $('#ps-add-item').addEventListener('click', () => {
-    items.push({ itemNumber: '', description: '', unit: '', plannedQty: '', unitPrice: '', stations: false, locations: [], side: false, computed: false, theoretical: false });
+    items.push({ itemNumber: '', description: '', unit: '', plannedQty: '', unitPrice: '', stations: false, locations: [], side: false, computed: false, theoretical: false, payAppOnly: false });
     renderPayItemsTab();
   });
 }

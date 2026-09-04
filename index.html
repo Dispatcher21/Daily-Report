@@ -335,7 +335,7 @@ async function renderManagerDashboard() {
   // list below rather than redone twice.
   const projectStats = included.map((project) => {
     const projReports = reports.filter((r) => r.projectId === project.id);
-    const flatItems = projReports.flatMap((r) => r.payItems || []);
+    const flatItems = effectivePayItemFlatEntries(projReports, project.billingEstimates);
     const items = fullPayItemCatalogOverview(flatItems, project.payItemCatalog || []);
     const overall = overallPercentComplete(items);
     const { totalContract, totalEarned } = contractValueSummary(items);
@@ -452,7 +452,7 @@ function renderMdTrendChart(projectStats, included, reports, today) {
   const withNtp = included.filter((project) => /^\d{4}-\d{2}-\d{2}$/.test((project.meta || {}).ntpDate || ''));
   const series = withNtp.map((project, i) => {
     const ntpDate = project.meta.ntpDate;
-    const points = progressOverTime(reports.filter((r) => r.projectId === project.id && r.date), project.payItemCatalog || [])
+    const points = progressOverTime(reports.filter((r) => r.projectId === project.id && r.date), project.payItemCatalog || [], project.billingEstimates)
       .map((p) => ({ ...p, day: Math.max(0, daysBetween(ntpDate, p.date)) }));
     // The line should always reach all the way back to NTP (day 0, 0%
     // complete) even when the earliest dated report came well after it --

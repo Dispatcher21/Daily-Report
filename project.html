@@ -288,7 +288,10 @@ function renderDashboard(reports, project) {
   // Every pay item in the catalog, not just ones that have shown up on a
   // report yet -- an item nobody's touched still counts toward the
   // project's total scope (and toward the weighted % complete below).
-  const flatItems = dated.concat(reports.filter((r) => !r.date)).flatMap((r) => r.payItems || []);
+  // effectivePayItemFlatEntries folds in the latest Pay App (if any),
+  // superseding reports through its date rather than just summing every
+  // report ever filed -- see that function's own comment.
+  const flatItems = effectivePayItemFlatEntries(reports, project.billingEstimates);
   const items = fullPayItemCatalogOverview(flatItems, project.payItemCatalog);
   const overall = overallPercentComplete(items);
   const { totalContract, totalEarned, pctByValue } = contractValueSummary(items);
@@ -378,7 +381,7 @@ function renderDashboard(reports, project) {
     ) : '');
 
   renderPayItems(items);
-  renderTrendChart(progressOverTime(dated, project.payItemCatalog));
+  renderTrendChart(progressOverTime(dated, project.payItemCatalog, project.billingEstimates));
   renderWeatherSchedule(dated);
   fitDashboardValues();
   animateDashboardFills();

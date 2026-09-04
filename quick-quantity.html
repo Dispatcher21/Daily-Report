@@ -161,7 +161,10 @@ async function init() {
 }
 
 function renderCatalogList() {
-  const catalog = project.payItemCatalog || [];
+  // Pay App only items are the engineer's to set (Quantity Sheet's Pay App
+  // section), never the inspector's -- left off this list entirely, same
+  // as report-editor.html's own catalog picker.
+  const catalog = (project.payItemCatalog || []).filter((it) => !it.payAppOnly);
   $('#catalog-empty').hidden = catalog.length > 0;
   $('#catalog-list').innerHTML = catalog
     .map((it, i) => {

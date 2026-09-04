@@ -59,17 +59,23 @@
   <div class="step">
     <div class="step-header">
       <span class="step-num">BILLING</span>
-      <h2>Estimates</h2>
-      <button type="button" class="info-tip" data-tip="Record a checkpoint each time a pay estimate goes out, so the quantities billed since the last one -- and since the start -- stay on file." aria-label="What this does">i</button>
+      <h2>Pay App</h2>
+      <button type="button" class="info-tip" data-tip="Record a Pay App each time one is approved, with the engineer-approved quantity for every item as of that date. Once one's on file, it (not raw inspector totals) is what this project's dashboards are based on through that date -- reports filed after it keep counting normally on top." aria-label="What this does">i</button>
     </div>
     <div class="step-body">
       <div id="estimate-history"></div>
       <div class="field-grid" id="estimate-form" style="margin-top:0.75rem;">
-        <label>Estimate No. <input type="text" id="f-est-no"></label>
+        <label>Pay App No. <input type="text" id="f-est-no"></label>
         <label>Date <input type="date" id="f-est-date"></label>
-        <label>Note (optional) <input type="text" id="f-est-note" placeholder="e.g. Pay estimate 3"></label>
+        <label>Note (optional) <input type="text" id="f-est-note" placeholder="e.g. Pay Application 3"></label>
       </div>
-      <button type="button" class="btn-secondary" id="btn-record-estimate" style="margin-top:0.5rem;">+ Record New Estimate</button>
+
+      <div class="eyebrow" style="margin-top:1rem;">Item Quantities <button type="button" class="info-tip" data-tip="Inspector Total is the current running total through today, for reference -- not editable here. Pay App Total is what gets approved and saved; it starts pre-filled with the Inspector Total, adjust whatever needs it." aria-label="What this does">i</button></div>
+      <div class="table-scroll">
+        <table class="data-table" id="payapp-items-table"></table>
+      </div>
+
+      <button type="button" class="btn-secondary" id="btn-record-estimate" style="margin-top:1rem;">+ Record Pay App</button>
       <p class="hint" id="estimate-error" style="color:var(--danger);" hidden></p>
     </div>
   </div>
@@ -205,6 +211,7 @@ async function init() {
   }
 
   renderEstimateHistory();
+  renderPayAppItemsTable();
   $('#f-est-no').value = nextEstimateNo(project.billingEstimates);
   $('#f-est-date').value = todayIso();
   $('#view-picker button[data-view="totals"]').setAttribute('aria-pressed', 'true');
@@ -512,9 +519,39 @@ function renderEstimateHistory() {
       project.billingEstimates = (project.billingEstimates || []).filter((e) => e.id !== btn.dataset.id);
       await saveProject(project);
       renderEstimateHistory();
+      renderPayAppItemsTable();
       if (rangeMode === 'estimate') renderRangeMode();
     });
   });
+}
+
+// The "Inspector Total" column mirrors exactly what the dashboards would
+// show right now (effectivePayItemFlatEntries -- the latest Pay App on
+// file, if any, plus whatever's been reported since); the adjacent input
+// is pre-filled with that same figure as a starting point for whatever the
+// engineer actually approves, not a guess of what they'll enter.
+function renderPayAppItemsTable() {
+  const items = fullPayItemCatalogOverview(
+    effectivePayItemFlatEntries(allReports, project.billingEstimates),
+    project.payItemCatalog
+  );
+  const table = $('#payapp-items-table');
+  if (items.length === 0) {
+    table.innerHTML = '';
+    return;
+  }
+  table.innerHTML = `
+    <thead><tr><th>Item</th><th>Description</th><th>Unit</th><th class="dt-num">Inspector Total</th><th class="dt-num">Pay App Total</th></tr></thead>
+    <tbody>
+      ${items.map((it) => `
+        <tr>
+          <td>${escapeHtml(it.itemNumber)}</td>
+          <td>${escapeHtml(it.description)}</td>
+          <td>${escapeHtml(it.unit || '')}</td>
+          <td class="dt-num">${it.total.toLocaleString()}</td>
+          <td class="dt-num"><input type="number" step="any" class="payapp-qty-input" data-item="${escapeHtml(it.itemNumber)}" value="${it.total}"></td>
+        </tr>`).join('')}
+    </tbody>`;
 }
 
 $('#btn-record-estimate').addEventListener('click', async () => {
@@ -523,15 +560,21 @@ $('#btn-record-estimate').addEventListener('click', async () => {
   const note = $('#f-est-note').value.trim();
   $('#estimate-error').hidden = true;
   if (!estimateNo || !date) {
-    $('#estimate-error').textContent = 'Estimate No. and Date are both required.';
+    $('#estimate-error').textContent = 'Pay App No. and Date are both required.';
     $('#estimate-error').hidden = false;
     return;
   }
+  const itemTotals = {};
+  $$('.payapp-qty-input').forEach((input) => {
+    const v = input.value.trim();
+    if (v !== '') itemTotals[input.dataset.item] = Number(v);
+  });
   if (!project.billingEstimates) project.billingEstimates = [];
-  const newEstimate = { id: crypto.randomUUID(), estimateNo, date, note };
+  const newEstimate = { id: crypto.randomUUID(), estimateNo, date, note, itemTotals };
   project.billingEstimates.push(newEstimate);
   await saveProject(project);
   renderEstimateHistory();
+  renderPayAppItemsTable();
   $('#f-est-no').value = '';
   $('#f-est-date').value = '';
   $('#f-est-note').value = '';

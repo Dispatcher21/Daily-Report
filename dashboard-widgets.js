@@ -200,6 +200,21 @@ const TREND_LINE_COLORS = ['#3d6fa8', '#c9622f', '#2f9e6f', '#a13d8f', '#c9a227'
 // every line spans the full NTP-to-today width regardless of how long that
 // project has actually been going, which is what actually makes pace
 // comparable at a glance. Points still carry `.date` for the tooltip.
+// A 5-point star's polygon coordinates, outer radius fixed relative to the
+// dot radii it stands in for (see renderTrendSvg) and inner radius a fixed
+// proportion of that -- a real drawn shape rather than a Unicode glyph, so
+// it stays crisp and consistently sized across browsers/fonts.
+function starPoints(cx, cy, outerR) {
+  const innerR = outerR * 0.42;
+  const pts = [];
+  for (let i = 0; i < 10; i++) {
+    const r = i % 2 === 0 ? outerR : innerR;
+    const angle = (Math.PI / 5) * i - Math.PI / 2;
+    pts.push(`${(cx + r * Math.cos(angle)).toFixed(2)},${(cy + r * Math.sin(angle)).toFixed(2)}`);
+  }
+  return pts.join(' ');
+}
+
 function renderTrendSvg(container, series, opts) {
   series = (series || []).filter((s) => s.points && s.points.length > 0);
   if (series.length === 0) { container.innerHTML = ''; return; }
@@ -267,13 +282,24 @@ function renderTrendSvg(container, series, opts) {
       const when = daysMode ? `Day ${p.day} (${p.date})` : p.date;
       const tip = p.synthetic
         ? `${s.label ? s.label + ' — ' : ''}NTP (${p.date}): assumed 0% complete, no report on file yet`
-        : `${s.label ? s.label + ' — ' : ''}${when}: ${p.pct != null ? (p.pct * 100).toFixed(1) + '% complete' : 'no target set yet'}${p.earned != null ? ', ' + fmtMoney(p.earned) + ' earned' : ''}`;
+        : `${s.label ? s.label + ' — ' : ''}${when}${p.payApp ? ' — Pay App' : ''}: ${p.pct != null ? (p.pct * 100).toFixed(1) + '% complete' : 'no target set yet'}${p.earned != null ? ', ' + fmtMoney(p.earned) + ' earned' : ''}`;
+      const titleTag = `<title>${escapeHtml(tip)}</title>`;
+      // A Pay App point is a real jump, not routine report-by-report growth
+      // -- marked with a star instead of a dot, in the same gold already
+      // used for a favorited project, and left visible even in daysMode
+      // (where ordinary dots go invisible-but-still-hoverable to cut
+      // clutter across several overlapping project lines): a Pay App is
+      // the rarer, more significant event of the two, worth standing out
+      // rather than blending into the noise-reduction rule made for dots.
+      if (p.payApp) {
+        return `<polygon points="${starPoints(cx, cy, daysMode ? 7 : singlePlainSeries ? 6 : 5)}" class="trend-star">${titleTag}</polygon>`;
+      }
       // daysMode (the Manager Dashboard's multi-project chart) draws lines
       // only -- visible dots at every report date were noise once several
       // projects' lines were overlapping. The circle still exists, just
       // invisible, so hovering the line's actual points still gets a tooltip.
       const visible = daysMode ? 'fill:transparent;stroke:none' : `fill:${color}`;
-      return `<circle cx="${cx}" cy="${cy}" r="${daysMode ? 6 : singlePlainSeries ? 4 : 3}" class="trend-dot" style="${visible}"><title>${escapeHtml(tip)}</title></circle>`;
+      return `<circle cx="${cx}" cy="${cy}" r="${daysMode ? 6 : singlePlainSeries ? 4 : 3}" class="trend-dot" style="${visible}">${titleTag}</circle>`;
     }).join('');
     return pathSection + dots;
   }).join('');

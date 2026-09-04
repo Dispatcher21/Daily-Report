@@ -1172,7 +1172,12 @@ function payItemFilledCount() {
 }
 
 function renderPayItemsStep() {
-  const catalog = project.payItemCatalog || [];
+  // Pay App only items are the engineer's to set (Quantity Sheet's Pay App
+  // section), never the inspector's -- left out of the picker entirely so
+  // there's nothing here to select. An entry from before the item was
+  // flagged this way, if any, is untouched: it still shows in Today's Pay
+  // Items below like any other, just can't be freshly added anymore.
+  const catalog = (project.payItemCatalog || []).filter((item) => !item.payAppOnly);
   const q = payItemSearch.trim().toLowerCase();
   const filtered = q
     ? catalog.filter((item) => `${item.itemNumber} ${item.description}`.toLowerCase().includes(q))

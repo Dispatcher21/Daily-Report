@@ -161,10 +161,15 @@ function contractValueSummary(items) {
 // Cumulative pay-item completion by calendar date, replaying each dated
 // report's quantities in date order -- powers the dashboard's progress trend
 // chart. Reports sharing a date are combined into one point, matching how
-// the Quantity Sheet treats "day" as the unit rather than "report". Only
-// ever grows more complete moving forward (usage doesn't get undone), so
-// each point reflects "as of this date" rather than "on this date".
-function progressOverTime(datedReports, payItemCatalog) {
+// the Quantity Sheet treats "day" as the unit rather than "report". Mostly
+// only grows moving forward (usage doesn't get undone), except at a Pay App
+// date: same as effectivePayItemFlatEntries, a Pay App's own approved
+// itemTotals there replace whatever had accumulated from reports through
+// that date rather than adding to it -- a real jump (up or down) instead of
+// a smooth climb, flagged on that point (payApp: true) so the chart can
+// mark it differently from an ordinary report-driven point. Reports dated
+// after the latest Pay App keep accumulating normally on top of it.
+function progressOverTime(datedReports, payItemCatalog, billingEstimates) {
   const byDate = new Map();
   for (const r of datedReports || []) {
     if (!r.date) continue;
@@ -172,15 +177,27 @@ function progressOverTime(datedReports, payItemCatalog) {
     if (!byDate.has(r.date)) byDate.set(r.date, []);
     byDate.get(r.date).push(...items);
   }
-  const dates = Array.from(byDate.keys()).sort();
+  const payAppByDate = new Map(
+    sortedEstimates(billingEstimates)
+      .filter((e) => e.itemTotals && Object.keys(e.itemTotals).length > 0)
+      .map((e) => [e.date, e])
+  );
+  const dates = Array.from(new Set([...byDate.keys(), ...payAppByDate.keys()])).sort();
 
   const points = [];
   let running = [];
   for (const date of dates) {
-    running = running.concat(byDate.get(date));
+    const payApp = payAppByDate.get(date);
+    if (payApp) {
+      running = Object.entries(payApp.itemTotals)
+        .filter(([, qty]) => qty != null && qty !== '')
+        .map(([itemNumber, qty]) => ({ itemNumber, qty: Number(qty) }));
+    } else {
+      running = running.concat(byDate.get(date));
+    }
     const items = fullPayItemCatalogOverview(running, payItemCatalog);
     const { totalEarned } = contractValueSummary(items);
-    points.push({ date, pct: overallPercentComplete(items), earned: totalEarned });
+    points.push({ date, pct: overallPercentComplete(items), earned: totalEarned, payApp: !!payApp });
   }
   return points;
 }
@@ -231,6 +248,33 @@ const PI_BAND_LABELS = {
 // how their Estimate No. text sorts.
 function sortedEstimates(billingEstimates) {
   return (billingEstimates || []).slice().sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+}
+
+// Once a Pay App is on file, it's the new floor everything else builds on:
+// its own itemTotals (an engineer's approved figures, entered on the
+// Quantity Sheet's Pay App section -- not a report total) replace whatever
+// inspectors had logged up through its date, and only reports dated after
+// that keep accumulating on top. A report with no date at all can't be
+// placed relative to the cutoff, so it's kept as still-current rather than
+// silently dropped. With no Pay App recorded yet, this is exactly the flat
+// list every report would already produce on its own -- an existing
+// project with no Pay Apps sees no change in its numbers from this.
+//
+// Feeding the result into aggregatePayItemTotals/fullPayItemCatalogOverview
+// unchanged (rather than merging Pay App figures in as a separate step)
+// means a Pay App's approved quantity and an inspector's logged quantity
+// are summed by exactly the same code, the same way two reports' quantities
+// for the same item already are.
+function effectivePayItemFlatEntries(reports, billingEstimates) {
+  const latest = sortedEstimates(billingEstimates).pop() || null;
+  const reportEntries = (reports || [])
+    .filter((r) => !latest || !r.date || r.date > latest.date)
+    .flatMap((r) => r.payItems || []);
+  if (!latest || !latest.itemTotals) return reportEntries;
+  const payAppEntries = Object.entries(latest.itemTotals)
+    .filter(([, qty]) => qty != null && qty !== '')
+    .map(([itemNumber, qty]) => ({ itemNumber, qty: Number(qty) }));
+  return payAppEntries.concat(reportEntries);
 }
 
 function nextDayIso(iso) {

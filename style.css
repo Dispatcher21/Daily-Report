@@ -869,6 +869,11 @@ input[type="file"] { min-height: 0; }
 .data-table tbody tr:hover { background: var(--surface-2); }
 .data-table .dt-group-row td { background: var(--surface-2); font-weight: 700; }
 .data-table .dt-group-row td.dt-num { font-weight: 700; }
+/* The Pay App table's editable column -- a compact right-aligned number
+   field instead of the full-width, tap-height default every other input
+   on the site uses, since a whole column of those would make each row as
+   tall as a normal form field instead of a normal table row. */
+.data-table .payapp-qty-input { width: 7rem; min-height: 0; padding: 0.3rem 0.5rem; text-align: right; }
 
 .detail-group-toggle { display: flex; align-items: center; gap: 0.4rem; flex: 0 0 auto; font-size: 0.85rem; color: var(--text-dim); margin-bottom: 0; }
 .detail-group-toggle input { width: 1.1rem; height: 1.1rem; }
@@ -1682,6 +1687,10 @@ input[type="file"] { min-height: 0; }
 .trend-area { fill: var(--brand-dim); stroke: none; }
 .trend-line { fill: none; stroke: var(--brand); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
 .trend-dot { fill: var(--brand); stroke: var(--surface); stroke-width: 2; }
+/* Same gold already used for a favorited project (.hc-favorite.is-fav) --
+   a Pay App marker borrows that "starred/significant" meaning rather than
+   inventing a new color for it. */
+.trend-star { fill: #f5c518; stroke: var(--surface); stroke-width: 1.5; stroke-linejoin: round; }
 
 /* Shown under the chart only when it's drawing 2+ colored series (see
    renderTrendSvg) -- a single line already reads fine with no key. */
