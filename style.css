@@ -860,6 +860,7 @@ input[type="file"] { min-height: 0; }
 .estimate-table th, .estimate-table td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border); }
 .estimate-table th { color: var(--text-dim); font-weight: 600; font-size: 0.8rem; }
 .estimate-table td:last-child { text-align: right; }
+.estimate-table .est-editing td { background: var(--brand-dim); }
 
 .table-scroll { overflow-x: auto; }
 .data-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; white-space: nowrap; }

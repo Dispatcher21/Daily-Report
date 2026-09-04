@@ -53,29 +53,34 @@
         <label>Estimate <select id="f-estimate"></select></label>
       </div>
       <p class="hint" id="range-summary" style="margin-bottom:0;"></p>
+
+      <div class="eyebrow">Pay Apps</div>
+      <div id="estimate-history"></div>
     </div>
   </div>
 
   <div class="step">
     <div class="step-header">
       <span class="step-num">BILLING</span>
-      <h2>Pay App</h2>
+      <h2 id="payapp-form-title">Pay App</h2>
       <button type="button" class="info-tip" data-tip="Record a Pay App each time one is approved, with the engineer-approved quantity for every item as of that date. Once one's on file, it (not raw inspector totals) is what this project's dashboards are based on through that date -- reports filed after it keep counting normally on top." aria-label="What this does">i</button>
     </div>
     <div class="step-body">
-      <div id="estimate-history"></div>
-      <div class="field-grid" id="estimate-form" style="margin-top:0.75rem;">
+      <div class="field-grid" id="estimate-form">
         <label>Pay App No. <input type="text" id="f-est-no"></label>
         <label>Date <input type="date" id="f-est-date"></label>
         <label>Note (optional) <input type="text" id="f-est-note" placeholder="e.g. Pay Application 3"></label>
       </div>
 
-      <div class="eyebrow" style="margin-top:1rem;">Item Quantities <button type="button" class="info-tip" data-tip="Inspector Total is the current running total through today, for reference -- not editable here. Pay App Total is what gets approved and saved; it starts pre-filled with the Inspector Total, adjust whatever needs it." aria-label="What this does">i</button></div>
+      <div class="eyebrow" style="margin-top:1rem;">Item Quantities <button type="button" class="info-tip" data-tip="Inspector Total is the reference running total as of this Pay App's date, for comparison -- not editable here. Pay App Total is what gets approved and saved; it starts pre-filled with the Inspector Total (or, when editing one already recorded, whatever it was last saved as), adjust whatever needs it." aria-label="What this does">i</button></div>
       <div class="table-scroll">
         <table class="data-table" id="payapp-items-table"></table>
       </div>
 
-      <button type="button" class="btn-secondary" id="btn-record-estimate" style="margin-top:1rem;">+ Record Pay App</button>
+      <div style="display:flex; gap:0.6rem; align-items:center; margin-top:1rem; flex-wrap:wrap;">
+        <button type="button" class="btn-secondary" id="btn-record-estimate">+ Record Pay App</button>
+        <button type="button" class="text-btn" id="btn-cancel-edit-estimate" hidden>Cancel Edit</button>
+      </div>
       <p class="hint" id="estimate-error" style="color:var(--danger);" hidden></p>
     </div>
   </div>
@@ -179,6 +184,7 @@ let project = null;
 let allReports = [];
 let rangeMode = 'range'; // 'range' | 'all' | 'estimate'
 let selectedEstimateId = null;
+let editingEstimateId = null; // the Pay App the form below is currently editing, if any -- see startEditEstimate
 
 async function init() {
   project = projectId ? await getProject(projectId) : null;
@@ -503,21 +509,29 @@ function renderEstimateHistory() {
   }
   container.innerHTML = `
     <table class="estimate-table">
-      <thead><tr><th>Estimate</th><th>Date</th><th>Note</th><th></th></tr></thead>
+      <thead><tr><th>Estimate</th><th>Date</th><th>Note</th><th></th><th></th></tr></thead>
       <tbody>
         ${sorted.map((e) => `
-          <tr>
+          <tr${e.id === editingEstimateId ? ' class="est-editing"' : ''}>
             <td>${escapeHtml(e.estimateNo)}</td>
             <td>${e.date}</td>
             <td>${escapeHtml(e.note || '')}</td>
+            <td><button type="button" class="text-btn est-edit" data-id="${e.id}">Edit</button></td>
             <td><button type="button" class="text-btn est-remove" data-id="${e.id}" style="color:var(--danger);">&times;</button></td>
           </tr>`).join('')}
       </tbody>
     </table>`;
+  $$('.est-edit', container).forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const estimate = (project.billingEstimates || []).find((e) => e.id === btn.dataset.id);
+      if (estimate) startEditEstimate(estimate);
+    });
+  });
   $$('.est-remove', container).forEach((btn) => {
     btn.addEventListener('click', async () => {
       project.billingEstimates = (project.billingEstimates || []).filter((e) => e.id !== btn.dataset.id);
       await saveProject(project);
+      if (editingEstimateId === btn.dataset.id) cancelEditEstimate();
       renderEstimateHistory();
       renderPayAppItemsTable();
       if (rangeMode === 'estimate') renderRangeMode();
@@ -525,14 +539,51 @@ function renderEstimateHistory() {
   });
 }
 
-// The "Inspector Total" column mirrors exactly what the dashboards would
-// show right now (effectivePayItemFlatEntries -- the latest Pay App on
-// file, if any, plus whatever's been reported since); the adjacent input
-// is pre-filled with that same figure as a starting point for whatever the
-// engineer actually approves, not a guess of what they'll enter.
+// Populates the Pay App form with an already-recorded one's own values --
+// its No./Date/Note as typed, and (via renderPayAppItemsTable, which reads
+// editingEstimateId) its own saved itemTotals per item instead of today's
+// reference figures -- so "+ Record Pay App" (relabeled "Save Changes"
+// while editing) updates it in place rather than creating a new one.
+function startEditEstimate(estimate) {
+  editingEstimateId = estimate.id;
+  $('#f-est-no').value = estimate.estimateNo;
+  $('#f-est-date').value = estimate.date;
+  $('#f-est-note').value = estimate.note || '';
+  $('#payapp-form-title').textContent = `Pay App -- Editing ${estimate.estimateNo}`;
+  $('#btn-record-estimate').textContent = 'Save Changes';
+  $('#btn-cancel-edit-estimate').hidden = false;
+  renderEstimateHistory();
+  renderPayAppItemsTable();
+  $('#payapp-form-title').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function cancelEditEstimate() {
+  editingEstimateId = null;
+  $('#f-est-no').value = nextEstimateNo(project.billingEstimates);
+  $('#f-est-date').value = todayIso();
+  $('#f-est-note').value = '';
+  $('#payapp-form-title').textContent = 'Pay App';
+  $('#btn-record-estimate').textContent = '+ Record Pay App';
+  $('#btn-cancel-edit-estimate').hidden = true;
+  renderEstimateHistory();
+  renderPayAppItemsTable();
+}
+
+$('#btn-cancel-edit-estimate').addEventListener('click', cancelEditEstimate);
+
+// The "Inspector Total" column is a reference figure, not what gets saved:
+// normally today's running total (effectivePayItemFlatEntries -- the
+// latest Pay App on file, if any, plus whatever's been reported since).
+// While editing an existing Pay App, it's instead that Pay App's own
+// baseline -- the Pay App before it (if any) plus reports up to its own
+// date, excluding its own not-yet-resaved figures from "latest" -- and the
+// adjacent input pre-fills from that Pay App's actual saved itemTotals
+// rather than the reference, since editing means showing what's really
+// there, not a fresh guess.
 function renderPayAppItemsTable() {
+  const editing = editingEstimateId ? (project.billingEstimates || []).find((e) => e.id === editingEstimateId) : null;
   const items = fullPayItemCatalogOverview(
-    effectivePayItemFlatEntries(allReports, project.billingEstimates),
+    effectivePayItemFlatEntries(allReports, project.billingEstimates, editingEstimateId),
     project.payItemCatalog
   );
   const table = $('#payapp-items-table');
@@ -556,6 +607,14 @@ function renderPayAppItemsTable() {
         // if the item has no Unit Price on file to compute a percent of.
         const isLump = isLumpSumUnit(it.unit) && it.unitPrice != null && it.unitPrice > 0;
         const pct = isLump ? (it.total / it.unitPrice) * 100 : null;
+        // Editing pre-fills from what's actually saved for this item, not
+        // the reference -- falling back to the reference if this Pay App
+        // never had a figure for it (e.g. the item was added after it was
+        // recorded).
+        const savedRaw = editing && editing.itemTotals && editing.itemTotals[it.itemNumber] != null
+          ? Number(editing.itemTotals[it.itemNumber])
+          : null;
+        const prefill = savedRaw != null ? (isLump ? (savedRaw / it.unitPrice) * 100 : savedRaw) : (isLump ? pct : it.total);
         return `
         <tr>
           <td>${escapeHtml(it.itemNumber)}</td>
@@ -563,8 +622,8 @@ function renderPayAppItemsTable() {
           <td>${escapeHtml(it.unit || '')}</td>
           <td class="dt-num">${isLump ? pct.toFixed(1) + '%' : it.total.toLocaleString()}</td>
           <td class="dt-num">${isLump
-            ? `<input type="number" step="any" min="0" max="100" class="payapp-qty-input" data-item="${escapeHtml(it.itemNumber)}" data-lump-price="${it.unitPrice}" value="${pct.toFixed(1)}">%`
-            : `<input type="number" step="any" class="payapp-qty-input" data-item="${escapeHtml(it.itemNumber)}" value="${it.total}">`}</td>
+            ? `<input type="number" step="any" min="0" max="100" class="payapp-qty-input" data-item="${escapeHtml(it.itemNumber)}" data-lump-price="${it.unitPrice}" value="${prefill.toFixed(1)}">%`
+            : `<input type="number" step="any" class="payapp-qty-input" data-item="${escapeHtml(it.itemNumber)}" value="${prefill}">`}</td>
         </tr>`;
       }).join('')}
     </tbody>`;
@@ -591,17 +650,29 @@ $('#btn-record-estimate').addEventListener('click', async () => {
     itemTotals[input.dataset.item] = lumpPrice != null ? (Number(v) / 100) * Number(lumpPrice) : Number(v);
   });
   if (!project.billingEstimates) project.billingEstimates = [];
-  const newEstimate = { id: crypto.randomUUID(), estimateNo, date, note, itemTotals };
-  project.billingEstimates.push(newEstimate);
+  let savedEstimate;
+  if (editingEstimateId) {
+    savedEstimate = project.billingEstimates.find((e) => e.id === editingEstimateId);
+    Object.assign(savedEstimate, { estimateNo, date, note, itemTotals });
+  } else {
+    savedEstimate = { id: crypto.randomUUID(), estimateNo, date, note, itemTotals };
+    project.billingEstimates.push(savedEstimate);
+  }
   await saveProject(project);
+  const wasEditing = !!editingEstimateId;
+  editingEstimateId = null;
+  $('#payapp-form-title').textContent = 'Pay App';
+  $('#btn-record-estimate').textContent = '+ Record Pay App';
+  $('#btn-cancel-edit-estimate').hidden = true;
   renderEstimateHistory();
   renderPayAppItemsTable();
   $('#f-est-no').value = '';
   $('#f-est-date').value = '';
   $('#f-est-note').value = '';
   $('#f-est-no').value = nextEstimateNo(project.billingEstimates);
+  if (wasEditing) $('#f-est-date').value = todayIso();
   if (rangeMode === 'estimate') {
-    selectedEstimateId = newEstimate.id;
+    selectedEstimateId = savedEstimate.id;
     renderRangeMode();
   }
 });

@@ -265,8 +265,17 @@ function sortedEstimates(billingEstimates) {
 // means a Pay App's approved quantity and an inspector's logged quantity
 // are summed by exactly the same code, the same way two reports' quantities
 // for the same item already are.
-function effectivePayItemFlatEntries(reports, billingEstimates) {
-  const latest = sortedEstimates(billingEstimates).pop() || null;
+//
+// excludeEstimateId leaves one specific Pay App out of "latest" entirely --
+// for the Quantity Sheet's own Item Quantities table while editing that
+// Pay App, so its Inspector Total reference column reflects the baseline
+// it was approved against (the Pay App before it, if any, plus reports
+// since) rather than circularly including its own not-yet-resaved figures.
+function effectivePayItemFlatEntries(reports, billingEstimates, excludeEstimateId) {
+  const candidates = excludeEstimateId
+    ? (billingEstimates || []).filter((e) => e.id !== excludeEstimateId)
+    : billingEstimates;
+  const latest = sortedEstimates(candidates).pop() || null;
   const reportEntries = (reports || [])
     .filter((r) => !latest || !r.date || r.date > latest.date)
     .flatMap((r) => r.payItems || []);
