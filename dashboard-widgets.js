@@ -43,6 +43,8 @@ const UNIT_FUN_FACTS = [
         sentence: (r) => `That's about ${fmtFunFactRatio(r)}× the length of a football field!` },
       { icon: '🌉', compareValue: 8981, // Golden Gate Bridge, total length incl. approaches
         sentence: (r) => `That's about ${fmtFunFactRatio(r)}× the length of the Golden Gate Bridge!` },
+      { icon: '🏙️', compareValue: 1454, // Empire State Building, height incl. antenna
+        sentence: (r) => `Laid on its side, that's about ${fmtFunFactRatio(r)}× the height of the Empire State Building!` },
     ],
   },
   {
@@ -53,6 +55,8 @@ const UNIT_FUN_FACTS = [
         sentence: (r) => `That's about ${fmtFunFactRatio(r)}× the length of a marathon!` },
       { icon: '🚢', compareValue: 51, // Panama Canal, end to end
         sentence: (r) => `That's about ${fmtFunFactRatio(r)}× the length of the Panama Canal!` },
+      { icon: '🛣️', compareValue: 2448, // historic Route 66, Chicago to Santa Monica
+        sentence: (r) => `That's about ${fmtFunFactRatio(r)}× the length of old Route 66!` },
     ],
   },
   {
@@ -63,6 +67,8 @@ const UNIT_FUN_FACTS = [
         sentence: (r) => `That's about ${fmtFunFactRatio(r)}× the size of an NBA basketball court!` },
       { icon: '🏛️', compareValue: 6600000, // The Pentagon, total office floor area
         sentence: (r) => `That's about ${fmtFunFactRatio(r)}× the floor area of the Pentagon!` },
+      { icon: '🏠', compareValue: 55000, // The White House, total floor space
+        sentence: (r) => `That's about ${fmtFunFactRatio(r)}× the floor space of the White House!` },
     ],
   },
   {
@@ -73,6 +79,8 @@ const UNIT_FUN_FACTS = [
         sentence: (r) => `That's about ${fmtFunFactRatio(r)}× the size of a football field, end zones included!` },
       { icon: '🔺', compareValue: 63500, // Great Pyramid of Giza, base footprint
         sentence: (r) => `That's about ${fmtFunFactRatio(r)}× the footprint of the Great Pyramid of Giza!` },
+      { icon: '⚽', compareValue: 8540, // FIFA regulation pitch, 105x68m
+        sentence: (r) => `That's about ${fmtFunFactRatio(r)}× the size of a regulation soccer pitch!` },
     ],
   },
   {
@@ -83,6 +91,8 @@ const UNIT_FUN_FACTS = [
         sentence: (r) => `That's about ${fmtFunFactRatio(r)} standard dump truck loads!` },
       { icon: '🏗️', compareValue: 3250000, // Hoover Dam, concrete in the dam itself
         sentence: (r) => `That's about ${fmtFunFactRatio(r)}× the concrete poured for Hoover Dam!` },
+      { icon: '🏊', compareValue: 3270, // Olympic-size swimming pool, 50x25x2m
+        sentence: (r) => `That's about ${fmtFunFactRatio(r)}× the volume of an Olympic swimming pool!` },
     ],
   },
   {
@@ -93,6 +103,8 @@ const UNIT_FUN_FACTS = [
         sentence: (r) => `That's as much as ${fmtFunFactRatio(r)} adult elephants!` },
       { icon: '🗽', compareValue: 225, // Statue of Liberty, total weight
         sentence: (r) => `That's about ${fmtFunFactRatio(r)}× the weight of the Statue of Liberty!` },
+      { icon: '🚌', compareValue: 12.5, // school bus, curb weight
+        sentence: (r) => `That's as much as ${fmtFunFactRatio(r)} school buses!` },
     ],
   },
   {
@@ -101,6 +113,8 @@ const UNIT_FUN_FACTS = [
     comparisons: [
       { icon: '🛁', compareValue: 50, // full bathtub
         sentence: (r) => `That's enough to fill ${fmtFunFactRatio(r)} bathtubs!` },
+      { icon: '💧', compareValue: 18000, // average residential swimming pool
+        sentence: (r) => `That's enough to fill ${fmtFunFactRatio(r)} backyard swimming pools!` },
     ],
   },
   {
@@ -111,6 +125,8 @@ const UNIT_FUN_FACTS = [
         sentence: (r) => `That's about ${fmtFunFactRatio(r)}× the size of a football field!` },
       { icon: '🏛️', compareValue: 583, // The Pentagon, full site including parking
         sentence: (r) => `That's about ${fmtFunFactRatio(r)}× the size of the Pentagon's entire site!` },
+      { icon: '⛳', compareValue: 150, // typical 18-hole golf course
+        sentence: (r) => `That's about ${fmtFunFactRatio(r)}× the size of an 18-hole golf course!` },
     ],
   },
 ];
