@@ -1098,12 +1098,20 @@ async function pullAllCompanyData(code, onProgress) {
   // unfetched, same reasoning as report photos.
   if (onProgress) onProgress({ phase: 'projects' });
   const projectsSnap = await getDocs(collection(db, 'companies', code, 'projects'));
+  // getProject/getReport are each a full store.getAll() under the hood (see
+  // storage.js) -- fine for a one-off lookup, but calling either inside a
+  // per-document loop below turned every sync into a full local scan PER
+  // REMOTE RECORD (an accidental O(n^2)) instead of one. At a couple
+  // hundred reports, each carrying photo Blobs, that's what actually made
+  // syncing take minutes -- not the Firestore round trip, which is a single
+  // query either way. Fetched once here instead and looked up by id.
+  const existingProjectsById = new Map((await getAllProjects()).map((p) => [p.id, p]));
   for (const d of projectsSnap.docs) {
     const data = d.data();
     const project = { ...data, id: d.id, companyCode: code };
     delete project.hasBackgroundImage;
 
-    const existing = await getProject(d.id);
+    const existing = existingProjectsById.get(d.id) || null;
     const alreadyFetched = existing && existing.backgroundImageFetched && existing.backgroundImage;
     if (!data.hasBackgroundImage) {
       project.backgroundImage = null;
@@ -1116,7 +1124,7 @@ async function pullAllCompanyData(code, onProgress) {
       project.backgroundImageFetched = false;
     }
 
-    const result = await mergeProjectRecord(project);
+    const result = await mergeProjectRecord(project, existing);
     if (result !== 'skipped') summary.projectsPulled++;
   }
 
@@ -1132,6 +1140,8 @@ async function pullAllCompanyData(code, onProgress) {
   // and triggered a re-pull.
   const reportsSnap = await getDocs(collection(db, 'companies', code, 'reports'));
   const reportDocs = reportsSnap.docs;
+  // Same fix as the projects loop above, same reason -- see that comment.
+  const existingReportsById = new Map((await getAllReports()).map((r) => [r.id, r]));
   for (let i = 0; i < reportDocs.length; i++) {
     const d = reportDocs[i];
     if (onProgress) onProgress({ phase: 'reports', index: i + 1, total: reportDocs.length });
@@ -1141,7 +1151,7 @@ async function pullAllCompanyData(code, onProgress) {
     delete report.photoSlots;
     delete report.hasSignature;
 
-    const existing = await getReport(d.id);
+    const existing = existingReportsById.get(d.id) || null;
 
     report.photos = [];
     report.photosFetched = [];
@@ -1183,7 +1193,7 @@ async function pullAllCompanyData(code, onProgress) {
     report.thumbnailBack = existing ? existing.thumbnailBack : null;
     report.thumbnailAt = existing ? existing.thumbnailAt : null;
 
-    const result = await mergeReportRecord(report);
+    const result = await mergeReportRecord(report, existing);
     if (result !== 'skipped') summary.reportsPulled++;
   }
 

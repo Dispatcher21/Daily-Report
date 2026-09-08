@@ -456,8 +456,14 @@ function deserializeImportedProject(raw) {
 // report/project. "Newer updatedAt wins" per record. Takes an
 // already-fully-formed record (real Blob/File objects) so it works the
 // same regardless of where it came from -- see report-bundle.js.
-async function mergeReportRecord(report) {
-  const existing = await getReport(report.id);
+// `existingReport`, if given (even explicitly null), is used as-is instead
+// of looking it up here -- getReport is a full store.getAll() under the
+// hood, so calling it once per record for a whole collection pull turns an
+// O(n) sync into an O(n^2) one. A caller merging a single record on its own
+// (there's currently none, but the fallback exists for that case) can just
+// omit it and pay for the lookup itself.
+async function mergeReportRecord(report, existingReport) {
+  const existing = existingReport !== undefined ? existingReport : await getReport(report.id);
   if (!existing) {
     await putReportRaw(report);
     return 'added';
@@ -469,8 +475,8 @@ async function mergeReportRecord(report) {
   return 'skipped';
 }
 
-async function mergeProjectRecord(project) {
-  const existing = await getProject(project.id);
+async function mergeProjectRecord(project, existingProject) {
+  const existing = existingProject !== undefined ? existingProject : await getProject(project.id);
   if (!existing) {
     await putProjectRaw(project);
     return 'added';
