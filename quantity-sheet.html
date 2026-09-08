@@ -584,6 +584,28 @@ $('#btn-cancel-edit-estimate').addEventListener('click', cancelEditEstimate);
 // adjacent input pre-fills from that Pay App's actual saved itemTotals
 // rather than the reference, since editing means showing what's really
 // there, not a fresh guess.
+// Builds just the input (plus its % or $ decoration) for one card's Pay App
+// Total field -- pulled out on its own so both the initial render and the
+// $ /Qty/% mode toggle (payAppToggleMode, below) can produce the exact same
+// markup instead of two copies drifting apart. `mode` is 'qty' (plain
+// quantity, the default for a normal unit), 'pct' (percent of contract
+// value, the default for Lump Sum), or 'cost' (a raw dollar amount, typed
+// straight off the pay application when neither a quantity nor a percent
+// comes out even -- see payAppRowContractorCost for how each mode turns
+// back into a dollar figure).
+function payAppInputMarkup(itemNumber, isLump, unitPrice, inspectorCost, mode, value) {
+  const dataAttrs = isLump ? `data-lump-price="${unitPrice}"` : `data-unit-price="${unitPrice != null ? unitPrice : ''}"`;
+  const common = `class="payapp-qty-input" data-item="${escapeHtml(itemNumber)}" data-mode="${mode}" ${dataAttrs} data-inspector-cost="${inspectorCost != null ? inspectorCost : ''}"`;
+  if (mode === 'cost') return `$ <input type="number" step="0.01" ${common} value="${value}">`;
+  if (mode === 'pct') return `<input type="number" step="any" min="0" max="100" ${common} value="${value}"> %`;
+  return `<input type="number" step="any" ${common} value="${value}">`;
+}
+
+function payAppModeToggleLabel(mode, isLump) {
+  if (mode === 'cost') return isLump ? 'Enter by %' : 'Enter by Qty';
+  return 'Enter by $';
+}
+
 function renderPayAppItemsTable() {
   const editing = editingEstimateId ? (project.billingEstimates || []).find((e) => e.id === editingEstimateId) : null;
   const items = fullPayItemCatalogOverview(
@@ -618,21 +640,16 @@ function renderPayAppItemsTable() {
       ? Number(editing.itemTotals[it.itemNumber])
       : null;
     const prefill = savedRaw != null ? (isLump ? (savedRaw / it.unitPrice) * 100 : savedRaw) : (isLump ? pct : it.total);
-    // % Diff/$ Diff (updatePayAppDiffs, below) compare this card's Pay
-    // App Total -- typed in straight off whatever pay application the
-    // contractor actually submitted, same field, no separate
-    // "contractor" input -- against Inspector Total, live as it's
-    // typed. Needs each input to carry what updatePayAppDiffs can't
-    // otherwise get back to: the item's Unit Price, to turn a plain
-    // quantity into a dollar figure, and Inspector Total's own dollar
-    // figure to diff against.
-    const dataAttrs = isLump
-      ? `data-lump-price="${it.unitPrice}"`
-      : `data-unit-price="${it.unitPrice != null ? it.unitPrice : ''}"`;
+    const defaultMode = isLump ? 'pct' : 'qty';
     const inspectorCost = it.earnedTotal != null ? it.earnedTotal : null;
-    const inputHtml = isLump
-      ? `<input type="number" step="any" min="0" max="100" class="payapp-qty-input" data-item="${escapeHtml(it.itemNumber)}" ${dataAttrs} data-inspector-cost="${inspectorCost != null ? inspectorCost : ''}" value="${prefill.toFixed(1)}"> %`
-      : `<input type="number" step="any" class="payapp-qty-input" data-item="${escapeHtml(it.itemNumber)}" ${dataAttrs} data-inspector-cost="${inspectorCost != null ? inspectorCost : ''}" value="${prefill}">`;
+    // The $-entry toggle only makes sense where there's a Unit Price to
+    // convert against -- with none on file there's nothing to turn a
+    // dollar figure back into for itemTotals (or elsewhere, back into %/qty).
+    const canToggle = it.unitPrice != null && it.unitPrice > 0;
+    const inputHtml = payAppInputMarkup(
+      it.itemNumber, isLump, it.unitPrice, inspectorCost, defaultMode,
+      isLump ? pct.toFixed(1) : prefill
+    );
     return `
     <div class="payapp-card">
       <div class="pac-top">
@@ -649,6 +666,7 @@ function renderPayAppItemsTable() {
           <div class="pac-field-label">Pay App Total</div>
           <div class="pac-field-input-row">${inputHtml}</div>
           <div class="pac-field-money payapp-contractor-money">—</div>
+          ${canToggle ? `<button type="button" class="pac-mode-toggle">${payAppModeToggleLabel(defaultMode, isLump)}</button>` : ''}
         </div>
       </div>
       <div class="pac-diff">
@@ -661,13 +679,45 @@ function renderPayAppItemsTable() {
   updatePayAppDiffs();
 }
 
+// Swaps one card's Pay App Total field between its default mode (Qty, or %
+// for Lump Sum) and a raw $ entry -- for the item whose billed dollar
+// figure just doesn't divide back into a clean quantity or percent, so
+// typing the $ amount directly (instead of hand-solving for whatever
+// quantity happens to produce it) is the whole point. Converts the
+// currently-entered value across the switch via its own dollar equivalent
+// (payAppRowContractorCost), so toggling never loses what's already typed.
+$('#payapp-items-list').addEventListener('click', (e) => {
+  const btn = e.target.closest('.pac-mode-toggle');
+  if (!btn) return;
+  const card = btn.closest('.payapp-card');
+  const input = card.querySelector('.payapp-qty-input');
+  const isLump = input.dataset.lumpPrice != null;
+  const unitPrice = Number(isLump ? input.dataset.lumpPrice : input.dataset.unitPrice);
+  const currentCost = payAppRowContractorCost(input);
+  const nextMode = input.dataset.mode === 'cost' ? (isLump ? 'pct' : 'qty') : 'cost';
+  let nextValue = '';
+  if (currentCost != null && unitPrice > 0) {
+    if (nextMode === 'cost') nextValue = currentCost.toFixed(2);
+    else if (nextMode === 'pct') nextValue = ((currentCost / unitPrice) * 100).toFixed(1);
+    else nextValue = String(Math.round((currentCost / unitPrice) * 1e6) / 1e6);
+  }
+  const inspectorCost = input.dataset.inspectorCost !== '' ? Number(input.dataset.inspectorCost) : null;
+  const rowEl = card.querySelector('.pac-field-input-row');
+  rowEl.innerHTML = payAppInputMarkup(input.dataset.item, isLump, unitPrice, inspectorCost, nextMode, nextValue);
+  rowEl.querySelector('.payapp-qty-input').addEventListener('input', updatePayAppDiffs);
+  btn.textContent = payAppModeToggleLabel(nextMode, isLump);
+  updatePayAppDiffs();
+});
+
 // A card's contractor-side dollar cost from its Pay App Total input's
 // current value -- null when there's nothing to compute it from (no Unit
 // Price on file, or the field's not a valid number), same "can't compute,
-// don't pretend to" rule as the rest of this app's earned-value math.
+// don't pretend to" rule as the rest of this app's earned-value math. $
+// mode needs no conversion at all -- the typed value already is the cost.
 function payAppRowContractorCost(input) {
   const v = Number(input.value);
   if (!isFinite(v) || input.value.trim() === '') return null;
+  if (input.dataset.mode === 'cost') return v;
   if (input.dataset.lumpPrice != null) return (v / 100) * Number(input.dataset.lumpPrice);
   const unitPrice = input.dataset.unitPrice;
   return unitPrice ? v * Number(unitPrice) : null;
@@ -738,11 +788,25 @@ $('#btn-record-estimate').addEventListener('click', async () => {
   $$('.payapp-qty-input').forEach((input) => {
     const v = input.value.trim();
     if (v === '') return;
-    // Lump Sum rows collect a percent (see renderPayAppItemsTable) --
-    // converted back to the dollar figure itemTotals actually stores here,
-    // the one place that needs to know the input was a percent at all.
-    const lumpPrice = input.dataset.lumpPrice;
-    itemTotals[input.dataset.item] = lumpPrice != null ? (Number(v) / 100) * Number(lumpPrice) : Number(v);
+    // itemTotals always stores the same convention regardless of which
+    // mode a row was actually entered in -- a dollar figure for Lump Sum
+    // (see earnedTotalFor), a plain quantity for everything else -- so
+    // this is the one place that needs to know whether the input held a
+    // percent, a raw quantity, or (the $-entry toggle) a dollar amount
+    // that still needs converting back to whichever of those two the item
+    // actually uses.
+    const isLump = input.dataset.lumpPrice != null;
+    const unitPrice = Number(isLump ? input.dataset.lumpPrice : input.dataset.unitPrice);
+    let stored;
+    if (input.dataset.mode === 'cost') {
+      const cost = Number(v);
+      stored = isLump ? cost : (unitPrice > 0 ? cost / unitPrice : null);
+    } else if (isLump) {
+      stored = (Number(v) / 100) * unitPrice; // pct mode
+    } else {
+      stored = Number(v); // qty mode
+    }
+    if (stored != null && isFinite(stored)) itemTotals[input.dataset.item] = stored;
   });
   if (!project.billingEstimates) project.billingEstimates = [];
   let savedEstimate;
