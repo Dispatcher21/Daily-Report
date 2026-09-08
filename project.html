@@ -509,14 +509,18 @@ function renderFilteredPayItems() {
     const band = completionBand(it.pct);
     const widthPct = it.pct == null ? 0 : Math.min(Math.max(it.pct, 0) * 100, 100);
     const pctLabel = it.pct == null ? '—' : `${(it.pct * 100).toFixed(1)}%`;
-    // Keyed off pct rather than planned: a Lump Sum item is deliberately kept
-    // out of % complete even if it does have a Per Plans Total on file (see
-    // quantity-calc.js), so it reads as plain usage here too, not a target
-    // it isn't actually being measured against.
-    const qtyLine = it.pct != null
-      ? `${it.total.toLocaleString()} of ${it.planned.toLocaleString()} ${it.unit || ''} planned`
-      : `${it.total.toLocaleString()} ${it.unit || ''} used — ${it.planned != null ? 'lump sum items aren\'t tracked toward a target' : 'no Per Plans Total on file'}`;
-    const moneyLine = it.unitPrice != null
+    // A Lump Sum item's pct is dollars earned vs. its contract value (see
+    // quantity-calc.js), not a quantity-vs-planned ratio -- shown as
+    // "$X of $Y billed" instead of the generic qty/planned phrasing, and
+    // moneyLine is skipped for it since that would just repeat the same two
+    // figures a second time.
+    const isLump = isLumpSumUnit(it.unit);
+    const qtyLine = isLump
+      ? (it.contractTotal != null ? `${fmtMoney(it.earnedTotal)} of ${fmtMoney(it.contractTotal)} billed` : `${it.total.toLocaleString()} ${it.unit || ''} used — no Unit Price on file to measure against`)
+      : it.pct != null
+        ? `${it.total.toLocaleString()} of ${it.planned.toLocaleString()} ${it.unit || ''} planned`
+        : `${it.total.toLocaleString()} ${it.unit || ''} used — no Per Plans Total on file`;
+    const moneyLine = (!isLump && it.unitPrice != null)
       ? ` &middot; ${fmtMoney(it.earnedTotal)} earned${it.contractTotal != null ? ' of ' + fmtMoney(it.contractTotal) : ''}`
       : '';
     const tip = `${qtyLine}.${it.unitPrice != null ? ' Unit price ' + fmtMoney(it.unitPrice) + '/' + (it.unit || 'unit') + '.' : ' No Unit Price on file.'}`;

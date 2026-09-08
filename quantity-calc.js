@@ -77,16 +77,30 @@ function aggregatePayItemTotals(flatItems, payItemCatalog) {
     // Theoretical Qty -- otherwise every entry's theoreticalQty is blank and
     // this would show a misleading "0 overrun" for items that never use it.
     const overrun = cat && cat.theoretical ? Math.round((total - totalTheoreticalQty.get(key)) * 1000) / 1000 : null;
+    const contractTotal = contractTotalFor(unit, planned, unitPrice);
+    const earnedTotal = earnedTotalFor(unit, total, unitPrice);
     return {
       itemNumber: meta.itemNumber,
       description: (cat && cat.description) || meta.description,
       unit,
       total,
       planned,
-      pct: planned != null && !isLumpSumUnit(unit) ? total / planned : null,
+      // A Lump Sum item's raw "quantity" was never on a physical scale worth
+      // comparing to a planned quantity (see contractTotalFor/earnedTotalFor)
+      // -- but its dollar earned-vs-contracted ratio is a perfectly real %
+      // complete, and now that a Pay App tracks Lump Sum billing precisely
+      // (percent-of-value entry, see quantity-sheet.html), there's an actual
+      // number to show here instead of leaving it permanently blank.
+      // overallPercentComplete (below) still excludes Lump Sum from the
+      // project-wide quantity-weighted average regardless of this -- that
+      // exclusion is about not mixing dollars into a physical-unit average,
+      // which this doesn't change.
+      pct: isLumpSumUnit(unit)
+        ? (contractTotal != null && contractTotal > 0 ? earnedTotal / contractTotal : null)
+        : (planned != null ? total / planned : null),
       unitPrice,
-      contractTotal: contractTotalFor(unit, planned, unitPrice),
-      earnedTotal: earnedTotalFor(unit, total, unitPrice),
+      contractTotal,
+      earnedTotal,
       overrun,
     };
   });
@@ -112,15 +126,19 @@ function fullPayItemCatalogOverview(flatItems, payItemCatalog) {
       if (hit) return hit;
       const planned = Number(cat.plannedQty) > 0 ? Number(cat.plannedQty) : null;
       const unitPrice = parsedUnitPrice(cat);
+      const contractTotal = contractTotalFor(cat.unit, planned, unitPrice);
+      // Untouched so far -- earnedTotal is trivially 0, so a Lump Sum item's
+      // $-based pct (see aggregatePayItemTotals' own comment) is just 0 as
+      // long as there's a contract value to measure 0 against.
       return {
         itemNumber: key,
         description: cat.description || '',
         unit: cat.unit || '',
         total: 0,
         planned,
-        pct: planned != null && !isLumpSumUnit(cat.unit) ? 0 : null,
+        pct: isLumpSumUnit(cat.unit) ? (contractTotal != null && contractTotal > 0 ? 0 : null) : (planned != null ? 0 : null),
         unitPrice,
-        contractTotal: contractTotalFor(cat.unit, planned, unitPrice),
+        contractTotal,
         earnedTotal: earnedTotalFor(cat.unit, 0, unitPrice),
         overrun: cat.theoretical ? 0 : null,
       };
