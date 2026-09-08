@@ -404,9 +404,30 @@ function renderTrendSvg(container, series, opts) {
   }).join('');
 
   const singlePlainSeries = series.length === 1 && !series[0].color;
+  const starRadius = daysMode ? 7 : singlePlainSeries ? 6 : 5;
+  // Two Pay Apps close together in time (a handful of days, on a chart
+  // spanning the project's whole history) land close enough in pixels that
+  // their star markers overlap into one unreadable blob -- indistinguishable
+  // from there only being one star at all. Declutters left to right: a star
+  // whose true x would land within one star-width of the previous (already
+  // placed) star gets nudged right just far enough to clear it. Only ever
+  // moves the marker, never the line itself (built from the true coords
+  // below), and the tooltip still names the real date either way.
+  const MIN_STAR_GAP = starRadius * 2 + 2;
+  function declutterStarX(coords, points) {
+    const starX = coords.map((c) => c[0]);
+    let lastX = -Infinity;
+    for (let i = 0; i < points.length; i++) {
+      if (!points[i].payApp) continue;
+      if (starX[i] - lastX < MIN_STAR_GAP) starX[i] = lastX + MIN_STAR_GAP;
+      lastX = starX[i];
+    }
+    return starX;
+  }
   const seriesSvg = series.map((s) => {
     const color = s.color || 'var(--brand)';
     const coords = s.points.map((p) => [xOf(p, s), y(p.pct)]);
+    const starXs = declutterStarX(coords, s.points);
     let pathSection = '';
     if (coords.length > 1) {
       const linePath = 'M' + coords.map((c) => c.join(',')).join(' L');
@@ -440,7 +461,7 @@ function renderTrendSvg(container, series, opts) {
       // the rarer, more significant event of the two, worth standing out
       // rather than blending into the noise-reduction rule made for dots.
       if (p.payApp) {
-        return `<polygon points="${starPoints(cx, cy, daysMode ? 7 : singlePlainSeries ? 6 : 5)}" class="trend-star">${titleTag}</polygon>`;
+        return `<polygon points="${starPoints(starXs[i], cy, starRadius)}" class="trend-star">${titleTag}</polygon>`;
       }
       // daysMode (the Manager Dashboard's multi-project chart) draws lines
       // only -- visible dots at every report date were noise once several

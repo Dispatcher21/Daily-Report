@@ -511,18 +511,29 @@ function renderEstimateHistory() {
     container.innerHTML = '<p class="hint" style="margin:0;">No estimates recorded yet.</p>';
     return;
   }
+  // Two Pay Apps sharing a date isn't just a display quirk -- the progress
+  // chart and dashboard math can only place one on that date, so whichever
+  // was saved last silently wins and the other's approved quantities never
+  // count toward anything (see progressOverTime, quantity-calc.js). Flagged
+  // here so it's visible from the list itself, not just discovered later as
+  // "why does the chart only have 5 stars."
+  const dateCounts = new Map();
+  (project.billingEstimates || []).forEach((e) => dateCounts.set(e.date, (dateCounts.get(e.date) || 0) + 1));
   container.innerHTML = `
     <table class="estimate-table">
       <thead><tr><th>Estimate</th><th>Date</th><th>Note</th><th></th><th></th></tr></thead>
       <tbody>
-        ${sorted.map((e) => `
+        ${sorted.map((e) => {
+          const dupeDate = dateCounts.get(e.date) > 1;
+          return `
           <tr${e.id === editingEstimateId ? ' class="est-editing"' : ''}>
             <td>${escapeHtml(e.estimateNo)}</td>
-            <td>${e.date}</td>
+            <td>${e.date}${dupeDate ? ` <span class="pill payapp-diff-over" data-tip="Another Pay App also uses this date -- only one of them actually counts toward the progress chart. Give one a different date to fix it." title="Shared with another Pay App">Shared date</span>` : ''}</td>
             <td>${escapeHtml(e.note || '')}</td>
             <td><button type="button" class="text-btn est-edit" data-id="${e.id}">Edit</button></td>
             <td><button type="button" class="text-btn est-remove" data-id="${e.id}" style="color:var(--danger);">&times;</button></td>
-          </tr>`).join('')}
+          </tr>`;
+        }).join('')}
       </tbody>
     </table>`;
   $$('.est-edit', container).forEach((btn) => {
@@ -783,6 +794,18 @@ $('#btn-record-estimate').addEventListener('click', async () => {
     $('#estimate-error').textContent = 'Pay App No. and Date are both required.';
     $('#estimate-error').hidden = false;
     return;
+  }
+  // See renderEstimateHistory's own comment -- a second Pay App on the same
+  // date isn't a cosmetic issue, it silently drops one of them from the
+  // progress chart and dashboard math entirely. Confirmed rather than just
+  // a passive warning, since it's easy to miss a one-line note and this is
+  // the one mistake here that isn't obviously recoverable later.
+  const dateCollision = (project.billingEstimates || []).find((e) => e.date === date && e.id !== editingEstimateId);
+  if (dateCollision) {
+    const ok = confirm(
+      `Pay App ${dateCollision.estimateNo} is already dated ${date}. Two Pay Apps on the same date can't both show on the progress chart -- only one will actually count toward it or the dashboard.\n\nSave with this date anyway?`
+    );
+    if (!ok) return;
   }
   const itemTotals = {};
   $$('.payapp-qty-input').forEach((input) => {
