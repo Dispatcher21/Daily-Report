@@ -453,6 +453,98 @@ function buildSheet2Images(report) {
   return imgs;
 }
 
+// ---------- Embedded photos -> Report.photos (inverse of buildSheet2Images) ----------
+// SheetJS's free build (lib/xlsx.min.js, what the rest of this importer runs
+// on) doesn't expose embedded images at all -- pulling them back out means
+// walking the .xlsx's own zip/OOXML relationships by hand: workbook.xml
+// names the Photo Log sheet, its .rels points at that sheet's drawing file,
+// the drawing places each picture at a starting cell, and ITS rels finally
+// point at the actual image bytes in xl/media/. Every step below is exact
+// (these are real spec'd relationships, not a guess at position), unlike
+// the PDF-import idea this was compared against -- there's no coordinate
+// calibration or fuzzy matching here, just following pointers.
+function rrColLetterToIndex(letters) {
+  let n = 0;
+  for (const ch of letters.toUpperCase()) n = n * 26 + (ch.charCodeAt(0) - 64);
+  return n - 1; // 0-based, to match a drawing anchor's own 0-based <xdr:col>
+}
+function rrParseCellRef(ref) {
+  const m = /^([A-Z]+)(\d+)$/.exec(ref);
+  return m ? { col: rrColLetterToIndex(m[1]), row: Number(m[2]) - 1 } : null;
+}
+function rrParseXmlRels(xmlText) {
+  const rels = {};
+  if (!xmlText) return rels;
+  const doc = new DOMParser().parseFromString(xmlText, 'application/xml');
+  doc.querySelectorAll('Relationship').forEach((el) => {
+    rels[el.getAttribute('Id')] = el.getAttribute('Target');
+  });
+  return rels;
+}
+// OOXML target paths are relative to the folder the referencing part lives
+// in ("../media/image1.jpeg" from xl/drawings/), not to the zip root.
+function rrResolveOoxmlPath(basePart, target) {
+  if (target.startsWith('/')) return target.slice(1);
+  const baseDir = basePart.split('/').slice(0, -1);
+  for (const seg of target.split('/')) {
+    if (seg === '..') baseDir.pop();
+    else if (seg !== '.') baseDir.push(seg);
+  }
+  return baseDir.join('/');
+}
+const RR_IMAGE_MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', bmp: 'image/bmp', webp: 'image/webp' };
+
+// Returns a sparse array (same shape as report.photos) of Blobs found
+// anchored at PHOTO_COORDS' cells on the given sheet name -- empty slots
+// stay undefined rather than null, so a caller can tell "this file has no
+// Photo Log sheet at all" (every slot undefined) apart from "it has the
+// sheet but this particular slot's photo box was left empty" (same thing,
+// but expected -- most reports don't fill all six).
+function extractEmbeddedPhotos(zipFiles, sheetName) {
+  const photos = [];
+  try {
+    const workbookXml = fflate.strFromU8(zipFiles['xl/workbook.xml'] || new Uint8Array());
+    const wbDoc = new DOMParser().parseFromString(workbookXml, 'application/xml');
+    const sheetEl = [...wbDoc.querySelectorAll('sheet')].find(
+      (el) => (el.getAttribute('name') || '').trim().toUpperCase() === sheetName
+    );
+    if (!sheetEl) return photos;
+    const sheetRid = sheetEl.getAttribute('r:id');
+    const wbRels = rrParseXmlRels(fflate.strFromU8(zipFiles['xl/_rels/workbook.xml.rels'] || new Uint8Array()));
+    const sheetPart = rrResolveOoxmlPath('xl/workbook.xml', wbRels[sheetRid]);
+
+    const sheetRelsPart = sheetPart.replace(/^(.*)\/([^/]+)$/, '$1/_rels/$2.rels');
+    const sheetRels = rrParseXmlRels(fflate.strFromU8(zipFiles[sheetRelsPart] || new Uint8Array()));
+    const drawingRid = Object.keys(sheetRels).find((rid) => sheetRels[rid].includes('drawing'));
+    if (!drawingRid) return photos;
+    const drawingPart = rrResolveOoxmlPath(sheetPart, sheetRels[drawingRid]);
+
+    const drawingRelsPart = drawingPart.replace(/^(.*)\/([^/]+)$/, '$1/_rels/$2.rels');
+    const drawingRels = rrParseXmlRels(fflate.strFromU8(zipFiles[drawingRelsPart] || new Uint8Array()));
+
+    const drawingDoc = new DOMParser().parseFromString(fflate.strFromU8(zipFiles[drawingPart] || new Uint8Array()), 'application/xml');
+    const targetCells = PHOTO_COORDS.map(rrParseCellRef);
+    drawingDoc.querySelectorAll('twoCellAnchor, oneCellAnchor').forEach((anchor) => {
+      const from = anchor.querySelector('from');
+      const blip = anchor.querySelector('blipFill blip, pic blipFill blip');
+      if (!from || !blip) return;
+      const col = Number(from.querySelector('col')?.textContent);
+      const row = Number(from.querySelector('row')?.textContent);
+      const slot = targetCells.findIndex((c) => c && c.col === col && c.row === row);
+      if (slot === -1) return;
+      const embedRid = blip.getAttribute('r:embed');
+      const imagePart = embedRid && drawingRels[embedRid] && rrResolveOoxmlPath(drawingPart, drawingRels[embedRid]);
+      const bytes = imagePart && zipFiles[imagePart];
+      if (!bytes) return;
+      const ext = imagePart.split('.').pop().toLowerCase();
+      photos[slot] = new Blob([bytes], { type: RR_IMAGE_MIME[ext] || 'application/octet-stream' });
+    });
+  } catch (err) {
+    console.error('extractEmbeddedPhotos:', err); // a photo log this can't fully parse just means no photos, not a failed import
+  }
+  return photos;
+}
+
 // ---------- Page assembly ----------
 
 let printLayoutPromise = null;

@@ -99,6 +99,7 @@
 </div>
 
 <script src="lib/xlsx.min.js"></script>
+<script src="lib/fflate.min.js"></script>
 <script src="common.js"></script>
 <script src="defaults.js"></script>
 <script src="storage.js"></script>
@@ -371,7 +372,7 @@ function renderEquipmentTab() {
 
 function renderImportReportsTab() {
   $('#ps-panel').innerHTML = `
-    <p class="hint" style="margin-top:0;">Upload Daily Work Report Excel files (one report per file, same layout this app prints) to load this project's existing report archive in. Every field comes straight from each file -- nothing here is backfilled from Project Info above.</p>
+    <p class="hint" style="margin-top:0;">Upload Daily Work Report Excel files (one report per file, same layout this app prints) to load this project's existing report archive in. Every field comes straight from each file -- nothing here is backfilled from Project Info above. Photos embedded in the Photo Log sheet come in too.</p>
     <div class="uz" id="uz-import-reports">
       <input type="file" id="f-import-reports" accept=".xlsx" multiple>
       <span class="uz-icon">&#128193;</span>
@@ -384,15 +385,27 @@ function renderImportReportsTab() {
 }
 
 async function parseReportExcelFile(file) {
-  const wb = await readWorkbookFromFile(file);
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const wb = XLSX.read(bytes, { type: 'array', cellDates: false });
   const ws = findSheet(wb, 'DAILY WORK REPORT');
   if (!ws) throw new Error('No "Daily Work Report" sheet found in this file.');
   const fields = parseDailyWorkReportSheet(ws);
   if (!fields.reportNo && !fields.date) throw new Error('No Report No. or Date found -- can\'t identify this report.');
-  return fields;
+  // Best-effort, separate from the fields parse above -- a Photo Log sheet
+  // this app's own relationship-chasing can't fully make sense of just
+  // means no photos come in with this report, not a failed import (see
+  // extractEmbeddedPhotos' own comment).
+  let photos = [];
+  try {
+    const zipFiles = fflate.unzipSync(bytes);
+    photos = extractEmbeddedPhotos(zipFiles, 'DAILY_PHOTO_LOG');
+  } catch (err) {
+    console.error('photo extraction:', err);
+  }
+  return { fields, photos };
 }
 
-function reportFromImportedFields(fields, forProject) {
+function reportFromImportedFields(fields, photos, forProject) {
   return {
     id: crypto.randomUUID(),
     projectId: forProject.id,
@@ -428,7 +441,7 @@ function reportFromImportedFields(fields, forProject) {
     weatherDesc: fields.weatherDesc,
     tempHigh: fields.tempHigh,
     tempLow: fields.tempLow,
-    photos: [null, null, null, null, null, null],
+    photos: Array.from({ length: 6 }, (_, i) => photos[i] || null),
     photosFetched: [true, true, true, true, true, true],
     signatureFetched: true,
     thumbnail: null,
@@ -459,13 +472,18 @@ async function handleImportReportsChange(e) {
     const file = files[i];
     progress.textContent = `Importing ${i + 1} of ${files.length}...`;
     try {
-      const fields = await parseReportExcelFile(file);
-      const report = reportFromImportedFields(fields, project);
+      const { fields, photos } = await parseReportExcelFile(file);
+      // Same size-capping every manually-uploaded photo already gets
+      // (report-editor.html) -- an imported archive is exactly the case
+      // this matters most for, since it's the one path that can add
+      // hundreds of full-size camera JPEGs to local storage/sync in one go.
+      const compressedPhotos = await Promise.all(photos.map((p) => (p ? compressImage(p) : null)));
+      const report = reportFromImportedFields(fields, compressedPhotos, project);
       const key = String(report.reportNo ?? '').trim();
       const isDupe = key !== '' && existingReportNos.has(key);
       await saveReport(report);
       if (key !== '') existingReportNos.add(key);
-      imported.push({ file: file.name, reportNo: report.reportNo, dupe: isDupe });
+      imported.push({ file: file.name, reportNo: report.reportNo, dupe: isDupe, photoCount: photos.filter(Boolean).length });
     } catch (err) {
       errors.push(`${file.name}: ${err.message}`);
     }
@@ -473,8 +491,11 @@ async function handleImportReportsChange(e) {
 
   progress.hidden = true;
   const dupeCount = imported.filter((r) => r.dupe).length;
+  const photoTotal = imported.reduce((sum, r) => sum + r.photoCount, 0);
   results.innerHTML = `
     <p class="hint" style="margin-top:0;">Imported ${imported.length} of ${files.length}${
+      photoTotal ? `, ${photoTotal} photo(s) pulled in with them` : ''
+    }${
       dupeCount ? ` &mdash; ${dupeCount} flagged as a duplicate Report No. (opening one in the editor shows the same conflict warning as always)` : ''
     }.</p>
     ${errors.length ? `<p class="hint" style="color:var(--danger); margin-bottom:0.3rem;">${errors.length} file(s) couldn't be imported:</p>
