@@ -225,6 +225,7 @@ const ERROR_CODES = {
   SAVE_QUANTITIES: 'ARCEE',
   BUILD_PDF: 'MEGATRON',
   REFRESH_REPORTS: 'BLURR',
+  IMPORT_REPORT_SYNC: 'SHOCKWAVE',
 };
 
 // Appends a reference code to a user-facing error message -- use for every

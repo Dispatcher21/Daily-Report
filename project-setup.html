@@ -428,12 +428,23 @@ async function handleImportReportsChange(e) {
       await saveReport(report);
       if (key !== '') existingReportNos.add(key);
       const photoCount = photos.filter(Boolean).length;
-      imported.push({ file: file.name, reportNo: report.reportNo, dupe: isDupe, photoCount });
+      // saveReport already fired its own fire-and-forget sync push, but a
+      // 150-file batch is exactly the case where a handful of those can
+      // fail silently to the console and never be seen -- confirming (with
+      // retries) here means a failure shows up in this file's own log row
+      // instead of only as a mismatched report count on some other device,
+      // weeks later.
+      const synced = await confirmReportPushed(report);
+      imported.push({ file: file.name, reportNo: report.reportNo, dupe: isDupe, photoCount, synced });
+      const detail = [`#${report.reportNo}`];
+      if (photoCount) detail.push(`${photoCount} photo${photoCount === 1 ? '' : 's'}`);
+      if (isDupe) detail.push('duplicate Report No.');
+      if (!synced) detail.push('cloud sync failed — retry with Refresh on Company Management');
       log.appendChild(irLogRow(
-        isDupe ? 'ir-dupe' : 'ir-ok',
-        isDupe ? '⚠' : '✓',
+        !synced ? 'ir-syncfail' : (isDupe ? 'ir-dupe' : 'ir-ok'),
+        !synced ? '⚠' : (isDupe ? '⚠' : '✓'),
         file.name,
-        `#${report.reportNo}${photoCount ? `, ${photoCount} photo${photoCount === 1 ? '' : 's'}` : ''}${isDupe ? ' — duplicate Report No.' : ''}`
+        detail.join(', ')
       ));
     } catch (err) {
       errors.push(`${file.name}: ${err.message}`);
@@ -443,9 +454,12 @@ async function handleImportReportsChange(e) {
   }
 
   const dupeCount = imported.filter((r) => r.dupe).length;
+  const syncFailCount = imported.filter((r) => !r.synced).length;
   const photoTotal = imported.reduce((sum, r) => sum + r.photoCount, 0);
   if (errors.length) {
     progressBannerError(userError(`${errors.length} of ${files.length} file(s) couldn't be imported -- see the list below.`, 'IMPORT_REPORT_BUNDLES'));
+  } else if (syncFailCount) {
+    progressBannerError(userError(`Imported ${imported.length} report(s), but ${syncFailCount} didn't make it to the company after retrying -- run Refresh on Company Management to finish syncing them.`, 'IMPORT_REPORT_SYNC'));
   } else {
     finishProgressBanner(`Imported ${imported.length} report(s)${photoTotal ? `, ${photoTotal} photo(s)` : ''}.`);
   }
@@ -456,6 +470,7 @@ async function handleImportReportsChange(e) {
     }${
       dupeCount ? ` &mdash; ${dupeCount} flagged as a duplicate Report No. (opening one in the editor shows the same conflict warning as always)` : ''
     }.</p>
+    ${syncFailCount ? `<p class="hint" style="color:var(--warn); margin-bottom:0.3rem;">${syncFailCount} saved locally but didn't sync to the company after retrying -- run <strong>Refresh</strong> on Company Management once this finishes to pick them back up (they're already listed above, flagged).</p>` : ''}
     ${errors.length ? `<p class="hint" style="color:var(--danger); margin-bottom:0.3rem;">${errors.length} file(s) couldn't be imported:</p>
     <ul class="hint" style="margin:0; padding-left:1.2rem;">${errors.map((msg) => `<li>${escapeHtml(msg)}</li>`).join('')}</ul>` : ''}
   `;

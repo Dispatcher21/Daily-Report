@@ -232,18 +232,23 @@ body {
 }
 .ir-log[hidden] { display: none; }
 .ir-log-row {
-  display: flex; align-items: baseline; gap: 0.5rem;
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.15rem 0.5rem;
   padding: 0.3rem 0.6rem; font-size: 0.8rem; border-bottom: 1px solid var(--border);
 }
 .ir-log-row:last-child { border-bottom: none; }
 .ir-log-icon { flex: 0 0 auto; width: 1rem; text-align: center; font-weight: 700; }
 .ir-log-row.ir-ok .ir-log-icon { color: var(--ok); }
 .ir-log-row.ir-dupe .ir-log-icon { color: var(--warn); }
+.ir-log-row.ir-syncfail .ir-log-icon { color: var(--warn); }
 .ir-log-row.ir-error .ir-log-icon { color: var(--danger); }
 .ir-log-file {
   flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.ir-log-detail { flex: 0 0 auto; color: var(--text-dim); }
+/* Always its own line under the icon/filename (flex-basis 100% forces the
+   wrap) -- a short "#187, 6 photos" looked fine crammed onto one line, but
+   a sync-failure message is long enough that forcing it there just meant
+   the whole row scrolled sideways to read it. */
+.ir-log-detail { flex: 1 1 100%; color: var(--text-dim); white-space: normal; word-break: break-word; }
 
 /* Company logo, shown in the header only once the app is installed (added to
    the home screen) -- a browser tab already has its own favicon, so this is

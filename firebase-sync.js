@@ -1304,16 +1304,61 @@ async function pushAllLocalData(code, onProgress) {
 // auto-sync toggle -- the point of a shared room is that the team stays in
 // sync without a manual step, so there's no "off" setting here.
 
+// A transient network hiccup is exactly what turned a ~150-report Excel
+// import into "half of them never made it to the company": each save fires
+// its sync hook once, fire-and-forget (storage.js never awaits it), so one
+// failed attempt had no second chance and failed silently to the console --
+// the local save looked completely fine on the device that ran the import,
+// while every other device pulling from the company was just quietly
+// missing whatever didn't make it. A few retries with a short backoff
+// catches most of that without adding real latency to the normal
+// one-report-at-a-time case; a genuine outage still fails after these, same
+// as before, and callers that need to know (a bulk import's own log, below)
+// still see the final failure.
+async function withSyncRetry(fn, attempts = 3, baseDelayMs = 400) {
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (i < attempts - 1) await new Promise((resolve) => setTimeout(resolve, baseDelayMs * (i + 1)));
+    }
+  }
+  throw lastErr;
+}
+
 async function onCompanySyncProjectChanged(project, deleted) {
   const room = await getCompanyRoom();
   if (!room) return;
-  if (deleted) await deleteProjectFromCompany(room.code, project);
-  else await pushProjectToCompany(room.code, project);
+  if (deleted) await withSyncRetry(() => deleteProjectFromCompany(room.code, project));
+  else await withSyncRetry(() => pushProjectToCompany(room.code, project));
 }
 
 async function onCompanySyncReportChanged(report, deleted) {
   const room = await getCompanyRoom();
   if (!room) return;
-  if (deleted) await deleteReportFromCompany(room.code, report);
-  else await pushReportToCompany(room.code, report);
+  if (deleted) await withSyncRetry(() => deleteReportFromCompany(room.code, report));
+  else await withSyncRetry(() => pushReportToCompany(room.code, report));
+}
+
+// Used by bulk report imports (project-setup.html's Import Reports tab,
+// project.html's own upload zone) to know -- per report, right when it
+// happens -- whether its cloud copy actually landed, instead of trusting
+// the same fire-and-forget hook above and only finding out much later that
+// a chunk silently didn't. saveReport already fires that hook too, so this
+// duplicates the push for a report that succeeds the first time -- an
+// acceptable trade for a one-time bulk operation where actually knowing
+// matters more than saving one redundant round trip. A local-only device
+// (no company joined) has nothing to confirm, so this is trivially true.
+async function confirmReportPushed(report) {
+  const room = await getCompanyRoom();
+  if (!room) return true;
+  try {
+    await withSyncRetry(() => pushReportToCompany(room.code, report));
+    return true;
+  } catch (err) {
+    console.error('confirmReportPushed:', err);
+    return false;
+  }
 }
