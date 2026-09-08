@@ -378,7 +378,7 @@ function renderImportReportsTab() {
       <span class="uz-icon">&#128193;</span>
       <span class="uz-lbl">Upload Daily Work Report Excel File(s)</span>
     </div>
-    <p class="hint" id="ir-progress" hidden style="margin-bottom:0;"></p>
+    <div id="ir-log" class="ir-log" hidden></div>
     <div id="ir-results"></div>
   `;
   $('#f-import-reports').addEventListener('change', handleImportReportsChange);
@@ -386,16 +386,17 @@ function renderImportReportsTab() {
 
 // parseReportExcelFile and reportFromImportedFields live in render-report.js
 // -- shared with project.html's own Import Reports upload zone, which takes
-// these same files now too.
+// these same files now too. irLogRow (below) is the same one that zone uses.
 
 async function handleImportReportsChange(e) {
   const files = Array.from(e.target.files || []);
   e.target.value = '';
   if (files.length === 0) return;
 
-  const progress = $('#ir-progress');
+  const log = $('#ir-log');
   const results = $('#ir-results');
-  progress.hidden = false;
+  log.hidden = false;
+  log.innerHTML = '';
   results.innerHTML = '';
 
   const imported = [];
@@ -404,9 +405,16 @@ async function handleImportReportsChange(e) {
     (await getReportsForProject(project.id)).map((r) => String(r.reportNo ?? '').trim()).filter(Boolean)
   );
 
+  // Same global banner every join/sync/create-company flow already uses
+  // (see reportCompanyProgress in common.js) -- one line, ticking through
+  // "X of Y" rather than a fresh row per file, since a 150-file batch
+  // would otherwise turn the banner itself into the very wall of text
+  // it's meant to replace. The per-file detail (which file, pass/fail,
+  // duplicate or not) is what the log list below is for.
+  startProgressBanner();
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
-    progress.textContent = `Importing ${i + 1} of ${files.length}...`;
+    progressStep('import-reports', 'Importing reports', `${i + 1} of ${files.length}`);
     try {
       const { fields, photos } = await parseReportExcelFile(file);
       // Same size-capping every manually-uploaded photo already gets
@@ -419,15 +427,29 @@ async function handleImportReportsChange(e) {
       const isDupe = key !== '' && existingReportNos.has(key);
       await saveReport(report);
       if (key !== '') existingReportNos.add(key);
-      imported.push({ file: file.name, reportNo: report.reportNo, dupe: isDupe, photoCount: photos.filter(Boolean).length });
+      const photoCount = photos.filter(Boolean).length;
+      imported.push({ file: file.name, reportNo: report.reportNo, dupe: isDupe, photoCount });
+      log.appendChild(irLogRow(
+        isDupe ? 'ir-dupe' : 'ir-ok',
+        isDupe ? '⚠' : '✓',
+        file.name,
+        `#${report.reportNo}${photoCount ? `, ${photoCount} photo${photoCount === 1 ? '' : 's'}` : ''}${isDupe ? ' — duplicate Report No.' : ''}`
+      ));
     } catch (err) {
       errors.push(`${file.name}: ${err.message}`);
+      log.appendChild(irLogRow('ir-error', '✗', file.name, err.message));
     }
+    log.scrollTop = log.scrollHeight;
   }
 
-  progress.hidden = true;
   const dupeCount = imported.filter((r) => r.dupe).length;
   const photoTotal = imported.reduce((sum, r) => sum + r.photoCount, 0);
+  if (errors.length) {
+    progressBannerError(userError(`${errors.length} of ${files.length} file(s) couldn't be imported -- see the list below.`, 'IMPORT_REPORT_BUNDLES'));
+  } else {
+    finishProgressBanner(`Imported ${imported.length} report(s)${photoTotal ? `, ${photoTotal} photo(s)` : ''}.`);
+  }
+
   results.innerHTML = `
     <p class="hint" style="margin-top:0;">Imported ${imported.length} of ${files.length}${
       photoTotal ? `, ${photoTotal} photo(s) pulled in with them` : ''

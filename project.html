@@ -165,6 +165,7 @@
           <span class="uz-hint">.report or Daily Work Report .xlsx &mdash; one or more</span>
           <span class="uz-fname" id="fn-import-reports"></span>
         </div>
+        <div id="ir-log" class="ir-log" hidden></div>
       </div>
     </div>
     </div>
@@ -776,7 +777,11 @@ $('#f-reupload').addEventListener('change', async (e) => {
 //
 // `confirmOverwrite` is a parameter (defaulting to the real confirm()
 // dialog) so tests can drive the merge decision without a real dialog.
-async function importReportFilesIntoProject(files, confirmOverwrite = (msg) => confirm(msg)) {
+// `onFileDone(file, outcome)` -- outcome one of 'added'/'overwritten'/
+// 'skipped'/'error' plus whatever detail applies -- is how the real UI
+// handler below drives its live per-file log; omitted (and the global
+// progress banner left untouched) when this is called from a test.
+async function importReportFilesIntoProject(files, confirmOverwrite = (msg) => confirm(msg), onFileDone = null) {
   const existingReports = await getReportsForProject(project.id);
   const existingByNo = new Map(existingReports.filter((r) => r.reportNo != null).map((r) => [String(r.reportNo), r]));
 
@@ -785,7 +790,10 @@ async function importReportFilesIntoProject(files, confirmOverwrite = (msg) => c
   let skipped = 0;
   const errors = [];
 
-  for (const file of files) {
+  if (onFileDone) startProgressBanner();
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    if (onFileDone) progressStep('import-reports', 'Importing reports', `${i + 1} of ${files.length}`);
     try {
       let incoming;
       const bundle = await tryParseReportBundle(file);
@@ -810,10 +818,11 @@ async function importReportFilesIntoProject(files, confirmOverwrite = (msg) => c
         );
         if (!ok) {
           skipped++;
+          if (onFileDone) onFileDone(file, { status: 'skipped', reportNo: incoming.reportNo });
           continue;
         }
         incoming.id = existing.id;
-        incoming.photos = (incoming.photos || []).map((p, i) => p || (existing.photos && existing.photos[i]) || null);
+        incoming.photos = (incoming.photos || []).map((p, i2) => p || (existing.photos && existing.photos[i2]) || null);
         incoming.repSignatureImage = incoming.repSignatureImage || existing.repSignatureImage;
         incoming.createdAt = existing.createdAt;
         overwritten++;
@@ -825,9 +834,25 @@ async function importReportFilesIntoProject(files, confirmOverwrite = (msg) => c
       normalizeReport(incoming);
       await saveReport(incoming);
       existingByNo.set(String(incoming.reportNo), incoming);
+      if (onFileDone) {
+        onFileDone(file, {
+          status: existing ? 'overwritten' : 'added',
+          reportNo: incoming.reportNo,
+          photoCount: (incoming.photos || []).filter(Boolean).length,
+        });
+      }
     } catch (err) {
       console.error(err);
       errors.push(`${file.name}: ${err.message}`);
+      if (onFileDone) onFileDone(file, { status: 'error', error: err.message });
+    }
+  }
+
+  if (onFileDone) {
+    if (errors.length) {
+      progressBannerError(userError(`${errors.length} of ${files.length} file(s) couldn't be imported -- see the list below.`, 'IMPORT_REPORT_BUNDLES'));
+    } else {
+      finishProgressBanner(`${added} added, ${overwritten} overwritten, ${skipped} skipped.`);
     }
   }
 
@@ -839,7 +864,20 @@ $('#f-import-reports').addEventListener('change', async (e) => {
   e.target.value = '';
   if (files.length === 0) return;
 
-  const { added, overwritten, skipped, errors } = await importReportFilesIntoProject(files);
+  const log = $('#ir-log');
+  log.hidden = false;
+  log.innerHTML = '';
+  const onFileDone = (file, outcome) => {
+    const detail = outcome.status === 'error' ? outcome.error
+      : outcome.status === 'skipped' ? `#${outcome.reportNo} — skipped`
+      : `#${outcome.reportNo}${outcome.photoCount ? `, ${outcome.photoCount} photo${outcome.photoCount === 1 ? '' : 's'}` : ''}${outcome.status === 'overwritten' ? ' — overwritten' : ''}`;
+    const cls = outcome.status === 'error' ? 'ir-error' : outcome.status === 'skipped' ? 'ir-dupe' : 'ir-ok';
+    const icon = outcome.status === 'error' ? '✗' : outcome.status === 'skipped' ? '⚠' : '✓';
+    log.appendChild(irLogRow(cls, icon, file.name, detail));
+    log.scrollTop = log.scrollHeight;
+  };
+
+  const { added, overwritten, skipped, errors } = await importReportFilesIntoProject(files, undefined, onFileDone);
 
   $('#uz-import-reports').classList.add('has');
   $('#fn-import-reports').textContent = files.length === 1 ? files[0].name : `${files.length} files`;

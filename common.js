@@ -142,6 +142,24 @@ function hideProgressBanner() {
   if (el) el.hidden = true;
 }
 
+// One line in a live-updating per-item log -- the report-import batch (see
+// project-setup.html's Import Reports tab and project.html's own upload
+// zone) is the first user, but generic enough for anything that processes
+// a list of files/records one at a time and wants each one to show up as
+// it finishes rather than only in a summary at the end. `cls` picks the
+// status color via CSS (ir-ok/ir-dupe/ir-error); user-derived text (a file
+// name, an error message) goes in through textContent, never the row's own
+// innerHTML, so it can never be read back as markup.
+function irLogRow(cls, icon, label, detail) {
+  const row = document.createElement('div');
+  row.className = `ir-log-row ${cls}`;
+  row.innerHTML = '<span class="ir-log-icon"></span><span class="ir-log-file"></span><span class="ir-log-detail"></span>';
+  row.querySelector('.ir-log-icon').textContent = icon;
+  row.querySelector('.ir-log-file').textContent = label;
+  row.querySelector('.ir-log-detail').textContent = detail || '';
+  return row;
+}
+
 // Feeds firebase-sync.js's {phase, index, total, count} progress shape
 // (used by join/create/sync/change-company-password) into the banner --
 // one mapping, reused by every flow that reports progress this way, so

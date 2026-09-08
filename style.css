@@ -222,6 +222,29 @@ body {
   cursor: pointer; padding: 0 0.1rem; flex-shrink: 0;
 }
 
+/* A live per-file log (report import batches, so far) -- rows append as
+   each file finishes rather than only summarizing at the end, and the
+   list scrolls its own overflow so a 150-file batch doesn't turn into a
+   150-row-tall page. */
+.ir-log {
+  max-height: 260px; overflow-y: auto; margin-top: 0.6rem;
+  border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface);
+}
+.ir-log[hidden] { display: none; }
+.ir-log-row {
+  display: flex; align-items: baseline; gap: 0.5rem;
+  padding: 0.3rem 0.6rem; font-size: 0.8rem; border-bottom: 1px solid var(--border);
+}
+.ir-log-row:last-child { border-bottom: none; }
+.ir-log-icon { flex: 0 0 auto; width: 1rem; text-align: center; font-weight: 700; }
+.ir-log-row.ir-ok .ir-log-icon { color: var(--ok); }
+.ir-log-row.ir-dupe .ir-log-icon { color: var(--warn); }
+.ir-log-row.ir-error .ir-log-icon { color: var(--danger); }
+.ir-log-file {
+  flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ir-log-detail { flex: 0 0 auto; color: var(--text-dim); }
+
 /* Company logo, shown in the header only once the app is installed (added to
    the home screen) -- a browser tab already has its own favicon, so this is
    reserved for the "feels like a real app" moment. */
