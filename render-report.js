@@ -463,11 +463,10 @@ function buildSheet2Images(report) {
 // (these are real spec'd relationships, not a guess at position), unlike
 // the PDF-import idea this was compared against -- there's no coordinate
 // calibration or fuzzy matching here, just following pointers.
-function rrColLetterToIndex(letters) {
-  let n = 0;
-  for (const ch of letters.toUpperCase()) n = n * 26 + (ch.charCodeAt(0) - 64);
-  return n - 1; // 0-based, to match a drawing anchor's own 0-based <xdr:col>
-}
+// rrColLetterToIndex already exists above (this file's own grid geometry
+// helpers) -- reused here rather than redeclared, since redeclaring it
+// silently shadows the original for everyone (this file learned that
+// lesson once already, see the rr* naming note up top).
 function rrParseCellRef(ref) {
   const m = /^([A-Z]+)(\d+)$/.exec(ref);
   return m ? { col: rrColLetterToIndex(m[1]), row: Number(m[2]) - 1 } : null;
@@ -543,6 +542,83 @@ function extractEmbeddedPhotos(zipFiles, sheetName) {
     console.error('extractEmbeddedPhotos:', err); // a photo log this can't fully parse just means no photos, not a failed import
   }
   return photos;
+}
+
+// ---------- Whole-file entry point ----------
+// Shared by both places a Daily Work Report Excel file can be brought in --
+// project-setup.html's own Import Reports tab (a dedicated bulk loader) and
+// project.html's Import Reports upload zone (originally .report bundles
+// only, now takes either kind so there's one drop target instead of two).
+// Fields and photos together, since a caller always wants both.
+async function parseReportExcelFile(file) {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const wb = XLSX.read(bytes, { type: 'array', cellDates: false });
+  const ws = findSheet(wb, 'DAILY WORK REPORT');
+  if (!ws) throw new Error('No "Daily Work Report" sheet found in this file.');
+  const fields = parseDailyWorkReportSheet(ws);
+  if (!fields.reportNo && !fields.date) throw new Error('No Report No. or Date found -- can\'t identify this report.');
+  // Best-effort, separate from the fields parse above -- a Photo Log sheet
+  // this app's own relationship-chasing can't fully make sense of just
+  // means no photos come in with this report, not a failed import.
+  let photos = [];
+  try {
+    const zipFiles = fflate.unzipSync(bytes);
+    photos = extractEmbeddedPhotos(zipFiles, 'DAILY_PHOTO_LOG');
+  } catch (err) {
+    console.error('photo extraction:', err);
+  }
+  return { fields, photos };
+}
+
+// Builds a full report record from parseReportExcelFile's output. `photos`
+// is passed in separately (rather than read off `fields`) so a caller can
+// run them through compressImage() first -- this function itself has no
+// opinion on that, just slots in whatever it's given.
+function reportFromImportedFields(fields, photos, forProject) {
+  return {
+    id: crypto.randomUUID(),
+    projectId: forProject.id,
+    companyCode: forProject.companyCode || null,
+    reportNo: fields.reportNo,
+    date: fields.date,
+    hours: fields.hours,
+    timeEntries: [{ start: '', end: '' }],
+    activity: fields.activity,
+    notes: fields.notes,
+    peName: fields.peName,
+    projectNo: fields.projectNo,
+    projectName: fields.projectName,
+    representative: fields.representative,
+    ntpDate: fields.ntpDate,
+    contractors: fields.contractors,
+    equipmentRows: fields.equipmentRows,
+    workSummaryHeader: fields.workSummaryHeader,
+    trafficControlNote: fields.trafficControlNote,
+    workSummary: fields.workSummary,
+    payItems: fields.payItems,
+    controllingItem: fields.controllingItem,
+    commentsOnTime: fields.commentsOnTime,
+    controllingItemTimeFrom: fields.controllingItemTimeFrom,
+    controllingItemTimeTo: fields.controllingItemTimeTo,
+    workingConditions: fields.workingConditions,
+    trafficControlSelect: fields.trafficControlSelect,
+    workBegin: fields.workBegin,
+    workEnd: fields.workEnd,
+    repSignatureName: fields.repSignatureName,
+    repSignatureImage: null,
+    peSignatureName: fields.peSignatureName,
+    weatherDesc: fields.weatherDesc,
+    tempHigh: fields.tempHigh,
+    tempLow: fields.tempLow,
+    photos: Array.from({ length: 6 }, (_, i) => (photos && photos[i]) || null),
+    photosFetched: [true, true, true, true, true, true],
+    signatureFetched: true,
+    thumbnail: null,
+    thumbnailBack: null,
+    thumbnailAt: null,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
 }
 
 // ---------- Page assembly ----------

@@ -155,14 +155,14 @@
       <div class="step-header">
         <span class="step-num">IMPORT</span>
         <h2>Import Reports</h2>
-        <button type="button" class="info-tip" data-tip="Bring in .report files -- from Sync Selected on the Reports page, or from elsewhere -- and merge them into this project. Select as many at once as you like. Any project info inside the file itself is ignored; only its report data is used. If a report with the same Report No. already exists here, you'll be asked before it's overwritten (its photos and signature are kept either way)." aria-label="What this does">i</button>
+        <button type="button" class="info-tip" data-tip="Bring in .report files (from Sync Selected on the Reports page, or from elsewhere) and Daily Work Report Excel files (this app's own printed layout) and merge them into this project. Select as many of either kind at once as you like. Any project info inside a file is ignored; only its report data is used. If a report with the same Report No. already exists here, you'll be asked before it's overwritten -- for a .report file its photos/signature are kept either way, for an Excel file whichever side (existing or incoming) actually has photos wins." aria-label="What this does">i</button>
       </div>
       <div class="step-body">
         <div class="uz" id="uz-import-reports">
-          <input type="file" id="f-import-reports" accept=".report" multiple>
+          <input type="file" id="f-import-reports" accept=".report,.xlsx" multiple>
           <span class="uz-icon">&#128196;</span>
           <span class="uz-lbl">Import Report Files</span>
-          <span class="uz-hint">.report &mdash; one or more</span>
+          <span class="uz-hint">.report or Daily Work Report .xlsx &mdash; one or more</span>
           <span class="uz-fname" id="fn-import-reports"></span>
         </div>
       </div>
@@ -181,6 +181,7 @@
 <script src="audit-log.js"></script>
 <script src="project-file.js"></script>
 <script src="report-bundle.js"></script>
+<script src="render-report.js"></script>
 <script src="quantity-calc.js"></script>
 <script src="dashboard-widgets.js"></script>
 <script type="module" src="firebase-init.js"></script>
@@ -756,14 +757,22 @@ $('#f-reupload').addEventListener('change', async (e) => {
   }
 });
 
-// Merges .report bundles into THIS project regardless of which project
-// their embedded project.json names -- you're already looking at the
-// project you want them in, so that's used instead. Only the bundle's
-// report data is read; mergeProjectRecord is deliberately never called
-// here. A report already on file for the same Report No. is only touched
-// after `confirmOverwrite` approves it, and even then its photos/signature
-// carry over from the existing report rather than being wiped by an
-// incoming file that (typically) has none of its own.
+// Merges .report bundles AND Daily Work Report Excel files into THIS
+// project regardless of which project a .report's embedded project.json
+// names -- you're already looking at the project you want them in, so
+// that's used instead. Only ever report data, never project data;
+// mergeProjectRecord is deliberately never called here. Each file is
+// content-sniffed rather than trusted by extension (tryParseReportBundle
+// returns null for anything that isn't actually one of this app's own
+// bundles, .xlsx included, so it's safe to just try that first and fall
+// back to the Excel parser).
+//
+// A report already on file for the same Report No. is only touched after
+// `confirmOverwrite` approves it, and even then a photo slot the incoming
+// file leaves empty keeps whatever the existing report already had there
+// rather than being cleared -- the old assumption that an incoming file
+// "typically" has no photos of its own doesn't hold for an Excel import
+// the way it did for a selectively-synced .report bundle.
 //
 // `confirmOverwrite` is a parameter (defaulting to the real confirm()
 // dialog) so tests can drive the merge decision without a real dialog.
@@ -778,26 +787,34 @@ async function importReportFilesIntoProject(files, confirmOverwrite = (msg) => c
 
   for (const file of files) {
     try {
+      let incoming;
       const bundle = await tryParseReportBundle(file);
-      if (!bundle) {
-        errors.push(`${file.name}: not a .report bundle`);
-        continue;
+      if (bundle) {
+        incoming = bundle.report;
+      } else {
+        let parsed;
+        try {
+          parsed = await parseReportExcelFile(file);
+        } catch (err) {
+          throw new Error(`not a .report bundle or a recognized Daily Work Report Excel file (${err.message})`);
+        }
+        const compressedPhotos = await Promise.all(parsed.photos.map((p) => (p ? compressImage(p) : null)));
+        incoming = reportFromImportedFields(parsed.fields, compressedPhotos, project);
       }
-      const incoming = bundle.report;
       const existing = existingByNo.get(String(incoming.reportNo));
 
       if (existing) {
         const label = `Report #${incoming.reportNo}${incoming.date ? ' (' + incoming.date + ')' : ''}`;
         const ok = confirmOverwrite(
-          `${label} already exists in this project (currently dated ${existing.date || 'undated'}).\n\nOverwrite it with the imported data? Existing photos and signature are kept either way.`
+          `${label} already exists in this project (currently dated ${existing.date || 'undated'}).\n\nOverwrite it with the imported data? A photo slot the incoming file leaves empty keeps the existing report's photo there instead of being cleared.`
         );
         if (!ok) {
           skipped++;
           continue;
         }
         incoming.id = existing.id;
-        incoming.photos = existing.photos;
-        incoming.repSignatureImage = existing.repSignatureImage;
+        incoming.photos = (incoming.photos || []).map((p, i) => p || (existing.photos && existing.photos[i]) || null);
+        incoming.repSignatureImage = incoming.repSignatureImage || existing.repSignatureImage;
         incoming.createdAt = existing.createdAt;
         overwritten++;
       } else {
