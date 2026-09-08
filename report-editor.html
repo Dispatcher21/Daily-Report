@@ -835,6 +835,11 @@ function renderEditor() {
 
   if ($('#btn-fetch-weather')) $('#btn-fetch-weather').addEventListener('click', fetchWeatherForReport);
 
+  // Leaves for the Reports list right after a successful save (same as
+  // Delete already does) instead of leaving the editor sitting open on a
+  // just-saved report -- staying here was exactly the state someone could
+  // come back to later, not realize they were still on an old report, and
+  // save over it without meaning to.
   $('#btn-save-report').onclick = async () => {
     const btn = $('#btn-save-report');
     const status = $('#save-status');
@@ -843,8 +848,7 @@ function renderEditor() {
     status.classList.remove('save-status-err');
     try {
       await commitSave();
-      status.textContent = 'Saved';
-      setTimeout(() => { if (!reportDirty) status.textContent = ''; }, 2000);
+      location.href = `reports.html?project=${project.id}`;
     } catch (err) {
       console.error(err);
       btn.disabled = false;
