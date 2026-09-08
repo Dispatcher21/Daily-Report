@@ -339,6 +339,94 @@ function buildSheet1Values(report) {
   return v;
 }
 
+// ---------- Cell values -> Report (inverse of buildSheet1Values) ----------
+// Built for the bulk report importer (project-setup.html's Import Reports
+// tab), which exists specifically so a company's existing archive of these
+// files -- hand-filled over years, not necessarily ever produced by this
+// app -- can be loaded in rather than retyped one at a time. Every field is
+// read from whatever's actually sitting in that cell, never backfilled from
+// the current project's own settings, so an old report keeps exactly the
+// project name/PE/NTP date it was filed under even if those have since
+// changed. A field with nothing readable in its cell just comes back blank,
+// same as a hand-filled form with an empty box -- not an error on its own.
+function rrCellText(ws, coord) {
+  const cell = ws[coord];
+  if (!cell || cell.v == null) return '';
+  return String(cell.v).trim();
+}
+function rrCellRaw(ws, coord) {
+  const cell = ws[coord];
+  return cell ? cell.v : null;
+}
+
+function parseDailyWorkReportSheet(ws) {
+  const report = {
+    reportNo: rrCellText(ws, 'Q3'),
+    date: normalizeDateValue(rrCellRaw(ws, 'Q5')),
+    hours: rrCellText(ws, 'K6'),
+    activity: rrCellText(ws, 'K7'),
+    notes: rrCellText(ws, 'K8'),
+    peName: rrCellText(ws, 'B9'),
+    projectNo: rrCellText(ws, 'B5'),
+    projectName: rrCellText(ws, 'B7'),
+    representative: rrCellText(ws, 'K5'),
+    ntpDate: normalizeDateValue(rrCellRaw(ws, 'Q7')),
+    contractors: RR_CONTRACTOR_COLS.map((col) => ({ name: rrCellText(ws, col + '5') })),
+    equipmentRows: [],
+    workSummaryHeader: rrCellText(ws, 'K11'),
+    trafficControlNote: rrCellText(ws, 'K12'),
+    workSummary: rrCellText(ws, RR_WORK_SUMMARY_CELL),
+    payItems: [],
+    controllingItem: rrCellText(ws, 'A35'),
+    commentsOnTime: rrCellText(ws, 'I35'),
+    controllingItemTimeFrom: rrCellText(ws, 'C35'),
+    controllingItemTimeTo: rrCellText(ws, 'F35'),
+    workingConditions: rrCellText(ws, 'A37'),
+    // Best-effort only -- the printed form's two checkboxes are just an 'X'
+    // dropped in I37/K37 by this app, but a hand-filled archive file might
+    // carry anything (a checkmark character, "yes", literal "n/a") in that
+    // spot instead. Recognized as marked on a bare "X" (any case); anything
+    // else -- including a genuinely blank cell -- comes back null/unselected
+    // rather than guessed at.
+    trafficControlSelect: rrCellText(ws, 'I37').toUpperCase() === 'X' ? 'IN_PLACE'
+      : rrCellText(ws, 'K37').toUpperCase() === 'X' ? 'ATTENTION_REQUIRED' : null,
+    workBegin: rrCellText(ws, 'C39'),
+    workEnd: rrCellText(ws, 'F39'),
+    repSignatureName: rrCellText(ws, 'I39'),
+    peSignatureName: rrCellText(ws, 'I41'),
+    weatherDesc: rrCellText(ws, 'A41'),
+    tempHigh: rrCellText(ws, 'D41'),
+    tempLow: rrCellText(ws, 'F41'),
+  };
+
+  for (let i = 0; i < EQUIPMENT_ROW_COUNT; i++) {
+    const r = RR_EQUIPMENT_FIRST_ROW + i;
+    report.equipmentRows.push({
+      label: rrCellText(ws, 'A' + r),
+      qty: RR_CONTRACTOR_COLS.map((col) => rrCellText(ws, col + r)),
+    });
+  }
+
+  // Only the table's own PAY_ITEM_ROW_COUNT rows come back structured --
+  // overflow items beyond that were never written anywhere but as plain
+  // text appended to the work summary box (see buildSheet1Values), and
+  // there's no reliable way back from that prose to itemNumber/qty/unit
+  // fields. They're still preserved verbatim as part of workSummary above,
+  // just not reconstructed as separate pay item rows.
+  for (let i = 0; i < PAY_ITEM_ROW_COUNT; i++) {
+    const r = RR_PAY_ITEM_FIRST_ROW + i;
+    report.payItems.push({
+      itemNumber: rrCellText(ws, 'I' + r),
+      description: rrCellText(ws, 'K' + r),
+      qty: rrCellText(ws, 'P' + r),
+      unit: rrCellText(ws, 'Q' + r),
+      startStation: '', endStation: '', location: '', side: '', length: '', width: '', theoreticalQty: '',
+    });
+  }
+
+  return report;
+}
+
 function buildSheet1Images(report) {
   const imgs = {};
   // Only the representative signs in the app -- this is an inspector's tool.

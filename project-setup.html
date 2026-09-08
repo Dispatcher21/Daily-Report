@@ -98,6 +98,7 @@
   <button type="button" class="btn-primary" id="fsb-save" disabled>Save</button>
 </div>
 
+<script src="lib/xlsx.min.js"></script>
 <script src="common.js"></script>
 <script src="defaults.js"></script>
 <script src="storage.js"></script>
@@ -126,6 +127,7 @@ const PS_TABS = [
   { key: 'payItems', label: 'Pay Items', render: renderPayItemsTab },
   { key: 'contractors', label: 'Contractors', render: renderContractorsTab },
   { key: 'equipment', label: 'Equipment', render: renderEquipmentTab },
+  { key: 'importReports', label: 'Import Reports', render: renderImportReportsTab },
 ];
 
 let project = null;
@@ -350,6 +352,134 @@ function renderEquipmentTab() {
       schedulePreviewRefresh();
     });
   });
+}
+
+// ---------- Import Reports tab ----------
+// A batch loader for a company's existing archive of Daily Work Report
+// Excel files -- built so hundreds of already-filled-out reports (from
+// before this app, or alongside it) can be loaded into this project rather
+// than retyped one at a time. Scoped to this one project deliberately (it
+// lives on Project Setup, not a company-wide page): there's no project
+// matching/creation to get wrong, every file uploaded here just becomes a
+// report under the project already open. Each field is read straight off
+// the file (parseDailyWorkReportSheet, render-report.js) and kept exactly
+// as found -- never overwritten with this project's own current settings --
+// so an imported report reflects the day it was actually filed. A Report
+// No. that collides with one already on file is imported anyway and
+// flagged in the results list; opening either one in the editor will show
+// the app's existing duplicate-Report-No. warning, same as it always has.
+
+function renderImportReportsTab() {
+  $('#ps-panel').innerHTML = `
+    <p class="hint" style="margin-top:0;">Upload Daily Work Report Excel files (one report per file, same layout this app prints) to load this project's existing report archive in. Every field comes straight from each file -- nothing here is backfilled from Project Info above.</p>
+    <div class="uz" id="uz-import-reports">
+      <input type="file" id="f-import-reports" accept=".xlsx" multiple>
+      <span class="uz-icon">&#128193;</span>
+      <span class="uz-lbl">Upload Daily Work Report Excel File(s)</span>
+    </div>
+    <p class="hint" id="ir-progress" hidden style="margin-bottom:0;"></p>
+    <div id="ir-results"></div>
+  `;
+  $('#f-import-reports').addEventListener('change', handleImportReportsChange);
+}
+
+async function parseReportExcelFile(file) {
+  const wb = await readWorkbookFromFile(file);
+  const ws = findSheet(wb, 'DAILY WORK REPORT');
+  if (!ws) throw new Error('No "Daily Work Report" sheet found in this file.');
+  const fields = parseDailyWorkReportSheet(ws);
+  if (!fields.reportNo && !fields.date) throw new Error('No Report No. or Date found -- can\'t identify this report.');
+  return fields;
+}
+
+function reportFromImportedFields(fields, forProject) {
+  return {
+    id: crypto.randomUUID(),
+    projectId: forProject.id,
+    companyCode: forProject.companyCode || null,
+    reportNo: fields.reportNo,
+    date: fields.date,
+    hours: fields.hours,
+    timeEntries: [{ start: '', end: '' }],
+    activity: fields.activity,
+    notes: fields.notes,
+    peName: fields.peName,
+    projectNo: fields.projectNo,
+    projectName: fields.projectName,
+    representative: fields.representative,
+    ntpDate: fields.ntpDate,
+    contractors: fields.contractors,
+    equipmentRows: fields.equipmentRows,
+    workSummaryHeader: fields.workSummaryHeader,
+    trafficControlNote: fields.trafficControlNote,
+    workSummary: fields.workSummary,
+    payItems: fields.payItems,
+    controllingItem: fields.controllingItem,
+    commentsOnTime: fields.commentsOnTime,
+    controllingItemTimeFrom: fields.controllingItemTimeFrom,
+    controllingItemTimeTo: fields.controllingItemTimeTo,
+    workingConditions: fields.workingConditions,
+    trafficControlSelect: fields.trafficControlSelect,
+    workBegin: fields.workBegin,
+    workEnd: fields.workEnd,
+    repSignatureName: fields.repSignatureName,
+    repSignatureImage: null,
+    peSignatureName: fields.peSignatureName,
+    weatherDesc: fields.weatherDesc,
+    tempHigh: fields.tempHigh,
+    tempLow: fields.tempLow,
+    photos: [null, null, null, null, null, null],
+    photosFetched: [true, true, true, true, true, true],
+    signatureFetched: true,
+    thumbnail: null,
+    thumbnailBack: null,
+    thumbnailAt: null,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+}
+
+async function handleImportReportsChange(e) {
+  const files = Array.from(e.target.files || []);
+  e.target.value = '';
+  if (files.length === 0) return;
+
+  const progress = $('#ir-progress');
+  const results = $('#ir-results');
+  progress.hidden = false;
+  results.innerHTML = '';
+
+  const imported = [];
+  const errors = [];
+  const existingReportNos = new Set(
+    (await getReportsForProject(project.id)).map((r) => String(r.reportNo ?? '').trim()).filter(Boolean)
+  );
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    progress.textContent = `Importing ${i + 1} of ${files.length}...`;
+    try {
+      const fields = await parseReportExcelFile(file);
+      const report = reportFromImportedFields(fields, project);
+      const key = String(report.reportNo ?? '').trim();
+      const isDupe = key !== '' && existingReportNos.has(key);
+      await saveReport(report);
+      if (key !== '') existingReportNos.add(key);
+      imported.push({ file: file.name, reportNo: report.reportNo, dupe: isDupe });
+    } catch (err) {
+      errors.push(`${file.name}: ${err.message}`);
+    }
+  }
+
+  progress.hidden = true;
+  const dupeCount = imported.filter((r) => r.dupe).length;
+  results.innerHTML = `
+    <p class="hint" style="margin-top:0;">Imported ${imported.length} of ${files.length}${
+      dupeCount ? ` &mdash; ${dupeCount} flagged as a duplicate Report No. (opening one in the editor shows the same conflict warning as always)` : ''
+    }.</p>
+    ${errors.length ? `<p class="hint" style="color:var(--danger); margin-bottom:0.3rem;">${errors.length} file(s) couldn't be imported:</p>
+    <ul class="hint" style="margin:0; padding-left:1.2rem;">${errors.map((msg) => `<li>${escapeHtml(msg)}</li>`).join('')}</ul>` : ''}
+  `;
 }
 
 // ---------- Live previews ----------
