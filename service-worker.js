@@ -1,7 +1,7 @@
 // Caches the app shell so it keeps working with no signal in the field.
 // Bump CACHE_NAME whenever any of these files change so the new version
 // actually gets picked up.
-const CACHE_NAME = 'daily-report-app-v203';
+const CACHE_NAME = 'daily-report-app-v204';
 const ASSETS = [
   './',
   './login.html',
@@ -39,6 +39,7 @@ const ASSETS = [
   './lib/jspdf.umd.min.js',
   './lib/html2canvas.min.js',
   './lib/fflate.min.js',
+  './lib/heic2any.min.js',
   './manifest.json',
   './icon.svg',
   './apple-touch-icon.png',

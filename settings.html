@@ -13,6 +13,7 @@
 <meta name="apple-mobile-web-app-title" content="Daily Reports">
 <link rel="stylesheet" href="style.css">
 <script src="theme.js"></script>
+<script src="lib/heic2any.min.js"></script>
 <style>
   /* Mirrors the printed header box (columns A-B, rows 1-4 of the template)
      so what you see here is the space the logo actually gets on the report. */
@@ -437,7 +438,7 @@ $('#cc-f-logo').addEventListener('change', async (e) => {
     e.target.value = '';
     return;
   }
-  ccPendingLogo = await capImageDimensions(file);
+  ccPendingLogo = await capImageDimensions(await convertHeicIfNeeded(file));
   $('#cc-fn-logo').textContent = file.name;
   showCreateLogoPreview(ccPendingLogo);
 });
@@ -579,7 +580,7 @@ $('#f-company-logo').addEventListener('change', async (e) => {
     return;
   }
   try {
-    const capped = await capImageDimensions(file);
+    const capped = await capImageDimensions(await convertHeicIfNeeded(file));
     await saveReportLogo(capped);
     $('#fn-company-logo').textContent = file.name;
     showCompanyLogo(capped);

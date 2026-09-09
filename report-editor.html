@@ -14,6 +14,7 @@
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="print-sheet.css">
 <script src="theme.js"></script>
+<script src="lib/heic2any.min.js"></script>
 </head>
 <body>
 
@@ -1455,7 +1456,7 @@ function renderPhotoGrid() {
       const idx = Number(input.dataset.add);
       const file = input.files[0];
       if (file) {
-        report.photos[idx] = await compressImage(file);
+        report.photos[idx] = await compressImage(await convertHeicIfNeeded(file));
         report.photosFetched[idx] = true; // a freshly-added photo is locally authoritative
         scheduleSave();
         renderPhotoGrid();

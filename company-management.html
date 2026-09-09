@@ -13,6 +13,7 @@
 <meta name="apple-mobile-web-app-title" content="Daily Reports">
 <link rel="stylesheet" href="style.css">
 <script src="theme.js"></script>
+<script src="lib/heic2any.min.js"></script>
 <style>
   .logo-preview-box {
     width: 251px; height: 83px;
@@ -391,7 +392,7 @@ $('#cm-f-logo').addEventListener('change', async (e) => {
     return;
   }
   try {
-    const capped = await capImageDimensions(file);
+    const capped = await capImageDimensions(await convertHeicIfNeeded(file));
     await saveReportLogo(capped);
     $('#cm-fn-logo').textContent = file.name;
     showCmLogo(capped);
