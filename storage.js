@@ -164,6 +164,19 @@ async function putReportRaw(report) {
   await withStore(REPORTS_STORE, 'readwrite', (store) => store.put(report));
 }
 
+// Removes a report from local storage only -- no audit entry, no
+// onCompanySyncReportChanged push-back. Used when firebase-sync.js's delta
+// pull learns (via a deletion tombstone) that another device already
+// deleted this report on the company's behalf: the deletion already
+// happened and already has its own audit entry, synced separately through
+// the audit log pull -- re-running deleteReport's normal path here would
+// just re-delete an already-gone remote doc and write a second, redundant
+// audit entry for the same event.
+async function deleteReportLocalOnly(id) {
+  await withStore(REPORTS_STORE, 'readwrite', (store) => store.delete(id));
+  await deleteReportDraft(id);
+}
+
 // onCompanySyncReportChanged is an optional hook into firebase-sync.js --
 // storage.js has no idea that file exists. It's a plain global checked by
 // name so pages that don't include firebase-sync.js work exactly as before,
@@ -289,6 +302,11 @@ async function getNextReportNo(projectId) {
 
 async function putProjectRaw(project) {
   await withStore(PROJECTS_STORE, 'readwrite', (store) => store.put(project));
+}
+
+// Same idea as deleteReportLocalOnly above, for projects.
+async function deleteProjectLocalOnly(id) {
+  await withStore(PROJECTS_STORE, 'readwrite', (store) => store.delete(id));
 }
 
 async function saveProject(project) {

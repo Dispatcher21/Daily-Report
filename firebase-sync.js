@@ -403,7 +403,11 @@ async function syncCompanyRoomNow(onProgress) {
     }
   }
 
-  const pulled = await pullAllCompanyData(room.code, onProgress);
+  // Delta by default -- see pullCompanyDataSmart -- with a full pull still
+  // falling back in automatically often enough (FULL_RECONCILE_INTERVAL_MS)
+  // to keep being a trustworthy "fix it" button without reading the whole
+  // company on every single click.
+  const pulled = await pullCompanyDataSmart(room.code, onProgress);
   pullCompanyMediaInBackground(room.code); // see joinCompanyRoom -- not awaited on purpose
   // dirtyOnly: this device's own live-push hooks already sent every real
   // edit in real time -- Sync Now only needs to catch what those attempts
@@ -876,6 +880,46 @@ function pullCompanyMediaInBackground(code) {
 const AUTO_PULL_THROTTLE_MS = 3 * 60 * 1000;
 const AUTO_PULL_SETTING = 'companyAutoPullAt';
 
+// ---------- Delta pull ----------
+//
+// pullAllCompanyData above reads every project/report in the company on
+// every call -- correct, but expensive at any real scale, and the actual
+// cause of "syncing" feeling like it re-syncs the whole company every time.
+// A delta pull (pullDeltaCompanyData) reads only what changed since this
+// device's last successful pull, using each record's own `updatedAt`. Two
+// things a delta pull structurally can't do, which is why it's never the
+// only kind that runs:
+//   - See a deletion (a deleted doc just isn't there to query for --
+//     handled via the tombstone docs written by deleteProjectFromCompany/
+//     deleteReportFromCompany, which a delta pull DOES query by timestamp).
+//   - Reconcile a stray untagged local record against the company's real,
+//     complete id set (pullAllCompanyData's FOREIGN_COMPANY_SENTINEL pass)
+//     -- that needs the full id set, which a delta pull never has.
+// pullCompanyDataSmart below is what every regular caller (auto-pull, Sync
+// Now) should actually call -- it runs a full pull periodically regardless
+// (FULL_RECONCILE_INTERVAL_MS) specifically to cover those two gaps, and
+// falls back to one immediately if this device has no delta cursor yet
+// (a fresh join, or the first pull after this feature shipped).
+const DELTA_PULL_CURSOR_SETTING = 'companyDeltaPullCursor';
+// Subtracted from the cursor before querying -- updatedAt is a device
+// clock timestamp (Date.now()), not a Firestore server timestamp, so two
+// devices a few minutes apart could otherwise let an edit fall on the wrong
+// side of the cursor and get silently skipped by every future delta pull.
+// Costs a handful of already-merged docs getting re-read and re-compared
+// near the boundary (mergeProjectRecord/mergeReportRecord just skip them,
+// same as any no-op pull); never costs a missed update.
+const DELTA_PULL_SAFETY_MS = 5 * 60 * 1000;
+const LAST_FULL_PULL_SETTING = 'companyLastFullPullAt';
+const FULL_RECONCILE_INTERVAL_MS = 24 * 60 * 60 * 1000;
+// How long a deletion tombstone sticks around before pullAllCompanyData
+// prunes it. Only matters for a device that's been offline/unused longer
+// than this AND hasn't done its own periodic full pull in that time either
+// -- vanishingly rare, and even then self-corrects the moment that device's
+// own FULL_RECONCILE_INTERVAL_MS comes due, since a full pull's
+// getDocs(...projects/reports) simply never includes an already-deleted id
+// in the first place.
+const TOMBSTONE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+
 // Pulls fresh project/report data in the background -- see wireAutoPull for
 // when this actually runs -- so a teammate's change shows up without anyone
 // having to remember Sync Now. Throttled per device (a Firestore read per
@@ -897,7 +941,7 @@ async function autoPullCompanyData(force) {
     if (Date.now() - last < AUTO_PULL_THROTTLE_MS) return;
   }
   try {
-    await pullAllCompanyData(room.code);
+    await pullCompanyDataSmart(room.code, null, force);
     await saveSetting(AUTO_PULL_SETTING, Date.now());
     pullCompanyMediaInBackground(room.code);
     window.dispatchEvent(new CustomEvent('company-data-pulled'));
@@ -980,11 +1024,18 @@ async function fetchProjectBackground(code, project) {
 
 async function deleteProjectFromCompany(code, project) {
   const { db, storage, ensureSignedIn } = await waitForFirebaseCore();
-  const { doc, deleteDoc } = await import(FIRESTORE_SDK);
+  const { doc, deleteDoc, setDoc } = await import(FIRESTORE_SDK);
   const { ref, deleteObject } = await import(STORAGE_SDK);
   await ensureSignedIn();
   await deleteObject(ref(storage, projectBackgroundPath(code, project.id))).catch(() => {});
   await deleteDoc(doc(db, 'companies', code, 'projects', project.id));
+  // A delta pull (see pullDeltaCompanyData) can only see what CHANGED since
+  // its cursor -- a deleted doc is just gone, nothing left to query for. A
+  // tombstone is the one thing a delta pull CAN query for by timestamp, so
+  // another device's next delta pull knows to remove its own local copy
+  // too, not just skip re-adding it. Kept small on purpose (no project data
+  // in it) and pruned periodically by pullAllCompanyData.
+  await setDoc(doc(db, 'companies', code, 'deletedProjects', project.id), { id: project.id, deletedAt: Date.now() });
 }
 
 // ---------- Report sync ----------
@@ -1056,7 +1107,7 @@ async function pushReportToCompany(code, report) {
 
 async function deleteReportFromCompany(code, report) {
   const { db, storage, ensureSignedIn } = await waitForFirebaseCore();
-  const { doc, deleteDoc } = await import(FIRESTORE_SDK);
+  const { doc, deleteDoc, setDoc } = await import(FIRESTORE_SDK);
   const { ref, deleteObject } = await import(STORAGE_SDK);
   await ensureSignedIn();
 
@@ -1065,6 +1116,8 @@ async function deleteReportFromCompany(code, report) {
   }
   await deleteObject(ref(storage, reportSignaturePath(code, report.id))).catch(() => {});
   await deleteDoc(doc(db, 'companies', code, 'reports', report.id));
+  // Same reasoning as deleteProjectFromCompany's tombstone -- see there.
+  await setDoc(doc(db, 'companies', code, 'deletedReports', report.id), { id: report.id, deletedAt: Date.now() });
 }
 
 // ---------- Audit log sync ----------
@@ -1089,8 +1142,17 @@ async function onCompanySyncAuditEntry(entry) {
 // ---------- Bulk pull / push -- used by join and "Sync Now" ----------
 
 async function pullAllCompanyData(code, onProgress) {
+  // Captured before any reading starts, not after -- a record saved by
+  // someone else WHILE this pull is running must still be covered by the
+  // very next delta pull's query (see pullDeltaCompanyData), which it only
+  // is if the cursor this pull leaves behind is the OLDER of the two
+  // possible timestamps. Using Date.now() at the end instead would create a
+  // window where such a write is newer than what this pull saw but older
+  // than the cursor it saves -- silently skipped by every future delta
+  // pull, forever.
+  const pullStartedAt = Date.now();
   const { db, storage, ensureSignedIn } = await waitForFirebaseCore();
-  const { collection, getDocs } = await import(FIRESTORE_SDK);
+  const { collection, doc, getDocs, deleteDoc } = await import(FIRESTORE_SDK);
   const { ref, getBytes } = await import(STORAGE_SDK);
   await ensureSignedIn();
 
@@ -1252,7 +1314,171 @@ async function pullAllCompanyData(code, onProgress) {
     }
   }
 
+  // Prune deletion tombstones old enough that nothing could still need
+  // them -- see TOMBSTONE_RETENTION_MS. Every device eventually runs this
+  // (every full pull does), so ownership isn't restricted to admins.
+  const tombstoneCutoff = pullStartedAt - TOMBSTONE_RETENTION_MS;
+  for (const sub of ['deletedProjects', 'deletedReports']) {
+    const tombstoneSnap = await getDocs(collection(db, 'companies', code, sub));
+    for (const d of tombstoneSnap.docs) {
+      if ((d.data().deletedAt || 0) < tombstoneCutoff) await deleteDoc(d.ref);
+    }
+  }
+
+  // A full pull just read the company's complete, authoritative state as
+  // of pullStartedAt -- exactly the guarantee a delta pull's cursor needs
+  // to start from. See pullCompanyDataSmart.
+  await saveSetting(DELTA_PULL_CURSOR_SETTING, pullStartedAt);
+  await saveSetting(LAST_FULL_PULL_SETTING, pullStartedAt);
+
   return summary;
+}
+
+// Reads only what changed since `cursor` (each record's own `updatedAt`,
+// plus deletion tombstones -- see the header comment above
+// DELTA_PULL_CURSOR_SETTING for why both are needed and what this still
+// can't do on its own). Mirrors pullAllCompanyData's per-record merge
+// logic exactly (background image / photo slot / signature carry-forward,
+// companyCode stamping, mergeProjectRecord's newer-updatedAt-wins rule) --
+// just over a far smaller doc set, so there's no need for that function's
+// getAllProjects()/getAllReports() prefetch-into-a-Map optimization; a
+// per-record getProject/getReport lookup is fine at delta-pull scale.
+async function pullDeltaCompanyData(code, onProgress, cursor) {
+  const pullStartedAt = Date.now();
+  const { db, storage, ensureSignedIn } = await waitForFirebaseCore();
+  const { collection, query, where, getDocs } = await import(FIRESTORE_SDK);
+  const { ref, getBytes } = await import(STORAGE_SDK);
+  await ensureSignedIn();
+
+  const queryCursor = Math.max(0, cursor - DELTA_PULL_SAFETY_MS);
+  const summary = { projectsPulled: 0, reportsPulled: 0, projectsDeleted: 0, reportsDeleted: 0 };
+
+  if (onProgress) onProgress({ phase: 'projects' });
+  const projectsSnap = await getDocs(
+    query(collection(db, 'companies', code, 'projects'), where('updatedAt', '>', queryCursor))
+  );
+  for (const d of projectsSnap.docs) {
+    const data = d.data();
+    const project = { ...data, id: d.id, companyCode: code };
+    delete project.hasBackgroundImage;
+
+    const existing = await getProject(d.id);
+    const alreadyFetched = existing && existing.backgroundImageFetched && existing.backgroundImage;
+    if (!data.hasBackgroundImage) {
+      project.backgroundImage = null;
+      project.backgroundImageFetched = true;
+    } else if (alreadyFetched) {
+      project.backgroundImage = existing.backgroundImage;
+      project.backgroundImageFetched = true;
+    } else {
+      project.backgroundImage = null;
+      project.backgroundImageFetched = false;
+    }
+
+    const result = await mergeProjectRecord(project, existing);
+    if (result !== 'skipped') summary.projectsPulled++;
+  }
+
+  const reportsSnap = await getDocs(
+    query(collection(db, 'companies', code, 'reports'), where('updatedAt', '>', queryCursor))
+  );
+  const reportDocs = reportsSnap.docs;
+  for (let i = 0; i < reportDocs.length; i++) {
+    const d = reportDocs[i];
+    if (onProgress) onProgress({ phase: 'reports', index: i + 1, total: reportDocs.length });
+
+    const data = d.data();
+    const report = { ...data, id: d.id, companyCode: code };
+    delete report.photoSlots;
+    delete report.hasSignature;
+
+    const existing = await getReport(d.id);
+
+    report.photos = [];
+    report.photosFetched = [];
+    for (let slot = 0; slot < REPORT_PHOTO_SLOTS; slot++) {
+      const remoteHasPhoto = !!(data.photoSlots && data.photoSlots[slot]);
+      const alreadyFetched = existing && existing.photosFetched && existing.photosFetched[slot] && existing.photos && existing.photos[slot];
+      if (!remoteHasPhoto) {
+        report.photos.push(null);
+        report.photosFetched.push(true);
+      } else if (alreadyFetched) {
+        report.photos.push(existing.photos[slot]);
+        report.photosFetched.push(true);
+      } else {
+        report.photos.push(null);
+        report.photosFetched.push(false);
+      }
+    }
+
+    const remoteHasSignature = !!data.hasSignature;
+    const signatureAlreadyFetched = existing && existing.signatureFetched && existing.repSignatureImage;
+    if (!remoteHasSignature) {
+      report.repSignatureImage = null;
+      report.signatureFetched = true;
+    } else if (signatureAlreadyFetched) {
+      report.repSignatureImage = existing.repSignatureImage;
+      report.signatureFetched = true;
+    } else {
+      report.repSignatureImage = null;
+      report.signatureFetched = false;
+    }
+
+    report.thumbnail = existing ? existing.thumbnail : null;
+    report.thumbnailBack = existing ? existing.thumbnailBack : null;
+    report.thumbnailAt = existing ? existing.thumbnailAt : null;
+
+    const result = await mergeReportRecord(report, existing);
+    if (result !== 'skipped') summary.reportsPulled++;
+  }
+
+  if (onProgress) onProgress({ phase: 'deletions' });
+  const deletedProjectsSnap = await getDocs(
+    query(collection(db, 'companies', code, 'deletedProjects'), where('deletedAt', '>', queryCursor))
+  );
+  for (const d of deletedProjectsSnap.docs) {
+    if (await getProject(d.id)) {
+      await deleteProjectLocalOnly(d.id);
+      summary.projectsDeleted++;
+    }
+  }
+  const deletedReportsSnap = await getDocs(
+    query(collection(db, 'companies', code, 'deletedReports'), where('deletedAt', '>', queryCursor))
+  );
+  for (const d of deletedReportsSnap.docs) {
+    if (await getReport(d.id)) {
+      await deleteReportLocalOnly(d.id);
+      summary.reportsDeleted++;
+    }
+  }
+
+  if (onProgress) onProgress({ phase: 'audit' });
+  const auditSnap = await getDocs(
+    query(collection(db, 'companies', code, 'auditLog'), where('timestamp', '>', queryCursor))
+  );
+  summary.auditEntriesPulled = 0;
+  for (const d of auditSnap.docs) {
+    const result = await mergeAuditEntry({ ...d.data(), id: d.id, companyCode: code });
+    if (result !== 'skipped') summary.auditEntriesPulled++;
+  }
+
+  await saveSetting(DELTA_PULL_CURSOR_SETTING, pullStartedAt);
+  return summary;
+}
+
+// Picks full vs. delta for any regular caller (auto-pull, Sync Now) that
+// just wants current company data without necessarily re-reading
+// everything -- see the header comment above DELTA_PULL_CURSOR_SETTING.
+// `forceFull` is for a caller that wants the strongest guarantee
+// regardless of timing (an explicit "Refresh" someone just clicked).
+async function pullCompanyDataSmart(code, onProgress, forceFull) {
+  const cursor = (await getSetting(DELTA_PULL_CURSOR_SETTING)) || 0;
+  const lastFull = (await getSetting(LAST_FULL_PULL_SETTING)) || 0;
+  const dueForFullReconcile = Date.now() - lastFull > FULL_RECONCILE_INTERVAL_MS;
+  if (forceFull || !cursor || dueForFullReconcile) {
+    return pullAllCompanyData(code, onProgress);
+  }
+  return pullDeltaCompanyData(code, onProgress, cursor);
 }
 
 // Downloads whichever photo/signature slots of `report` haven't been
