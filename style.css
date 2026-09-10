@@ -736,9 +736,6 @@ main { max-width: min(1400px, 94vw); margin: 0 auto; padding: 1rem; }
     padding: 0.7rem 1rem calc(0.7rem + env(safe-area-inset-bottom, 0px));
     box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.15);
   }
-  /* .btn-primary is width:100% by default (fine inline in the form) -- fixed
-     to a set width here so the status text next to it has room to wrap. */
-  .save-row .btn-primary { width: auto; min-width: 110px; flex: 0 0 auto; }
 }
 .rb-preview-label {
   font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
@@ -1372,7 +1369,16 @@ input[type="file"] { min-height: 0; }
 
 .export-bar { margin-top: 1rem; display: flex; flex-direction: column; gap: 0.5rem; }
 .save-row { display: flex; align-items: center; gap: 0.7rem; }
-.save-row #btn-save-report { flex: 0 0 auto; }
+/* .btn-primary is width:100% by default (fine everywhere else it's used
+   alone) -- inside this row specifically it has to share space with the
+   status text next to it, so it needs an explicit width here regardless of
+   viewport. Without this, flex:0 0 auto alone does nothing: auto falls
+   back to the width property, which is still 100%, so the button claims
+   the whole row and the status text -- including a save-blocking error --
+   gets squeezed into an unreadably thin sliver instead of actually
+   showing. Previously only set inside the mobile fixed-bar media query
+   below, so this exact thing happened at desktop widths. */
+.save-row #btn-save-report { flex: 0 0 auto; width: auto; min-width: 110px; }
 .save-status { font-size: 0.85rem; color: var(--text-dim); flex: 1 1 auto; min-width: 0; }
 .save-status-err { color: var(--danger); font-weight: 600; }
 
