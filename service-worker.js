@@ -39,6 +39,7 @@ const ASSETS = [
   './lib/jspdf.umd.min.js',
   './lib/html2canvas.min.js',
   './lib/fflate.min.js',
+  './lib/heic2any.min.js',
   './manifest.json',
   './icon.svg',
   './apple-touch-icon.png',

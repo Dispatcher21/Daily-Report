@@ -249,6 +249,33 @@ function triggerDownload(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
+// iPhones save camera photos as HEIC/HEIF by default. Safari can decode
+// those natively, but createImageBitmap() throws on them in every other
+// browser (Chrome, Firefox, Edge), which used to mean compressImage() and
+// capImageDimensions() would silently fall back to storing the raw,
+// undecodable HEIC blob -- it'd save fine, then show a broken-image icon
+// forever since no non-Safari <img> can render it. Converting to JPEG here,
+// before either of those functions ever sees the file, fixes that. Anything
+// that isn't HEIC/HEIF (checked by MIME type, then by extension since some
+// browsers hand HEIC files over with an empty/generic type) passes through
+// untouched; any conversion failure falls back to the original file rather
+// than blocking the upload, same policy as the rest of this file.
+async function convertHeicIfNeeded(file) {
+  if (!file) return file;
+  const isHeic =
+    /^image\/hei[cf]/i.test(file.type || '') || /\.hei[cf]$/i.test(file.name || '');
+  if (!isHeic) return file;
+  try {
+    const converted = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.9 });
+    const jpegBlob = Array.isArray(converted) ? converted[0] : converted;
+    const newName = (file.name || 'photo').replace(/\.hei[cf]$/i, '.jpg');
+    return new File([jpegBlob], newName, { type: 'image/jpeg' });
+  } catch (err) {
+    console.error('convertHeicIfNeeded:', err); // fall back to the original rather than blocking the upload
+    return file;
+  }
+}
+
 // Downscales and re-encodes a photo as JPEG so on-device storage (and later,
 // sync) never has to carry full-resolution phone camera output -- a 4000px,
 // 6MB original becomes roughly 150-400KB. Non-image files (or anything the
