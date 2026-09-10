@@ -316,6 +316,12 @@ async function compressImage(file, { maxDim = 1600, quality = 0.7 } = {}) {
 // fixed-size box on the report, so pixels beyond maxDim buy nothing.
 async function capImageDimensions(file, { maxDim = 800 } = {}) {
   if (!file || !file.type || !file.type.startsWith('image/')) return file;
+  // The resize path below decodes to a single frame (createImageBitmap) and
+  // re-encodes through <canvas> -- fine for a photo, but it would silently
+  // flatten an animated GIF down to one still frame. Pass it through
+  // untouched instead; a big GIF just uploads at its real size rather than
+  // getting "resized" into something that no longer animates.
+  if (file.type === 'image/gif') return file;
   try {
     const bitmap = await createImageBitmap(file);
     if (Math.max(bitmap.width, bitmap.height) <= maxDim) {

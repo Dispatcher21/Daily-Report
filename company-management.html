@@ -236,7 +236,7 @@
           </div>
         </div>
 
-        <p class="hint" style="margin:1rem 0 0.3rem; display:flex; align-items:center; gap:0.4rem;">Decorative Image (optional) <button type="button" class="info-tip" data-tip="A transparent PNG shown over the home screen background -- a mascot, logo mark, anything. Position, size, and default transparency are set here; members can still nudge the transparency to their own taste." aria-label="What this does">i</button></p>
+        <p class="hint" style="margin:1rem 0 0.3rem; display:flex; align-items:center; gap:0.4rem;">Decorative Image (optional) <button type="button" class="info-tip" data-tip="A transparent PNG or an animated GIF shown over the home screen background -- a mascot, logo mark, anything. Position, size, and default transparency are set here; members can still nudge the transparency to their own taste." aria-label="What this does">i</button></p>
         <div class="logo-preview-box" id="cm-theme-decal-preview-box">
           <span class="lp-empty" id="cm-theme-decal-empty">No image set</span>
           <img id="cm-theme-decal-img" alt="Decorative image preview" hidden>
@@ -244,9 +244,10 @@
         <div class="uz" id="uz-cm-theme-decal">
           <input type="file" id="cm-theme-f-decal" accept="image/*">
           <span class="uz-icon">&#128444;</span>
-          <span class="uz-lbl">Upload Decorative Image</span>
+          <span class="uz-lbl">Upload Decorative Image (PNG or animated GIF)</span>
           <span class="uz-fname" id="cm-theme-fn-decal"></span>
         </div>
+        <p class="hint" style="margin:0.3rem 0 0;">Animated GIFs can't be resized without losing their animation, so a large one uploads (and syncs to everyone's device) at its full size -- keep it under a few MB if you can.</p>
         <button type="button" class="btn-danger" id="btn-remove-cm-theme-decal" style="margin-top:0.5rem;" hidden>Remove Decorative Image</button>
 
         <div id="cm-theme-decal-settings" hidden style="margin-top:0.75rem;">
@@ -761,6 +762,17 @@ $('#cm-theme-f-decal').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
   if (!/^image\//.test(file.type)) { alert('That file is not an image.'); e.target.value = ''; return; }
+  // Only a heads-up, not a hard block -- an admin might genuinely want a
+  // big GIF. capImageDimensions can't shrink an animated GIF without
+  // freezing it (see its own comment), so unlike every other image upload
+  // in this app, a large one here really does upload at full size.
+  if (file.type === 'image/gif' && file.size > 8 * 1024 * 1024) {
+    const mb = (file.size / (1024 * 1024)).toFixed(1);
+    if (!confirm(`That GIF is ${mb}MB. It can't be shrunk without losing its animation, so it'll sync to every teammate's device at full size -- could be slow on cellular. Use it anyway?`)) {
+      e.target.value = '';
+      return;
+    }
+  }
   pendingDecalFile = await capImageDimensions(await convertHeicIfNeeded(file));
   removeDecalImage = false;
   $('#cm-theme-fn-decal').textContent = file.name;

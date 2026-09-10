@@ -957,11 +957,18 @@ async function pullCompanyThemes() {
 // every device. A no-op, no network call, once already fetched.
 async function fetchThemeAsset(code, themeId, kind) {
   const { storage, ensureSignedIn } = await waitForFirebaseCore();
-  const { ref, getBytes } = await import(STORAGE_SDK);
+  const { ref, getBytes, getMetadata } = await import(STORAGE_SDK);
   await ensureSignedIn();
-  const bytes = await getBytesIfExists(ref(storage, themeAssetPath(code, themeId, kind)), getBytes);
+  const assetRef = ref(storage, themeAssetPath(code, themeId, kind));
+  const [bytes, metadata] = await Promise.all([getBytesIfExists(assetRef, getBytes), getMetadata(assetRef).catch(() => null)]);
   if (!bytes) return null;
-  const blob = new Blob([bytes], { type: 'image/png' });
+  // Hardcoding image/png here used to quietly break an animated GIF decal:
+  // the bytes were still a real GIF, but a Blob TYPED as png can get
+  // mis-decoded by some renderers as a static image. uploadThemeAsset's
+  // uploadBytes call (see saveCompanyThemes) already stores the file's own
+  // real contentType -- read it back instead of assuming, same pattern as
+  // pullCompanyLogo.
+  const blob = new Blob([bytes], { type: (metadata && metadata.contentType) || 'image/png' });
   await saveThemeImageBlob(themeId, kind, blob);
   return blob;
 }
