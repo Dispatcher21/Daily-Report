@@ -71,6 +71,56 @@
   .cm-pw-label { font-weight: 600; font-size: 0.85rem; }
   .cm-pw-value { font-family: monospace; font-size: 1rem; user-select: all; }
   .cm-pw-value.cm-pw-none { font-family: inherit; font-size: 0.8rem; color: var(--text-dim); font-style: italic; user-select: none; }
+
+  /* Theme Builder's live preview -- a rough stand-in for the home screen so
+     an admin can see accent/background/decal together without saving and
+     checking Settings + index.html separately. Colors are set inline by
+     renderThemePreview(), not here -- this only lays things out. */
+  .theme-form-grid { display: flex; flex-direction: column; gap: 1.25rem; }
+  @media (min-width: 700px) {
+    .theme-form-grid { flex-direction: row; align-items: flex-start; }
+    .theme-form-fields { flex: 1 1 0; min-width: 0; }
+    .theme-form-preview { flex: 0 0 260px; position: sticky; top: 1rem; }
+  }
+  .theme-preview-frame {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    border-radius: var(--radius-sm);
+    border: 1.5px solid var(--border-strong);
+    overflow: hidden;
+    background: var(--surface-2);
+    background-size: cover;
+    background-position: center;
+    display: flex;
+    flex-direction: column;
+  }
+  .theme-preview-header {
+    display: flex; align-items: center; gap: 0.4rem;
+    padding: 0.5rem 0.6rem;
+    font-size: 0.7rem; font-weight: 700;
+    background: var(--brand); color: var(--on-brand);
+    flex: 0 0 auto;
+  }
+  .theme-preview-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; opacity: 0.6; flex: 0 0 auto; }
+  .theme-preview-body { flex: 1; padding: 0.6rem; }
+  .theme-preview-card {
+    display: inline-block;
+    background: var(--surface);
+    border: 1.5px solid var(--brand);
+    color: var(--brand);
+    border-radius: 6px;
+    padding: 0.35rem 0.6rem;
+    font-size: 0.68rem;
+    font-weight: 600;
+  }
+  .theme-preview-decal { position: absolute; object-fit: contain; pointer-events: none; }
+  .theme-preview-decal.decal-size-small { width: 22%; }
+  .theme-preview-decal.decal-size-medium { width: 34%; }
+  .theme-preview-decal.decal-size-large { width: 50%; }
+  .theme-preview-decal.decal-pos-bottom-right { right: 4%; bottom: 4%; }
+  .theme-preview-decal.decal-pos-bottom-left { left: 4%; bottom: 4%; }
+  .theme-preview-decal.decal-pos-center { left: 50%; top: 50%; transform: translate(-50%, -50%); }
 </style>
 </head>
 <body>
@@ -155,6 +205,9 @@
       <details class="company-details" id="cm-theme-details" style="margin-top:0.9rem;">
         <summary id="cm-theme-details-summary">Add Theme</summary>
 
+        <div class="theme-form-grid">
+        <div class="theme-form-fields">
+
         <label>Theme Name
           <input type="text" id="cm-theme-name" placeholder="e.g. LSU">
         </label>
@@ -218,6 +271,24 @@
 
         <button type="button" class="btn-primary" id="btn-save-cm-theme" style="margin-top:0.9rem;">Save Theme</button>
         <button type="button" class="text-btn" id="btn-cancel-cm-theme" style="margin-top:0.5rem;display:block;" hidden>Cancel Edit</button>
+
+        </div>
+
+        <div class="theme-form-preview">
+          <p class="hint" style="margin:0 0 0.5rem;">Live Preview</p>
+          <div class="theme-preview-frame" id="cm-theme-preview-frame">
+            <div class="theme-preview-header" id="cm-theme-preview-header">
+              <span class="theme-preview-dot"></span>
+              <span id="cm-theme-preview-name">Daily Work Reports</span>
+            </div>
+            <div class="theme-preview-body">
+              <div class="theme-preview-card" id="cm-theme-preview-card">Sample Project</div>
+            </div>
+            <img id="cm-theme-preview-decal" class="theme-preview-decal" alt="" hidden>
+          </div>
+          <p class="hint" style="margin:0.5rem 0 0;">A rough stand-in for the home screen -- exact spacing will differ on a real device.</p>
+        </div>
+        </div>
       </details>
     </div>
   </div>
@@ -577,12 +648,14 @@ function resetThemeForm() {
   pendingDecalFile = null;
   removeDecalImage = false;
   $('#btn-cancel-cm-theme').hidden = true;
+  renderThemePreview();
 }
 
 function setThemeBgType(type) {
   $$('#cm-theme-bg-type button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.bgType === type)));
   $('#cm-theme-bg-color-controls').hidden = type !== 'color';
   $('#cm-theme-bg-image-controls').hidden = type !== 'image';
+  renderThemePreview();
 }
 $('#cm-theme-bg-type').addEventListener('click', (e) => {
   const btn = e.target.closest('button');
@@ -597,12 +670,54 @@ function showThemeImagePreview(kind, blobOrUrl) {
     img.removeAttribute('src');
     img.hidden = true;
     empty.hidden = false;
+    renderThemePreview();
     return;
   }
   img.src = typeof blobOrUrl === 'string' ? blobOrUrl : trackedObjectUrl(blobOrUrl);
   img.hidden = false;
   empty.hidden = true;
+  renderThemePreview();
 }
+
+// A rough stand-in for the home screen, next to the Theme Builder's fields,
+// updated live as the admin edits -- no need to save and go check Settings
+// + index.html separately to see what a theme actually looks like. Reuses
+// whatever's already showing in the bg/decal preview <img> tags above
+// (their object URLs, not fresh ones) rather than re-deriving from
+// pendingBgFile/pendingDecalFile, so it stays correct whether that image
+// came from a fresh upload or an existing theme being edited.
+function renderThemePreview() {
+  const frame = $('#cm-theme-preview-frame');
+  const header = $('#cm-theme-preview-header');
+  const card = $('#cm-theme-preview-card');
+  const decal = $('#cm-theme-preview-decal');
+
+  const accent = $('#cm-theme-accent').value || '#461d7c';
+  header.style.background = accent;
+  card.style.borderColor = accent;
+  card.style.color = accent;
+
+  const bgType = ($('#cm-theme-bg-type button[aria-pressed="true"]') || {}).dataset?.bgType || 'color';
+  const bgImg = $('#cm-theme-bg-img');
+  if (bgType === 'image' && !bgImg.hidden && bgImg.src) {
+    frame.style.background = '#666';
+    frame.style.backgroundImage = `url(${bgImg.src})`;
+  } else {
+    frame.style.backgroundImage = 'none';
+    frame.style.background = bgType === 'color' ? ($('#cm-theme-bg-color').value || '#461d7c') : '#666';
+  }
+
+  const decalImg = $('#cm-theme-decal-img');
+  const decalVisible = !decalImg.hidden && !!decalImg.src && !removeDecalImage;
+  decal.hidden = !decalVisible;
+  if (decalVisible) {
+    decal.src = decalImg.src;
+    decal.className = `theme-preview-decal decal-size-${$('#cm-theme-decal-size').value} decal-pos-${$('#cm-theme-decal-position').value}`;
+    decal.style.opacity = Number($('#cm-theme-decal-opacity').value) / 100;
+  }
+}
+$('.theme-form-fields').addEventListener('input', renderThemePreview);
+$('.theme-form-fields').addEventListener('change', renderThemePreview);
 
 let pendingBgFile = null;
 let pendingDecalFile = null;
@@ -687,6 +802,7 @@ async function openThemeFormForEdit(theme) {
   $('#cm-theme-details').open = true;
   $('#btn-cancel-cm-theme').hidden = false;
   $('#cm-theme-details').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  renderThemePreview();
 }
 
 $('#cm-theme-list').addEventListener('click', async (e) => {
