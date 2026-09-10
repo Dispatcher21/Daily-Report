@@ -730,6 +730,11 @@ async function applyCompanyThemeVisuals() {
       decalEl.src = URL.createObjectURL(blob);
       decalEl.className = `decal-size-${theme.decalSize || 'medium'} decal-pos-${theme.decalPosition || 'bottom-right'}`;
       decalEl.style.opacity = theme.decalOpacity != null ? theme.decalOpacity : 0.35;
+      // 'top' sits in front of <main>'s own content (still pointer-events:
+      // none, so it never blocks a tap); 'background' (the original,
+      // default behaviour) stays tucked behind it, a watermark rather than
+      // an overlay. See the CSS default on #company-theme-decal below.
+      decalEl.style.zIndex = theme.decalLayer === 'top' ? '500' : '-1';
       decalEl.hidden = false;
     }
   }

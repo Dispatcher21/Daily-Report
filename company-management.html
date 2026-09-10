@@ -257,6 +257,11 @@
               <option value="center">Center</option>
             </select>
           </label>
+          <p class="hint" style="margin:0.75rem 0 0.3rem; display:flex; align-items:center; gap:0.4rem;">Layer <button type="button" class="info-tip" data-tip="Background sits behind the app's cards and buttons, like a watermark. Top sits in front of them, over the whole screen -- still never blocks taps or clicks either way." aria-label="What this does">i</button></p>
+          <div class="segmented" id="cm-theme-decal-layer">
+            <button type="button" data-decal-layer="background">Background</button>
+            <button type="button" data-decal-layer="top">Top</button>
+          </div>
           <label>Size
             <select id="cm-theme-decal-size">
               <option value="small">Small</option>
@@ -641,6 +646,7 @@ function resetThemeForm() {
   $('#cm-theme-decal-settings').hidden = true;
   $('#btn-remove-cm-theme-decal').hidden = true;
   $('#cm-theme-decal-position').value = 'bottom-right';
+  setDecalLayer('background');
   $('#cm-theme-decal-size').value = 'medium';
   $('#cm-theme-decal-opacity').value = 35;
   $('#cm-theme-decal-opacity-val').textContent = '35%';
@@ -661,6 +667,20 @@ $('#cm-theme-bg-type').addEventListener('click', (e) => {
   const btn = e.target.closest('button');
   if (!btn) return;
   setThemeBgType(btn.dataset.bgType);
+});
+
+// "Background" sits behind the app's own content (cards, buttons) --
+// today's only behaviour, a watermark. "Top" sits in front of everything,
+// over the whole screen -- still never blocks taps/clicks (pointer-events:
+// none, see index.html), just visually on top rather than tucked behind.
+function setDecalLayer(layer) {
+  $$('#cm-theme-decal-layer button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.decalLayer === layer)));
+  renderThemePreview();
+}
+$('#cm-theme-decal-layer').addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  setDecalLayer(btn.dataset.decalLayer);
 });
 
 function showThemeImagePreview(kind, blobOrUrl) {
@@ -714,6 +734,11 @@ function renderThemePreview() {
     decal.src = decalImg.src;
     decal.className = `theme-preview-decal decal-size-${$('#cm-theme-decal-size').value} decal-pos-${$('#cm-theme-decal-position').value}`;
     decal.style.opacity = Number($('#cm-theme-decal-opacity').value) / 100;
+    const layer = ($('#cm-theme-decal-layer button[aria-pressed="true"]') || {}).dataset?.decalLayer || 'background';
+    // Negative sits below the sample card's own (unpositioned, "auto"
+    // layer) content; positive sits above it -- same rule index.html uses
+    // against its real <main>, just against this mock card instead.
+    decal.style.zIndex = layer === 'top' ? '2' : '-1';
   }
 }
 $('.theme-form-fields').addEventListener('input', renderThemePreview);
@@ -795,6 +820,7 @@ async function openThemeFormForEdit(theme) {
     $('#btn-remove-cm-theme-decal').hidden = true;
   }
   $('#cm-theme-decal-position').value = theme.decalPosition || 'bottom-right';
+  setDecalLayer(theme.decalLayer || 'background');
   $('#cm-theme-decal-size').value = theme.decalSize || 'medium';
   $('#cm-theme-decal-opacity').value = Math.round((theme.decalOpacity != null ? theme.decalOpacity : 0.35) * 100);
   $('#cm-theme-decal-opacity-val').textContent = `${$('#cm-theme-decal-opacity').value}%`;
@@ -862,6 +888,7 @@ $('#btn-save-cm-theme').addEventListener('click', async () => {
       hasBackgroundImage: bgType === 'image' ? (!!pendingBgFile || !!existing.hasBackgroundImage) : false,
       hasDecalImage: removeDecalImage ? false : (!!pendingDecalFile || !!existing.hasDecalImage),
       decalPosition: $('#cm-theme-decal-position').value,
+      decalLayer: ($('#cm-theme-decal-layer button[aria-pressed="true"]') || {}).dataset?.decalLayer || 'background',
       decalSize: $('#cm-theme-decal-size').value,
       decalOpacity: Number($('#cm-theme-decal-opacity').value) / 100,
     };
