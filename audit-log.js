@@ -207,6 +207,91 @@ function diffProject(before, after) {
   return out;
 }
 
+// Company themes (see firebase-sync.js's saveCompanyThemes) don't go
+// through storage.js's saveProject/saveReport at all -- one admin action
+// can create, edit, and delete several themes in the same call (the whole
+// list is saved at once). logThemeChanges, called directly from
+// saveCompanyThemes, diffs the old list against the new one by id and
+// writes one entry per theme that actually changed -- no coalescing
+// needed (see AUDIT_COALESCE_MS's header comment for why reports/projects
+// need it and this doesn't): a Theme Builder save is already one
+// deliberate action, not a burst of autosaves.
+const THEME_DECAL_POSITION_LABELS = { 'bottom-right': 'Bottom Right', 'bottom-left': 'Bottom Left', center: 'Center' };
+const THEME_DECAL_SIZE_LABELS = { small: 'Small', medium: 'Medium', large: 'Large' };
+const THEME_DECAL_LAYER_LABELS = { background: 'Behind the app’s cards and buttons', top: 'In front of the app, over everything' };
+
+function fmtThemeOpacity(v) {
+  return v == null ? '(blank)' : `${Math.round(v * 100)}%`;
+}
+function fmtThemeBackground(t) {
+  return t.backgroundType === 'image' ? 'An uploaded image' : `A solid color (${t.backgroundColor || '(blank)'})`;
+}
+// Prefixed the same way a report's label leads with "Report #N" -- a
+// theme's plain name alone ("LSU") would read as just another project in
+// the log; "Theme:" makes what kind of thing changed obvious at a glance.
+function themeEntityLabel(theme) {
+  return `Theme: ${theme.name || 'Untitled Theme'}`;
+}
+
+// Plain-language, one line per thing that actually changed -- written for
+// an admin skimming the log, not a developer, per how this whole file's
+// output already reads (see REPORT_FIELD_LABELS/PROJECT_FIELD_LABELS
+// above for the same spirit). imageChange ({background, decal} booleans)
+// comes from saveCompanyThemes, which is the only place that still knows
+// whether an upload actually happened -- hasBackgroundImage/hasDecalImage
+// alone can't tell "replaced with a different picture" from "left alone",
+// since both stay true either way.
+function diffTheme(before, after, imageChange) {
+  const out = [];
+  const push = (label, a, b) => { if (a !== b) out.push({ label, from: a, to: b }); };
+
+  push('Theme Name', before.name || '(blank)', after.name || '(blank)');
+  push('Accent Color', before.accent || '(blank)', after.accent || '(blank)');
+  push('Home Screen Background', fmtThemeBackground(before), fmtThemeBackground(after));
+  if (after.backgroundType === 'image' && imageChange && imageChange.background) {
+    out.push({ label: 'Background Image', from: before.hasBackgroundImage ? 'Previous picture' : '(none)', to: 'New picture uploaded' });
+  }
+
+  const hadDecal = !!before.hasDecalImage;
+  const hasDecal = !!after.hasDecalImage;
+  push('Has a Decorative Image', hadDecal ? 'Yes' : 'No', hasDecal ? 'Yes' : 'No');
+  if (imageChange && imageChange.decal && hadDecal && hasDecal) {
+    out.push({ label: 'Decorative Image', from: 'Previous picture', to: 'Replaced with a new picture' });
+  }
+  if (hasDecal) {
+    push('Decorative Image Position', THEME_DECAL_POSITION_LABELS[before.decalPosition] || before.decalPosition || '(blank)', THEME_DECAL_POSITION_LABELS[after.decalPosition] || after.decalPosition || '(blank)');
+    push('Decorative Image Layer', THEME_DECAL_LAYER_LABELS[before.decalLayer || 'background'], THEME_DECAL_LAYER_LABELS[after.decalLayer || 'background']);
+    push('Decorative Image Size', THEME_DECAL_SIZE_LABELS[before.decalSize] || before.decalSize || '(blank)', THEME_DECAL_SIZE_LABELS[after.decalSize] || after.decalSize || '(blank)');
+    push('Decorative Image Opacity', fmtThemeOpacity(before.decalOpacity), fmtThemeOpacity(after.decalOpacity));
+  }
+  return out;
+}
+
+// `imageChanges` is a plain object keyed by theme id -> {background, decal}
+// booleans (see the comment above diffTheme for why saveCompanyThemes has
+// to be the one to supply this). Every entry writes immediately -- no
+// coalescing, no waiting -- since this only ever runs once per deliberate
+// Theme Builder save.
+async function logThemeChanges(beforeThemes, afterThemes, imageChanges) {
+  const beforeById = new Map(beforeThemes.map((t) => [t.id, t]));
+  const afterIds = new Set(afterThemes.map((t) => t.id));
+
+  for (const after of afterThemes) {
+    const before = beforeById.get(after.id);
+    if (!before) {
+      await writeAuditEntry('theme', after.id, themeEntityLabel(after), 'created', []);
+      continue;
+    }
+    const changes = diffTheme(before, after, (imageChanges || {})[after.id]);
+    if (changes.length) await writeAuditEntry('theme', after.id, themeEntityLabel(after), 'edited', changes);
+  }
+  for (const before of beforeThemes) {
+    if (!afterIds.has(before.id)) {
+      await writeAuditEntry('theme', before.id, themeEntityLabel(before), 'deleted', []);
+    }
+  }
+}
+
 async function reportEntityLabel(report) {
   const project = report.projectId ? await getProject(report.projectId) : null;
   const projectLabel = (project && project.name) || report.projectName || report.projectNo || 'Unassigned Project';

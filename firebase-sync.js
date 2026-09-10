@@ -870,9 +870,13 @@ async function saveCompanyThemes(themes) {
   const { ref, uploadBytes, deleteObject } = await import(STORAGE_SDK);
   await ensureSignedIn();
 
+  const beforeThemes = await getAllCompanyThemes(); // for the audit log diff below
+
   const prepared = [];
+  const imageChanges = {}; // themeId -> {background, decal} -- audit log only, see logThemeChanges
   for (const theme of themes) {
     const t = { ...theme };
+    imageChanges[t.id] = { background: !!(t._removeBackgroundImage || t._newBackgroundFile), decal: !!(t._removeDecalImage || t._newDecalFile) };
     if (t._removeBackgroundImage) {
       await deleteObject(ref(storage, themeAssetPath(room.code, t.id, 'background'))).catch(() => {});
       t.hasBackgroundImage = false;
@@ -909,6 +913,10 @@ async function saveCompanyThemes(themes) {
       await deleteObject(ref(storage, themeAssetPath(room.code, oldId, 'background'))).catch(() => {});
       await deleteObject(ref(storage, themeAssetPath(room.code, oldId, 'decal'))).catch(() => {});
     }
+  }
+
+  if (typeof logThemeChanges === 'function') {
+    await logThemeChanges(beforeThemes, prepared, imageChanges).catch((err) => console.error('theme audit log:', err));
   }
 
   // Local-only fields (the real image blobs, and whether each has been
