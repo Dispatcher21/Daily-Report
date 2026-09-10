@@ -840,6 +840,27 @@ function renderEditor() {
   // just-saved report -- staying here was exactly the state someone could
   // come back to later, not realize they were still on an old report, and
   // save over it without meaning to.
+  // A save that only reaches local storage is exactly how a device ends up
+  // permanently out of sync with everyone else's -- the old fire-and-forget
+  // push (storage.js) tried once, quietly, and gave up forever on the first
+  // failure with nothing to show for it. Save now waits to confirm the push
+  // actually landed before moving on, and only accepts "stayed local" when
+  // there's genuinely no connection to reach the company with -- see
+  // confirmReportSyncStatus (firebase-sync.js).
+  async function confirmSyncAfterSave() {
+    const status = $('#save-status');
+    const syncStatus = await confirmReportSyncStatus(report);
+    if (syncStatus === 'offline') {
+      status.textContent = 'Saved locally — no connection, will sync automatically once you\'re back online.';
+    } else if (syncStatus === 'failed') {
+      status.classList.add('save-status-err');
+      alert(userError(
+        'Saved locally, but couldn\'t reach the company to sync it even after retrying. It\'ll keep trying on its own, or open Company Management and hit Refresh to retry now.',
+        'SAVE_SYNC_CONFIRM'
+      ));
+    }
+  }
+
   $('#btn-save-report').onclick = async () => {
     const btn = $('#btn-save-report');
     const status = $('#save-status');
@@ -848,6 +869,8 @@ function renderEditor() {
     status.classList.remove('save-status-err');
     try {
       await commitSave();
+      status.textContent = 'Syncing…';
+      await confirmSyncAfterSave();
       location.href = `reports.html?project=${project.id}`;
     } catch (err) {
       console.error(err);
@@ -865,6 +888,7 @@ function renderEditor() {
     if (reportDirty) {
       try {
         await commitSave();
+        await confirmSyncAfterSave();
       } catch (err) {
         console.error(err);
         alert('Could not save your changes -- check your connection and try again before generating.');

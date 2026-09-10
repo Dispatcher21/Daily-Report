@@ -42,6 +42,8 @@ it on the Welcome screen or in Settings).
   BLURR           Couldn't refresh the reports list
   SHOCKWAVE       Some imported reports saved locally but didn't sync to
                   the company -- run Refresh on Company Management
+  SKIDS           A report saved locally but couldn't sync to the company
+                  even after retrying -- run Refresh on Company Management
   SPARKPLUG       Something failed that doesn't have its own code yet --
                   note exactly what you were doing when this showed up
 

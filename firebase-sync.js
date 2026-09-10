@@ -1372,3 +1372,26 @@ async function confirmReportPushed(report) {
     return false;
   }
 }
+
+// Same confirmed-push idea as confirmReportPushed above, but for the one
+// place a person is actually staring at the screen waiting on it (the
+// report editor's own Save button) rather than a bulk import's log --
+// distinguishes "there's genuinely no connection to sync over" (expected,
+// not a failure -- the local save stands and wireAutoPull/the next Sync Now
+// picks it up once connectivity returns) from "online, but the push still
+// didn't go through even after retrying" (a real problem worth telling the
+// person about right now, not just leaving to fail silently the way the
+// fire-and-forget hook in storage.js always has). 'no-room' covers a
+// local-only device with nothing to sync to in the first place.
+async function confirmReportSyncStatus(report) {
+  const room = await getCompanyRoom();
+  if (!room) return 'no-room';
+  if (!navigator.onLine) return 'offline';
+  try {
+    await withSyncRetry(() => pushReportToCompany(room.code, report));
+    return 'synced';
+  } catch (err) {
+    console.error('confirmReportSyncStatus:', err);
+    return 'failed';
+  }
+}
