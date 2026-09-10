@@ -1069,6 +1069,15 @@ async function autoPullCompanyData(force) {
   }
   try {
     await pullCompanyDataSmart(room.code, null, force);
+    // Own try/catch, not allowed to fail this pull -- themes previously
+    // only synced on join or a manual Sync Now (same cadence as the
+    // company logo, deliberately), which meant a theme an admin just
+    // added or changed just sat there until someone happened to click
+    // Sync Now. Folded into the same background cycle projects/reports
+    // already use so it shows up on its own -- cheap either way, since
+    // pullCompanyThemes itself skips the round trip once nothing's newer
+    // than what this device already has (see its own header comment).
+    await pullCompanyThemes().catch((err) => console.error('theme pull:', err));
     await saveSetting(AUTO_PULL_SETTING, Date.now());
     pullCompanyMediaInBackground(room.code);
     window.dispatchEvent(new CustomEvent('company-data-pulled'));
