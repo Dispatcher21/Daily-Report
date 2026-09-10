@@ -405,7 +405,10 @@ async function syncCompanyRoomNow(onProgress) {
 
   const pulled = await pullAllCompanyData(room.code, onProgress);
   pullCompanyMediaInBackground(room.code); // see joinCompanyRoom -- not awaited on purpose
-  await pushAllLocalData(room.code, onProgress);
+  // dirtyOnly: this device's own live-push hooks already sent every real
+  // edit in real time -- Sync Now only needs to catch what those attempts
+  // couldn't land (see pushAllLocalData), not re-upload the whole company.
+  await pushAllLocalData(room.code, onProgress, { dirtyOnly: true });
   return pulled;
 }
 
@@ -953,7 +956,10 @@ async function pushProjectToCompany(code, project) {
     hasBackgroundImage = existingDoc.exists() ? !!existingDoc.data().hasBackgroundImage : false;
   }
 
-  const { backgroundImage: _bg, backgroundImageFetched: _bgf, ...rest } = project;
+  // pendingPush is this device's own local dirty-tracking flag (see
+  // withSyncRetry's callers below) -- never something to hand to another
+  // device, which would misread it as ITS OWN sync state for this record.
+  const { backgroundImage: _bg, backgroundImageFetched: _bgf, pendingPush: _pp, ...rest } = project;
   const data = JSON.parse(JSON.stringify(rest));
   data.hasBackgroundImage = hasBackgroundImage;
   await setDoc(doc(db, 'companies', code, 'projects', project.id), data);
@@ -1041,7 +1047,7 @@ async function pushReportToCompany(code, report) {
 
   // thumbnail/thumbnailBack/thumbnailAt are local-only (see defaults.js) --
   // never pushed, so they're excluded here the same as the real blob fields.
-  const { photos: _photos, photosFetched: _pf, repSignatureImage: _sig, signatureFetched: _sf, peSignatureImage: _peSig, thumbnail: _thumb, thumbnailBack: _thumbBack, thumbnailAt: _thumbAt, ...rest } = report;
+  const { photos: _photos, photosFetched: _pf, repSignatureImage: _sig, signatureFetched: _sf, peSignatureImage: _peSig, thumbnail: _thumb, thumbnailBack: _thumbBack, thumbnailAt: _thumbAt, pendingPush: _pp, ...rest } = report;
   const data = JSON.parse(JSON.stringify(rest));
   data.photoSlots = photos.map((p, i) => (photosFetched[i] ? !!p : !!existingPhotoSlots[i]));
   data.hasSignature = signatureFetched ? !!report.repSignatureImage : !!existingData.hasSignature;
@@ -1286,23 +1292,54 @@ async function fetchReportMedia(report) {
   return updated;
 }
 
-async function pushAllLocalData(code, onProgress) {
+// dirtyOnly (used by syncCompanyRoomNow -- the "Refresh" / Sync Now button)
+// re-pushes only records this device knows didn't land (pendingPush, set by
+// onCompanySyncProjectChanged/onCompanySyncReportChanged/confirmReportPushed/
+// confirmReportSyncStatus above the moment a push fails, and cleared the
+// moment one lands). Live saves already push themselves in real time --
+// re-uploading every project/report's full data (photos included) on every
+// manual sync click was the actual cause of "syncing the whole company"
+// feeling slow and wasteful, not anything about the data being out of date.
+// createCompanyRoom and rotateCompanyPassword still call this WITHOUT
+// dirtyOnly -- seeding a (new) company code from this device's existing
+// data is exactly the one case that legitimately needs everything pushed,
+// regardless of any record's pendingPush state.
+//
+// One-time caveat: a record that failed to sync BEFORE this flag existed
+// has no pendingPush set either way, so the very first Sync Now after this
+// ships won't know to retry it. Run Sync Now once manually after updating
+// to establish a clean baseline; every failure after that is caught going
+// forward.
+async function pushAllLocalData(code, onProgress, { dirtyOnly = false } = {}) {
   // Filtered against `code`, not pushed wholesale -- local storage has no
   // separate cache per company, so a device that's ever cached another
   // company's projects/reports (see _inCompanyScope) would otherwise bulk-
   // write that foreign data straight into this company's real records on
   // every "Sync Now". An untagged (pre-fix-vintage) record still passes,
   // same fallback as everywhere else this check is used.
-  const projects = (await getAllProjects()).filter((p) => projectInScope(p, { code }));
-  await Promise.all(projects.map((project) => pushProjectToCompany(code, project)));
+  const scopedProjects = (await getAllProjects()).filter((p) => projectInScope(p, { code }));
+  const projects = dirtyOnly ? scopedProjects.filter((p) => p.pendingPush) : scopedProjects;
+  await Promise.all(
+    projects.map(async (project) => {
+      await pushProjectToCompany(code, project);
+      if (project.pendingPush) await putProjectRaw({ ...project, pendingPush: false });
+    })
+  );
   if (onProgress) onProgress({ phase: 'projects', count: projects.length });
 
-  const reports = (await getAllReports()).filter((r) => reportInScope(r, { code }));
+  const scopedReports = (await getAllReports()).filter((r) => reportInScope(r, { code }));
+  const reports = dirtyOnly ? scopedReports.filter((r) => r.pendingPush) : scopedReports;
   for (let i = 0; i < reports.length; i++) {
     await pushReportToCompany(code, reports[i]);
+    if (reports[i].pendingPush) await putReportRaw({ ...reports[i], pendingPush: false });
     if (onProgress) onProgress({ phase: 'reports', index: i + 1, total: reports.length });
   }
 
+  // Not filtered by dirtyOnly -- entries are small (no blobs), the push is
+  // a plain idempotent setDoc, and an entry already on the far side costs
+  // nothing extra to re-send. Not worth its own pendingPush tracking; the
+  // cost this feature actually targets is re-uploading every project's/
+  // report's full data (photos included) on every click, not this.
   const auditEntries = (await getAllAuditEntries()).filter((e) => auditEntryInCompany(e, { code }));
   await Promise.all(auditEntries.map((entry) => pushAuditEntryToCompany(code, entry)));
   if (onProgress) onProgress({ phase: 'audit', count: auditEntries.length });
@@ -1338,18 +1375,44 @@ async function withSyncRetry(fn, attempts = 3, baseDelayMs = 400) {
   throw lastErr;
 }
 
+// pendingPush marks a record "Sync Now" must re-push -- set the moment a
+// live push fails even after retrying (so a later manual Refresh actually
+// finds it instead of Sync Now silently skipping it, now that Sync Now no
+// longer re-pushes the whole company -- see pushAllLocalData's dirtyOnly
+// mode), cleared the moment a push actually lands. A local-only raw write,
+// same as the other device-local fields (thumbnail, photosFetched) --
+// never something to await the caller for, and never sent to Firestore
+// (see pushProjectToCompany/pushReportToCompany's exclusion of it).
 async function onCompanySyncProjectChanged(project, deleted) {
   const room = await getCompanyRoom();
   if (!room) return;
-  if (deleted) await withSyncRetry(() => deleteProjectFromCompany(room.code, project));
-  else await withSyncRetry(() => pushProjectToCompany(room.code, project));
+  if (deleted) {
+    await withSyncRetry(() => deleteProjectFromCompany(room.code, project));
+    return;
+  }
+  try {
+    await withSyncRetry(() => pushProjectToCompany(room.code, project));
+    if (project.pendingPush) await putProjectRaw({ ...project, pendingPush: false });
+  } catch (err) {
+    await putProjectRaw({ ...project, pendingPush: true });
+    throw err;
+  }
 }
 
 async function onCompanySyncReportChanged(report, deleted) {
   const room = await getCompanyRoom();
   if (!room) return;
-  if (deleted) await withSyncRetry(() => deleteReportFromCompany(room.code, report));
-  else await withSyncRetry(() => pushReportToCompany(room.code, report));
+  if (deleted) {
+    await withSyncRetry(() => deleteReportFromCompany(room.code, report));
+    return;
+  }
+  try {
+    await withSyncRetry(() => pushReportToCompany(room.code, report));
+    if (report.pendingPush) await putReportRaw({ ...report, pendingPush: false });
+  } catch (err) {
+    await putReportRaw({ ...report, pendingPush: true });
+    throw err;
+  }
 }
 
 // Used by bulk report imports (project-setup.html's Import Reports tab,
@@ -1366,9 +1429,11 @@ async function confirmReportPushed(report) {
   if (!room) return true;
   try {
     await withSyncRetry(() => pushReportToCompany(room.code, report));
+    if (report.pendingPush) await putReportRaw({ ...report, pendingPush: false });
     return true;
   } catch (err) {
     console.error('confirmReportPushed:', err);
+    await putReportRaw({ ...report, pendingPush: true });
     return false;
   }
 }
@@ -1389,9 +1454,11 @@ async function confirmReportSyncStatus(report) {
   if (!navigator.onLine) return 'offline';
   try {
     await withSyncRetry(() => pushReportToCompany(room.code, report));
+    if (report.pendingPush) await putReportRaw({ ...report, pendingPush: false });
     return 'synced';
   } catch (err) {
     console.error('confirmReportSyncStatus:', err);
+    await putReportRaw({ ...report, pendingPush: true });
     return 'failed';
   }
 }
