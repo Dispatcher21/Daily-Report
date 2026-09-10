@@ -227,6 +227,7 @@ const ERROR_CODES = {
   REFRESH_REPORTS: 'BLURR',
   IMPORT_REPORT_SYNC: 'SHOCKWAVE',
   SAVE_SYNC_CONFIRM: 'SKIDS',
+  THEME_SAVE: 'WHIRL',
 };
 
 // Appends a reference code to a user-facing error message -- use for every

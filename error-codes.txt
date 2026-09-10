@@ -44,6 +44,7 @@ it on the Welcome screen or in Settings).
                   the company -- run Refresh on Company Management
   SKIDS           A report saved locally but couldn't sync to the company
                   even after retrying -- run Refresh on Company Management
+  WHIRL           Couldn't save or delete a company theme
   SPARKPLUG       Something failed that doesn't have its own code yet --
                   note exactly what you were doing when this showed up
 

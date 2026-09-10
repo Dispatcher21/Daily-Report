@@ -225,4 +225,48 @@ function readAccent() {
     set: setAccent,
     reset: () => setAccent(null),
   };
+
+  // ---------- Company theme ----------
+  //
+  // A company theme (see firebase-sync.js's theme sync / storage.js's
+  // companyThemes store) is a named preset for the SAME accent mechanism
+  // above, plus -- index.html only -- a background and a decorative decal
+  // image. Picking one just calls setAccent under the hood, so every
+  // derivation this file already does keeps working unchanged; this only
+  // adds remembering WHICH theme, so index.html knows what background/
+  // decal to render and Settings can highlight the current pick. The
+  // theme's solid-color fields are cached in localStorage the same way the
+  // accent hex is (not its images, which are async blobs and belong in
+  // IndexedDB, fetched lazily by index.html) so a solid-background theme
+  // still applies before first paint -- only an image background/decal can
+  // flash in, same as any other synced photo elsewhere in the app.
+  const COMPANY_THEME_KEY = 'daily-report-company-theme';
+
+  function readCompanyTheme() {
+    try {
+      const raw = localStorage.getItem(COMPANY_THEME_KEY);
+      if (!raw) return null;
+      const v = JSON.parse(raw);
+      return v && v.id ? v : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  let companyTheme = readCompanyTheme();
+
+  window.appCompanyTheme = {
+    get: () => companyTheme, // full metadata record, or null for "no company theme selected"
+    set: (theme) => {
+      companyTheme = theme && theme.id ? theme : null;
+      try {
+        if (companyTheme) localStorage.setItem(COMPANY_THEME_KEY, JSON.stringify(companyTheme));
+        else localStorage.removeItem(COMPANY_THEME_KEY);
+      } catch (e) {
+        /* private mode -- selection just won't persist */
+      }
+      if (companyTheme && companyTheme.accent) setAccent(companyTheme.accent);
+    },
+    reset: () => window.appCompanyTheme.set(null),
+  };
 })();

@@ -72,6 +72,7 @@ const COMPANY_PERMISSIONS_SETTING = 'companyRoomPermissions';
 const COMPANY_PROJECT_SCOPE_SETTING = 'companyRoomProjectScope';
 const COMPANY_ROLE_ID_SETTING = 'companyRoomRoleId';
 const LOGO_SYNCED_AT_SETTING = 'companyLogoSyncedAt';
+const THEMES_SYNCED_AT_SETTING = 'companyThemesSyncedAt';
 
 // Both default to admin-only (false) -- a company connected to Firebase for
 // the first time should never be more open than the app-level trust model
@@ -298,6 +299,7 @@ async function joinCompanyRoom(password, onProgress) {
   await saveSetting(LOGO_SYNCED_AT_SETTING, null);
 
   const pulled = await pullAllCompanyData(code, onProgress);
+  await pullCompanyThemes().catch((err) => console.error('theme pull:', err));
   // Logo + project background photos are fetched eagerly (not deferred
   // until something's actually opened, unlike report photos), but not
   // awaited here -- they can be large, and nobody should have to wait on a
@@ -408,6 +410,7 @@ async function syncCompanyRoomNow(onProgress) {
   // to keep being a trustworthy "fix it" button without reading the whole
   // company on every single click.
   const pulled = await pullCompanyDataSmart(room.code, onProgress);
+  await pullCompanyThemes().catch((err) => console.error('theme pull:', err));
   pullCompanyMediaInBackground(room.code); // see joinCompanyRoom -- not awaited on purpose
   // dirtyOnly: this device's own live-push hooks already sent every real
   // edit in real time -- Sync Now only needs to catch what those attempts
@@ -829,6 +832,130 @@ async function pullCompanyLogo() {
   await saveReportLogo(blob);
   await saveSetting(LOGO_SYNCED_AT_SETTING, Date.now());
   return true;
+}
+
+// ---------- Theme sync ----------
+//
+// Admin-curated, company-wide list of named themes (accent color +
+// background + a decorative "decal" image) that members choose from
+// individually in Settings -- see appCompanyTheme in theme.js for how a
+// chosen theme actually gets applied. Small and changes rarely, so synced
+// the same explicit way as the logo (join + Sync Now) rather than on every
+// throttled auto-pull -- see pullCompanyLogo's header comment for why.
+// Metadata (name, colors, position/opacity settings, hasBackgroundImage/
+// hasDecalImage flags) lives on the company doc itself, right next to name
+// and permissions; the actual background/decal image bytes are separate
+// Storage objects, lazy-fetched on demand (fetchThemeAsset) rather than
+// downloaded for every theme on every device regardless of whether that
+// theme is ever actually selected.
+
+function themeAssetPath(code, themeId, kind) {
+  return `companies/${code}/themes/${themeId}/${kind}`;
+}
+
+// `themes` is the FULL local shape (see storage.js's companyThemes store),
+// including any transient `_newBackgroundFile`/`_newDecalFile` (a File to
+// upload) or `_removeBackgroundImage`/`_removeDecalImage` (clear that
+// image) markers the Theme Builder UI sets on whichever entries changed --
+// everything else is left untouched. Also deletes Storage assets for any
+// theme id that existed locally before this call but isn't in `themes`
+// anymore (the admin deleted it).
+async function saveCompanyThemes(themes) {
+  const room = await getCompanyRoom();
+  if (!room) throw new Error('Not connected to a company.');
+  if (!room.isAdmin) throw new Error('Only an admin can manage themes.');
+
+  const { db, storage, ensureSignedIn } = await waitForFirebaseCore();
+  const { doc, updateDoc, serverTimestamp } = await import(FIRESTORE_SDK);
+  const { ref, uploadBytes, deleteObject } = await import(STORAGE_SDK);
+  await ensureSignedIn();
+
+  const prepared = [];
+  for (const theme of themes) {
+    const t = { ...theme };
+    if (t._removeBackgroundImage) {
+      await deleteObject(ref(storage, themeAssetPath(room.code, t.id, 'background'))).catch(() => {});
+      t.hasBackgroundImage = false;
+      t.backgroundImage = null;
+      t.backgroundImageFetched = true;
+    } else if (t._newBackgroundFile) {
+      await uploadBytes(ref(storage, themeAssetPath(room.code, t.id, 'background')), t._newBackgroundFile, { contentType: t._newBackgroundFile.type });
+      t.hasBackgroundImage = true;
+      t.backgroundImage = t._newBackgroundFile;
+      t.backgroundImageFetched = true;
+    }
+    if (t._removeDecalImage) {
+      await deleteObject(ref(storage, themeAssetPath(room.code, t.id, 'decal'))).catch(() => {});
+      t.hasDecalImage = false;
+      t.decalImage = null;
+      t.decalImageFetched = true;
+    } else if (t._newDecalFile) {
+      await uploadBytes(ref(storage, themeAssetPath(room.code, t.id, 'decal')), t._newDecalFile, { contentType: t._newDecalFile.type });
+      t.hasDecalImage = true;
+      t.decalImage = t._newDecalFile;
+      t.decalImageFetched = true;
+    }
+    delete t._newBackgroundFile;
+    delete t._newDecalFile;
+    delete t._removeBackgroundImage;
+    delete t._removeDecalImage;
+    prepared.push(t);
+  }
+
+  const previousIds = new Set((await getAllCompanyThemes()).map((t) => t.id));
+  const keptIds = new Set(prepared.map((t) => t.id));
+  for (const oldId of previousIds) {
+    if (!keptIds.has(oldId)) {
+      await deleteObject(ref(storage, themeAssetPath(room.code, oldId, 'background'))).catch(() => {});
+      await deleteObject(ref(storage, themeAssetPath(room.code, oldId, 'decal'))).catch(() => {});
+    }
+  }
+
+  // Local-only fields (the real image blobs, and whether each has been
+  // fetched on THIS device) never go to Firestore -- only the small
+  // metadata every device needs to decide whether/what to fetch.
+  const metadata = prepared.map(({ backgroundImage, decalImage, backgroundImageFetched, decalImageFetched, ...rest }) => rest);
+  await updateDoc(doc(db, 'companies', room.code), { themes: metadata, themesUpdatedAt: serverTimestamp() });
+  await replaceAllCompanyThemes(prepared);
+  await saveSetting(THEMES_SYNCED_AT_SETTING, Date.now());
+}
+
+// Pulls the company's current theme list down if it's newer than what this
+// device already has cached -- same "skip the round trip when nothing
+// changed" idea as pullCompanyLogo. An empty/never-touched list is a
+// legitimate, common state (most companies won't use this), not an error.
+async function pullCompanyThemes() {
+  const room = await getCompanyRoom();
+  if (!room) return false;
+
+  const { db, ensureSignedIn } = await waitForFirebaseCore();
+  const { doc, getDoc } = await import(FIRESTORE_SDK);
+  await ensureSignedIn();
+
+  const snap = await getDoc(doc(db, 'companies', room.code));
+  const data = snap.exists() ? snap.data() : {};
+  const remoteUpdatedAt = data.themesUpdatedAt ? data.themesUpdatedAt.toMillis() : 0;
+  const localSyncedAt = (await getSetting(THEMES_SYNCED_AT_SETTING)) || 0;
+  if (remoteUpdatedAt <= localSyncedAt) return false;
+
+  await replaceAllCompanyThemes(data.themes || []);
+  await saveSetting(THEMES_SYNCED_AT_SETTING, Date.now());
+  return true;
+}
+
+// Downloads one theme's background or decal image on demand -- called by
+// Settings (previewing a theme before picking it) and index.html (actually
+// rendering the currently-selected one), never eagerly for every theme on
+// every device. A no-op, no network call, once already fetched.
+async function fetchThemeAsset(code, themeId, kind) {
+  const { storage, ensureSignedIn } = await waitForFirebaseCore();
+  const { ref, getBytes } = await import(STORAGE_SDK);
+  await ensureSignedIn();
+  const bytes = await getBytesIfExists(ref(storage, themeAssetPath(code, themeId, kind)), getBytes);
+  if (!bytes) return null;
+  const blob = new Blob([bytes], { type: 'image/png' });
+  await saveThemeImageBlob(themeId, kind, blob);
+  return blob;
 }
 
 // Downloads the logo and every project's background image, waiting for

@@ -20,9 +20,36 @@
      regardless of specificity -- so visibility is a class, not `hidden`. */
   #link-company-management { display: none; text-align: center; text-decoration: none; max-width: 400px; margin: 1.5rem auto 0; }
   #link-company-management.show { display: block; }
+
+  /* Company theme background/decal -- see theme.js's appCompanyTheme and
+     applyCompanyThemeVisuals below. Fixed behind everything so it reads as
+     "the home screen's atmosphere," not a box competing with real content;
+     hidden by default (a solid-color theme, the only kind that can apply
+     before first paint, sets its own background inline the instant it's
+     picked -- see applyCompanyThemeVisuals -- an image background/decal is
+     always filled in a moment later, once fetched). */
+  #company-theme-bg {
+    position: fixed; inset: 0; z-index: -2;
+    background-size: cover; background-position: center;
+    pointer-events: none;
+  }
+  #company-theme-decal {
+    position: fixed; z-index: -1; pointer-events: none;
+    max-width: 28vw; max-height: 45vh; object-fit: contain;
+  }
+  #company-theme-decal[hidden] { display: none; }
+  #company-theme-decal.decal-size-small { max-width: 18vw; }
+  #company-theme-decal.decal-size-medium { max-width: 28vw; }
+  #company-theme-decal.decal-size-large { max-width: 42vw; }
+  #company-theme-decal.decal-pos-bottom-right { right: 1rem; bottom: 1rem; }
+  #company-theme-decal.decal-pos-bottom-left { left: 1rem; bottom: 1rem; }
+  #company-theme-decal.decal-pos-center { left: 50%; top: 50%; transform: translate(-50%, -50%); }
 </style>
 </head>
 <body>
+
+<div id="company-theme-bg" aria-hidden="true"></div>
+<img id="company-theme-decal" aria-hidden="true" alt="" hidden>
 
 <header class="app-header">
   <div>
@@ -663,6 +690,51 @@ async function handleIncomingSetup() {
   }
 }
 
+// ---------- Company theme visuals ----------
+//
+// Applies whichever theme this device has picked in Settings (see theme.js's
+// appCompanyTheme) -- a solid background colour is already in localStorage
+// so it applies here without a network round trip; a background/decal
+// IMAGE is a blob that only ever lives in IndexedDB, so those are fetched
+// (lazily -- see fetchThemeAsset) each time this runs, same one-time flash-
+// in every other synced photo in this app already has.
+async function applyCompanyThemeVisuals() {
+  const bgEl = $('#company-theme-bg');
+  const decalEl = $('#company-theme-decal');
+  const selected = window.appCompanyTheme && window.appCompanyTheme.get();
+  if (!selected) {
+    bgEl.style.background = '';
+    bgEl.style.backgroundImage = '';
+    decalEl.hidden = true;
+    return;
+  }
+  if (selected.backgroundType === 'color' && selected.backgroundColor) {
+    bgEl.style.background = selected.backgroundColor;
+  }
+
+  const room = await getCompanyRoom();
+  if (!room) return;
+  const theme = await getCompanyTheme(selected.id);
+  if (!theme) return; // deleted by the admin since this device last synced
+
+  if (theme.backgroundType === 'image' && theme.hasBackgroundImage) {
+    let blob = theme.backgroundImage;
+    if (!theme.backgroundImageFetched) blob = await fetchThemeAsset(room.code, theme.id, 'background').catch(() => null);
+    if (blob) bgEl.style.backgroundImage = `url(${URL.createObjectURL(blob)})`;
+  }
+
+  if (theme.hasDecalImage) {
+    let blob = theme.decalImage;
+    if (!theme.decalImageFetched) blob = await fetchThemeAsset(room.code, theme.id, 'decal').catch(() => null);
+    if (blob) {
+      decalEl.src = URL.createObjectURL(blob);
+      decalEl.className = `decal-size-${theme.decalSize || 'medium'} decal-pos-${theme.decalPosition || 'bottom-right'}`;
+      decalEl.style.opacity = theme.decalOpacity != null ? theme.decalOpacity : 0.35;
+      decalEl.hidden = false;
+    }
+  }
+}
+
 // ---------- Init ----------
 
 (async () => {
@@ -672,6 +744,7 @@ async function handleIncomingSetup() {
   }
   const room = await getCompanyRoom();
   $('#link-company-management').classList.toggle('show', !!(room && room.isAdmin));
+  applyCompanyThemeVisuals();
 
   // Logo/background pulls are fire-and-forget by design (see
   // pullCompanyMediaInBackground) so login never blocks on a photo

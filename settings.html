@@ -114,6 +114,11 @@
       <p class="hint" style="margin:1.1rem 0 0.3rem; display:flex; align-items:center; gap:0.4rem;">Accent Colour <button type="button" class="info-tip" data-tip="Used for buttons, headers, and highlights throughout the app." aria-label="What this does">i</button></p>
       <div class="color-swatches" id="accent-swatches"></div>
       <button type="button" class="text-btn" id="btn-reset-accent" style="padding:0;">Reset to default</button>
+
+      <div id="company-theme-section" hidden>
+        <p class="hint" style="margin:1.1rem 0 0.3rem; display:flex; align-items:center; gap:0.4rem;">Company Theme <button type="button" class="info-tip" data-tip="Themes your company admin has set up. Picking one sets your accent colour and, on the home screen, its background and artwork. Purely a personal choice -- nobody else's device changes." aria-label="What this does">i</button></p>
+        <div class="theme-gallery" id="company-theme-gallery"></div>
+      </div>
     </div>
   </div>
   </div>
@@ -304,19 +309,93 @@ function renderAccentSwatches() {
 $('#accent-swatches').addEventListener('click', (e) => {
   const btn = e.target.closest('.swatch:not(.swatch-custom)');
   if (!btn) return;
+  appCompanyTheme.reset(); // picking a plain colour means "not a company theme" -- see renderCompanyThemeGallery
   appAccent.set(btn.dataset.color);
   renderAccentSwatches();
+  renderCompanyThemeGallery();
 });
 $('#accent-swatches').addEventListener('change', (e) => {
   if (e.target.id !== 'accent-color-custom') return;
+  appCompanyTheme.reset();
   appAccent.set(e.target.value);
   renderAccentSwatches();
+  renderCompanyThemeGallery();
 });
 $('#btn-reset-accent').addEventListener('click', () => {
+  appCompanyTheme.reset();
   appAccent.reset();
   renderAccentSwatches();
+  renderCompanyThemeGallery();
 });
 renderAccentSwatches();
+
+// ---------- Company theme gallery ----------
+//
+// Purely a "pick one" surface -- members can never create/edit themes here,
+// only company-management.html's admin-only Theme Builder can. See
+// theme.js's appCompanyTheme for how a pick actually takes effect.
+let companyThemesCache = [];
+
+async function themeAssetObjectUrl(theme, kind) {
+  const room = await getCompanyRoom();
+  const has = kind === 'background' ? theme.hasBackgroundImage : theme.hasDecalImage;
+  if (!room || !has) return null;
+  let blob = kind === 'background' ? theme.backgroundImage : theme.decalImage;
+  const fetched = kind === 'background' ? theme.backgroundImageFetched : theme.decalImageFetched;
+  if (!fetched) {
+    blob = await fetchThemeAsset(room.code, theme.id, kind).catch(() => null);
+  }
+  return blob ? URL.createObjectURL(blob) : null;
+}
+
+async function renderCompanyThemeGallery() {
+  const section = $('#company-theme-section');
+  const room = await getCompanyRoom();
+  companyThemesCache = room ? await getAllCompanyThemes() : [];
+  section.hidden = !room || companyThemesCache.length === 0;
+  if (section.hidden) return;
+
+  const selected = appCompanyTheme.get();
+  const box = $('#company-theme-gallery');
+  box.innerHTML = companyThemesCache
+    .map((t) => {
+      const isSelected = selected && selected.id === t.id;
+      const bg = t.backgroundType === 'color' ? t.backgroundColor : '#666';
+      return (
+        `<button type="button" class="theme-card" data-theme-id="${t.id}" aria-pressed="${isSelected}">` +
+        `<span class="theme-card-swatch" data-bg-preview="${t.id}" style="background:${bg}">` +
+        `<span class="theme-card-accent" style="background:${t.accent}"></span>` +
+        `</span>` +
+        `<span class="theme-card-name">${escapeHtml(t.name)}</span>` +
+        `</button>`
+      );
+    })
+    .join('');
+
+  // Image previews (background thumbnails) are filled in after the fact --
+  // they may need a lazy fetch, and shouldn't block the swatch/name/accent
+  // parts (which are all local text/hex) from showing immediately.
+  companyThemesCache.forEach((t) => {
+    if (t.backgroundType !== 'image') return;
+    themeAssetObjectUrl(t, 'background').then((url) => {
+      if (!url) return;
+      const el = box.querySelector(`[data-bg-preview="${t.id}"]`);
+      if (el) el.style.backgroundImage = `url(${url})`;
+    });
+  });
+}
+
+$('#company-theme-gallery').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.theme-card');
+  if (!btn) return;
+  const theme = companyThemesCache.find((t) => t.id === btn.dataset.themeId);
+  if (!theme) return;
+  const { backgroundImage, decalImage, backgroundImageFetched, decalImageFetched, ...metadata } = theme;
+  appCompanyTheme.set(metadata);
+  renderAccentSwatches();
+  renderCompanyThemeGallery();
+  window.dispatchEvent(new CustomEvent('company-theme-changed'));
+});
 
 // ---------- Install as app ----------
 
@@ -421,6 +500,7 @@ async function refreshCompanySection() {
   $('#company-unlock-admin').hidden = room.isAdmin;
 
   showCompanyLogo(await getReportLogo());
+  await renderCompanyThemeGallery();
 }
 
 // -- Create Company --
@@ -668,7 +748,7 @@ $('#btn-sync-company-now').addEventListener('click', async () => {
   startProgressBanner();
   try {
     const result = await syncCompanyRoomNow(reportCompanyProgress);
-    showCompanyLogo(await getReportLogo());
+    await refreshCompanySection();
     applyHeaderLogo();
     finishProgressBanner(`You're all caught up! Got ${result.projectsPulled} project(s) and ${result.reportsPulled} report(s).`);
   } catch (err) {

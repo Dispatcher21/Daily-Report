@@ -142,6 +142,86 @@
     </div>
   </div>
 
+  <div class="step">
+    <div class="step-header">
+      <span class="step-num">BRANDING</span>
+      <h2>Theme Builder</h2>
+      <button type="button" class="info-tip" data-tip="Named themes (accent colour, home-screen background, and an optional decorative image) that members can choose from individually in their own Settings. Nobody's forced into one -- this just adds options." aria-label="What this does">i</button>
+    </div>
+    <div class="step-body">
+      <div class="empty-state" id="cm-themes-empty" hidden style="padding:1.25rem;">No themes yet -- add one below.</div>
+      <div id="cm-theme-list"></div>
+
+      <details class="company-details" id="cm-theme-details" style="margin-top:0.9rem;">
+        <summary id="cm-theme-details-summary">Add Theme</summary>
+
+        <label>Theme Name
+          <input type="text" id="cm-theme-name" placeholder="e.g. LSU">
+        </label>
+
+        <p class="hint" style="margin:0.9rem 0 0.3rem;">Accent Colour</p>
+        <div class="color-swatches"><input type="color" id="cm-theme-accent" class="swatch swatch-custom" value="#461d7c"></div>
+
+        <p class="hint" style="margin:0.9rem 0 0.3rem;">Home Screen Background</p>
+        <div class="segmented" id="cm-theme-bg-type">
+          <button type="button" data-bg-type="color">Solid Colour</button>
+          <button type="button" data-bg-type="image">Image</button>
+        </div>
+        <div id="cm-theme-bg-color-controls" style="margin-top:0.6rem;">
+          <div class="color-swatches"><input type="color" id="cm-theme-bg-color" class="swatch swatch-custom" value="#461d7c"></div>
+        </div>
+        <div id="cm-theme-bg-image-controls" hidden>
+          <div class="logo-preview-box" id="cm-theme-bg-preview-box" style="width:100%;height:140px;">
+            <span class="lp-empty" id="cm-theme-bg-empty">No image set</span>
+            <img id="cm-theme-bg-img" alt="Background preview" hidden style="width:100%;height:100%;object-fit:cover;">
+          </div>
+          <div class="uz" id="uz-cm-theme-bg">
+            <input type="file" id="cm-theme-f-bg" accept="image/*">
+            <span class="uz-icon">&#128444;</span>
+            <span class="uz-lbl">Upload Background Image</span>
+            <span class="uz-fname" id="cm-theme-fn-bg"></span>
+          </div>
+        </div>
+
+        <p class="hint" style="margin:1rem 0 0.3rem; display:flex; align-items:center; gap:0.4rem;">Decorative Image (optional) <button type="button" class="info-tip" data-tip="A transparent PNG shown over the home screen background -- a mascot, logo mark, anything. Position, size, and default transparency are set here; members can still nudge the transparency to their own taste." aria-label="What this does">i</button></p>
+        <div class="logo-preview-box" id="cm-theme-decal-preview-box">
+          <span class="lp-empty" id="cm-theme-decal-empty">No image set</span>
+          <img id="cm-theme-decal-img" alt="Decorative image preview" hidden>
+        </div>
+        <div class="uz" id="uz-cm-theme-decal">
+          <input type="file" id="cm-theme-f-decal" accept="image/*">
+          <span class="uz-icon">&#128444;</span>
+          <span class="uz-lbl">Upload Decorative Image</span>
+          <span class="uz-fname" id="cm-theme-fn-decal"></span>
+        </div>
+        <button type="button" class="btn-danger" id="btn-remove-cm-theme-decal" style="margin-top:0.5rem;" hidden>Remove Decorative Image</button>
+
+        <div id="cm-theme-decal-settings" hidden style="margin-top:0.75rem;">
+          <label>Position
+            <select id="cm-theme-decal-position">
+              <option value="bottom-right">Bottom Right</option>
+              <option value="bottom-left">Bottom Left</option>
+              <option value="center">Center</option>
+            </select>
+          </label>
+          <label>Size
+            <select id="cm-theme-decal-size">
+              <option value="small">Small</option>
+              <option value="medium" selected>Medium</option>
+              <option value="large">Large</option>
+            </select>
+          </label>
+          <label>Default Opacity: <span id="cm-theme-decal-opacity-val">35%</span>
+            <input type="range" id="cm-theme-decal-opacity" min="5" max="100" value="35">
+          </label>
+        </div>
+
+        <button type="button" class="btn-primary" id="btn-save-cm-theme" style="margin-top:0.9rem;">Save Theme</button>
+        <button type="button" class="text-btn" id="btn-cancel-cm-theme" style="margin-top:0.5rem;display:block;" hidden>Cancel Edit</button>
+      </details>
+    </div>
+  </div>
+
   <div class="step-pair">
   <div class="step">
     <div class="step-header">
@@ -412,6 +492,281 @@ $('#btn-remove-cm-logo').addEventListener('click', async () => {
   await clearReportLogo();
   showCmLogo(null);
   applyHeaderLogo();
+});
+
+// ---------- Theme Builder ----------
+//
+// themesCache mirrors what's in IndexedDB (companyThemes store) -- reloaded
+// after every save/delete so it never drifts. The open form's staged image
+// changes (a new File to upload, or "remove this image") live only on the
+// theme object currently being edited, as _newBackgroundFile/_newDecalFile/
+// _removeBackgroundImage/_removeDecalImage -- saveCompanyThemes (firebase-
+// sync.js) knows to look for exactly those fields.
+
+let themesCache = [];
+let editingThemeId = null;
+let themePreviewUrls = []; // object URLs created for previews -- revoked on every re-render so they don't leak
+
+function revokeThemePreviewUrls() {
+  themePreviewUrls.forEach((u) => URL.revokeObjectURL(u));
+  themePreviewUrls = [];
+}
+function trackedObjectUrl(blob) {
+  const url = URL.createObjectURL(blob);
+  themePreviewUrls.push(url);
+  return url;
+}
+
+async function renderCmThemeList() {
+  revokeThemePreviewUrls();
+  const box = $('#cm-theme-list');
+  $('#cm-themes-empty').hidden = themesCache.length > 0;
+  box.innerHTML = themesCache
+    .map((t) => {
+      const swatchBg = t.backgroundType === 'color' ? t.backgroundColor : '#666';
+      return (
+        `<div class="cm-project-row">` +
+        `<div style="display:flex;align-items:center;gap:0.6rem;">` +
+        `<span style="width:36px;height:36px;border-radius:8px;border:1px solid var(--border);background:${swatchBg};flex:0 0 auto;position:relative;overflow:hidden;" data-theme-swatch="${t.id}">` +
+        `<span style="position:absolute;right:2px;bottom:2px;width:12px;height:12px;border-radius:50%;border:1.5px solid rgba(255,255,255,0.85);background:${t.accent};"></span>` +
+        `</span>` +
+        `<div class="cm-project-name">${escapeHtml(t.name)}</div>` +
+        `</div>` +
+        `<div class="cm-project-actions">` +
+        `<button type="button" class="btn-secondary" data-edit-theme="${t.id}">Edit</button>` +
+        `<button type="button" class="btn-danger" data-delete-theme="${t.id}">Delete</button>` +
+        `</div>` +
+        `</div>`
+      );
+    })
+    .join('');
+
+  themesCache.forEach((t) => {
+    if (t.backgroundType !== 'image' || !t.hasBackgroundImage) return;
+    (async () => {
+      let blob = t.backgroundImage;
+      if (!t.backgroundImageFetched) {
+        const room = await getCompanyRoom();
+        blob = room ? await fetchThemeAsset(room.code, t.id, 'background').catch(() => null) : null;
+      }
+      if (!blob) return;
+      const el = box.querySelector(`[data-theme-swatch="${t.id}"]`);
+      if (el) { el.style.backgroundImage = `url(${trackedObjectUrl(blob)})`; el.style.backgroundSize = 'cover'; el.style.backgroundPosition = 'center'; }
+    })();
+  });
+}
+
+function resetThemeForm() {
+  editingThemeId = null;
+  $('#cm-theme-details-summary').textContent = 'Add Theme';
+  $('#cm-theme-name').value = '';
+  $('#cm-theme-accent').value = '#461d7c';
+  setThemeBgType('color');
+  $('#cm-theme-bg-color').value = '#461d7c';
+  showThemeImagePreview('bg', null);
+  $('#cm-theme-fn-bg').textContent = '';
+  showThemeImagePreview('decal', null);
+  $('#cm-theme-fn-decal').textContent = '';
+  $('#cm-theme-decal-settings').hidden = true;
+  $('#btn-remove-cm-theme-decal').hidden = true;
+  $('#cm-theme-decal-position').value = 'bottom-right';
+  $('#cm-theme-decal-size').value = 'medium';
+  $('#cm-theme-decal-opacity').value = 35;
+  $('#cm-theme-decal-opacity-val').textContent = '35%';
+  pendingBgFile = null;
+  pendingDecalFile = null;
+  removeDecalImage = false;
+  $('#btn-cancel-cm-theme').hidden = true;
+}
+
+function setThemeBgType(type) {
+  $$('#cm-theme-bg-type button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.bgType === type)));
+  $('#cm-theme-bg-color-controls').hidden = type !== 'color';
+  $('#cm-theme-bg-image-controls').hidden = type !== 'image';
+}
+$('#cm-theme-bg-type').addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  setThemeBgType(btn.dataset.bgType);
+});
+
+function showThemeImagePreview(kind, blobOrUrl) {
+  const img = $(kind === 'bg' ? '#cm-theme-bg-img' : '#cm-theme-decal-img');
+  const empty = $(kind === 'bg' ? '#cm-theme-bg-empty' : '#cm-theme-decal-empty');
+  if (!blobOrUrl) {
+    img.removeAttribute('src');
+    img.hidden = true;
+    empty.hidden = false;
+    return;
+  }
+  img.src = typeof blobOrUrl === 'string' ? blobOrUrl : trackedObjectUrl(blobOrUrl);
+  img.hidden = false;
+  empty.hidden = true;
+}
+
+let pendingBgFile = null;
+let pendingDecalFile = null;
+let removeDecalImage = false;
+
+$('#cm-theme-f-bg').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (!/^image\//.test(file.type)) { alert('That file is not an image.'); e.target.value = ''; return; }
+  pendingBgFile = await capImageDimensions(await convertHeicIfNeeded(file));
+  $('#cm-theme-fn-bg').textContent = file.name;
+  showThemeImagePreview('bg', pendingBgFile);
+});
+
+$('#cm-theme-f-decal').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (!/^image\//.test(file.type)) { alert('That file is not an image.'); e.target.value = ''; return; }
+  pendingDecalFile = await capImageDimensions(await convertHeicIfNeeded(file));
+  removeDecalImage = false;
+  $('#cm-theme-fn-decal').textContent = file.name;
+  showThemeImagePreview('decal', pendingDecalFile);
+  $('#cm-theme-decal-settings').hidden = false;
+  $('#btn-remove-cm-theme-decal').hidden = false;
+});
+
+$('#btn-remove-cm-theme-decal').addEventListener('click', () => {
+  pendingDecalFile = null;
+  removeDecalImage = true;
+  $('#cm-theme-fn-decal').textContent = '';
+  showThemeImagePreview('decal', null);
+  $('#cm-theme-decal-settings').hidden = true;
+  $('#btn-remove-cm-theme-decal').hidden = true;
+});
+
+$('#cm-theme-decal-opacity').addEventListener('input', (e) => {
+  $('#cm-theme-decal-opacity-val').textContent = `${e.target.value}%`;
+});
+
+async function openThemeFormForEdit(theme) {
+  editingThemeId = theme.id;
+  $('#cm-theme-details-summary').textContent = `Editing "${theme.name}"`;
+  $('#cm-theme-name').value = theme.name;
+  $('#cm-theme-accent').value = theme.accent;
+  setThemeBgType(theme.backgroundType);
+  $('#cm-theme-bg-color').value = theme.backgroundType === 'color' ? theme.backgroundColor : '#461d7c';
+  pendingBgFile = null;
+  $('#cm-theme-fn-bg').textContent = '';
+  if (theme.backgroundType === 'image' && theme.hasBackgroundImage) {
+    let blob = theme.backgroundImage;
+    if (!blob) {
+      const room = await getCompanyRoom();
+      blob = room ? await fetchThemeAsset(room.code, theme.id, 'background').catch(() => null) : null;
+    }
+    showThemeImagePreview('bg', blob);
+  } else {
+    showThemeImagePreview('bg', null);
+  }
+
+  pendingDecalFile = null;
+  removeDecalImage = false;
+  $('#cm-theme-fn-decal').textContent = '';
+  if (theme.hasDecalImage) {
+    let blob = theme.decalImage;
+    if (!blob) {
+      const room = await getCompanyRoom();
+      blob = room ? await fetchThemeAsset(room.code, theme.id, 'decal').catch(() => null) : null;
+    }
+    showThemeImagePreview('decal', blob);
+    $('#cm-theme-decal-settings').hidden = false;
+    $('#btn-remove-cm-theme-decal').hidden = false;
+  } else {
+    showThemeImagePreview('decal', null);
+    $('#cm-theme-decal-settings').hidden = true;
+    $('#btn-remove-cm-theme-decal').hidden = true;
+  }
+  $('#cm-theme-decal-position').value = theme.decalPosition || 'bottom-right';
+  $('#cm-theme-decal-size').value = theme.decalSize || 'medium';
+  $('#cm-theme-decal-opacity').value = Math.round((theme.decalOpacity != null ? theme.decalOpacity : 0.35) * 100);
+  $('#cm-theme-decal-opacity-val').textContent = `${$('#cm-theme-decal-opacity').value}%`;
+
+  $('#cm-theme-details').open = true;
+  $('#btn-cancel-cm-theme').hidden = false;
+  $('#cm-theme-details').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+$('#cm-theme-list').addEventListener('click', async (e) => {
+  const editBtn = e.target.closest('[data-edit-theme]');
+  if (editBtn) {
+    const theme = themesCache.find((t) => t.id === editBtn.dataset.editTheme);
+    if (theme) await openThemeFormForEdit(theme);
+    return;
+  }
+  const delBtn = e.target.closest('[data-delete-theme]');
+  if (delBtn) {
+    const theme = themesCache.find((t) => t.id === delBtn.dataset.deleteTheme);
+    if (!theme) return;
+    if (!confirm(`Delete the "${theme.name}" theme? Anyone currently using it keeps their accent colour, but loses its background/artwork next time they visit Settings.`)) return;
+    cmError('');
+    try {
+      const next = themesCache.filter((t) => t.id !== theme.id);
+      await saveCompanyThemes(next);
+      themesCache = await getAllCompanyThemes();
+      await renderCmThemeList();
+      cmStatus('Theme deleted.');
+    } catch (err) {
+      console.error(err);
+      cmError(userError("Couldn't delete the theme: " + err.message, 'THEME_SAVE'));
+    }
+  }
+});
+
+$('#btn-cancel-cm-theme').addEventListener('click', () => {
+  resetThemeForm();
+  $('#cm-theme-details').open = false;
+});
+
+$('#btn-save-cm-theme').addEventListener('click', async () => {
+  const name = $('#cm-theme-name').value.trim();
+  if (!name) { alert('Give the theme a name.'); return; }
+  const bgType = $('#cm-theme-bg-type button[aria-pressed="true"]').dataset.bgType;
+  if (bgType === 'image' && !pendingBgFile && !(editingThemeId && themesCache.find((t) => t.id === editingThemeId)?.hasBackgroundImage)) {
+    alert('Upload a background image, or switch to Solid Colour.');
+    return;
+  }
+
+  const btn = $('#btn-save-cm-theme');
+  btn.disabled = true;
+  cmError('');
+  try {
+    const id = editingThemeId || crypto.randomUUID();
+    const existing = themesCache.find((t) => t.id === id) || {};
+    const theme = {
+      ...existing,
+      id,
+      createdAt: existing.createdAt || Date.now(),
+      name,
+      accent: $('#cm-theme-accent').value,
+      backgroundType: bgType,
+      backgroundColor: bgType === 'color' ? $('#cm-theme-bg-color').value : (existing.backgroundColor || $('#cm-theme-bg-color').value),
+      hasBackgroundImage: bgType === 'image' ? (!!pendingBgFile || !!existing.hasBackgroundImage) : false,
+      hasDecalImage: removeDecalImage ? false : (!!pendingDecalFile || !!existing.hasDecalImage),
+      decalPosition: $('#cm-theme-decal-position').value,
+      decalSize: $('#cm-theme-decal-size').value,
+      decalOpacity: Number($('#cm-theme-decal-opacity').value) / 100,
+    };
+    if (pendingBgFile) theme._newBackgroundFile = pendingBgFile;
+    if (bgType === 'color' && existing.hasBackgroundImage) theme._removeBackgroundImage = true;
+    if (pendingDecalFile) theme._newDecalFile = pendingDecalFile;
+    if (removeDecalImage) theme._removeDecalImage = true;
+
+    const next = editingThemeId ? themesCache.map((t) => (t.id === id ? theme : t)) : [...themesCache, theme];
+    await saveCompanyThemes(next);
+    themesCache = await getAllCompanyThemes();
+    await renderCmThemeList();
+    resetThemeForm();
+    $('#cm-theme-details').open = false;
+    cmStatus('Theme saved.');
+  } catch (err) {
+    console.error(err);
+    cmError(userError("Couldn't save the theme: " + err.message, 'THEME_SAVE'));
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 // ---------- Projects ----------
@@ -884,6 +1239,8 @@ $('#btn-refresh-activity').addEventListener('click', async () => {
     await syncCompanyRoomNow(reportCompanyProgress);
     await renderCmProjects();
     await renderCmActivity();
+    themesCache = await getAllCompanyThemes();
+    await renderCmThemeList();
     finishProgressBanner('Refreshed!');
   } catch (err) {
     console.error(err);
@@ -917,6 +1274,10 @@ $('#btn-refresh-activity').addEventListener('click', async () => {
   await renderCmProjects();
   await renderCmActivity();
   await renderCsList();
+
+  themesCache = await getAllCompanyThemes();
+  resetThemeForm();
+  await renderCmThemeList();
 })();
 </script>
 </body>

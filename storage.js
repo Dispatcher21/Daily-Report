@@ -2,12 +2,13 @@
 // photo/signature blobs) on-device. No library needed.
 
 const DB_NAME = 'daily-report-app';
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 const REPORTS_STORE = 'reports';
 const PROJECTS_STORE = 'projects';
 const SETTINGS_STORE = 'settings';
 const AUDIT_STORE = 'auditLog';
 const REPORT_DRAFTS_STORE = 'reportDrafts';
+const COMPANY_THEMES_STORE = 'companyThemes';
 const LOGO_SETTING_KEY = 'reportLogo';
 const USER_NAME_SETTING_KEY = 'userName';
 
@@ -30,6 +31,9 @@ function openDb() {
       }
       if (!db.objectStoreNames.contains(REPORT_DRAFTS_STORE)) {
         db.createObjectStore(REPORT_DRAFTS_STORE, { keyPath: 'reportId' });
+      }
+      if (!db.objectStoreNames.contains(COMPANY_THEMES_STORE)) {
+        db.createObjectStore(COMPANY_THEMES_STORE, { keyPath: 'id' });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -543,4 +547,110 @@ async function mergeAuditEntry(entry) {
   if (existing) return 'skipped';
   await saveAuditEntry(entry);
   return 'added';
+}
+
+// ---------- Company themes ----------
+//
+// Small, admin-curated list (name + accent color + background + decal
+// settings), cached locally so a member's Settings page and index.html can
+// read it without a network round trip. Background/decal image bytes are
+// lazy-fetched (see firebase-sync.js's fetchThemeAsset) exactly like
+// project background photos -- only downloaded once a device actually
+// needs to render that specific theme, not on every pull.
+function getAllCompanyThemes() {
+  return withStore(COMPANY_THEMES_STORE, 'readonly', (store) => {
+    return new Promise((resolve, reject) => {
+      const req = store.getAll();
+      // IndexedDB's getAll() order follows the key (id, a random UUID), not
+      // creation order -- sort by createdAt so the builder's list and the
+      // picker's gallery show themes in the order the admin actually made
+      // them, same reasoning as reports/projects sorting by updatedAt.
+      req.onsuccess = () => resolve(req.result.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0)));
+      req.onerror = () => reject(req.error);
+    });
+  });
+}
+
+async function getCompanyTheme(id) {
+  return withStore(COMPANY_THEMES_STORE, 'readonly', (store) => {
+    return new Promise((resolve, reject) => {
+      const req = store.get(id);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => reject(req.error);
+    });
+  });
+}
+
+async function putCompanyThemeRaw(theme) {
+  await withStore(COMPANY_THEMES_STORE, 'readwrite', (store) => store.put(theme));
+}
+
+// Replaces the entire local theme list in one go -- the list is small and
+// wholly admin-owned, so unlike projects/reports there's no per-record
+// merge-by-updatedAt to do: whatever the company doc says right now IS the
+// list, full stop. Existing image blobs are carried forward for any theme
+// id that survives the replace, same "don't lose what's already local"
+// idea as a project's background image during a normal pull.
+async function replaceAllCompanyThemes(themes) {
+  const existingById = new Map((await getAllCompanyThemes()).map((t) => [t.id, t]));
+  // clear() then a run of put()s in the same synchronous pass -- valid IDB
+  // usage; requests queued against one transaction execute in the order
+  // they were made, no need to wait for clear()'s own onsuccess first.
+  await withStore(COMPANY_THEMES_STORE, 'readwrite', (store) => {
+    store.clear();
+    for (const theme of themes) {
+      const existing = existingById.get(theme.id);
+      const merged = { ...theme };
+      // Three cases, in order: no image at all; the incoming record ALREADY
+      // carries its own blob (saveCompanyThemes just uploaded it -- that's
+      // the admin's own device adopting what it just pushed, and must win
+      // over anything stale sitting in the old cache); otherwise fall back
+      // to whatever this device already had (the normal pull case, where
+      // incoming is metadata-only from Firestore).
+      if (!theme.hasBackgroundImage) {
+        merged.backgroundImage = null;
+        merged.backgroundImageFetched = true;
+      } else if (theme.backgroundImageFetched && theme.backgroundImage) {
+        merged.backgroundImage = theme.backgroundImage;
+        merged.backgroundImageFetched = true;
+      } else if (existing && existing.backgroundImageFetched && existing.backgroundImage) {
+        merged.backgroundImage = existing.backgroundImage;
+        merged.backgroundImageFetched = true;
+      } else {
+        merged.backgroundImage = null;
+        merged.backgroundImageFetched = false;
+      }
+      if (!theme.hasDecalImage) {
+        merged.decalImage = null;
+        merged.decalImageFetched = true;
+      } else if (theme.decalImageFetched && theme.decalImage) {
+        merged.decalImage = theme.decalImage;
+        merged.decalImageFetched = true;
+      } else if (existing && existing.decalImageFetched && existing.decalImage) {
+        merged.decalImage = existing.decalImage;
+        merged.decalImageFetched = true;
+      } else {
+        merged.decalImage = null;
+        merged.decalImageFetched = false;
+      }
+      store.put(merged);
+    }
+  });
+}
+
+// Records a lazily-fetched background/decal image blob against an
+// already-cached theme -- see firebase-sync.js's fetchThemeAsset. A no-op
+// if the theme's since been deleted out from under it (admin removed it
+// while a fetch was in flight).
+async function saveThemeImageBlob(themeId, kind, blob) {
+  const theme = await getCompanyTheme(themeId);
+  if (!theme) return;
+  if (kind === 'background') {
+    theme.backgroundImage = blob;
+    theme.backgroundImageFetched = true;
+  } else {
+    theme.decalImage = blob;
+    theme.decalImageFetched = true;
+  }
+  await putCompanyThemeRaw(theme);
 }
