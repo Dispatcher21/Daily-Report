@@ -538,7 +538,7 @@ main { max-width: min(1400px, 94vw); margin: 0 auto; padding: 1rem; }
   background: linear-gradient(to bottom, rgba(0,0,0,0.38) 0%, rgba(0,0,0,0.58) 40%, var(--surface) 100%);
   z-index: 0; pointer-events: none;
 }
-.hub-card .hc-icon, .hub-card .hc-title, .hub-card .hc-desc, .hub-card .hc-count {
+.hub-card .hc-icon, .hub-card .hc-title, .hub-card .hc-desc, .hub-card .hc-count, .hub-card .folder-preview-grid {
   position: relative; z-index: 1;
 }
 .hub-card.has-bg .hc-icon, .hub-card.has-bg .hc-title { color: #fff; }
