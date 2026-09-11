@@ -253,8 +253,26 @@ function projectCardHtml(p, countByProject, favoriteSet, { unfolderable = false 
 // layout entry itself (folder.backgroundImage), same as how a project's
 // own background photo is stored, just never uploaded anywhere since a
 // folder never syncs at all.
-function folderCardHtml(folder) {
-  const n = folder.projectIds.length;
+//
+// Instead of one big icon, shows a small 2-up grid of the projects
+// actually inside -- each tile labelled with that project's number (its
+// icon if it has none) -- so the card reads as "a folder holding these
+// specific things," the way a phone's own folder icon previews a few of
+// the apps inside it, rather than just a generic folder glyph.
+function folderCardHtml(folder, projectsById) {
+  const members = folder.projectIds.map((id) => projectsById.get(id)).filter(Boolean);
+  const n = members.length;
+  // Always at most 4 cells (a clean 2x2), never a ragged 3rd row -- when
+  // there are more than 4 projects, the 4th cell becomes the "+N" count
+  // instead of a 5th real tile.
+  const maxTiles = 4;
+  const shown = n > maxTiles ? members.slice(0, maxTiles - 1) : members;
+  const overflow = n - shown.length;
+  const tileLabel = (p) => (p.meta && p.meta.projectNo ? `#${p.meta.projectNo}` : p.icon || '\u{1F4C1}');
+  const tiles =
+    shown.map((p) => `<div class="folder-preview-tile" title="${escapeHtml(p.name)}">${escapeHtml(tileLabel(p))}</div>`).join('') +
+    (overflow > 0 ? `<div class="folder-preview-tile folder-preview-more">+${overflow}</div>` : '');
+
   const hasBg = folder.backgroundType === 'image' && folder.backgroundImage;
   let bgHtml = '';
   let styleAttr = '';
@@ -269,7 +287,7 @@ function folderCardHtml(folder) {
   return `
       <div class="hub-card folder-card${hasAnyBg ? ' has-bg' : ''}" data-drag-id="${folder.id}" data-drag-type="folder" data-open-folder="${folder.id}"${styleAttr}>
         ${bgHtml}
-        <span class="hc-icon">&#128193;</span>
+        <div class="folder-preview-grid">${tiles}</div>
         <div class="hc-title">${escapeHtml(folder.name)}</div>
         <div class="hc-desc">${n} project${n === 1 ? '' : 's'}</div>
       </div>`;
@@ -350,7 +368,7 @@ async function renderProjectCards() {
   const grid = $('#hub-grid');
   const cards = layout
     .map((entry) => {
-      if (entry.type === 'folder') return folderCardHtml(entry);
+      if (entry.type === 'folder') return folderCardHtml(entry, projectsById);
       const p = projectsById.get(entry.id);
       return p ? projectCardHtml(p, countByProject, favoriteSet) : '';
     })

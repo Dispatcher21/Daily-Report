@@ -548,6 +548,27 @@ main { max-width: min(1400px, 94vw); margin: 0 auto; padding: 1rem; }
   box-shadow: var(--shadow-lg);
 }
 .hub-card .hc-icon { font-size: 1.9rem; display: block; margin-bottom: 0.5rem; }
+
+/* Folder cards swap the single .hc-icon for this -- a small 2-up grid
+   previewing a few of the projects actually inside, each tile labelled
+   with that project's number (or its own icon, if it has no number).
+   Sized to occupy roughly the same footprint .hc-icon did, so folder and
+   project cards still read as the same family of tile. */
+.folder-preview-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.3rem;
+  width: 100%; max-width: 132px;
+  margin-bottom: 0.6rem;
+}
+.folder-preview-tile {
+  background: var(--brand-dim); color: var(--link);
+  border-radius: 8px; aspect-ratio: 1;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.68rem; font-weight: 700; text-align: center;
+  padding: 0.2rem; line-height: 1.1; overflow: hidden;
+  white-space: nowrap; text-overflow: ellipsis;
+}
+.hub-card.has-bg .folder-preview-tile { background: rgba(255,255,255,0.18); color: #fff; }
+.folder-preview-tile.folder-preview-more { font-size: 0.8rem; }
 .hub-card .hc-title { font-weight: 700; font-size: 1.08rem; margin-bottom: 0.3rem; }
 .hub-card .hc-desc { font-size: 0.85rem; color: var(--text-dim); line-height: 1.45; }
 .hub-card .hc-favorite {
