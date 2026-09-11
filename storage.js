@@ -111,6 +111,29 @@ async function toggleFavoriteProject(projectId) {
   return ids;
 }
 
+// The home screen's project grid order, and which projects are grouped
+// into which folders -- same "per device-user, never synced" reasoning as
+// favorites above (index.html is the only reader/writer of this). `null`
+// means "never customized" -- index.html falls back to its original
+// favorites-first flat order in that case; once someone drags anything,
+// a real layout array gets saved and takes over ordering completely.
+// Shape: an array of `{type:'project', id}` or `{type:'folder', id, name,
+// projectIds:[id,...]}` entries, in display order.
+function projectLayoutSettingKey(userName) {
+  return `projectLayout:${userName || '_anon'}`;
+}
+
+async function getProjectLayout() {
+  const userName = await getUserName();
+  const v = await getSetting(projectLayoutSettingKey(userName));
+  return v || null;
+}
+
+async function saveProjectLayout(layout) {
+  const userName = await getUserName();
+  await saveSetting(projectLayoutSettingKey(userName), layout);
+}
+
 // Shows the company logo in the header bar -- in the installed app and in
 // a plain browser tab alike, since this is used as a regular website too,
 // not just installed.

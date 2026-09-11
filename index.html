@@ -128,6 +128,7 @@
         <div class="eyebrow">Your Projects</div>
         <button type="button" class="view-toggle-btn" id="btn-refresh-home" title="Refresh company data" aria-label="Refresh company data">&#8635;</button>
       </div>
+      <p class="hint" style="margin:-0.5rem 0 0.75rem;">Press and hold a project, then drag it onto another to combine them into a folder -- just for you, on this device.</p>
       <div id="hub-grid" class="hub-grid"></div>
 
       <!-- ADD PROJECT PANEL (revealed in place, no separate page) -->
@@ -168,6 +169,20 @@
   <a class="btn-secondary" id="link-company-management" href="company-management.html">&#9881;&#65039; Company Management</a>
 </main>
 
+<div class="modal-overlay" id="folder-modal-overlay" hidden>
+  <div class="modal-card folder-modal-card">
+    <div class="folder-modal-header">
+      <h2 id="folder-modal-title"></h2>
+      <button type="button" class="text-btn" id="folder-modal-rename">Rename</button>
+    </div>
+    <div class="hub-grid" id="folder-modal-grid"></div>
+    <div class="folder-modal-footer">
+      <button type="button" class="btn-sm btn-sm-danger" id="folder-modal-delete">Delete Folder</button>
+      <button type="button" class="btn-secondary" id="folder-modal-close">Close</button>
+    </div>
+  </div>
+</div>
+
 <script src="lib/xlsx.min.js"></script>
 <script src="common.js"></script>
 <script src="defaults.js"></script>
@@ -183,6 +198,96 @@
 let pendingParsed = null;
 let hubCardBgUrls = [];
 
+// ---------- Home screen: project folders + drag to organize ----------
+//
+// Purely local to this device/user (see storage.js's getProjectLayout) --
+// never synced to the company, same reasoning as favorites. Drag is built
+// on Pointer Events rather than native HTML5 drag-and-drop, which barely
+// works on touch -- this app's real use is mostly phones/tablets in the
+// field, so native DnD would have made the feature effectively
+// desktop-only. See wireHubGridInteractions/hubDragPointerDown below.
+
+let currentHubLayout = null; // the exact layout last rendered -- mutated in place by drag/folder actions, then persisted
+let currentProjectsById = new Map();
+let currentCountByProject = new Map();
+let currentFavoriteSet = new Set();
+
+function projectCardHtml(p, countByProject, favoriteSet, { unfolderable = false } = {}) {
+  const n = countByProject.get(p.id) || 0;
+  const countLabel = n === 1 ? '1 report' : `${n} reports`;
+  let bgHtml = '';
+  if (p.backgroundImage) {
+    const url = URL.createObjectURL(p.backgroundImage);
+    hubCardBgUrls.push(url);
+    bgHtml = `<img class="hc-bg-img" src="${url}" alt=""><div class="hc-bg-fade"></div>`;
+  }
+  const isFav = favoriteSet.has(p.id);
+  return `
+      <a class="hub-card${p.backgroundImage ? ' has-bg' : ''}" href="project.html?id=${p.id}" data-drag-id="${p.id}" data-drag-type="project">
+        ${bgHtml}
+        ${unfolderable ? `<button type="button" class="hc-unfolder" data-unfolder-id="${p.id}" title="Take out of this folder">&times;</button>` : ''}
+        <button type="button" class="hc-favorite${isFav ? ' is-fav' : ''}" data-favorite-id="${p.id}" title="${isFav ? 'Remove from favorites' : 'Add to favorites'}">&#9733;</button>
+        <span class="hc-icon">&#128193;</span>
+        <div class="hc-title">${escapeHtml(p.name)}</div>
+        <div class="hc-desc">${escapeHtml(p.meta.projectName || '')}</div>
+        <div class="hc-count">${countLabel}</div>
+      </a>`;
+}
+
+function folderCardHtml(folder) {
+  const n = folder.projectIds.length;
+  return `
+      <div class="hub-card folder-card" data-drag-id="${folder.id}" data-drag-type="folder" data-open-folder="${folder.id}">
+        <span class="hc-icon">&#128193;</span>
+        <div class="hc-title">${escapeHtml(folder.name)}</div>
+        <div class="hc-desc">${n} project${n === 1 ? '' : 's'}</div>
+      </div>`;
+}
+
+// Reconciles the saved layout against the company's current real project
+// set -- a project deleted elsewhere disappears from wherever it was
+// (including out of a folder, dissolving that folder down to a plain
+// project entry if that leaves exactly one behind), and any project not
+// mentioned anywhere (new, or this is the first time this device has ever
+// customized anything) gets appended at the end. Self-healing: persists
+// the reconciled version back so drift never quietly accumulates.
+async function buildHubLayout(projects, favoriteSet) {
+  const saved = await getProjectLayout();
+  const existingIds = new Set(projects.map((p) => p.id));
+
+  if (!saved) {
+    // Never customized -- exact original behaviour, favorites first.
+    const ordered = [...projects].sort((a, b) => (favoriteSet.has(b.id) ? 1 : 0) - (favoriteSet.has(a.id) ? 1 : 0));
+    return ordered.map((p) => ({ type: 'project', id: p.id }));
+  }
+
+  const placed = new Set();
+  const reconciled = [];
+  for (const entry of saved) {
+    if (entry.type === 'project') {
+      if (!existingIds.has(entry.id)) continue;
+      placed.add(entry.id);
+      reconciled.push(entry);
+    } else if (entry.type === 'folder') {
+      const kept = entry.projectIds.filter((id) => existingIds.has(id));
+      kept.forEach((id) => placed.add(id));
+      if (kept.length === 0) continue; // every project in it is gone -- drop the folder
+      if (kept.length === 1) {
+        reconciled.push({ type: 'project', id: kept[0] }); // down to one -- no point keeping it a folder
+        continue;
+      }
+      reconciled.push({ ...entry, projectIds: kept });
+    }
+  }
+  for (const p of projects) {
+    if (!placed.has(p.id)) reconciled.push({ type: 'project', id: p.id });
+  }
+
+  if (JSON.stringify(saved) !== JSON.stringify(reconciled)) {
+    saveProjectLayout(reconciled).catch((err) => console.error('project layout reconcile:', err));
+  }
+  return reconciled;
+}
 
 async function renderProjectCards() {
   // One getAllReports() call, not one per project -- it already reads every
@@ -194,8 +299,7 @@ async function renderProjectCards() {
   // just what can be edited -- see projectInScope in firebase-sync.js.
   const projects = allProjects.filter((p) => projectInScope(p, room));
   const favoriteSet = new Set(favoriteIds);
-  // Favorited projects first (each list keeps its original order otherwise).
-  projects.sort((a, b) => (favoriteSet.has(b.id) ? 1 : 0) - (favoriteSet.has(a.id) ? 1 : 0));
+  const projectsById = new Map(projects.map((p) => [p.id, p]));
   const countByProject = new Map();
   for (const r of reports) {
     countByProject.set(r.projectId, (countByProject.get(r.projectId) || 0) + 1);
@@ -206,27 +310,18 @@ async function renderProjectCards() {
   hubCardBgUrls.forEach((url) => URL.revokeObjectURL(url));
   hubCardBgUrls = [];
 
+  const layout = await buildHubLayout(projects, favoriteSet);
+  currentHubLayout = layout;
+  currentProjectsById = projectsById;
+  currentCountByProject = countByProject;
+  currentFavoriteSet = favoriteSet;
+
   const grid = $('#hub-grid');
-  const cards = projects
-    .map((p) => {
-      const n = countByProject.get(p.id) || 0;
-      const countLabel = n === 1 ? '1 report' : `${n} reports`;
-      let bgHtml = '';
-      if (p.backgroundImage) {
-        const url = URL.createObjectURL(p.backgroundImage);
-        hubCardBgUrls.push(url);
-        bgHtml = `<img class="hc-bg-img" src="${url}" alt=""><div class="hc-bg-fade"></div>`;
-      }
-      const isFav = favoriteSet.has(p.id);
-      return `
-      <a class="hub-card${p.backgroundImage ? ' has-bg' : ''}" href="project.html?id=${p.id}">
-        ${bgHtml}
-        <button type="button" class="hc-favorite${isFav ? ' is-fav' : ''}" data-favorite-id="${p.id}" title="${isFav ? 'Remove from favorites' : 'Add to favorites'}">&#9733;</button>
-        <span class="hc-icon">&#128193;</span>
-        <div class="hc-title">${escapeHtml(p.name)}</div>
-        <div class="hc-desc">${escapeHtml(p.meta.projectName || '')}</div>
-        <div class="hc-count">${countLabel}</div>
-      </a>`;
+  const cards = layout
+    .map((entry) => {
+      if (entry.type === 'folder') return folderCardHtml(entry);
+      const p = projectsById.get(entry.id);
+      return p ? projectCardHtml(p, countByProject, favoriteSet) : '';
     })
     .join('');
   const canCreate = await companyCan('createProjects');
@@ -240,14 +335,288 @@ async function renderProjectCards() {
     );
   }
   if (canCreate) $('#btn-add-project').addEventListener('click', showAddProjectPanel);
+}
 
-  $$('[data-favorite-id]', grid).forEach((btn) => {
-    btn.addEventListener('click', async (e) => {
+// ---------- Drag controller ----------
+//
+// Long-press (not an immediate drag on movement) is what lets a normal
+// touch swipe keep scrolling the page right up until someone deliberately
+// holds a card -- same reasoning a phone home screen uses for "jiggle
+// mode." Works identically with a mouse, just via a short hold instead of
+// a distinct gesture, so the exact same code path covers both.
+const HUB_LONG_PRESS_MS = 280;
+const HUB_MOVE_CANCEL_PX = 10;
+const HUB_COMBINE_ZONE = 0.55; // fraction of a card's box, centered, that counts as "drop ON this card" rather than "beside it"
+
+let hubDrag = null; // active drag state, or null
+let hubDragSuppressClick = false; // consumed once by the next click after any armed drag, so it can't also navigate/open
+
+function clearHoverClasses() {
+  $$('.drop-combine, .drop-before, .drop-after', $('#hub-grid')).forEach((el) => {
+    el.classList.remove('drop-combine', 'drop-before', 'drop-after');
+  });
+}
+
+function updateHoverTarget(x, y) {
+  // .drag-ghost is pointer-events:none, so elementFromPoint already sees
+  // straight through it to whatever's actually underneath.
+  const el = document.elementFromPoint(x, y);
+  const targetCard = el && el.closest && el.closest('.hub-card[data-drag-id]');
+  clearHoverClasses();
+  if (!targetCard || targetCard.dataset.dragId === hubDrag.id) {
+    hubDrag.hoverEl = null;
+    hubDrag.hoverZone = null;
+    return;
+  }
+  const rect = targetCard.getBoundingClientRect();
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+  const withinCombineZone = Math.abs(x - cx) < (rect.width * HUB_COMBINE_ZONE) / 2 && Math.abs(y - cy) < (rect.height * HUB_COMBINE_ZONE) / 2;
+  // Only a PROJECT being dragged can combine into a folder -- a dragged
+  // folder only ever reorders, keeping folders one level deep on purpose.
+  const canCombine = hubDrag.type === 'project' && withinCombineZone;
+  hubDrag.hoverEl = targetCard;
+  if (canCombine) {
+    hubDrag.hoverZone = 'combine';
+    targetCard.classList.add('drop-combine');
+  } else {
+    hubDrag.hoverZone = x < cx ? 'before' : 'after';
+    targetCard.classList.add(x < cx ? 'drop-before' : 'drop-after');
+  }
+}
+
+async function finishDrag() {
+  const drag = hubDrag;
+  const grid = $('#hub-grid');
+  grid.classList.remove('dragging');
+  drag.card.classList.remove('drag-source');
+  drag.ghost.remove();
+  clearHoverClasses();
+  hubDrag = null;
+
+  if (!drag.hoverEl || !drag.hoverZone) return; // dropped on empty space -- no-op, nothing moved
+
+  const targetId = drag.hoverEl.dataset.dragId;
+  const targetType = drag.hoverEl.dataset.dragType;
+  const layout = currentHubLayout;
+
+  if (drag.hoverZone === 'combine') {
+    if (targetType === 'project') {
+      const name = prompt('Name this folder:', '');
+      if (!name || !name.trim()) return; // cancelled -- leave both cards exactly where they were
+      const targetIdx = layout.findIndex((e) => e.id === targetId);
+      const folder = { type: 'folder', id: crypto.randomUUID(), name: name.trim(), projectIds: [targetId, drag.id] };
+      const without = layout.filter((e) => e.id !== drag.id && e.id !== targetId);
+      without.splice(Math.min(targetIdx, without.length), 0, folder);
+      currentHubLayout = without;
+    } else {
+      const without = layout.filter((e) => e.id !== drag.id);
+      const folderEntry = without.find((e) => e.id === targetId);
+      if (!folderEntry) return;
+      folderEntry.projectIds.push(drag.id);
+      currentHubLayout = without;
+    }
+  } else {
+    // Reorder -- the same move works whether a project or a folder is
+    // the one being dragged.
+    const draggedEntry = layout.find((e) => e.id === drag.id);
+    const without = layout.filter((e) => e.id !== drag.id);
+    const targetIdx = without.findIndex((e) => e.id === targetId);
+    without.splice(drag.hoverZone === 'before' ? targetIdx : targetIdx + 1, 0, draggedEntry);
+    currentHubLayout = without;
+  }
+
+  await saveProjectLayout(currentHubLayout);
+  await renderProjectCards();
+}
+
+function hubDragPointerDown(e) {
+  if (e.button !== undefined && e.button !== 0) return; // left mouse only; touch/pen report undefined
+  if (e.target.closest('[data-favorite-id], [data-unfolder-id]')) return; // let those buttons work normally
+  const card = e.target.closest('.hub-card[data-drag-id]');
+  if (!card) return;
+
+  const grid = $('#hub-grid');
+  const pointerId = e.pointerId;
+  const startX = e.clientX;
+  const startY = e.clientY;
+  let armed = false;
+
+  function arm() {
+    if (armed) return;
+    armed = true;
+    hubDragSuppressClick = true;
+    grid.classList.add('dragging');
+    card.classList.add('drag-source');
+    const rect = card.getBoundingClientRect();
+    const ghost = card.cloneNode(true);
+    ghost.classList.remove('drag-source');
+    ghost.classList.add('drag-ghost');
+    ghost.style.left = `${rect.left}px`;
+    ghost.style.top = `${rect.top}px`;
+    ghost.style.width = `${rect.width}px`;
+    document.body.appendChild(ghost);
+    hubDrag = {
+      id: card.dataset.dragId,
+      type: card.dataset.dragType,
+      card,
+      ghost,
+      offsetX: startX - rect.left,
+      offsetY: startY - rect.top,
+      hoverEl: null,
+      hoverZone: null,
+    };
+  }
+
+  const longPressTimer = setTimeout(arm, HUB_LONG_PRESS_MS);
+
+  function onMove(ev) {
+    if (ev.pointerId !== pointerId) return;
+    if (!armed) {
+      if (Math.hypot(ev.clientX - startX, ev.clientY - startY) > HUB_MOVE_CANCEL_PX) {
+        clearTimeout(longPressTimer);
+        cleanup();
+      }
+      return;
+    }
+    ev.preventDefault();
+    hubDrag.ghost.style.left = `${ev.clientX - hubDrag.offsetX}px`;
+    hubDrag.ghost.style.top = `${ev.clientY - hubDrag.offsetY}px`;
+    updateHoverTarget(ev.clientX, ev.clientY);
+  }
+
+  function onUp(ev) {
+    if (ev.pointerId !== pointerId) return;
+    clearTimeout(longPressTimer);
+    cleanup();
+    if (armed) finishDrag();
+  }
+
+  function cleanup() {
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
+    window.removeEventListener('pointercancel', onUp);
+  }
+
+  window.addEventListener('pointermove', onMove, { passive: false });
+  window.addEventListener('pointerup', onUp);
+  window.addEventListener('pointercancel', onUp);
+}
+
+// ---------- Folder modal ----------
+
+let openFolderId = null;
+
+function currentFolderEntry(folderId) {
+  return (currentHubLayout || []).find((e) => e.type === 'folder' && e.id === folderId);
+}
+
+function renderFolderModalGrid() {
+  const folder = currentFolderEntry(openFolderId);
+  if (!folder) {
+    closeFolderModal();
+    return;
+  }
+  $('#folder-modal-title').textContent = folder.name;
+  $('#folder-modal-grid').innerHTML = folder.projectIds
+    .map((id) => currentProjectsById.get(id))
+    .filter(Boolean)
+    .map((p) => projectCardHtml(p, currentCountByProject, currentFavoriteSet, { unfolderable: true }))
+    .join('');
+}
+
+function openFolderModal(folderId) {
+  openFolderId = folderId;
+  renderFolderModalGrid();
+  $('#folder-modal-overlay').hidden = false;
+}
+
+function closeFolderModal() {
+  $('#folder-modal-overlay').hidden = true;
+  openFolderId = null;
+}
+
+function wireHubGridInteractions() {
+  const grid = $('#hub-grid');
+
+  grid.addEventListener('click', async (e) => {
+    if (hubDragSuppressClick) {
+      hubDragSuppressClick = false;
       e.preventDefault();
       e.stopPropagation();
-      await toggleFavoriteProject(btn.dataset.favoriteId);
+      return;
+    }
+    const favBtn = e.target.closest('[data-favorite-id]');
+    if (favBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      await toggleFavoriteProject(favBtn.dataset.favoriteId);
       await renderProjectCards();
-    });
+      return;
+    }
+    const folderCard = e.target.closest('[data-open-folder]');
+    if (folderCard) openFolderModal(folderCard.dataset.openFolder);
+  });
+
+  grid.addEventListener('pointerdown', hubDragPointerDown);
+
+  $('#folder-modal-close').addEventListener('click', closeFolderModal);
+  $('#folder-modal-overlay').addEventListener('click', (e) => {
+    if (e.target.id === 'folder-modal-overlay') closeFolderModal();
+  });
+
+  $('#folder-modal-rename').addEventListener('click', async () => {
+    const folder = currentFolderEntry(openFolderId);
+    if (!folder) return;
+    const name = prompt('Rename folder:', folder.name);
+    if (!name || !name.trim()) return;
+    folder.name = name.trim();
+    await saveProjectLayout(currentHubLayout);
+    $('#folder-modal-title').textContent = folder.name;
+    await renderProjectCards();
+  });
+
+  $('#folder-modal-delete').addEventListener('click', async () => {
+    const folder = currentFolderEntry(openFolderId);
+    if (!folder) return;
+    if (!confirm(`Delete the "${folder.name}" folder? Its projects go back to the main list -- nothing is actually deleted.`)) return;
+    const idx = currentHubLayout.findIndex((e) => e.id === folder.id);
+    currentHubLayout.splice(idx, 1, ...folder.projectIds.map((id) => ({ type: 'project', id })));
+    await saveProjectLayout(currentHubLayout);
+    closeFolderModal();
+    await renderProjectCards();
+  });
+
+  $('#folder-modal-grid').addEventListener('click', async (e) => {
+    const favBtn = e.target.closest('[data-favorite-id]');
+    if (favBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      await toggleFavoriteProject(favBtn.dataset.favoriteId);
+      renderFolderModalGrid();
+      await renderProjectCards();
+      return;
+    }
+    const unfolderBtn = e.target.closest('[data-unfolder-id]');
+    if (!unfolderBtn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const folder = currentFolderEntry(openFolderId);
+    if (!folder) return;
+    const pid = unfolderBtn.dataset.unfolderId;
+    folder.projectIds = folder.projectIds.filter((id) => id !== pid);
+    const folderIdx = currentHubLayout.findIndex((e2) => e2.id === folder.id);
+    if (folder.projectIds.length === 0) {
+      currentHubLayout.splice(folderIdx, 1);
+    } else if (folder.projectIds.length === 1) {
+      currentHubLayout.splice(folderIdx, 1, { type: 'project', id: folder.projectIds[0] });
+    }
+    currentHubLayout.push({ type: 'project', id: pid });
+    await saveProjectLayout(currentHubLayout);
+    const stillOpen = currentHubLayout.some((e2) => e2.id === folder.id);
+    if (stillOpen) renderFolderModalGrid();
+    else closeFolderModal();
+    await renderProjectCards();
   });
 }
 
@@ -764,6 +1133,7 @@ async function applyCompanyThemeVisuals() {
 
   await handleIncomingSetup();
   await adoptOrphanReportsIfAny();
+  wireHubGridInteractions();
   await renderProjectCards();
   await renderUnsavedDrafts();
   await renderManagerDashboard();
