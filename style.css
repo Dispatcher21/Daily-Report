@@ -693,6 +693,9 @@ main { max-width: min(1400px, 94vw); margin: 0 auto; padding: 1rem; }
   margin-bottom: 1rem;
 }
 .folder-modal-header h2 { margin: 0; font-size: 1.2rem; overflow-wrap: break-word; }
+.folder-bg-controls { margin-bottom: 1.25rem; }
+.folder-bg-controls .color-swatches,
+.folder-bg-controls .uz { margin-top: 0.6rem; }
 .folder-modal-card .hub-grid { margin: 0 0 1.25rem; }
 .folder-modal-card .hub-grid:empty::after {
   content: 'No projects left in this folder.';

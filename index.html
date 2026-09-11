@@ -13,6 +13,7 @@
 <meta name="apple-mobile-web-app-title" content="Daily Reports">
 <link rel="stylesheet" href="style.css">
 <script src="theme.js"></script>
+<script src="lib/heic2any.min.js"></script>
 <style>
   /* A plain `hidden` attribute doesn't work here: this link also needs
      display:block while visible, and any author-stylesheet rule that sets
@@ -171,6 +172,23 @@
       <h2 id="folder-modal-title"></h2>
       <button type="button" class="text-btn" id="folder-modal-rename">Rename</button>
     </div>
+
+    <div class="folder-bg-controls">
+      <div class="segmented" id="folder-bg-type">
+        <button type="button" data-bg-type="none">No Background</button>
+        <button type="button" data-bg-type="color">Colour</button>
+        <button type="button" data-bg-type="image">Image</button>
+      </div>
+      <div class="color-swatches" id="folder-bg-color-controls" hidden>
+        <input type="color" id="folder-bg-color" class="swatch swatch-custom" value="#1c3d5a">
+      </div>
+      <div class="uz" id="folder-bg-image-controls" hidden>
+        <input type="file" id="folder-f-bg" accept="image/*">
+        <span class="uz-icon">&#128444;</span>
+        <span class="uz-lbl">Upload Background Image</span>
+      </div>
+    </div>
+
     <div class="hub-grid" id="folder-modal-grid"></div>
     <div class="folder-modal-footer">
       <button type="button" class="btn-sm btn-sm-danger" id="folder-modal-delete">Delete Folder</button>
@@ -223,17 +241,34 @@ function projectCardHtml(p, countByProject, favoriteSet, { unfolderable = false 
         ${bgHtml}
         ${unfolderable ? `<button type="button" class="hc-unfolder" data-unfolder-id="${p.id}" title="Take out of this folder">&times;</button>` : ''}
         <button type="button" class="hc-favorite${isFav ? ' is-fav' : ''}" data-favorite-id="${p.id}" title="${isFav ? 'Remove from favorites' : 'Add to favorites'}">&#9733;</button>
-        <span class="hc-icon">&#128193;</span>
+        <span class="hc-icon">${p.icon || '&#128193;'}</span>
         <div class="hc-title">${escapeHtml(p.name)}</div>
         <div class="hc-desc">${escapeHtml(p.meta.projectName || '')}</div>
         <div class="hc-count">${countLabel}</div>
       </a>`;
 }
 
+// A folder's background is purely local (see storage.js's
+// getProjectLayout header comment) -- stored directly as a Blob on the
+// layout entry itself (folder.backgroundImage), same as how a project's
+// own background photo is stored, just never uploaded anywhere since a
+// folder never syncs at all.
 function folderCardHtml(folder) {
   const n = folder.projectIds.length;
+  const hasBg = folder.backgroundType === 'image' && folder.backgroundImage;
+  let bgHtml = '';
+  let styleAttr = '';
+  if (hasBg) {
+    const url = URL.createObjectURL(folder.backgroundImage);
+    hubCardBgUrls.push(url);
+    bgHtml = `<img class="hc-bg-img" src="${url}" alt=""><div class="hc-bg-fade"></div>`;
+  } else if (folder.backgroundType === 'color' && folder.backgroundColor) {
+    styleAttr = ` style="background:${folder.backgroundColor};"`;
+  }
+  const hasAnyBg = hasBg || folder.backgroundType === 'color';
   return `
-      <div class="hub-card folder-card" data-drag-id="${folder.id}" data-drag-type="folder" data-open-folder="${folder.id}">
+      <div class="hub-card folder-card${hasAnyBg ? ' has-bg' : ''}" data-drag-id="${folder.id}" data-drag-type="folder" data-open-folder="${folder.id}"${styleAttr}>
+        ${bgHtml}
         <span class="hc-icon">&#128193;</span>
         <div class="hc-title">${escapeHtml(folder.name)}</div>
         <div class="hc-desc">${n} project${n === 1 ? '' : 's'}</div>
@@ -531,7 +566,64 @@ function renderFolderModalGrid() {
     .filter(Boolean)
     .map((p) => projectCardHtml(p, currentCountByProject, currentFavoriteSet, { unfolderable: true }))
     .join('');
+  renderFolderBgControls(folder);
 }
+
+function setFolderBgType(type) {
+  $$('#folder-bg-type button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.bgType === type)));
+  $('#folder-bg-color-controls').hidden = type !== 'color';
+  $('#folder-bg-image-controls').hidden = type !== 'image';
+}
+$('#folder-bg-type').addEventListener('click', async (e) => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  const folder = currentFolderEntry(openFolderId);
+  if (!folder) return;
+  const type = btn.dataset.bgType;
+  setFolderBgType(type);
+  if (type === 'none') {
+    folder.backgroundType = 'none';
+    folder.backgroundImage = null;
+    await saveProjectLayout(currentHubLayout);
+    await renderProjectCards();
+  } else if (type === 'color' && folder.backgroundType !== 'color') {
+    folder.backgroundType = 'color';
+    folder.backgroundColor = folder.backgroundColor || '#1c3d5a';
+    folder.backgroundImage = null;
+    await saveProjectLayout(currentHubLayout);
+    await renderProjectCards();
+  }
+  // 'image' alone doesn't commit anything yet -- waits for an actual file.
+});
+
+function renderFolderBgControls(folder) {
+  const type = folder.backgroundType || 'none';
+  setFolderBgType(type);
+  $('#folder-bg-color').value = folder.backgroundColor || '#1c3d5a';
+}
+
+$('#folder-bg-color').addEventListener('change', async (e) => {
+  const folder = currentFolderEntry(openFolderId);
+  if (!folder) return;
+  folder.backgroundType = 'color';
+  folder.backgroundColor = e.target.value;
+  folder.backgroundImage = null;
+  await saveProjectLayout(currentHubLayout);
+  await renderProjectCards();
+});
+
+$('#folder-f-bg').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  if (!/^image\//.test(file.type)) { alert('That file is not an image.'); return; }
+  const folder = currentFolderEntry(openFolderId);
+  if (!folder) return;
+  folder.backgroundType = 'image';
+  folder.backgroundImage = await capImageDimensions(await convertHeicIfNeeded(file));
+  await saveProjectLayout(currentHubLayout);
+  await renderProjectCards();
+});
 
 // `originEl` (the folder card that was tapped) is what lets the popup
 // visibly grow out of that exact card instead of just appearing --

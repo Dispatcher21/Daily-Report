@@ -35,6 +35,24 @@
   .cm-project-row > div:first-child { min-width: 0; flex: 1 1 auto; }
   .cm-project-name { font-weight: 600; overflow-wrap: break-word; }
   .cm-project-sub { font-size: 0.8rem; color: var(--text-dim); }
+
+  .cm-project-icon {
+    flex: 0 0 auto; width: 2.2rem; height: 2.2rem; border-radius: var(--radius-sm);
+    background: var(--surface-2); border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.2rem; cursor: pointer;
+  }
+  .cm-project-icon:hover { border-color: var(--brand-light); }
+
+  .icon-picker-grid {
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem;
+  }
+  .icon-picker-opt {
+    aspect-ratio: 1; border-radius: var(--radius-sm); border: 1.5px solid var(--border);
+    background: var(--surface-2); font-size: 1.3rem; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .icon-picker-opt:hover { border-color: var(--brand-light); background: var(--surface-3); }
   .cm-project-actions { display: flex; gap: 0.5rem 1rem; flex-wrap: wrap; flex: 1 1 auto; justify-content: flex-end; }
   /* Groups background-management (Replace/Remove BG) separately from
      record-management (Manage/Delete) -- the extra gap between clusters
@@ -475,6 +493,14 @@
   <div class="err" id="cm-error" hidden></div>
 
 </main>
+
+<div class="modal-overlay" id="icon-picker-overlay" hidden>
+  <div class="modal-card" style="max-width:360px;">
+    <h2 style="margin:0 0 0.9rem;font-size:1.1rem;">Choose an Icon</h2>
+    <div class="icon-picker-grid" id="icon-picker-grid"></div>
+    <button type="button" class="btn-secondary" id="icon-picker-close" style="width:auto;margin-top:1rem;">Close</button>
+  </div>
+</div>
 
 <script src="lib/xlsx.min.js"></script>
 <script src="common.js"></script>
@@ -947,12 +973,16 @@ async function renderCmProjects() {
     .map(
       (p) => `
       <div class="cm-project-row" data-id="${p.id}">
-        <div>
-          <div class="cm-project-name">${escapeHtml(p.name)}</div>
-          <div class="cm-project-sub">${p.payItemCatalog.length} pay item(s)${p.meta.projectNo ? ' &middot; #' + escapeHtml(p.meta.projectNo) : ''}</div>
+        <div style="display:flex;align-items:center;gap:0.6rem;">
+          <span class="cm-project-icon" data-pick-icon="${p.id}" title="Change icon">${p.icon || '&#128193;'}</span>
+          <div>
+            <div class="cm-project-name">${escapeHtml(p.name)}</div>
+            <div class="cm-project-sub">${p.payItemCatalog.length} pay item(s)${p.meta.projectNo ? ' &middot; #' + escapeHtml(p.meta.projectNo) : ''}</div>
+          </div>
         </div>
         <div class="cm-project-actions">
           <div class="cm-action-cluster">
+            <button type="button" class="btn-sm" data-pick-icon="${p.id}">Icon</button>
             <label class="btn-sm" style="cursor:pointer;">
               &#128444; ${p.backgroundImage ? 'Replace BG' : 'Add BG'}
               <input type="file" accept="image/*" data-bg-upload="${p.id}">
@@ -969,6 +999,70 @@ async function renderCmProjects() {
     .join('');
   await renderRequiredFieldsPicker(projects);
 }
+
+// ---------- Project icons ----------
+//
+// A curated set rather than a free upload -- keeps this a one-line string
+// field on the project (syncs exactly like any other project field,
+// nothing new needed in firebase-sync.js) instead of another per-project
+// Storage asset to manage. Shown on the home screen's project cards in
+// place of the generic folder glyph (see index.html's projectCardHtml).
+const PROJECT_ICON_OPTIONS = [
+  '\u{1F3D7}\u{FE0F}', // building construction (crane)
+  '\u{1F6A7}', // construction sign
+  '\u{1F6E3}\u{FE0F}', // road
+  '\u{1F309}', // bridge at night
+  '\u{1F6A6}', // traffic light
+  '\u{1F6B0}', // water/pipe
+  '\u{1F3E2}', // office building
+  '\u{2699}\u{FE0F}', // gear
+  '\u{1F4D0}', // triangular ruler
+  '\u{1F9F1}', // bricks
+  '\u{1F687}', // tunnel/metro
+  '\u{26A1}', // electrical
+  '\u{1F527}', // wrench
+  '\u{1F3ED}', // factory
+  '\u{1F4E1}', // signal/utility
+  '\u{1FAA7}', // sign
+  '\u{1F30A}', // drainage/water
+  '\u{1F69B}', // hauling truck
+  '\u{1F9BA}', // safety vest
+  '\u{1F4CD}', // survey/location
+  '\u{1F4C1}', // plain folder -- the original default, kept as an explicit option
+];
+
+let iconPickerProjectId = null;
+
+function renderIconPickerGrid() {
+  $('#icon-picker-grid').innerHTML = PROJECT_ICON_OPTIONS.map(
+    (icon) => `<button type="button" class="icon-picker-opt" data-icon="${icon}">${icon}</button>`
+  ).join('');
+}
+
+function openIconPicker(projectId) {
+  iconPickerProjectId = projectId;
+  renderIconPickerGrid();
+  $('#icon-picker-overlay').hidden = false;
+}
+function closeIconPicker() {
+  $('#icon-picker-overlay').hidden = true;
+  iconPickerProjectId = null;
+}
+$('#icon-picker-close').addEventListener('click', closeIconPicker);
+$('#icon-picker-overlay').addEventListener('click', (e) => {
+  if (e.target.id === 'icon-picker-overlay') closeIconPicker();
+});
+$('#icon-picker-grid').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.icon-picker-opt');
+  if (!btn || !iconPickerProjectId) return;
+  const room = await getCompanyRoom();
+  const project = (await getAllProjects()).filter((p) => projectInScope(p, room)).find((p) => p.id === iconPickerProjectId);
+  if (!project) return;
+  project.icon = btn.dataset.icon;
+  await saveProject(project);
+  closeIconPicker();
+  await renderCmProjects();
+});
 
 async function renderRequiredFieldsPicker(projects) {
   let list = projects;
@@ -991,6 +1085,12 @@ $('#rf-project-select').addEventListener('change', () => {
 });
 
 $('#cm-project-list').addEventListener('click', async (e) => {
+  const iconBtn = e.target.closest('[data-pick-icon]');
+  if (iconBtn) {
+    openIconPicker(iconBtn.dataset.pickIcon);
+    return;
+  }
+
   const deleteBtn = e.target.closest('[data-delete-project]');
   if (deleteBtn) {
     const id = deleteBtn.dataset.deleteProject;
