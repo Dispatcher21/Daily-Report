@@ -564,14 +564,15 @@ main { max-width: min(1400px, 94vw); margin: 0 auto; padding: 1rem; }
 }
 .hub-card .hc-icon { font-size: 1.9rem; display: block; margin-bottom: 0.5rem; }
 
-/* Folder cards swap the single .hc-icon for this -- a small 2-up grid
+/* Folder cards swap the single .hc-icon for this -- a small grid
    previewing a few of the projects actually inside, each tile labelled
-   with that project's number (or its own icon, if it has no number).
-   Sized to occupy roughly the same footprint .hc-icon did, so folder and
-   project cards still read as the same family of tile. */
+   with that project's number (or its own icon, if it has no number). A
+   home-screen card has plenty of width to spare (see .hub-grid's own
+   minmax), so this runs 4 across rather than capping at 2 just because
+   .hc-icon happened to be narrow. */
 .folder-preview-grid {
-  display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.3rem;
-  width: 100%; max-width: 132px;
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.3rem;
+  width: 100%; max-width: 260px;
   margin-bottom: 0.6rem;
 }
 .folder-preview-tile {

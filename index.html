@@ -285,18 +285,19 @@ function projectCardHtml(p, countByProject, favoriteSet, { unfolderable = false 
 // syncing actual photos would mean uploading them to Storage per person,
 // a bigger feature than what was asked for here.
 //
-// Instead of one big icon, shows a small 2-up grid of the projects
-// actually inside -- each tile labelled with that project's number (its
-// icon if it has none) -- so the card reads as "a folder holding these
-// specific things," the way a phone's own folder icon previews a few of
-// the apps inside it, rather than just a generic folder glyph.
+// Instead of one big icon, shows a small grid of the projects actually
+// inside -- each tile labelled with that project's number (its icon if
+// it has none) -- so the card reads as "a folder holding these specific
+// things," the way a phone's own folder icon previews a few of the apps
+// inside it, rather than just a generic folder glyph.
 function folderCardHtml(folder, projectsById) {
   const members = folder.projectIds.map((id) => projectsById.get(id)).filter(Boolean);
   const n = members.length;
-  // Always at most 4 cells (a clean 2x2), never a ragged 3rd row -- when
-  // there are more than 4 projects, the 4th cell becomes the "+N" count
-  // instead of a 5th real tile.
-  const maxTiles = 4;
+  // Always at most 8 cells (a clean 4x2), never a ragged row -- when
+  // there are more than 8 projects, the 8th cell becomes the "+N" count
+  // instead of a real tile. The card has the width for 4 across; see
+  // .folder-preview-grid.
+  const maxTiles = 8;
   const shown = n > maxTiles ? members.slice(0, maxTiles - 1) : members;
   const overflow = n - shown.length;
   const tileHtml = (p) => {
