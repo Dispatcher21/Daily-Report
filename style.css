@@ -562,13 +562,16 @@ main { max-width: min(1400px, 94vw); margin: 0 auto; padding: 1rem; }
 .folder-preview-tile {
   background: var(--brand-dim); color: var(--link);
   border-radius: 8px; aspect-ratio: 1;
-  display: flex; align-items: center; justify-content: center;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 0.15rem;
   font-size: 0.68rem; font-weight: 700; text-align: center;
   padding: 0.2rem; line-height: 1.1; overflow: hidden;
   white-space: nowrap; text-overflow: ellipsis;
 }
 .hub-card.has-bg .folder-preview-tile { background: rgba(255,255,255,0.18); color: #fff; }
 .folder-preview-tile.folder-preview-more { font-size: 0.8rem; }
+.fp-tile-icon { font-size: 1.6rem; line-height: 1; }
+.fp-tile-num { font-size: 0.65rem; }
 .hub-card .hc-title { font-weight: 700; font-size: 1.08rem; margin-bottom: 0.3rem; }
 .hub-card .hc-desc { font-size: 0.85rem; color: var(--text-dim); line-height: 1.45; }
 .hub-card .hc-favorite {

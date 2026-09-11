@@ -268,9 +268,17 @@ function folderCardHtml(folder, projectsById) {
   const maxTiles = 4;
   const shown = n > maxTiles ? members.slice(0, maxTiles - 1) : members;
   const overflow = n - shown.length;
-  const tileLabel = (p) => (p.meta && p.meta.projectNo ? `#${p.meta.projectNo}` : p.icon || '\u{1F4C1}');
+  const tileHtml = (p) => {
+    const num = p.meta && p.meta.projectNo ? `#${p.meta.projectNo}` : '';
+    const icon = p.icon || '\u{1F4C1}';
+    // Icon is the primary visual, centered and large; the project number
+    // (when there is one) sits as a small centered caption underneath it.
+    return num
+      ? `<div class="folder-preview-tile" title="${escapeHtml(p.name)}"><span class="fp-tile-icon">${icon}</span><span class="fp-tile-num">${escapeHtml(num)}</span></div>`
+      : `<div class="folder-preview-tile" title="${escapeHtml(p.name)}"><span class="fp-tile-icon">${icon}</span></div>`;
+  };
   const tiles =
-    shown.map((p) => `<div class="folder-preview-tile" title="${escapeHtml(p.name)}">${escapeHtml(tileLabel(p))}</div>`).join('') +
+    shown.map(tileHtml).join('') +
     (overflow > 0 ? `<div class="folder-preview-tile folder-preview-more">+${overflow}</div>` : '');
 
   const hasBg = folder.backgroundType === 'image' && folder.backgroundImage;
