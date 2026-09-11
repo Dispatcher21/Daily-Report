@@ -565,10 +565,45 @@ main { max-width: min(1400px, 94vw); margin: 0 auto; padding: 1rem; }
    gesture from fighting the drag; restored the instant the drag ends. */
 .hub-grid.dragging { touch-action: none; }
 .hub-card.drag-source { opacity: 0.35; }
+
+/* iOS-style "jiggle mode" -- every OTHER card wiggles in place the moment
+   a drag arms, signalling "you're rearranging now," while the card
+   actually being carried (the ghost, below) stays still and just follows
+   the pointer. Odd/every-third cards get their own slightly different
+   duration/direction so the grid reads as a pile of loose icons rather
+   than one block moving in lockstep -- same trick the real thing uses. */
+@keyframes hub-jiggle {
+  0% { transform: rotate(-1.4deg); }
+  50% { transform: rotate(1.4deg); }
+  100% { transform: rotate(-1.4deg); }
+}
+.hub-grid.dragging .hub-card:not(.drag-source):not(.add-card) {
+  animation: hub-jiggle 0.26s ease-in-out infinite;
+}
+.hub-grid.dragging .hub-card:not(.drag-source):not(.add-card):nth-child(odd) {
+  animation-duration: 0.22s; animation-direction: alternate-reverse;
+}
+.hub-grid.dragging .hub-card:not(.drag-source):not(.add-card):nth-child(3n) {
+  animation-duration: 0.3s;
+}
+
+/* The card actually being carried -- pops up with a little overshoot the
+   instant it's grabbed (the long-press "arming"), then holds that lifted
+   size/tilt while it tracks the pointer. */
+@keyframes hub-grab-pop {
+  0% { transform: scale(1) rotate(0deg); }
+  55% { transform: scale(1.1) rotate(-3deg); }
+  100% { transform: scale(1.05) rotate(-1deg); }
+}
 .hub-card.drag-ghost {
   position: fixed; z-index: 2000; pointer-events: none;
-  width: 220px; opacity: 0.92; transform: scale(1.04) rotate(-1deg);
+  width: 220px; opacity: 0.92; transform: scale(1.05) rotate(-1deg);
   box-shadow: var(--shadow-lg);
+  animation: hub-grab-pop 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .hub-grid.dragging .hub-card { animation: none; }
+  .hub-card.drag-ghost { animation: none; }
 }
 /* Hovering a project/folder mid-drag with intent to COMBINE into a folder
    -- a ring rather than a side bar, so it reads as distinct from a plain
@@ -582,7 +617,32 @@ main { max-width: min(1400px, 94vw); margin: 0 auto; padding: 1rem; }
 .hub-card.drop-before { box-shadow: -4px 0 0 0 var(--brand); }
 .hub-card.drop-after { box-shadow: 4px 0 0 0 var(--brand); }
 
-.folder-modal-card { max-width: 620px; width: 100%; text-align: left; }
+/* Opens/closes as if it's growing out of (and shrinking back into) the
+   folder icon that was tapped, iOS-style, rather than just appearing --
+   #folder-modal-overlay JS sets --modal-dx/--modal-dy (the offset from
+   viewport centre to that folder card) before adding .modal-visible.
+   Scoped to this modal specifically, NOT the shared .modal-overlay/
+   .modal-card base -- report-editor.html's required-fields warning uses
+   those same base classes without ever toggling .modal-visible, so
+   animating the base classes would leave that one stuck invisible. */
+#folder-modal-overlay {
+  transition: opacity 0.2s ease;
+  opacity: 0;
+}
+#folder-modal-overlay.modal-visible { opacity: 1; }
+.folder-modal-card {
+  max-width: 620px; width: 100%; text-align: left;
+  transform: translate(var(--modal-dx, 0px), var(--modal-dy, 0px)) scale(0.35);
+  opacity: 0;
+  transition: transform 0.26s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease;
+}
+#folder-modal-overlay.modal-visible .folder-modal-card {
+  transform: translate(0, 0) scale(1);
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  #folder-modal-overlay, .folder-modal-card { transition: none; }
+}
 .folder-modal-header {
   display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
   margin-bottom: 1rem;

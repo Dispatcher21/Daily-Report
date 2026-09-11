@@ -525,14 +525,43 @@ function renderFolderModalGrid() {
     .join('');
 }
 
-function openFolderModal(folderId) {
+// `originEl` (the folder card that was tapped) is what lets the popup
+// visibly grow out of that exact card instead of just appearing --
+// --modal-dx/--modal-dy (see style.css) are the offset from the viewport
+// centre (where the flex-centred modal card naturally sits) to that
+// card's centre, so the opening transform starts right on top of it.
+function openFolderModal(folderId, originEl) {
   openFolderId = folderId;
   renderFolderModalGrid();
-  $('#folder-modal-overlay').hidden = false;
+  const overlay = $('#folder-modal-overlay');
+  const card = $('.folder-modal-card', overlay);
+  if (originEl) {
+    const rect = originEl.getBoundingClientRect();
+    card.style.setProperty('--modal-dx', `${rect.left + rect.width / 2 - window.innerWidth / 2}px`);
+    card.style.setProperty('--modal-dy', `${rect.top + rect.height / 2 - window.innerHeight / 2}px`);
+  } else {
+    card.style.removeProperty('--modal-dx');
+    card.style.removeProperty('--modal-dy');
+  }
+  overlay.hidden = false;
+  // Force a layout flush so the browser registers the (offset, shrunk,
+  // transparent) starting state before the class flip below -- adding
+  // .modal-visible in the same tick as removing [hidden] would otherwise
+  // skip straight to the end state with no transition to animate through.
+  overlay.offsetHeight;
+  overlay.classList.add('modal-visible');
 }
 
 function closeFolderModal() {
-  $('#folder-modal-overlay').hidden = true;
+  const overlay = $('#folder-modal-overlay');
+  if (overlay.hidden) return;
+  overlay.classList.remove('modal-visible');
+  // transitionend is the clean path; the timeout is a fallback so the
+  // overlay can never get stuck invisible-but-still-blocking-clicks if a
+  // transition doesn't fire (reduced motion, a re-render racing it, etc).
+  const finish = () => { overlay.hidden = true; };
+  overlay.addEventListener('transitionend', finish, { once: true });
+  setTimeout(finish, 300);
   openFolderId = null;
 }
 
@@ -555,7 +584,7 @@ function wireHubGridInteractions() {
       return;
     }
     const folderCard = e.target.closest('[data-open-folder]');
-    if (folderCard) openFolderModal(folderCard.dataset.openFolder);
+    if (folderCard) openFolderModal(folderCard.dataset.openFolder, folderCard);
   });
 
   grid.addEventListener('pointerdown', hubDragPointerDown);
