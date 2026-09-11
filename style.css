@@ -523,6 +523,15 @@ main { max-width: min(1400px, 94vw); margin: 0 auto; padding: 1rem; }
   cursor: pointer;
   box-shadow: var(--shadow);
   transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+  /* A project card is a link, and on touch a long-press on a link is
+     normally the browser's cue to pop its own "Open in new tab / Copy
+     Link" callout -- exactly the gesture wireHubDragAndDrop (index.html)
+     uses to start a drag. Without this, that native menu wins the race
+     and drag-to-organize never gets a chance to arm. */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 /* Optional per-project background photo (Company Management) -- covers the
    top of the card, then fades to the card's own surface colour by roughly
@@ -701,9 +710,22 @@ main { max-width: min(1400px, 94vw); margin: 0 auto; padding: 1rem; }
 #folder-modal-overlay.modal-visible { opacity: 1; }
 .folder-modal-card {
   max-width: 620px; width: 100%; text-align: left;
+  max-height: calc(100vh - 3rem); overflow-y: auto;
   transform: translate(var(--modal-dx, 0px), var(--modal-dy, 0px)) scale(0.35);
   opacity: 0;
   transition: transform 0.26s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease;
+}
+/* On a wide-enough screen a folder deserves more than the 2 columns its
+   620px cap forces -- widen the card and let 3-4 project cards sit
+   side by side instead of running a tall single strip down the middle
+   of the screen. */
+@media (min-width: 760px) {
+  .folder-modal-card { max-width: 780px; }
+  .folder-modal-card .hub-grid { grid-template-columns: repeat(3, 1fr); }
+}
+@media (min-width: 1000px) {
+  .folder-modal-card { max-width: 1000px; }
+  .folder-modal-card .hub-grid { grid-template-columns: repeat(4, 1fr); }
 }
 #folder-modal-overlay.modal-visible .folder-modal-card {
   transform: translate(0, 0) scale(1);
@@ -724,6 +746,17 @@ main { max-width: min(1400px, 94vw); margin: 0 auto; padding: 1rem; }
 .folder-modal-card .hub-grid:empty::after {
   content: 'No projects left in this folder.';
   color: var(--text-dim); font-size: 0.88rem;
+}
+/* A folder can hold far more projects than a phone screen shows in one
+   column at a time (with the modal itself now scrollable, that's no
+   longer fatal, but a single tall stack still buries the ones near the
+   bottom under a lot of scrolling) -- stays a real grid here even on
+   mobile instead of falling back to .hub-grid's narrow-viewport 1fr. */
+@media (max-width: 560px) {
+  .folder-modal-card .hub-grid { grid-template-columns: repeat(2, 1fr); gap: 0.6rem; }
+  .folder-modal-card .hub-grid .hc-title { font-size: 0.9rem; }
+  .folder-modal-card .hub-grid .hc-desc, .folder-modal-card .hub-grid .hc-count { font-size: 0.72rem; }
+  .folder-modal-card .hub-grid .hc-icon { font-size: 1.5rem; margin-bottom: 0.3rem; }
 }
 .folder-modal-footer { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
 .folder-modal-footer .btn-secondary { width: auto; }

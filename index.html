@@ -714,6 +714,15 @@ function wireHubGridInteractions() {
   });
 
   grid.addEventListener('pointerdown', hubDragPointerDown);
+  // Without this, a touch long-press on a project card (an <a> link)
+  // races our own long-press-to-drag timer against the browser's native
+  // "Open in new tab / Copy Link" callout -- CSS alone
+  // (-webkit-touch-callout/user-select, below) stops most of it, but
+  // Android Chrome still shows its own context menu unless the event
+  // itself is blocked here too.
+  grid.addEventListener('contextmenu', (e) => {
+    if (e.target.closest('.hub-card[data-drag-id]')) e.preventDefault();
+  });
 
   $('#folder-modal-close').addEventListener('click', closeFolderModal);
   $('#folder-modal-overlay').addEventListener('click', (e) => {
