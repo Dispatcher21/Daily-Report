@@ -131,6 +131,12 @@ body {
   color: var(--text);
   padding-bottom: 3rem;
   -webkit-text-size-adjust: 100%;
+  /* Stops Chrome/PWA's native pull-to-refresh from triggering when a
+     swipe starts (or a held finger drifts) near the top of a scrolled-up
+     page -- unrelated to any single gesture below, just an app-wide PWA
+     good practice, and specifically what was firing during an attempted
+     long-press-to-drag on a folder card. */
+  overscroll-behavior-y: contain;
 }
 
 :focus-visible {

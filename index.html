@@ -507,6 +507,19 @@ function hubDragPointerDown(e) {
   const startX = e.clientX;
   const startY = e.clientY;
   let armed = false;
+  let scrolling = false;
+  let lastY = e.clientY;
+
+  // The browser decides how to handle a touch (scroll it, or hand it to
+  // us) the instant it starts, based on touch-action at that moment -- by
+  // the time our long-press timer fires below, a default touch-action
+  // has usually already let the browser claim it as a scroll (or, near
+  // the top of the page, a pull-to-refresh), and there's no taking it
+  // back after the fact. Taking touch-action away up front avoids that
+  // race, at the cost of no longer getting scrolling for free: if this
+  // pointer turns out to be a scroll and not a hold, onMove below
+  // forwards it manually instead.
+  if (isTouch) card.style.touchAction = 'none';
 
   function arm() {
     if (armed) return;
@@ -538,12 +551,25 @@ function hubDragPointerDown(e) {
 
   function onMove(ev) {
     if (ev.pointerId !== pointerId) return;
+    if (scrolling) {
+      ev.preventDefault();
+      window.scrollBy(0, lastY - ev.clientY);
+      lastY = ev.clientY;
+      return;
+    }
     if (!armed) {
       if (Math.hypot(ev.clientX - startX, ev.clientY - startY) <= HUB_MOVE_CANCEL_PX) return;
       if (isTouch) {
-        // Moved before the hold armed it -- this was a scroll, not a drag.
+        // Moved before the hold armed it -- this was a scroll, not a
+        // drag. touch-action:none (above) means the browser won't do
+        // that scroll for us, so take over forwarding the rest of this
+        // same touch's movement to the page ourselves.
         clearTimeout(longPressTimer);
-        cleanup();
+        card.style.touchAction = '';
+        scrolling = true;
+        lastY = ev.clientY;
+        ev.preventDefault();
+        window.scrollBy(0, startY - ev.clientY);
         return;
       }
       arm(); // mouse/pen -- the movement itself is the go-ahead
@@ -562,6 +588,7 @@ function hubDragPointerDown(e) {
   }
 
   function cleanup() {
+    card.style.touchAction = '';
     window.removeEventListener('pointermove', onMove);
     window.removeEventListener('pointerup', onUp);
     window.removeEventListener('pointercancel', onUp);
