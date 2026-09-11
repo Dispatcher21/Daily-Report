@@ -63,6 +63,7 @@
   <div id="dash-content" hidden>
     <div class="dash-grid" id="dash-stats"></div>
 
+    <div class="step-pair">
     <div class="step">
       <div class="step-header">
         <span class="step-num">PAY ITEMS</span>
@@ -86,18 +87,6 @@
       </div>
     </div>
 
-    <div class="step-pair">
-    <div class="step" id="dash-trend-step" hidden>
-      <div class="step-header">
-        <span class="step-num">TREND</span>
-        <h2>Progress Over Time</h2>
-      </div>
-      <div class="step-body">
-        <div id="dash-trend-chart"></div>
-        <p class="hint" id="dash-trend-hint" hidden style="margin-top:0.5rem;">Only one dated report on file so far &mdash; a trend line will appear once there's more than one date to compare.</p>
-      </div>
-    </div>
-
     <div class="step" id="dash-weather-step" hidden>
       <div class="step-header">
         <span class="step-num">CONDITIONS</span>
@@ -115,6 +104,17 @@
         <div class="weather-calendar" id="dash-weather-calendar" hidden></div>
       </div>
     </div>
+    </div>
+
+    <div class="step" id="dash-trend-step" hidden>
+      <div class="step-header">
+        <span class="step-num">TREND</span>
+        <h2>Progress Over Time</h2>
+      </div>
+      <div class="step-body">
+        <div id="dash-trend-chart"></div>
+        <p class="hint" id="dash-trend-hint" hidden style="margin-top:0.5rem;">Only one dated report on file so far &mdash; a trend line will appear once there's more than one date to compare.</p>
+      </div>
     </div>
   </div>
 
