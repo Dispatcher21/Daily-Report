@@ -35,7 +35,23 @@
   .cm-project-row > div:first-child { min-width: 0; flex: 1 1 auto; }
   .cm-project-name { font-weight: 600; overflow-wrap: break-word; }
   .cm-project-sub { font-size: 0.8rem; color: var(--text-dim); }
-  .cm-project-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; flex: 1 1 auto; justify-content: flex-end; }
+  .cm-project-actions { display: flex; gap: 0.5rem 1rem; flex-wrap: wrap; flex: 1 1 auto; justify-content: flex-end; }
+  /* Groups background-management (Replace/Remove BG) separately from
+     record-management (Manage/Delete) -- the extra gap between clusters
+     (set on .cm-project-actions above) is what actually reads as "two
+     groups" at a glance; this just keeps each cluster's own buttons from
+     wrapping apart from each other first. */
+  .cm-action-cluster { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+  /* .btn-secondary/.btn-danger default to width:100% -- correct for a
+     lone button in a form, but inside this row it means a button that
+     wraps onto its own line (Delete, almost always, since it's last)
+     stretches into a full-width bar instead of sizing to its own label.
+     Same bug, same fix, as the report editor's save-row buttons. */
+  .cm-project-actions .btn-secondary,
+  .cm-project-actions .btn-danger,
+  .cm-project-actions a {
+    width: auto; flex: 0 0 auto;
+  }
 
   .cc-project-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.5rem 0 0; }
   .cc-chip {
@@ -939,13 +955,17 @@ async function renderCmProjects() {
           <div class="cm-project-sub">${p.payItemCatalog.length} pay item(s)${p.meta.projectNo ? ' &middot; #' + escapeHtml(p.meta.projectNo) : ''}</div>
         </div>
         <div class="cm-project-actions">
-          <label class="btn-secondary" style="cursor:pointer;margin:0;">
-            &#128444; ${p.backgroundImage ? 'Replace' : 'Background'}
-            <input type="file" accept="image/*" data-bg-upload="${p.id}" hidden>
-          </label>
-          ${p.backgroundImage ? `<button type="button" class="btn-secondary" data-remove-bg="${p.id}">Remove BG</button>` : ''}
-          <a class="btn-secondary" href="project.html?id=${p.id}">Manage</a>
-          <button type="button" class="btn-danger" data-delete-project="${p.id}">Delete</button>
+          <div class="cm-action-cluster">
+            <label class="btn-secondary" style="cursor:pointer;margin:0;">
+              &#128444; ${p.backgroundImage ? 'Replace BG' : 'Add BG'}
+              <input type="file" accept="image/*" data-bg-upload="${p.id}" hidden>
+            </label>
+            ${p.backgroundImage ? `<button type="button" class="btn-secondary" data-remove-bg="${p.id}">Remove BG</button>` : ''}
+          </div>
+          <div class="cm-action-cluster">
+            <a class="btn-secondary" href="project.html?id=${p.id}">Manage</a>
+            <button type="button" class="btn-danger" data-delete-project="${p.id}">Delete</button>
+          </div>
         </div>
       </div>`
     )
