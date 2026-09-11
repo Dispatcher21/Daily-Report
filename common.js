@@ -353,7 +353,34 @@ function queryParam(key) {
 }
 
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  // Whether this page load was already under an existing service worker's
+  // control -- decides how to read the very first controllerchange event
+  // below, which fires in two very different situations that otherwise
+  // look identical: a brand-new install claiming an until-now-uncontrolled
+  // page (not "a new version" -- nothing to tell anyone), versus an
+  // already-controlled page having its controller REPLACED because a
+  // newer service worker just activated (a real update, worth a prompt).
+  const hadControllerAtLoad = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.register('service-worker.js').catch(console.error);
+
+  // A new service worker just took over -- the page already open is still
+  // running whatever JS it loaded with, which is now stale relative to
+  // what's actually cached (this is exactly the "worked in my browser tab
+  // but the installed app looked broken" gap: an installed PWA can sit
+  // resumed-from-background for days without ever doing a real navigation,
+  // so the update installs in the background but the visible page never
+  // gets the one reload it needs to actually show it). Prompting rather
+  // than reloading outright, since this can fire while someone's mid-report.
+  let sawFirstClaim = hadControllerAtLoad;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!sawFirstClaim) {
+      sawFirstClaim = true; // the initial claim on a previously-uncontrolled page -- not a "new version"
+      return;
+    }
+    if (confirm('A new version of the app is ready. Reload now to use it?')) {
+      location.reload();
+    }
+  });
 }
 
 // Deferred to DOMContentLoaded because applyHeaderLogo lives in storage.js,

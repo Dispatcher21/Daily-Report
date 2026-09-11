@@ -138,6 +138,9 @@
       <div id="install-manual" hidden>
         <p class="hint" id="install-manual-text"></p>
       </div>
+
+      <p class="hint" style="margin:1rem 0 0.4rem; display:flex; align-items:center; gap:0.4rem;">Stuck on an old version? <button type="button" class="info-tip" data-tip="An installed app can sit resumed from the background for days without ever fully reloading, so an update can be sitting ready without you actually seeing it. This clears everything cached on this device and reloads fresh -- nothing you've saved is affected." aria-label="What this does">i</button></p>
+      <button type="button" class="btn-secondary" id="btn-force-update">Force Update</button>
     </div>
   </div>
 
@@ -438,6 +441,34 @@ $('#btn-install').addEventListener('click', async () => {
 });
 
 window.addEventListener('install-availability-changed', renderInstallSection);
+
+// Unregisters the service worker and clears every cache entry, then
+// reloads over the network from scratch -- the same manual sequence used
+// throughout this app's own development to bust a stuck cache, made
+// available in the app itself for whenever a device (especially an
+// installed one, which can sit resumed from the background for days
+// without a real reload) ends up running stale code that the normal
+// update path hasn't caught up with. Doesn't touch anything saved --
+// IndexedDB (projects/reports/settings) is untouched, only the cached
+// copies of the app's own files.
+$('#btn-force-update').addEventListener('click', async () => {
+  const btn = $('#btn-force-update');
+  btn.disabled = true;
+  btn.textContent = 'Updating...';
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map((r) => r.unregister()));
+    }
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+    }
+  } catch (err) {
+    console.error('force update:', err);
+  }
+  location.reload();
+});
 
 // ---------- Company ----------
 
