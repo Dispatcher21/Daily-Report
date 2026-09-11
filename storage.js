@@ -88,9 +88,14 @@ async function saveUserName(name) {
   await saveSetting(USER_NAME_SETTING_KEY, name || '');
 }
 
-// Favorite-starred projects, kept per device-user (by name), never synced to
-// the company -- two people sharing a login see their own favorites, and
-// switching companies doesn't touch this list.
+// Favorite-starred projects and the folder layout below are kept per
+// person (by name, not by device) -- two people sharing a login see their
+// own favorites, and switching companies doesn't touch this list. Synced
+// to the company when a name is set (see onCompanySyncUserLayoutChanged in
+// firebase-sync.js) specifically so this follows that person to a
+// different phone/tablet instead of needing to be rebuilt from scratch
+// there; a device with no name set stays local-only (there's no identity
+// to sync it under).
 function favoriteProjectsSettingKey(userName) {
   return `favoriteProjects:${userName || '_anon'}`;
 }
@@ -108,17 +113,17 @@ async function toggleFavoriteProject(projectId) {
   if (idx === -1) ids.push(projectId);
   else ids.splice(idx, 1);
   await saveSetting(key, ids);
+  syncUserLayout(userName);
   return ids;
 }
 
 // The home screen's project grid order, and which projects are grouped
-// into which folders -- same "per device-user, never synced" reasoning as
-// favorites above (index.html is the only reader/writer of this). `null`
-// means "never customized" -- index.html falls back to its original
-// favorites-first flat order in that case; once someone drags anything,
-// a real layout array gets saved and takes over ordering completely.
-// Shape: an array of `{type:'project', id}` or `{type:'folder', id, name,
-// projectIds:[id,...]}` entries, in display order.
+// into which folders (index.html is the only reader/writer of this).
+// `null` means "never customized" -- index.html falls back to its
+// original favorites-first flat order in that case; once someone drags
+// anything, a real layout array gets saved and takes over ordering
+// completely. Shape: an array of `{type:'project', id}` or `{type:'folder',
+// id, name, projectIds:[id,...]}` entries, in display order.
 function projectLayoutSettingKey(userName) {
   return `projectLayout:${userName || '_anon'}`;
 }
@@ -132,6 +137,28 @@ async function getProjectLayout() {
 async function saveProjectLayout(layout) {
   const userName = await getUserName();
   await saveSetting(projectLayoutSettingKey(userName), layout);
+  syncUserLayout(userName);
+}
+
+// Local marker of when this person's favorites/layout last changed on
+// THIS device -- compared against the company's copy on pull (see
+// pullUserLayout in firebase-sync.js) so an older copy synced from
+// elsewhere never clobbers a newer local edit, and vice versa.
+function userLayoutUpdatedAtSettingKey(userName) {
+  return `userLayoutUpdatedAt:${userName || '_anon'}`;
+}
+
+// onCompanySyncUserLayoutChanged is an optional hook into firebase-sync.js,
+// same pattern as onCompanySyncReportChanged -- a no-op if that file isn't
+// loaded or no company is joined. Fired without awaiting: nobody should
+// wait on a network push just to star a project or drop a folder.
+function syncUserLayout(userName) {
+  if (!userName) return; // nothing to key a synced copy under
+  saveSetting(userLayoutUpdatedAtSettingKey(userName), Date.now()).then(() => {
+    if (typeof onCompanySyncUserLayoutChanged === 'function') {
+      onCompanySyncUserLayoutChanged(userName).catch((err) => console.error('user layout sync:', err));
+    }
+  });
 }
 
 // Shows the company logo in the header bar -- in the installed app and in

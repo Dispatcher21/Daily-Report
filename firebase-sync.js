@@ -300,6 +300,7 @@ async function joinCompanyRoom(password, onProgress) {
 
   const pulled = await pullAllCompanyData(code, onProgress);
   await pullCompanyThemes().catch((err) => console.error('theme pull:', err));
+  await pullUserLayout(code, await getUserName()).catch((err) => console.error('user layout pull:', err));
   // Logo + project background photos are fetched eagerly (not deferred
   // until something's actually opened, unlike report photos), but not
   // awaited here -- they can be large, and nobody should have to wait on a
@@ -411,6 +412,7 @@ async function syncCompanyRoomNow(onProgress) {
   // company on every single click.
   const pulled = await pullCompanyDataSmart(room.code, onProgress);
   await pullCompanyThemes().catch((err) => console.error('theme pull:', err));
+  await pullUserLayout(room.code, await getUserName()).catch((err) => console.error('user layout pull:', err));
   pullCompanyMediaInBackground(room.code); // see joinCompanyRoom -- not awaited on purpose
   // dirtyOnly: this device's own live-push hooks already sent every real
   // edit in real time -- Sync Now only needs to catch what those attempts
@@ -601,6 +603,17 @@ async function changeCompanyPassword(newPassword, adminPassword, onProgress) {
         projectIds: roleData.projectIds,
       });
     }
+  }
+
+  // Same copy-forward as roles above -- without this, everyone's synced
+  // folder layout/favorites would sit orphaned under the old address until
+  // each person happened to make a new local edit (which re-pushes under
+  // whatever address is current). A device that hasn't rejoined under the
+  // new password yet just keeps reading its own local cache either way.
+  if (onProgress) onProgress({ phase: 'layouts' });
+  const layoutsSnap = await getDocs(collection(db, 'companies', room.code, 'userLayouts'));
+  for (const layoutDoc of layoutsSnap.docs) {
+    await setDoc(doc(db, 'companies', newCode, 'userLayouts', layoutDoc.id), layoutDoc.data());
   }
 
   await saveSetting(COMPANY_CODE_SETTING, newCode);
@@ -951,6 +964,98 @@ async function pullCompanyThemes() {
   return true;
 }
 
+// ---------- Per-person folder layout / favorites sync ----------
+//
+// Keyed by the person's own name (not by device) so the same person's
+// folder organization and starred projects follow them to a different
+// phone/tablet instead of starting over there every time -- see
+// storage.js's syncUserLayout/getProjectLayout/getFavoriteProjectIds
+// header comments. A device with no name set has no identity to key a
+// synced copy under and stays local-only, same as always.
+
+// Firestore doc ids can't contain "/" -- swapped for "_" rather than
+// rejected outright, so an unusual name still gets a working (if
+// slightly mangled) synced copy instead of silently never syncing.
+function userLayoutDocId(userName) {
+  return String(userName).trim().replace(/\//g, '_').slice(0, 300);
+}
+
+// A folder's backgroundImage (when it has one) is a Blob -- silently
+// becomes `{}` through a plain JSON round-trip rather than throwing, which
+// would corrupt it on every device that later pulls this doc (folder
+// rendering assumes a real Blob or nothing at all). Stripped here instead;
+// the image itself stays local-only, same as project background photos.
+function stripLayoutForSync(layout) {
+  if (!layout) return null;
+  return layout.map((entry) => {
+    if (entry.type !== 'folder') return entry;
+    const { backgroundImage, ...rest } = entry;
+    return rest;
+  });
+}
+
+async function pushUserLayout(code, userName) {
+  const { db, ensureSignedIn } = await waitForFirebaseCore();
+  const { doc, setDoc, serverTimestamp } = await import(FIRESTORE_SDK);
+  await ensureSignedIn();
+
+  const [projectLayout, favoriteProjectIds] = await Promise.all([getProjectLayout(), getFavoriteProjectIds()]);
+  await setDoc(doc(db, 'companies', code, 'userLayouts', userLayoutDocId(userName)), {
+    projectLayout: JSON.parse(JSON.stringify(stripLayoutForSync(projectLayout))),
+    favoriteProjectIds,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+// Only overwrites local data if the company's copy is actually newer than
+// what this device last pushed or pulled -- otherwise a device that's
+// simply behind on its own push (offline, mid-retry) would get its own
+// not-yet-synced edit stomped by the still-older copy it just fetched
+// back. Silent on failure, same reasoning as pullCompanyThemes -- this
+// rides along on the same background/join/Sync Now passes those do.
+async function pullUserLayout(code, userName) {
+  if (!userName) return false;
+  const { db, ensureSignedIn } = await waitForFirebaseCore();
+  const { doc, getDoc } = await import(FIRESTORE_SDK);
+  await ensureSignedIn();
+
+  const snap = await getDoc(doc(db, 'companies', code, 'userLayouts', userLayoutDocId(userName)));
+  if (!snap.exists()) return false;
+  const data = snap.data();
+  const remoteUpdatedAt = data.updatedAt && data.updatedAt.toMillis ? data.updatedAt.toMillis() : 0;
+  const localUpdatedAt = (await getSetting(userLayoutUpdatedAtSettingKey(userName))) || 0;
+  if (remoteUpdatedAt <= localUpdatedAt) return false;
+
+  // stripLayoutForSync means a remote folder entry never carries a
+  // backgroundImage Blob -- reattach this device's own local ones (by
+  // folder id) before overwriting, or a sync pull would silently wipe out
+  // an image that was only ever set on this device and never went anywhere.
+  const localLayout = await getProjectLayout();
+  const localImages = new Map(
+    (localLayout || [])
+      .filter((entry) => entry.type === 'folder' && entry.backgroundImage)
+      .map((entry) => [entry.id, entry.backgroundImage])
+  );
+  const mergedLayout = (data.projectLayout || null) && data.projectLayout.map((entry) => {
+    if (entry.type !== 'folder' || !localImages.has(entry.id)) return entry;
+    return { ...entry, backgroundImage: localImages.get(entry.id) };
+  });
+
+  await saveSetting(projectLayoutSettingKey(userName), mergedLayout);
+  await saveSetting(favoriteProjectsSettingKey(userName), data.favoriteProjectIds || []);
+  await saveSetting(userLayoutUpdatedAtSettingKey(userName), remoteUpdatedAt);
+  return true;
+}
+
+// Called from storage.js the moment a folder/favorite changes on this
+// device -- same live-push-with-retry pattern as
+// onCompanySyncProjectChanged/onCompanySyncReportChanged above.
+async function onCompanySyncUserLayoutChanged(userName) {
+  const room = await getCompanyRoom();
+  if (!room) return;
+  await withSyncRetry(() => pushUserLayout(room.code, userName));
+}
+
 // Downloads one theme's background or decal image on demand -- called by
 // Settings (previewing a theme before picking it) and index.html (actually
 // rendering the currently-selected one), never eagerly for every theme on
@@ -1093,6 +1198,7 @@ async function autoPullCompanyData(force) {
     // pullCompanyThemes itself skips the round trip once nothing's newer
     // than what this device already has (see its own header comment).
     await pullCompanyThemes().catch((err) => console.error('theme pull:', err));
+    await pullUserLayout(room.code, await getUserName()).catch((err) => console.error('user layout pull:', err));
     await saveSetting(AUTO_PULL_SETTING, Date.now());
     pullCompanyMediaInBackground(room.code);
     window.dispatchEvent(new CustomEvent('company-data-pulled'));

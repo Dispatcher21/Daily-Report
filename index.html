@@ -170,10 +170,13 @@
   <div class="modal-card folder-modal-card">
     <div class="folder-modal-header">
       <h2 id="folder-modal-title"></h2>
-      <button type="button" class="text-btn" id="folder-modal-rename">Rename</button>
+      <div class="folder-modal-header-actions">
+        <button type="button" class="text-btn" id="folder-modal-rename">Rename</button>
+        <button type="button" class="inline-edit-pencil" id="folder-bg-pencil" title="Edit folder background" aria-label="Edit folder background">&#9998;</button>
+      </div>
     </div>
 
-    <div class="folder-bg-controls">
+    <div class="folder-bg-controls" id="folder-bg-controls" hidden>
       <div class="segmented" id="folder-bg-type">
         <button type="button" data-bg-type="none">No Background</button>
         <button type="button" data-bg-type="color">Colour</button>
@@ -214,9 +217,11 @@ let hubCardBgUrls = [];
 
 // ---------- Home screen: project folders + drag to organize ----------
 //
-// Purely local to this device/user (see storage.js's getProjectLayout) --
-// never synced to the company, same reasoning as favorites. Drag is built
-// on Pointer Events rather than native HTML5 drag-and-drop, which barely
+// Keyed by name and synced to the company when one's set (see storage.js's
+// getProjectLayout/syncUserLayout header comments), same as favorites --
+// this device just reads/writes the local copy; firebase-sync.js pushes
+// and pulls it in the background. Drag is built on Pointer Events rather
+// than native HTML5 drag-and-drop, which barely
 // works on touch -- this app's real use is mostly phones/tablets in the
 // field, so native DnD would have made the feature effectively
 // desktop-only. See wireHubGridInteractions/hubDragPointerDown below.
@@ -248,11 +253,15 @@ function projectCardHtml(p, countByProject, favoriteSet, { unfolderable = false 
       </a>`;
 }
 
-// A folder's background is purely local (see storage.js's
-// getProjectLayout header comment) -- stored directly as a Blob on the
-// layout entry itself (folder.backgroundImage), same as how a project's
-// own background photo is stored, just never uploaded anywhere since a
-// folder never syncs at all.
+// A folder's background IMAGE is purely local -- stored directly as a
+// Blob on the layout entry itself (folder.backgroundImage), same as how a
+// project's own background photo is stored, just never uploaded anywhere.
+// The folder's organization/name/order/background TYPE and colour do sync
+// now (see storage.js's getProjectLayout header comment and
+// firebase-sync.js's pushUserLayout, which strips backgroundImage before
+// syncing) -- a Blob can't survive the JSON round-trip to Firestore, and
+// syncing actual photos would mean uploading them to Storage per person,
+// a bigger feature than what was asked for here.
 //
 // Instead of one big icon, shows a small 2-up grid of the projects
 // actually inside -- each tile labelled with that project's number (its
@@ -686,6 +695,11 @@ $('#folder-f-bg').addEventListener('change', async (e) => {
 function openFolderModal(folderId, originEl) {
   openFolderId = folderId;
   renderFolderModalGrid();
+  // Collapsed by default every time a folder is opened -- most opens are
+  // just to look at what's inside, not to re-theme it, so this is one
+  // more click rather than a segmented control everyone has to look past.
+  $('#folder-bg-controls').hidden = true;
+  $('#folder-bg-pencil').hidden = false;
   const overlay = $('#folder-modal-overlay');
   const card = $('.folder-modal-card', overlay);
   if (originEl) {
@@ -754,6 +768,11 @@ function wireHubGridInteractions() {
   $('#folder-modal-close').addEventListener('click', closeFolderModal);
   $('#folder-modal-overlay').addEventListener('click', (e) => {
     if (e.target.id === 'folder-modal-overlay') closeFolderModal();
+  });
+
+  $('#folder-bg-pencil').addEventListener('click', () => {
+    $('#folder-bg-controls').hidden = false;
+    $('#folder-bg-pencil').hidden = true;
   });
 
   $('#folder-modal-rename').addEventListener('click', async () => {
