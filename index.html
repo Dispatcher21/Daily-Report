@@ -128,7 +128,6 @@
         <div class="eyebrow">Your Projects</div>
         <button type="button" class="view-toggle-btn" id="btn-refresh-home" title="Refresh company data" aria-label="Refresh company data">&#8635;</button>
       </div>
-      <p class="hint" style="margin:-0.5rem 0 0.75rem;">Press and hold a project, then drag it onto another to combine them into a folder -- just for you, on this device.</p>
       <div id="hub-grid" class="hub-grid"></div>
 
       <!-- ADD PROJECT PANEL (revealed in place, no separate page) -->
@@ -223,7 +222,7 @@ function projectCardHtml(p, countByProject, favoriteSet, { unfolderable = false 
   }
   const isFav = favoriteSet.has(p.id);
   return `
-      <a class="hub-card${p.backgroundImage ? ' has-bg' : ''}" href="project.html?id=${p.id}" data-drag-id="${p.id}" data-drag-type="project">
+      <a class="hub-card${p.backgroundImage ? ' has-bg' : ''}" href="project.html?id=${p.id}" draggable="false" data-drag-id="${p.id}" data-drag-type="project">
         ${bgHtml}
         ${unfolderable ? `<button type="button" class="hc-unfolder" data-unfolder-id="${p.id}" title="Take out of this folder">&times;</button>` : ''}
         <button type="button" class="hc-favorite${isFav ? ' is-fav' : ''}" data-favorite-id="${p.id}" title="${isFav ? 'Remove from favorites' : 'Add to favorites'}">&#9733;</button>
@@ -436,6 +435,15 @@ function hubDragPointerDown(e) {
   const card = e.target.closest('.hub-card[data-drag-id]');
   if (!card) return;
 
+  // Touch needs a deliberate hold before anything counts as a drag -- pick
+  // it up too eagerly and a normal scroll swipe gets hijacked instead.
+  // Mouse (and pen) has no such conflict, so requiring the same hold there
+  // just made the drag never start: a mouse user presses and immediately
+  // starts moving in one motion, same as dragging anything else on a
+  // desktop, and that movement was being read as "not a drag, just a
+  // click" and cancelled before the hold timer ever got a chance to fire.
+  const isTouch = e.pointerType === 'touch';
+
   const grid = $('#hub-grid');
   const pointerId = e.pointerId;
   const startX = e.clientX;
@@ -468,16 +476,19 @@ function hubDragPointerDown(e) {
     };
   }
 
-  const longPressTimer = setTimeout(arm, HUB_LONG_PRESS_MS);
+  const longPressTimer = isTouch ? setTimeout(arm, HUB_LONG_PRESS_MS) : null;
 
   function onMove(ev) {
     if (ev.pointerId !== pointerId) return;
     if (!armed) {
-      if (Math.hypot(ev.clientX - startX, ev.clientY - startY) > HUB_MOVE_CANCEL_PX) {
+      if (Math.hypot(ev.clientX - startX, ev.clientY - startY) <= HUB_MOVE_CANCEL_PX) return;
+      if (isTouch) {
+        // Moved before the hold armed it -- this was a scroll, not a drag.
         clearTimeout(longPressTimer);
         cleanup();
+        return;
       }
-      return;
+      arm(); // mouse/pen -- the movement itself is the go-ahead
     }
     ev.preventDefault();
     hubDrag.ghost.style.left = `${ev.clientX - hubDrag.offsetX}px`;
@@ -487,7 +498,7 @@ function hubDragPointerDown(e) {
 
   function onUp(ev) {
     if (ev.pointerId !== pointerId) return;
-    clearTimeout(longPressTimer);
+    if (longPressTimer) clearTimeout(longPressTimer);
     cleanup();
     if (armed) finishDrag();
   }

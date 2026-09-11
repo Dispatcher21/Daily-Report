@@ -560,6 +560,20 @@ main { max-width: min(1400px, 94vw); margin: 0 auto; padding: 1rem; }
 .hub-card.folder-card { cursor: pointer; }
 .hub-card.folder-card .hc-icon { color: var(--link); }
 
+/* A project card is an <a> -- links (and any element with text content)
+   have their own native mouse-drag behaviours that fire well before our
+   pointerdown/long-press logic ever gets a say: dragging one starts the
+   browser's built-in "drag this link out" gesture, and dragging over its
+   title/description just selects that text. Either one hijacks the mouse
+   gesture entirely, which is exactly why the custom drag never worked
+   with a mouse (a synthetic PointerEvent in testing skips right past both
+   of these, since they're real-input-only browser behaviours). Touch was
+   never affected -- neither exists as a competing gesture there. */
+.hub-card[data-drag-id] {
+  -webkit-user-drag: none; user-drag: none;
+  -webkit-user-select: none; user-select: none;
+}
+
 /* Drag state -- see wireHubDragAndDrop in index.html. touch-action:none on
    the grid while a drag is active is what stops a phone's own scroll
    gesture from fighting the drag; restored the instant the drag ends. */
