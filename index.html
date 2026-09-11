@@ -30,10 +30,25 @@
      picked -- see applyCompanyThemeVisuals -- an image background/decal is
      always filled in a moment later, once fetched). */
   #company-theme-bg {
-    position: fixed; inset: 0; z-index: -2;
+    position: fixed; inset: 0; z-index: -3;
     background-size: cover; background-position: center;
     pointer-events: none;
+    /* Slightly oversized so a blurred edge (see .theme-blur-*) never
+       shows a hard, unblurred border where the element itself ends. */
+    transform: scale(1.06);
   }
+  /* A dark/light wash between the photo and the app's own content, same
+     purpose as the small per-card fade project/folder tiles already use
+     (see .hc-bg-fade) -- keeps text and icons readable over an arbitrary
+     uploaded photo instead of leaving that to luck. */
+  #company-theme-bg-fade {
+    position: fixed; inset: 0; z-index: -2;
+    pointer-events: none;
+  }
+  #company-theme-bg-fade[hidden] { display: none; }
+  #company-theme-bg.theme-blur-light { filter: blur(6px); }
+  #company-theme-bg.theme-blur-medium { filter: blur(16px); }
+  #company-theme-bg.theme-blur-strong { filter: blur(32px); }
   #company-theme-decal {
     position: fixed; z-index: -1; pointer-events: none;
     max-width: 28vw; max-height: 45vh; object-fit: contain;
@@ -42,14 +57,21 @@
   #company-theme-decal.decal-size-small { max-width: 18vw; }
   #company-theme-decal.decal-size-medium { max-width: 28vw; }
   #company-theme-decal.decal-size-large { max-width: 42vw; }
-  #company-theme-decal.decal-pos-bottom-right { right: 1rem; bottom: 1rem; }
-  #company-theme-decal.decal-pos-bottom-left { left: 1rem; bottom: 1rem; }
+  #company-theme-decal.decal-pos-top-left { left: 1rem; top: 1rem; }
+  #company-theme-decal.decal-pos-top-center { left: 50%; top: 1rem; transform: translateX(-50%); }
+  #company-theme-decal.decal-pos-top-right { right: 1rem; top: 1rem; }
+  #company-theme-decal.decal-pos-center-left { left: 1rem; top: 50%; transform: translateY(-50%); }
   #company-theme-decal.decal-pos-center { left: 50%; top: 50%; transform: translate(-50%, -50%); }
+  #company-theme-decal.decal-pos-center-right { right: 1rem; top: 50%; transform: translateY(-50%); }
+  #company-theme-decal.decal-pos-bottom-left { left: 1rem; bottom: 1rem; }
+  #company-theme-decal.decal-pos-bottom-center { left: 50%; bottom: 1rem; transform: translateX(-50%); }
+  #company-theme-decal.decal-pos-bottom-right { right: 1rem; bottom: 1rem; }
 </style>
 </head>
 <body>
 
 <div id="company-theme-bg" aria-hidden="true"></div>
+<div id="company-theme-bg-fade" aria-hidden="true" hidden></div>
 <img id="company-theme-decal" aria-hidden="true" alt="" hidden>
 
 <header class="app-header">
@@ -1279,11 +1301,14 @@ async function handleIncomingSetup() {
 // in every other synced photo in this app already has.
 async function applyCompanyThemeVisuals() {
   const bgEl = $('#company-theme-bg');
+  const fadeEl = $('#company-theme-bg-fade');
   const decalEl = $('#company-theme-decal');
   const selected = window.appCompanyTheme && window.appCompanyTheme.get();
   if (!selected) {
     bgEl.style.background = '';
     bgEl.style.backgroundImage = '';
+    bgEl.className = '';
+    fadeEl.hidden = true;
     decalEl.hidden = true;
     return;
   }
@@ -1300,6 +1325,16 @@ async function applyCompanyThemeVisuals() {
     let blob = theme.backgroundImage;
     if (!theme.backgroundImageFetched) blob = await fetchThemeAsset(room.code, theme.id, 'background').catch(() => null);
     if (blob) bgEl.style.backgroundImage = `url(${URL.createObjectURL(blob)})`;
+
+    bgEl.className = theme.backgroundBlur && theme.backgroundBlur !== 'none' ? `theme-blur-${theme.backgroundBlur}` : '';
+
+    if (theme.backgroundFadeColor && theme.backgroundFadeColor !== 'none') {
+      const amount = theme.backgroundFadeAmount != null ? theme.backgroundFadeAmount : 0.4;
+      fadeEl.style.background = theme.backgroundFadeColor === 'dark' ? `rgba(0,0,0,${amount})` : `rgba(255,255,255,${amount})`;
+      fadeEl.hidden = false;
+    } else {
+      fadeEl.hidden = true;
+    }
   }
 
   if (theme.hasDecalImage) {

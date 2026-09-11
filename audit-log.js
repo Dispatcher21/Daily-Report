@@ -216,9 +216,16 @@ function diffProject(before, after) {
 // needed (see AUDIT_COALESCE_MS's header comment for why reports/projects
 // need it and this doesn't): a Theme Builder save is already one
 // deliberate action, not a burst of autosaves.
-const THEME_DECAL_POSITION_LABELS = { 'bottom-right': 'Bottom Right', 'bottom-left': 'Bottom Left', center: 'Center' };
+const THEME_DECAL_POSITION_LABELS = {
+  'top-left': 'Top Left', 'top-center': 'Top Center', 'top-right': 'Top Right',
+  'center-left': 'Center Left', center: 'Center', 'center-right': 'Center Right',
+  'bottom-left': 'Bottom Left', 'bottom-center': 'Bottom Center', 'bottom-right': 'Bottom Right',
+};
 const THEME_DECAL_SIZE_LABELS = { small: 'Small', medium: 'Medium', large: 'Large' };
 const THEME_DECAL_LAYER_LABELS = { background: 'Behind the app’s cards and buttons', top: 'In front of the app, over everything' };
+const THEME_MODE_LABELS = { auto: 'Auto', light: 'Light', dark: 'Dark' };
+const THEME_FADE_COLOR_LABELS = { none: 'None', dark: 'Dark', light: 'Light' };
+const THEME_BLUR_LABELS = { none: 'None', light: 'Light', medium: 'Medium', strong: 'Strong' };
 
 function fmtThemeOpacity(v) {
   return v == null ? '(blank)' : `${Math.round(v * 100)}%`;
@@ -247,9 +254,17 @@ function diffTheme(before, after, imageChange) {
 
   push('Theme Name', before.name || '(blank)', after.name || '(blank)');
   push('Accent Color', before.accent || '(blank)', after.accent || '(blank)');
+  push('Style Mode', THEME_MODE_LABELS[before.mode || 'auto'], THEME_MODE_LABELS[after.mode || 'auto']);
   push('Home Screen Background', fmtThemeBackground(before), fmtThemeBackground(after));
   if (after.backgroundType === 'image' && imageChange && imageChange.background) {
     out.push({ label: 'Background Image', from: before.hasBackgroundImage ? 'Previous picture' : '(none)', to: 'New picture uploaded' });
+  }
+  if (after.backgroundType === 'image') {
+    push('Background Fade', THEME_FADE_COLOR_LABELS[before.backgroundFadeColor || 'none'], THEME_FADE_COLOR_LABELS[after.backgroundFadeColor || 'none']);
+    if ((after.backgroundFadeColor || 'none') !== 'none') {
+      push('Background Fade Amount', fmtThemeOpacity(before.backgroundFadeAmount), fmtThemeOpacity(after.backgroundFadeAmount));
+    }
+    push('Background Blur', THEME_BLUR_LABELS[before.backgroundBlur || 'none'], THEME_BLUR_LABELS[after.backgroundBlur || 'none']);
   }
 
   const hadDecal = !!before.hasDecalImage;

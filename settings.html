@@ -167,33 +167,73 @@
   @media (min-width: 700px) {
     .theme-form-grid { flex-direction: row; align-items: flex-start; }
     .theme-form-fields { flex: 1 1 0; min-width: 0; }
-    .theme-form-preview { flex: 0 0 260px; position: sticky; top: 4rem; }
+    .theme-form-preview { flex: 0 0 320px; position: sticky; top: 4rem; }
   }
+  /* aspect-ratio widened from 4:3 and every element inside sized down a
+     notch from what it'd be at "true" scale -- a preview zoomed to fit
+     the whole home screen, corners included, beats one that's cropped in
+     tight on just the header and a card. */
   .theme-preview-frame {
-    position: relative; width: 100%; aspect-ratio: 4 / 3;
+    /* z-index:0 (not just position:relative) is load-bearing -- it's what
+       makes this its own stacking context, so the fade/blur/decal layers'
+       negative z-indexes stay scoped inside it instead of escaping to
+       stack against page content far outside this card. */
+    position: relative; z-index: 0; width: 100%; aspect-ratio: 16 / 11;
     border-radius: var(--radius-sm); border: 1.5px solid var(--border-strong);
     overflow: hidden; background: var(--surface-2);
     background-size: cover; background-position: center;
     display: flex; flex-direction: column;
   }
+  .theme-preview-frame.force-light {
+    --surface: #ffffff; --surface-2: #f4f7f9; --border: #c2ccd6; --text: #10171d; --text-dim: #4f5c68;
+  }
+  .theme-preview-frame.force-dark {
+    --surface: #1a2128; --surface-2: #212a32; --border: #35424e; --text: #eef3f7; --text-dim: #a2b1be;
+  }
+  /* Explicit z-index matches index.html's real -3/-2/-1 stack (blur under
+     fade under a "Background"-layer decal) -- without it these two sit at
+     the default stacking level, which is ABOVE a decal's z-index:-1 and
+     silently hides it under the fade. */
+  .theme-preview-bg-fade { position: absolute; inset: 0; pointer-events: none; z-index: -2; }
+  .theme-preview-bg-blur {
+    position: absolute; inset: -8%; background-size: cover; background-position: center; pointer-events: none; z-index: -3;
+  }
   .theme-preview-header {
+    position: relative;
     display: flex; align-items: center; gap: 0.4rem; padding: 0.5rem 0.6rem;
-    font-size: 0.7rem; font-weight: 700; background: var(--brand); color: var(--on-brand);
+    font-size: 0.68rem; font-weight: 700; background: var(--brand); color: var(--on-brand);
     flex: 0 0 auto;
   }
   .theme-preview-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; opacity: 0.6; flex: 0 0 auto; }
-  .theme-preview-body { flex: 1; padding: 0.6rem; }
+  .theme-preview-body { position: relative; flex: 1; padding: 0.55rem; }
   .theme-preview-card {
     display: inline-block; background: var(--surface); border: 1.5px solid var(--brand); color: var(--brand);
-    border-radius: 6px; padding: 0.35rem 0.6rem; font-size: 0.68rem; font-weight: 600;
+    border-radius: 6px; padding: 0.3rem 0.5rem; font-size: 0.6rem; font-weight: 600;
   }
   .theme-preview-decal { position: absolute; object-fit: contain; pointer-events: none; }
-  .theme-preview-decal.decal-size-small { width: 22%; }
-  .theme-preview-decal.decal-size-medium { width: 34%; }
-  .theme-preview-decal.decal-size-large { width: 50%; }
-  .theme-preview-decal.decal-pos-bottom-right { right: 4%; bottom: 4%; }
-  .theme-preview-decal.decal-pos-bottom-left { left: 4%; bottom: 4%; }
+  .theme-preview-decal.decal-size-small { width: 15%; }
+  .theme-preview-decal.decal-size-medium { width: 24%; }
+  .theme-preview-decal.decal-size-large { width: 36%; }
+  .theme-preview-decal.decal-pos-top-left { left: 4%; top: 4%; }
+  .theme-preview-decal.decal-pos-top-center { left: 50%; top: 4%; transform: translateX(-50%); }
+  .theme-preview-decal.decal-pos-top-right { right: 4%; top: 4%; }
+  .theme-preview-decal.decal-pos-center-left { left: 4%; top: 50%; transform: translateY(-50%); }
   .theme-preview-decal.decal-pos-center { left: 50%; top: 50%; transform: translate(-50%, -50%); }
+  .theme-preview-decal.decal-pos-center-right { right: 4%; top: 50%; transform: translateY(-50%); }
+  .theme-preview-decal.decal-pos-bottom-left { left: 4%; bottom: 4%; }
+  .theme-preview-decal.decal-pos-bottom-center { left: 50%; bottom: 4%; transform: translateX(-50%); }
+  .theme-preview-decal.decal-pos-bottom-right { right: 4%; bottom: 4%; }
+
+  /* Position picker -- a real 3x3 map of the screen reads faster than a
+     dropdown of position names, and doubles as its own tiny preview. */
+  .decal-position-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem; max-width: 180px; }
+  .decal-position-opt {
+    aspect-ratio: 1; border-radius: var(--radius-sm); border: 1.5px solid var(--border);
+    background: var(--surface-2); cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  .decal-position-opt::after { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--text-dim); }
+  .decal-position-opt[aria-pressed="true"] { border-color: var(--brand); background: var(--brand-dim); }
+  .decal-position-opt[aria-pressed="true"]::after { background: var(--brand); }
 </style>
 </head>
 <body>
@@ -412,6 +452,13 @@
               <p class="hint" style="margin:0.9rem 0 0.3rem;">Accent Colour</p>
               <div class="color-swatches"><input type="color" id="cm-theme-accent" class="swatch swatch-custom" value="#461d7c"></div>
 
+              <p class="hint" style="margin:0.9rem 0 0.3rem;">Style Mode &mdash; forces a member's device into Light or Dark the moment they pick this theme (they can still switch back afterward in their own Appearance settings). Auto leaves their existing choice alone.</p>
+              <div class="segmented" id="cm-theme-mode">
+                <button type="button" data-mode="auto">Auto</button>
+                <button type="button" data-mode="light">&#9728; Light</button>
+                <button type="button" data-mode="dark">&#9790; Dark</button>
+              </div>
+
               <p class="hint" style="margin:0.9rem 0 0.3rem;">Home Screen Background</p>
               <div class="segmented" id="cm-theme-bg-type">
                 <button type="button" data-bg-type="color">Solid Colour</button>
@@ -436,6 +483,24 @@
                     <span class="uz-fname" id="cm-theme-fn-bg"></span>
                   </div>
                 </div>
+
+                <p class="hint" style="margin:0.9rem 0 0.3rem;">Fade &mdash; a dark or light wash over the photo so text and icons stay readable, whatever the picture.</p>
+                <div class="segmented" id="cm-theme-bg-fade-color">
+                  <button type="button" data-fade-color="none">None</button>
+                  <button type="button" data-fade-color="dark">Dark</button>
+                  <button type="button" data-fade-color="light">Light</button>
+                </div>
+                <label id="cm-theme-bg-fade-amount-label" hidden style="margin-top:0.6rem;">Fade Amount: <span id="cm-theme-bg-fade-amount-val">40%</span>
+                  <input type="range" id="cm-theme-bg-fade-amount" min="5" max="90" value="40">
+                </label>
+
+                <p class="hint" style="margin:0.9rem 0 0.3rem;">Blur &mdash; softens the photo so it reads as atmosphere rather than something competing with the app's own content.</p>
+                <div class="segmented" id="cm-theme-bg-blur">
+                  <button type="button" data-blur="none">None</button>
+                  <button type="button" data-blur="light">Light</button>
+                  <button type="button" data-blur="medium">Medium</button>
+                  <button type="button" data-blur="strong">Strong</button>
+                </div>
               </div>
 
               <p class="hint" style="margin:1rem 0 0.3rem;">Decorative Image (optional) &mdash; a transparent PNG or an animated GIF shown over the home screen background. Position, size, and default transparency are set here; members can still nudge the transparency to their own taste.</p>
@@ -458,14 +523,19 @@
               </div>
 
               <div id="cm-theme-decal-settings" hidden style="margin-top:0.75rem;">
-                <label>Position
-                  <select id="cm-theme-decal-position">
-                    <option value="bottom-right">Bottom Right</option>
-                    <option value="bottom-left">Bottom Left</option>
-                    <option value="center">Center</option>
-                  </select>
-                </label>
-                <p class="hint" style="margin:0.75rem 0 0.3rem;">Layer &mdash; Background sits behind the app's cards/buttons, like a watermark. Top sits in front, over the whole screen -- still never blocks taps or clicks either way.</p>
+                <p class="hint" style="margin-bottom:0.4rem;">Position</p>
+                <div class="decal-position-grid" id="cm-theme-decal-position-grid">
+                  <button type="button" class="decal-position-opt" data-pos="top-left" title="Top Left" aria-label="Top Left"></button>
+                  <button type="button" class="decal-position-opt" data-pos="top-center" title="Top Center" aria-label="Top Center"></button>
+                  <button type="button" class="decal-position-opt" data-pos="top-right" title="Top Right" aria-label="Top Right"></button>
+                  <button type="button" class="decal-position-opt" data-pos="center-left" title="Center Left" aria-label="Center Left"></button>
+                  <button type="button" class="decal-position-opt" data-pos="center" title="Center" aria-label="Center"></button>
+                  <button type="button" class="decal-position-opt" data-pos="center-right" title="Center Right" aria-label="Center Right"></button>
+                  <button type="button" class="decal-position-opt" data-pos="bottom-left" title="Bottom Left" aria-label="Bottom Left"></button>
+                  <button type="button" class="decal-position-opt" data-pos="bottom-center" title="Bottom Center" aria-label="Bottom Center"></button>
+                  <button type="button" class="decal-position-opt" data-pos="bottom-right" title="Bottom Right" aria-label="Bottom Right"></button>
+                </div>
+                <p class="hint" style="margin:0.9rem 0 0.3rem;">Layer &mdash; Background sits behind the app's cards/buttons, like a watermark. Top sits in front, over the whole screen -- still never blocks taps or clicks either way.</p>
                 <div class="segmented" id="cm-theme-decal-layer">
                   <button type="button" data-decal-layer="background">Background</button>
                   <button type="button" data-decal-layer="top">Top</button>
@@ -490,6 +560,8 @@
               <div class="theme-form-preview">
                 <p class="hint" style="margin:0 0 0.5rem;">Live Preview</p>
                 <div class="theme-preview-frame" id="cm-theme-preview-frame">
+                  <div class="theme-preview-bg-blur" id="cm-theme-preview-bg-blur" hidden></div>
+                  <div class="theme-preview-bg-fade" id="cm-theme-preview-bg-fade" hidden></div>
                   <div class="theme-preview-header" id="cm-theme-preview-header">
                     <span class="theme-preview-dot"></span>
                     <span id="cm-theme-preview-name">Daily Work Reports</span>
@@ -823,6 +895,14 @@ $('#company-theme-gallery').addEventListener('click', async (e) => {
   if (!theme) return;
   const { backgroundImage, decalImage, backgroundImageFetched, decalImageFetched, ...metadata } = theme;
   appCompanyTheme.set(metadata);
+  // A one-time nudge, not a standing override -- picking a theme with a
+  // set Style Mode flips the device's Appearance to match, same as it
+  // already does for accent colour, but a member is still free to switch
+  // back in Appearance afterward without the theme fighting them for it.
+  if (theme.mode && theme.mode !== 'auto') {
+    appTheme.set(theme.mode);
+    renderThemePicker();
+  }
   renderAccentSwatches();
   renderCompanyThemeGallery();
   window.dispatchEvent(new CustomEvent('company-theme-changed'));
@@ -1276,15 +1356,20 @@ function resetThemeForm() {
   $('#cm-theme-details-summary').textContent = 'Add Theme';
   $('#cm-theme-name').value = '';
   $('#cm-theme-accent').value = '#461d7c';
+  setThemeMode('auto');
   setThemeBgType('color');
   $('#cm-theme-bg-color').value = '#461d7c';
+  setFadeColor('none');
+  $('#cm-theme-bg-fade-amount').value = 40;
+  $('#cm-theme-bg-fade-amount-val').textContent = '40%';
+  setThemeBlur('none');
   showThemeImagePreview('bg', null);
   $('#cm-theme-fn-bg').textContent = '';
   showThemeImagePreview('decal', null);
   $('#cm-theme-fn-decal').textContent = '';
   $('#cm-theme-decal-settings').hidden = true;
   $('#btn-remove-cm-theme-decal').hidden = true;
-  $('#cm-theme-decal-position').value = 'bottom-right';
+  setDecalPosition('bottom-right');
   setDecalLayer('background');
   $('#cm-theme-decal-size').value = 'medium';
   $('#cm-theme-decal-opacity').value = 35;
@@ -1300,6 +1385,16 @@ function resetThemeForm() {
   renderThemePreview();
 }
 
+function setThemeMode(mode) {
+  $$('#cm-theme-mode button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === mode)));
+  renderThemePreview();
+}
+$('#cm-theme-mode').addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  setThemeMode(btn.dataset.mode);
+});
+
 function setThemeBgType(type) {
   $$('#cm-theme-bg-type button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.bgType === type)));
   $('#cm-theme-bg-color-controls').hidden = type !== 'color';
@@ -1314,6 +1409,41 @@ $('#cm-theme-bg-type').addEventListener('click', (e) => {
 
 wirePencil('#cm-theme-bg-pencil', '#cm-theme-bg-file-controls');
 wirePencil('#cm-theme-decal-pencil', '#cm-theme-decal-file-controls');
+
+function setFadeColor(color) {
+  $$('#cm-theme-bg-fade-color button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.fadeColor === color)));
+  $('#cm-theme-bg-fade-amount-label').hidden = color === 'none';
+  renderThemePreview();
+}
+$('#cm-theme-bg-fade-color').addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  setFadeColor(btn.dataset.fadeColor);
+});
+$('#cm-theme-bg-fade-amount').addEventListener('input', (e) => {
+  $('#cm-theme-bg-fade-amount-val').textContent = `${e.target.value}%`;
+  renderThemePreview();
+});
+
+function setThemeBlur(blur) {
+  $$('#cm-theme-bg-blur button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.blur === blur)));
+  renderThemePreview();
+}
+$('#cm-theme-bg-blur').addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  setThemeBlur(btn.dataset.blur);
+});
+
+function setDecalPosition(pos) {
+  $$('#cm-theme-decal-position-grid button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.pos === pos)));
+  renderThemePreview();
+}
+$('#cm-theme-decal-position-grid').addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  setDecalPosition(btn.dataset.pos);
+});
 
 function setDecalLayer(layer) {
   $$('#cm-theme-decal-layer button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.decalLayer === layer)));
@@ -1346,15 +1476,22 @@ function renderThemePreview() {
   const header = $('#cm-theme-preview-header');
   const card = $('#cm-theme-preview-card');
   const decal = $('#cm-theme-preview-decal');
+  const bgBlur = $('#cm-theme-preview-bg-blur');
+  const bgFade = $('#cm-theme-preview-bg-fade');
 
   const accent = $('#cm-theme-accent').value || '#461d7c';
   header.style.background = accent;
   card.style.borderColor = accent;
   card.style.color = accent;
 
+  const mode = ($('#cm-theme-mode button[aria-pressed="true"]') || {}).dataset?.mode || 'auto';
+  frame.classList.toggle('force-light', mode === 'light');
+  frame.classList.toggle('force-dark', mode === 'dark');
+
   const bgType = ($('#cm-theme-bg-type button[aria-pressed="true"]') || {}).dataset?.bgType || 'color';
   const bgImg = $('#cm-theme-bg-img');
-  if (bgType === 'image' && !bgImg.hidden && bgImg.src) {
+  const hasBgImage = bgType === 'image' && !bgImg.hidden && !!bgImg.src;
+  if (hasBgImage) {
     frame.style.background = '#666';
     frame.style.backgroundImage = `url(${bgImg.src})`;
   } else {
@@ -1362,12 +1499,29 @@ function renderThemePreview() {
     frame.style.background = bgType === 'color' ? ($('#cm-theme-bg-color').value || '#461d7c') : '#666';
   }
 
+  const blur = hasBgImage ? (($('#cm-theme-bg-blur button[aria-pressed="true"]') || {}).dataset?.blur || 'none') : 'none';
+  bgBlur.hidden = blur === 'none';
+  if (blur !== 'none') {
+    const px = { light: 3, medium: 8, strong: 16 }[blur];
+    bgBlur.style.backgroundImage = `url(${bgImg.src})`;
+    bgBlur.style.filter = `blur(${px}px)`;
+    frame.style.backgroundImage = 'none'; // the blurred layer stands in for it
+  }
+
+  const fadeColor = hasBgImage ? (($('#cm-theme-bg-fade-color button[aria-pressed="true"]') || {}).dataset?.fadeColor || 'none') : 'none';
+  bgFade.hidden = fadeColor === 'none';
+  if (fadeColor !== 'none') {
+    const amount = Number($('#cm-theme-bg-fade-amount').value) / 100;
+    bgFade.style.background = fadeColor === 'dark' ? `rgba(0,0,0,${amount})` : `rgba(255,255,255,${amount})`;
+  }
+
   const decalImg = $('#cm-theme-decal-img');
   const decalVisible = !decalImg.hidden && !!decalImg.src && !removeDecalImage;
   decal.hidden = !decalVisible;
   if (decalVisible) {
+    const pos = ($('#cm-theme-decal-position-grid button[aria-pressed="true"]') || {}).dataset?.pos || 'bottom-right';
     decal.src = decalImg.src;
-    decal.className = `theme-preview-decal decal-size-${$('#cm-theme-decal-size').value} decal-pos-${$('#cm-theme-decal-position').value}`;
+    decal.className = `theme-preview-decal decal-size-${$('#cm-theme-decal-size').value} decal-pos-${pos}`;
     decal.style.opacity = Number($('#cm-theme-decal-opacity').value) / 100;
     const layer = ($('#cm-theme-decal-layer button[aria-pressed="true"]') || {}).dataset?.decalLayer || 'background';
     decal.style.zIndex = layer === 'top' ? '2' : '-1';
@@ -1426,8 +1580,13 @@ async function openThemeFormForEdit(theme) {
   $('#cm-theme-details-summary').textContent = `Editing "${theme.name}"`;
   $('#cm-theme-name').value = theme.name;
   $('#cm-theme-accent').value = theme.accent;
+  setThemeMode(theme.mode || 'auto');
   setThemeBgType(theme.backgroundType);
   $('#cm-theme-bg-color').value = theme.backgroundType === 'color' ? theme.backgroundColor : '#461d7c';
+  setFadeColor(theme.backgroundFadeColor || 'none');
+  $('#cm-theme-bg-fade-amount').value = Math.round((theme.backgroundFadeAmount != null ? theme.backgroundFadeAmount : 0.4) * 100);
+  $('#cm-theme-bg-fade-amount-val').textContent = `${$('#cm-theme-bg-fade-amount').value}%`;
+  setThemeBlur(theme.backgroundBlur || 'none');
   pendingBgFile = null;
   $('#cm-theme-fn-bg').textContent = '';
   if (theme.backgroundType === 'image' && theme.hasBackgroundImage) {
@@ -1462,7 +1621,7 @@ async function openThemeFormForEdit(theme) {
     $('#cm-theme-decal-settings').hidden = true;
     $('#btn-remove-cm-theme-decal').hidden = true;
   }
-  $('#cm-theme-decal-position').value = theme.decalPosition || 'bottom-right';
+  setDecalPosition(theme.decalPosition || 'bottom-right');
   setDecalLayer(theme.decalLayer || 'background');
   $('#cm-theme-decal-size').value = theme.decalSize || 'medium';
   $('#cm-theme-decal-opacity').value = Math.round((theme.decalOpacity != null ? theme.decalOpacity : 0.35) * 100);
@@ -1526,11 +1685,15 @@ $('#btn-save-cm-theme').addEventListener('click', async () => {
       createdAt: existing.createdAt || Date.now(),
       name,
       accent: $('#cm-theme-accent').value,
+      mode: ($('#cm-theme-mode button[aria-pressed="true"]') || {}).dataset?.mode || 'auto',
       backgroundType: bgType,
       backgroundColor: bgType === 'color' ? $('#cm-theme-bg-color').value : (existing.backgroundColor || $('#cm-theme-bg-color').value),
       hasBackgroundImage: bgType === 'image' ? (!!pendingBgFile || !!existing.hasBackgroundImage) : false,
+      backgroundFadeColor: bgType === 'image' ? (($('#cm-theme-bg-fade-color button[aria-pressed="true"]') || {}).dataset?.fadeColor || 'none') : 'none',
+      backgroundFadeAmount: Number($('#cm-theme-bg-fade-amount').value) / 100,
+      backgroundBlur: bgType === 'image' ? (($('#cm-theme-bg-blur button[aria-pressed="true"]') || {}).dataset?.blur || 'none') : 'none',
       hasDecalImage: removeDecalImage ? false : (!!pendingDecalFile || !!existing.hasDecalImage),
-      decalPosition: $('#cm-theme-decal-position').value,
+      decalPosition: ($('#cm-theme-decal-position-grid button[aria-pressed="true"]') || {}).dataset?.pos || 'bottom-right',
       decalLayer: ($('#cm-theme-decal-layer button[aria-pressed="true"]') || {}).dataset?.decalLayer || 'background',
       decalSize: $('#cm-theme-decal-size').value,
       decalOpacity: Number($('#cm-theme-decal-opacity').value) / 100,
