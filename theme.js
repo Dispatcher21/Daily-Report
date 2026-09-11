@@ -183,33 +183,85 @@ function readAccent() {
     applyAccent();
   }
 
-  // Every page except Settings itself gets a gear in the header.
-  function mountGear() {
+  // Every page gets the same header-right cluster: a sync button (only
+  // when actually connected to a company -- a local-only device has
+  // nothing to pull/push) and a settings gear (every page except Settings
+  // itself, which is where the gear would just link to). Replaces what
+  // used to be four separate, differently-behaved refresh/sync buttons
+  // scattered across Home, Reports, Settings, and Company Management --
+  // one control, same place, on every page.
+  //
+  // Run from DOMContentLoaded (same as before), which is late enough that
+  // firebase-sync.js and common.js -- both plain synchronous scripts
+  // lower in the body -- have already executed and defined the globals
+  // this needs, on every page that includes them (all of them).
+  async function mountHeaderControls() {
     const header = document.querySelector('.app-header');
-    if (!header || header.querySelector('.header-gear')) return;
-    if (/settings\.html$/i.test(location.pathname)) {
-      const slot = header.querySelector(':scope > span:empty');
-      if (slot) slot.remove();
-      return;
-    }
+    if (!header || header.querySelector('.header-controls')) return;
     const slot = header.querySelector(':scope > span:empty');
-    const a = document.createElement('a');
-    a.className = 'header-gear';
-    a.href = 'settings.html';
-    a.setAttribute('aria-label', 'Settings');
-    a.title = 'Settings';
-    const img = document.createElement('img');
-    img.src = 'settings-icon.png';
-    img.alt = '';
-    a.appendChild(img);
-    if (slot) slot.replaceWith(a);
-    else header.appendChild(a);
+    const isSettingsPage = /settings\.html$/i.test(location.pathname);
+
+    const controls = document.createElement('div');
+    controls.className = 'header-controls';
+
+    if (typeof getCompanyRoom === 'function') {
+      const room = await getCompanyRoom().catch(() => null);
+      if (room) {
+        const syncBtn = document.createElement('button');
+        syncBtn.type = 'button';
+        syncBtn.className = 'header-sync-btn';
+        syncBtn.title = 'Sync with company';
+        syncBtn.setAttribute('aria-label', 'Sync with company');
+        syncBtn.innerHTML = '&#8635;';
+        syncBtn.addEventListener('click', async () => {
+          if (syncBtn.classList.contains('spinning')) return; // already running
+          syncBtn.classList.add('spinning');
+          syncBtn.disabled = true;
+          try {
+            await syncCompanyRoomNow();
+            // Pages that care already listen for this (see index.html/
+            // project.html/reports.html) and re-render themselves; a page
+            // that doesn't just shows the fresh data next time it loads,
+            // same as it would have before this button existed.
+            window.dispatchEvent(new CustomEvent('company-data-pulled'));
+          } catch (err) {
+            console.error('header sync:', err);
+            alert(
+              typeof userError === 'function'
+                ? userError("Couldn't sync: " + err.message, 'HEADER_SYNC')
+                : "Couldn't sync: " + err.message
+            );
+          } finally {
+            syncBtn.classList.remove('spinning');
+            syncBtn.disabled = false;
+          }
+        });
+        controls.appendChild(syncBtn);
+      }
+    }
+
+    if (!isSettingsPage) {
+      const a = document.createElement('a');
+      a.className = 'header-gear';
+      a.href = 'settings.html';
+      a.setAttribute('aria-label', 'Settings');
+      a.title = 'Settings';
+      const img = document.createElement('img');
+      img.src = 'settings-icon.png';
+      img.alt = '';
+      a.appendChild(img);
+      controls.appendChild(a);
+    }
+
+    if (!controls.children.length) return; // nothing to show (local-only device, on Settings)
+    if (slot) slot.replaceWith(controls);
+    else header.appendChild(controls);
   }
 
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', mountGear);
+    document.addEventListener('DOMContentLoaded', mountHeaderControls);
   } else {
-    mountGear();
+    mountHeaderControls();
   }
 
   window.appTheme = {

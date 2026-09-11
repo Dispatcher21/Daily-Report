@@ -265,6 +265,12 @@ body {
   object-fit: contain;
 }
 
+/* Header-right cluster (theme.js's mountHeaderControls) -- the sync
+   button (when connected to a company) and the settings gear, held
+   together as one unit so they read as a pair regardless of which one(s)
+   are actually present on a given page. */
+.header-controls { flex: 0 0 auto; display: flex; align-items: center; gap: 0.5rem; }
+
 /* Gear in the header -- icon only, but a full 44px tap target. */
 .header-gear {
   flex: 0 0 auto;
@@ -289,6 +295,31 @@ body {
   height: 22px;
   display: block;
   filter: invert(1);
+}
+
+/* Same circle treatment as .header-gear, just a real <button> with a
+   glyph instead of an <img>. Reuses .view-toggle-btn's own spin keyframe
+   (view-toggle-spin, style.css) rather than redefining it. */
+.header-sync-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tap);
+  height: var(--tap);
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--on-brand);
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.header-sync-btn:hover { background: rgba(255, 255, 255, 0.22); }
+.header-sync-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.header-sync-btn.spinning { animation: view-toggle-spin 0.8s linear infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .header-sync-btn.spinning { animation: none; }
 }
 
 /* Segmented control (theme picker) */
@@ -685,16 +716,6 @@ main { max-width: min(1400px, 94vw); margin: 0 auto; padding: 1rem; }
   font-weight: 700;
   margin: 1.4rem 0 0.5rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--border);
 }
-
-/* Same idea as .eyebrow (label + underline), just with room for a small
-   action button flush against the right end of that underline instead of
-   plain text alone -- see #btn-refresh-home. */
-.eyebrow-row {
-  display: flex; align-items: flex-end; justify-content: space-between; gap: 0.5rem;
-  margin: 1.4rem 0 0.5rem; padding-bottom: 0.3rem; border-bottom: 1px solid var(--border);
-}
-.eyebrow-row .eyebrow { margin: 0; padding-bottom: 0; border-bottom: none; }
-.eyebrow-row .view-toggle-btn { width: 1.7rem; height: 1.7rem; flex: 0 0 auto; }
 
 .unsaved-drafts[hidden] { display: none; }
 .unsaved-drafts .eyebrow { margin-top: 0; }

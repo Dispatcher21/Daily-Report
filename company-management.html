@@ -370,7 +370,6 @@
       <button type="button" class="info-tip" data-tip="Reports grouped by whoever's logged in as on the device that created them. Only reflects data this device has synced -- tap Refresh to pull in the latest first." aria-label="What this does">i</button>
     </div>
     <div class="step-body">
-      <button type="button" class="btn-secondary" id="btn-refresh-activity" style="margin-bottom:0.75rem;">Refresh</button>
       <div class="empty-state" id="cm-activity-empty" hidden style="padding:1.25rem;">No reports yet.</div>
       <div id="cm-activity-list"></div>
       <p class="hint" style="margin-bottom:0;">Looking for a full, timestamped record of every change -- edits, deletions, exact before/after values? See the <a href="audit-log.html">Audit Log</a>.</p>
@@ -1402,26 +1401,14 @@ async function renderCmActivity() {
     .join('');
 }
 
-$('#btn-refresh-activity').addEventListener('click', async () => {
-  const btn = $('#btn-refresh-activity');
-  cmError('');
-  btn.disabled = true;
-  btn.textContent = 'Refreshing...';
-  startProgressBanner();
-  try {
-    await syncCompanyRoomNow(reportCompanyProgress);
-    await renderCmProjects();
-    await renderCmActivity();
-    themesCache = await getAllCompanyThemes();
-    await renderCmThemeList();
-    finishProgressBanner('Refreshed!');
-  } catch (err) {
-    console.error(err);
-    progressBannerError(userError("Couldn't refresh: " + err.message, 'REFRESH_ACTIVITY'));
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Refresh';
-  }
+// The header's own sync button (theme.js) handles Refresh/Sync Now now --
+// this just keeps this page's own lists current when that button (or any
+// other pull) lands, the same way they're already populated on page load.
+window.addEventListener('company-data-pulled', async () => {
+  await renderCmProjects();
+  await renderCmActivity();
+  themesCache = await getAllCompanyThemes();
+  await renderCmThemeList();
 });
 
 // ---------- Init ----------

@@ -238,8 +238,6 @@
           </div>
         </div>
 
-        <button type="button" class="btn-primary" id="btn-sync-company-now" style="margin:0.75rem 0 0.5rem;">Sync Now</button>
-        <br>
         <button type="button" class="text-btn" id="btn-leave-company" style="padding:0;color:var(--danger);">Leave This Company</button>
       </div>
 
@@ -740,26 +738,14 @@ $('#btn-unlock-admin').addEventListener('click', async () => {
   }
 });
 
-// -- Connected: sync / leave --
+// -- Connected: leave --
 
-$('#btn-sync-company-now').addEventListener('click', async () => {
-  const btn = $('#btn-sync-company-now');
-  companyError('');
-  btn.disabled = true;
-  btn.textContent = 'Syncing...';
-  startProgressBanner();
-  try {
-    const result = await syncCompanyRoomNow(reportCompanyProgress);
-    await refreshCompanySection();
-    applyHeaderLogo();
-    finishProgressBanner(`You're all caught up! Got ${result.projectsPulled} project(s) and ${result.reportsPulled} report(s).`);
-  } catch (err) {
-    console.error(err);
-    progressBannerError(userError("Sync didn't finish: " + err.message, 'SYNC_NOW'));
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Sync Now';
-  }
+// The header's own sync button (theme.js) handles Sync Now now -- this
+// just keeps this page's own view current when that button (or any other
+// pull) lands, the same way it already refreshes itself on page load.
+window.addEventListener('company-data-pulled', async () => {
+  await refreshCompanySection();
+  applyHeaderLogo();
 });
 
 $('#btn-leave-company').addEventListener('click', async () => {

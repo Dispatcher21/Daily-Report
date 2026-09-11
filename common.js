@@ -228,6 +228,7 @@ const ERROR_CODES = {
   IMPORT_REPORT_SYNC: 'SHOCKWAVE',
   SAVE_SYNC_CONFIRM: 'SKIDS',
   THEME_SAVE: 'WHIRL',
+  HEADER_SYNC: 'BRAWN',
 };
 
 // Appends a reference code to a user-facing error message -- use for every
