@@ -41,17 +41,15 @@
      (set on .cm-project-actions above) is what actually reads as "two
      groups" at a glance; this just keeps each cluster's own buttons from
      wrapping apart from each other first. */
-  .cm-action-cluster { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-  /* .btn-secondary/.btn-danger default to width:100% -- correct for a
-     lone button in a form, but inside this row it means a button that
-     wraps onto its own line (Delete, almost always, since it's last)
-     stretches into a full-width bar instead of sizing to its own label.
-     Same bug, same fix, as the report editor's save-row buttons. */
-  .cm-project-actions .btn-secondary,
-  .cm-project-actions .btn-danger,
-  .cm-project-actions a {
-    width: auto; flex: 0 0 auto;
-  }
+  .cm-action-cluster { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+  /* Row actions use .btn-sm (the same compact pill reports.html's own row
+     actions already use) rather than .btn-secondary/.btn-danger -- those
+     default to width:100%, sized for a lone button in a form, and looked
+     visibly out of place (heavy, inconsistent row heights, Delete
+     ballooning to a full-width bar once it wrapped) stacked several to a
+     row here. */
+  .cm-project-actions .btn-sm { margin-top: 0; }
+  .cm-project-actions label.btn-sm input[type="file"] { display: none; }
 
   .cc-project-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.5rem 0 0; }
   .cc-chip {
@@ -626,8 +624,8 @@ async function renderCmThemeList() {
         `<div class="cm-project-name">${escapeHtml(t.name)}</div>` +
         `</div>` +
         `<div class="cm-project-actions">` +
-        `<button type="button" class="btn-secondary" data-edit-theme="${t.id}">Edit</button>` +
-        `<button type="button" class="btn-danger" data-delete-theme="${t.id}">Delete</button>` +
+        `<button type="button" class="btn-sm" data-edit-theme="${t.id}">Edit</button>` +
+        `<button type="button" class="btn-sm btn-sm-danger" data-delete-theme="${t.id}">Delete</button>` +
         `</div>` +
         `</div>`
       );
@@ -956,15 +954,15 @@ async function renderCmProjects() {
         </div>
         <div class="cm-project-actions">
           <div class="cm-action-cluster">
-            <label class="btn-secondary" style="cursor:pointer;margin:0;">
+            <label class="btn-sm" style="cursor:pointer;">
               &#128444; ${p.backgroundImage ? 'Replace BG' : 'Add BG'}
-              <input type="file" accept="image/*" data-bg-upload="${p.id}" hidden>
+              <input type="file" accept="image/*" data-bg-upload="${p.id}">
             </label>
-            ${p.backgroundImage ? `<button type="button" class="btn-secondary" data-remove-bg="${p.id}">Remove BG</button>` : ''}
+            ${p.backgroundImage ? `<button type="button" class="btn-sm" data-remove-bg="${p.id}">Remove BG</button>` : ''}
           </div>
           <div class="cm-action-cluster">
-            <a class="btn-secondary" href="project.html?id=${p.id}">Manage</a>
-            <button type="button" class="btn-danger" data-delete-project="${p.id}">Delete</button>
+            <a class="btn-sm" href="project.html?id=${p.id}">Manage</a>
+            <button type="button" class="btn-sm btn-sm-danger" data-delete-project="${p.id}">Delete</button>
           </div>
         </div>
       </div>`
@@ -1197,7 +1195,7 @@ async function renderCsList() {
           <div class="cm-project-sub">${escapeHtml(csPermissionSummary(r.permissions || {}))} &middot; ${scope}</div>
         </div>
         <div class="cm-project-actions">
-          <button type="button" class="btn-danger" data-delete-setup="${r.id}">Delete</button>
+          <button type="button" class="btn-sm btn-sm-danger" data-delete-setup="${r.id}">Delete</button>
         </div>
       </div>`;
     })

@@ -1343,6 +1343,8 @@ input[type="file"] { min-height: 0; }
   min-height: 2.25rem;
 }
 .btn-sm:hover { border-color: var(--brand-light); }
+.btn-sm-danger { color: var(--danger); border-color: var(--danger); }
+.btn-sm-danger:hover { background: var(--danger-bg); border-color: var(--danger); }
 
 .text-btn {
   background: none; border: none; font-size: 0.92rem; font-weight: 700;
