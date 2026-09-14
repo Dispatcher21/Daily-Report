@@ -37,6 +37,11 @@
     You don't have permission to edit reports for this company &mdash; ask an admin to unlock this, or open Company Management to change it.
   </div>
 
+  <div class="view-mode-banner" id="view-mode-banner" hidden>
+    <span>Viewing this report.</span>
+    <button type="button" class="btn-secondary" id="btn-edit-report">&#9998; Edit Report</button>
+  </div>
+
   <div class="no-work-day-bar">
     <button type="button" class="btn-secondary" id="btn-no-work-day">&#128683; Mark as No Work Day</button>
     <p class="hint" style="margin:0.4rem 0 0;">Sets Notes to "NO WORK DAY" and Hours to 0, leaves everything else as-is -- counted on the project dashboard.</p>
@@ -140,6 +145,7 @@ let payItemSearch = '';
 let manualPayOpen = false;
 let editable = true;
 let hasRestoredDraft = false;
+let reportViewLocked = false;
 
 // Edits only land in the real, synced/audit-logged record once the Save
 // button is pressed -- scheduleSave, called from every field on the page,
@@ -235,6 +241,33 @@ function lockReportEditor() {
   $$('main canvas.sig-pad').forEach((c) => { c.style.pointerEvents = 'none'; });
 }
 
+// Default state for opening an already-saved report someone IS allowed to
+// edit -- same locking mechanism as lockReportEditor (a member with no
+// permission at all), just with an Edit button to lift it instead of a
+// permanent explanation for why it's stuck. Landing straight in an
+// editable form made it too easy to nudge a field by accident while just
+// checking a past report; a deliberate "unlock" step matches how printing/
+// viewing is the far more common reason to open one.
+function enterViewMode() {
+  reportViewLocked = true;
+  $('#view-mode-banner').hidden = false;
+  $$('main input, main textarea, main select, main button').forEach((el) => {
+    if (el.id === 'btn-generate' || el.id === 'btn-edit-report') return;
+    el.disabled = true;
+  });
+  $$('main canvas.sig-pad').forEach((c) => { c.style.pointerEvents = 'none'; });
+}
+
+function exitViewMode() {
+  reportViewLocked = false;
+  $('#view-mode-banner').hidden = true;
+  $$('main input, main textarea, main select, main button').forEach((el) => { el.disabled = false; });
+  $$('main canvas.sig-pad').forEach((c) => { c.style.pointerEvents = ''; });
+  setDirty(false); // Save stays disabled until something actually changes, not just because unlocking touched it
+}
+
+$('#btn-edit-report').addEventListener('click', exitViewMode);
+
 async function init() {
   const room = await getCompanyRoom();
   project = projectId ? await getProject(projectId) : null;
@@ -311,7 +344,15 @@ async function init() {
     if (hasRestoredDraft) setDirty(true);
     checkDupeWarnings(); // catches a conflict that already existed when this report was opened, not just one made while editing it
   } finally {
-    if (!editable) lockReportEditor();
+    if (!editable) {
+      lockReportEditor();
+    } else if (reportParam !== 'new' && !hasRestoredDraft) {
+      // A brand-new report has nothing to view yet -- straight to editing.
+      // A restored draft means they were already mid-edit when this page
+      // last closed; re-locking it would just be an extra click back to
+      // where they already were.
+      enterViewMode();
+    }
   }
 }
 

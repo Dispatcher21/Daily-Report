@@ -1205,6 +1205,17 @@ input[type="file"] { min-height: 0; }
   color: var(--warn); margin-bottom: 0.75rem;
 }
 
+/* Neutral, not .warn's amber/red -- opening a report to look at it isn't a
+   problem the way missing edit permission (#readonly-banner) is, just a
+   default a report editor should have unlocked deliberately. */
+.view-mode-banner {
+  background: var(--brand-dim); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 0.7rem 0.85rem; font-size: 0.85rem;
+  color: var(--text); margin-bottom: 0.75rem;
+  display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap;
+}
+.view-mode-banner .btn-secondary { width: auto; }
+
 /* Live Report No./Date collision notice in report-editor.html -- same
    styling as .warn, just below the fields it's about instead of at the top
    of the page, and can hold two stacked lines (one per kind of collision). */
