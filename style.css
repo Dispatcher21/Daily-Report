@@ -932,6 +932,11 @@ main { max-width: min(1400px, 94vw); margin: 0 auto; padding: 1rem; }
   display: flex; gap: 0.4rem; position: sticky; top: 0; z-index: 5;
   background: var(--bg); padding: 0.5rem 0; margin: -0.5rem 0 0.5rem;
 }
+/* This element's own display:flex above is an author rule, which beats
+   the browser's built-in [hidden]{display:none} regardless of
+   specificity -- enterViewMode's `.hidden = true` (report-editor.html)
+   would otherwise silently do nothing. */
+.rb-mobile-tabs[hidden] { display: none; }
 .rb-mobile-tab {
   flex: 1; padding: 0.6rem 0.5rem; border-radius: var(--radius);
   border: 1px solid var(--border); background: var(--surface); color: var(--text-dim);
@@ -966,6 +971,17 @@ main { max-width: min(1400px, 94vw); margin: 0 auto; padding: 1rem; }
     box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.15);
   }
 }
+/* View mode (report-editor.html's enterViewMode): the form -- and its
+   mobile Form/Preview switcher, hidden separately via JS since it isn't a
+   descendant of .rb-layout -- stay hidden at every screen size, not just
+   below the mobile breakpoint, until a click on the preview itself (or
+   the Edit Report button) unlocks it. Two classes beats .rb-layout's own
+   display:grid/flex rules by specificity regardless of viewport width, so
+   this doesn't need its own media query. */
+.rb-layout.preview-only { display: block; }
+.rb-layout.preview-only .rb-form { display: none; }
+.rb-layout.preview-only .rb-preview-col { display: block; position: static; }
+
 .rb-preview-label {
   font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
   color: var(--text-dim); margin: 0 0 0.6rem;

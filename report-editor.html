@@ -251,19 +251,29 @@ function lockReportEditor() {
 function enterViewMode() {
   reportViewLocked = true;
   $('#view-mode-banner').hidden = false;
+  $('#rb-layout').classList.add('preview-only');
+  $('#rb-mobile-tabs').hidden = true; // nothing to switch between while only the preview shows
   $$('main input, main textarea, main select, main button').forEach((el) => {
     if (el.id === 'btn-generate' || el.id === 'btn-edit-report') return;
     el.disabled = true;
   });
   $$('main canvas.sig-pad').forEach((c) => { c.style.pointerEvents = 'none'; });
+  // The preview was already rendered/scaled once against whatever width it
+  // had before this ran (a normal 2-column desktop layout, or a hidden
+  // 0-width mobile pane) -- re-measure now that .preview-only has made it
+  // the full-width, always-visible layout.
+  if (previewLayout) requestAnimationFrame(() => requestAnimationFrame(refreshLivePreview));
 }
 
 function exitViewMode() {
   reportViewLocked = false;
   $('#view-mode-banner').hidden = true;
+  $('#rb-layout').classList.remove('preview-only');
+  $('#rb-mobile-tabs').hidden = false;
   $$('main input, main textarea, main select, main button').forEach((el) => { el.disabled = false; });
   $$('main canvas.sig-pad').forEach((c) => { c.style.pointerEvents = ''; });
   setDirty(false); // Save stays disabled until something actually changes, not just because unlocking touched it
+  if (previewLayout) requestAnimationFrame(() => requestAnimationFrame(refreshLivePreview));
 }
 
 $('#btn-edit-report').addEventListener('click', exitViewMode);
@@ -723,6 +733,12 @@ function setRbMobileView(view) {
 }
 
 function jumpToField(key, groupId) {
+  // Clicking a field directly on the preview is the intended way in while
+  // view-locked -- unlocks editing for the whole report (same as the Edit
+  // Report button), then continues on to reveal+scroll to this one field.
+  const wasLocked = reportViewLocked;
+  if (wasLocked) exitViewMode();
+
   // Switching mobile views changes display:none -> block on .rb-form, so the
   // scroll/focus below must happen after that layout change lands, not before.
   const wasOnPreview = rbMobileView === 'preview';
@@ -751,7 +767,7 @@ function jumpToField(key, groupId) {
     }
   };
 
-  if (wasOnPreview) requestAnimationFrame(() => requestAnimationFrame(doJump));
+  if (wasOnPreview || wasLocked) requestAnimationFrame(() => requestAnimationFrame(doJump));
   else doJump();
 }
 
