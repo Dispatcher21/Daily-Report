@@ -147,7 +147,10 @@
         <div id="unsaved-drafts-list"></div>
       </div>
 
-      <div class="eyebrow">Your Projects</div>
+      <div class="eyebrow eyebrow-row">
+        <span>Your Projects</span>
+        <button type="button" class="text-btn" id="btn-reorder-toggle" aria-pressed="false">Reorder</button>
+      </div>
       <div id="hub-grid" class="hub-grid"></div>
 
       <!-- ADD PROJECT PANEL (revealed in place, no separate page) -->
@@ -253,7 +256,23 @@ let currentProjectsById = new Map();
 let currentCountByProject = new Map();
 let currentFavoriteSet = new Set();
 
-function projectCardHtml(p, countByProject, favoriteSet, { unfolderable = false } = {}) {
+// Reorder mode: a standalone alternative to holding a card, for phones
+// where the PWA's touch handling doesn't leave long-press-to-drag reliably
+// working. Toggled by #btn-reorder-toggle; while on, every card gets its
+// own up/down buttons instead (see reorderBtnsHtml) and dragging/navigating
+// off a card are both disabled so a tap can't be mistaken for either.
+let hubReorderMode = false;
+
+function reorderBtnsHtml(id, reorderMode, isFirst, isLast) {
+  if (!reorderMode) return '';
+  return `
+        <div class="hc-reorder-btns">
+          <button type="button" class="hc-reorder-btn" data-reorder="up" data-reorder-id="${id}" ${isFirst ? 'disabled' : ''} aria-label="Move up">&#9650;</button>
+          <button type="button" class="hc-reorder-btn" data-reorder="down" data-reorder-id="${id}" ${isLast ? 'disabled' : ''} aria-label="Move down">&#9660;</button>
+        </div>`;
+}
+
+function projectCardHtml(p, countByProject, favoriteSet, { unfolderable = false, reorderMode = false, isFirst = false, isLast = false } = {}) {
   const n = countByProject.get(p.id) || 0;
   const countLabel = n === 1 ? '1 report' : `${n} reports`;
   let bgHtml = '';
@@ -263,8 +282,14 @@ function projectCardHtml(p, countByProject, favoriteSet, { unfolderable = false 
     bgHtml = `<img class="hc-bg-img" src="${url}" alt=""><div class="hc-bg-fade"></div>`;
   }
   const isFav = favoriteSet.has(p.id);
+  // Reorder mode swaps the card's tag from <a> to <div> so tapping it can't
+  // navigate away -- the up/down buttons (the same move finishDrag makes via
+  // drag-and-drop, which doesn't hold reliably as a PWA on mobile) become
+  // the only thing a tap does.
+  const tag = reorderMode ? 'div' : 'a';
+  const hrefAttr = reorderMode ? '' : ` href="project.html?id=${p.id}"`;
   return `
-      <a class="hub-card${p.backgroundImage ? ' has-bg' : ''}" href="project.html?id=${p.id}" draggable="false" data-drag-id="${p.id}" data-drag-type="project">
+      <${tag} class="hub-card${p.backgroundImage ? ' has-bg' : ''}"${hrefAttr} draggable="false" data-drag-id="${p.id}" data-drag-type="project">
         ${bgHtml}
         ${unfolderable ? `<button type="button" class="hc-unfolder" data-unfolder-id="${p.id}" title="Take out of this folder">&times;</button>` : ''}
         <button type="button" class="hc-favorite${isFav ? ' is-fav' : ''}" data-favorite-id="${p.id}" title="${isFav ? 'Remove from favorites' : 'Add to favorites'}">&#9733;</button>
@@ -272,7 +297,8 @@ function projectCardHtml(p, countByProject, favoriteSet, { unfolderable = false 
         <div class="hc-title">${escapeHtml(p.name)}</div>
         <div class="hc-desc">${escapeHtml(p.meta.projectName || '')}</div>
         <div class="hc-count">${countLabel}</div>
-      </a>`;
+        ${reorderBtnsHtml(p.id, reorderMode, isFirst, isLast)}
+      </${tag}>`;
 }
 
 // A folder's background IMAGE is purely local -- stored directly as a
@@ -290,7 +316,8 @@ function projectCardHtml(p, countByProject, favoriteSet, { unfolderable = false 
 // it has none) -- so the card reads as "a folder holding these specific
 // things," the way a phone's own folder icon previews a few of the apps
 // inside it, rather than just a generic folder glyph.
-function folderCardHtml(folder, projectsById) {
+function folderCardHtml(folder, projectsById, favoriteSet, { reorderMode = false, isFirst = false, isLast = false } = {}) {
+  const isFav = favoriteSet.has(folder.id);
   const members = folder.projectIds.map((id) => projectsById.get(id)).filter(Boolean);
   const n = members.length;
   // Always at most 8 cells (a clean 4x2), never a ragged row -- when
@@ -327,9 +354,11 @@ function folderCardHtml(folder, projectsById) {
   return `
       <div class="hub-card folder-card${hasAnyBg ? ' has-bg' : ''}" data-drag-id="${folder.id}" data-drag-type="folder" data-open-folder="${folder.id}"${styleAttr}>
         ${bgHtml}
+        <button type="button" class="hc-favorite${isFav ? ' is-fav' : ''}" data-favorite-id="${folder.id}" title="${isFav ? 'Remove from favorites' : 'Add to favorites'}">&#9733;</button>
         <div class="folder-preview-grid">${tiles}</div>
         <div class="hc-title">${escapeHtml(folder.name)}</div>
         <div class="hc-desc">${n} project${n === 1 ? '' : 's'}</div>
+        ${reorderBtnsHtml(folder.id, reorderMode, isFirst, isLast)}
       </div>`;
 }
 
@@ -406,15 +435,17 @@ async function renderProjectCards() {
   currentFavoriteSet = favoriteSet;
 
   const grid = $('#hub-grid');
+  grid.classList.toggle('reorder-mode', hubReorderMode);
   const cards = layout
-    .map((entry) => {
-      if (entry.type === 'folder') return folderCardHtml(entry, projectsById);
+    .map((entry, i) => {
+      const opts = { reorderMode: hubReorderMode, isFirst: i === 0, isLast: i === layout.length - 1 };
+      if (entry.type === 'folder') return folderCardHtml(entry, projectsById, favoriteSet, opts);
       const p = projectsById.get(entry.id);
-      return p ? projectCardHtml(p, countByProject, favoriteSet) : '';
+      return p ? projectCardHtml(p, countByProject, favoriteSet, opts) : '';
     })
     .join('');
   const canCreate = await companyCan('createProjects');
-  grid.innerHTML = cards + (canCreate ? `<div class="hub-card add-card" id="btn-add-project">+ Add Project</div>` : '');
+  grid.innerHTML = cards + (canCreate && !hubReorderMode ? `<div class="hub-card add-card" id="btn-add-project">+ Add Project</div>` : '');
   if (projects.length === 0) {
     grid.insertAdjacentHTML(
       'afterbegin',
@@ -423,7 +454,7 @@ async function renderProjectCards() {
         : '<div class="empty-state" style="grid-column:1/-1;">No projects yet -- ask an admin to add one.</div>'
     );
   }
-  if (canCreate) $('#btn-add-project').addEventListener('click', showAddProjectPanel);
+  if (canCreate && !hubReorderMode) $('#btn-add-project').addEventListener('click', showAddProjectPanel);
 }
 
 // ---------- Drag controller ----------
@@ -519,7 +550,22 @@ async function finishDrag() {
   await renderProjectCards();
 }
 
+// Reorder-mode's up/down buttons -- a plain array swap with a neighbour,
+// same top-level move finishDrag makes for a 'before'/'after' drop, just
+// driven by a tap instead of a drag gesture.
+async function moveHubEntry(id, direction) {
+  const layout = currentHubLayout;
+  const idx = layout.findIndex((e) => e.id === id);
+  if (idx === -1) return;
+  const swapWith = direction === 'up' ? idx - 1 : idx + 1;
+  if (swapWith < 0 || swapWith >= layout.length) return;
+  [layout[idx], layout[swapWith]] = [layout[swapWith], layout[idx]];
+  await saveProjectLayout(layout);
+  await renderProjectCards();
+}
+
 function hubDragPointerDown(e) {
+  if (hubReorderMode) return; // up/down buttons are driving the layout instead
   if (e.button !== undefined && e.button !== 0) return; // left mouse only; touch/pen report undefined
   if (e.target.closest('[data-favorite-id], [data-unfolder-id]')) return; // let those buttons work normally
   const card = e.target.closest('.hub-card[data-drag-id]');
@@ -765,6 +811,13 @@ function wireHubGridInteractions() {
       e.stopPropagation();
       return;
     }
+    const reorderBtn = e.target.closest('[data-reorder]');
+    if (reorderBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!reorderBtn.disabled) await moveHubEntry(reorderBtn.dataset.reorderId, reorderBtn.dataset.reorder);
+      return;
+    }
     const favBtn = e.target.closest('[data-favorite-id]');
     if (favBtn) {
       e.preventDefault();
@@ -775,6 +828,14 @@ function wireHubGridInteractions() {
     }
     const folderCard = e.target.closest('[data-open-folder]');
     if (folderCard) openFolderModal(folderCard.dataset.openFolder, folderCard);
+  });
+
+  $('#btn-reorder-toggle').addEventListener('click', async () => {
+    hubReorderMode = !hubReorderMode;
+    const btn = $('#btn-reorder-toggle');
+    btn.setAttribute('aria-pressed', String(hubReorderMode));
+    btn.textContent = hubReorderMode ? 'Done' : 'Reorder';
+    await renderProjectCards();
   });
 
   grid.addEventListener('pointerdown', hubDragPointerDown);
