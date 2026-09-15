@@ -93,6 +93,7 @@
           <span class="save-status" id="save-status"></span>
         </div>
         <button id="btn-generate" class="btn-primary">Generate Report</button>
+        <button type="button" id="btn-duplicate-report" class="btn-secondary">Duplicate This Report</button>
         <button id="btn-delete-report" class="btn-danger">Delete This Report</button>
       </div>
     </div>
@@ -246,8 +247,8 @@ async function init() {
   $('#bb-back-link').href = `reports.html?project=${project.id}`;
 
   const reportParam = queryParam('report');
+  const dupFromId = queryParam('dupFrom');
   if (reportParam === 'new') {
-    const existing = await getReportsForProject(project.id);
     const nextNo = await getNextReportNo(project.id);
     // Deliberately NOT committed here (no saveReport call) -- that used to
     // write a real, audit-logged, synced-to-everyone report the instant this
@@ -257,7 +258,16 @@ async function init() {
     // memory until the first real edit hands it to scheduleSave -- same
     // local-draft-then-explicit-commit path every other edit already goes
     // through -- so an abandoned blank report leaves no trace anywhere.
-    report = await makeBlankReport(nextNo, project, existing[0]);
+    // Same reasoning covers a duplicate (?dupFrom=<id>, see btn-duplicate-
+    // report below): it's built from the source report right here, but
+    // nothing's written until a real edit commits it.
+    const dupFrom = dupFromId ? await getReport(dupFromId) : null;
+    if (dupFrom && dupFrom.projectId === project.id) {
+      report = await duplicateReport(dupFrom, nextNo, project);
+    } else {
+      const existing = await getReportsForProject(project.id);
+      report = await makeBlankReport(nextNo, project, existing[0]);
+    }
     history.replaceState(null, '', `report-editor.html?project=${project.id}&report=${report.id}`);
   } else {
     report = await getReport(reportParam);
@@ -909,6 +919,23 @@ function renderEditor() {
   $('#rf-warning-close').addEventListener('click', () => {
     $('#rf-warning-overlay').hidden = true;
   });
+
+  $('#btn-duplicate-report').onclick = async () => {
+    // Duplicating reads the committed report back off the source id (see
+    // init()'s dupFrom handling), not this page's in-memory state -- same
+    // save-first reasoning as Generate Report above, so an edit made right
+    // before clicking Duplicate isn't silently left out of the copy.
+    if (reportDirty) {
+      try {
+        await commitSave();
+      } catch (err) {
+        console.error(err);
+        alert('Could not save your changes -- check your connection and try again before duplicating.');
+        return;
+      }
+    }
+    location.href = `report-editor.html?project=${project.id}&report=new&dupFrom=${report.id}`;
+  };
 
   $('#btn-delete-report').onclick = async () => {
     if (!confirm('Delete this report? This cannot be undone.')) return;

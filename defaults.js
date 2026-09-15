@@ -235,6 +235,58 @@ async function makeBlankReport(nextReportNo, project, previous) {
   };
 }
 
+// Seeds a brand-new report from an existing one -- unlike makeBlankReport's
+// narrow previous-report carry-forward (just hours/names/contractor and
+// equipment labels), this copies every descriptive/structural field:
+// activity, notes, work summary, weather, contractors, equipment labels,
+// and pay item rows (item number/description/station/side/unit). What it
+// deliberately does NOT copy is anything that's a measurement or record of
+// that specific day rather than a description of the work: pay item and
+// equipment quantities, time entries, photos, and both signature images --
+// those always start blank/empty, same as a normal new report, since
+// copying yesterday's actual measured numbers or someone else's signature
+// into today would be actively wrong, not just unnecessary.
+async function duplicateReport(source, nextReportNo, project) {
+  const loggedInName = typeof getUserName === 'function' ? await getUserName() : null;
+  const room = typeof getCompanyRoom === 'function' ? await getCompanyRoom() : null;
+  const companyCode = (project && project.companyCode) || (room && room.code) || null;
+  const representative = loggedInName || source.representative || '';
+
+  return {
+    ...source,
+    id: crypto.randomUUID(),
+    projectId: project ? project.id : source.projectId,
+    companyCode,
+    reportNo: nextReportNo,
+    date: todayIso(),
+    representative,
+    repSignatureName: representative,
+    peSignatureName: source.peName || '',
+    timeEntries: [{ start: '', end: '' }],
+    equipmentRows: (source.equipmentRows || []).map((row) => ({
+      label: row.label || '',
+      qty: Array.from({ length: CONTRACTOR_COUNT }, () => ''),
+    })),
+    payItems: (source.payItems || []).map((it) => ({
+      ...it,
+      qty: '',
+      theoreticalQty: '',
+    })),
+    repSignatureImage: null,
+    peSignatureImage: null,
+    photos: [null, null, null, null, null, null],
+    photosFetched: [true, true, true, true, true, true],
+    signatureFetched: true,
+    thumbnail: null,
+    thumbnailBack: null,
+    thumbnailAt: null,
+    createdBy: undefined,
+    lastEditedBy: undefined,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+}
+
 // Brings a stored report up to the current shape. Reports saved before the
 // force/equipment table grew from 15 rows to the template's full 22 only hold
 // 15, and older ones predate the work-summary header field entirely.
