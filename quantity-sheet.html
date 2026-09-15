@@ -30,7 +30,6 @@
 </div>
 
 <main>
-  <div class="step-pair">
   <div class="step">
     <div class="step-header">
       <span class="step-num">RANGE</span>
@@ -52,42 +51,11 @@
       <div id="range-estimate-field" style="margin-top:0.75rem;" hidden>
         <label>Estimate <select id="f-estimate"></select></label>
       </div>
-      <p class="hint" id="range-summary" style="margin-bottom:0;"></p>
-
-      <div class="eyebrow">Pay Apps</div>
-      <div id="estimate-history"></div>
-    </div>
-  </div>
-
-  <div class="step">
-    <div class="step-header">
-      <span class="step-num">BILLING</span>
-      <h2 id="payapp-form-title">Pay App</h2>
-      <button type="button" class="info-tip" data-tip="Record a Pay App each time one is approved, with the engineer-approved quantity for every item as of that date. Once one's on file, it (not raw inspector totals) is what this project's dashboards are based on through that date -- reports filed after it keep counting normally on top." aria-label="What this does">i</button>
-    </div>
-    <div class="step-body">
-      <div class="field-grid" id="estimate-form">
-        <label>Pay App No. <input type="text" id="f-est-no"></label>
-        <label>Date <input type="date" id="f-est-date"></label>
-        <label>Note (optional) <input type="text" id="f-est-note" placeholder="e.g. Pay Application 3"></label>
+      <div class="qty-range-footer">
+        <p class="hint" id="range-summary">&nbsp;</p>
+        <a class="text-btn" id="link-pay-apps" href="#">Manage Pay Apps &rarr;</a>
       </div>
-
-      <div class="eyebrow" style="margin-top:1rem;">Item Quantities <button type="button" class="info-tip" data-tip="Inspector Total is the reference running total as of this Pay App's date, for comparison -- not editable here. Pay App Total is what gets approved and saved; it starts pre-filled with the Inspector Total (or, when editing one already recorded, whatever it was last saved as), adjust whatever needs it." aria-label="What this does">i</button></div>
-      <div class="payapp-summary" id="payapp-summary">
-        <div><span class="ps-label">Inspector Total</span><span class="ps-value" id="payapp-total-inspector">—</span></div>
-        <div><span class="ps-label">Pay App Total</span><span class="ps-value" id="payapp-total-contractor">—</span></div>
-        <div><span class="ps-label">% Diff</span><span class="ps-value" id="payapp-total-pctdiff">—</span></div>
-        <div><span class="ps-label">$ Diff</span><span class="ps-value" id="payapp-total-costdiff">—</span></div>
-      </div>
-      <div class="payapp-list" id="payapp-items-list"></div>
-
-      <div style="display:flex; gap:0.6rem; align-items:center; margin-top:1rem; flex-wrap:wrap;">
-        <button type="button" class="btn-secondary" id="btn-record-estimate">+ Record Pay App</button>
-        <button type="button" class="text-btn" id="btn-cancel-edit-estimate" hidden>Cancel Edit</button>
-      </div>
-      <p class="hint" id="estimate-error" style="color:var(--danger);" hidden></p>
     </div>
-  </div>
   </div>
 
   <div class="step" id="period-step" hidden>
@@ -103,11 +71,11 @@
 
   <div class="step">
     <div class="step-header">
-      <span class="step-num">VIEW</span>
+      <span class="step-num">QUANTITIES</span>
       <h2>Quantities For This Range</h2>
     </div>
     <div class="step-body">
-      <div class="segmented" id="view-picker">
+      <div class="segmented view-tabs" id="view-picker">
         <button type="button" data-view="totals">Totals</button>
         <button type="button" data-view="byDay">By Day</button>
         <button type="button" data-view="byEstimate">By Estimate</button>
@@ -129,18 +97,21 @@
         <div class="bar-list" id="qty-bars"></div>
         <p class="hint" id="qty-bars-empty" hidden style="margin:0;">No pay items logged on any report in this range.</p>
         <p class="hint" id="qty-bars-no-match" hidden style="margin:0;">No pay items match the current search/filter.</p>
+
+        <div class="eyebrow" style="margin-top:1.25rem;">Excel Preview <button type="button" class="info-tip" data-tip="Exactly what the Totals sheet of the downloaded workbook will contain, same column order and all." aria-label="What this does">i</button></div>
+        <div class="table-scroll"><table class="data-table xlsx-table" id="totals-preview-table"></table></div>
       </div>
 
       <div id="view-byDay" style="margin-top:0.9rem;" hidden>
         <div class="panel-tip-row"><button type="button" class="info-tip" data-tip="Each item's own quantity for that day -- not a running total." aria-label="What this does">i</button></div>
-        <div class="table-scroll"><table class="data-table" id="byday-table"></table></div>
+        <div class="table-scroll"><table class="data-table xlsx-table" id="byday-table"></table></div>
         <p class="hint" id="byday-empty" hidden style="margin:0;">No pay items logged on any report in this range.</p>
       </div>
 
       <div id="view-byEstimate" style="margin-top:0.9rem;" hidden>
         <div class="panel-tip-row"><button type="button" class="info-tip" data-tip="Each item's quantity billed in that period (since the previous estimate, or since the start for the first one)." aria-label="What this does">i</button></div>
-        <div class="table-scroll"><table class="data-table" id="byestimate-table"></table></div>
-        <p class="hint" id="byestimate-empty" hidden style="margin:0;">No estimates recorded yet -- add one in the Billing section above.</p>
+        <div class="table-scroll"><table class="data-table xlsx-table" id="byestimate-table"></table></div>
+        <p class="hint" id="byestimate-empty" hidden style="margin:0;">No estimates recorded yet -- add one from Manage Pay Apps above.</p>
       </div>
 
       <div id="view-detail" style="margin-top:0.9rem;" hidden>
@@ -157,7 +128,7 @@
           </select>
           <label class="detail-group-toggle"><input type="checkbox" id="detail-group"> Group by Item</label>
         </div>
-        <div class="table-scroll"><table class="data-table" id="detail-table"></table></div>
+        <div class="table-scroll"><table class="data-table xlsx-table" id="detail-table"></table></div>
         <p class="hint" id="detail-empty" hidden style="margin:0;">No pay items logged on any report in this range.</p>
         <p class="hint" id="detail-summary" style="margin-bottom:0;"></p>
       </div>
@@ -188,7 +159,6 @@ let project = null;
 let allReports = [];
 let rangeMode = 'range'; // 'range' | 'all' | 'estimate'
 let selectedEstimateId = null;
-let editingEstimateId = null; // the Pay App the form below is currently editing, if any -- see startEditEstimate
 
 async function init() {
   project = projectId ? await getProject(projectId) : null;
@@ -199,6 +169,7 @@ async function init() {
   document.title = `Quantity Sheet — ${project.name}`;
   $('#project-name-sub').textContent = project.name;
   $('#bb-back-link').href = `project.html?id=${project.id}`;
+  $('#link-pay-apps').href = `pay-apps.html?project=${project.id}`;
 
   allReports = (await getReportsForProject(project.id)).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 
@@ -220,10 +191,6 @@ async function init() {
     rangeMode = 'all'; // nothing has a date at all -- a range can never match anything
   }
 
-  renderEstimateHistory();
-  renderPayAppItemsTable();
-  $('#f-est-no').value = nextEstimateNo(project.billingEstimates);
-  $('#f-est-date').value = todayIso();
   $('#view-picker button[data-view="totals"]').setAttribute('aria-pressed', 'true');
   renderRangeMode();
 }
@@ -367,7 +334,7 @@ function renderByEstimateTable() {
   const sortedBillingEstimates = sortedEstimates(project.billingEstimates);
   if (sortedBillingEstimates.length === 0) {
     $('#byestimate-table').innerHTML = '';
-    $('#byestimate-empty').textContent = 'No estimates recorded yet -- add one in the Billing section above.';
+    $('#byestimate-empty').textContent = 'No estimates recorded yet -- add one from Manage Pay Apps above.';
     $('#byestimate-empty').hidden = false;
     return;
   }
@@ -502,363 +469,6 @@ $('#detail-inspector').addEventListener('change', (e) => { detailFilterState.ins
 $('#detail-sort').addEventListener('change', (e) => { detailFilterState.sort = e.target.value; renderDetailTable(); });
 $('#detail-group').addEventListener('change', (e) => { detailFilterState.group = e.target.checked; renderDetailTable(); });
 
-// ---------- Billing estimates ----------
-
-function renderEstimateHistory() {
-  const sorted = sortedEstimates(project.billingEstimates).slice().reverse(); // newest first
-  const container = $('#estimate-history');
-  if (sorted.length === 0) {
-    container.innerHTML = '<p class="hint" style="margin:0;">No estimates recorded yet.</p>';
-    return;
-  }
-  // Two Pay Apps sharing a date isn't just a display quirk -- the progress
-  // chart and dashboard math can only place one on that date, so whichever
-  // was saved last silently wins and the other's approved quantities never
-  // count toward anything (see progressOverTime, quantity-calc.js). Flagged
-  // here so it's visible from the list itself, not just discovered later as
-  // "why does the chart only have 5 stars."
-  const dateCounts = new Map();
-  (project.billingEstimates || []).forEach((e) => dateCounts.set(e.date, (dateCounts.get(e.date) || 0) + 1));
-  container.innerHTML = `
-    <table class="estimate-table">
-      <thead><tr><th>Estimate</th><th>Date</th><th>Note</th><th></th><th></th></tr></thead>
-      <tbody>
-        ${sorted.map((e) => {
-          const dupeDate = dateCounts.get(e.date) > 1;
-          return `
-          <tr${e.id === editingEstimateId ? ' class="est-editing"' : ''}>
-            <td>${escapeHtml(e.estimateNo)}</td>
-            <td>${e.date}${dupeDate ? ` <span class="pill payapp-diff-over" data-tip="Another Pay App also uses this date -- only one of them actually counts toward the progress chart. Give one a different date to fix it." title="Shared with another Pay App">Shared date</span>` : ''}</td>
-            <td>${escapeHtml(e.note || '')}</td>
-            <td><button type="button" class="text-btn est-edit" data-id="${e.id}">Edit</button></td>
-            <td><button type="button" class="text-btn est-remove" data-id="${e.id}" style="color:var(--danger);">&times;</button></td>
-          </tr>`;
-        }).join('')}
-      </tbody>
-    </table>`;
-  $$('.est-edit', container).forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const estimate = (project.billingEstimates || []).find((e) => e.id === btn.dataset.id);
-      if (estimate) startEditEstimate(estimate);
-    });
-  });
-  $$('.est-remove', container).forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      project.billingEstimates = (project.billingEstimates || []).filter((e) => e.id !== btn.dataset.id);
-      await saveProject(project);
-      if (editingEstimateId === btn.dataset.id) cancelEditEstimate();
-      renderEstimateHistory();
-      renderPayAppItemsTable();
-      if (rangeMode === 'estimate') renderRangeMode();
-    });
-  });
-}
-
-// Populates the Pay App form with an already-recorded one's own values --
-// its No./Date/Note as typed, and (via renderPayAppItemsTable, which reads
-// editingEstimateId) its own saved itemTotals per item instead of today's
-// reference figures -- so "+ Record Pay App" (relabeled "Save Changes"
-// while editing) updates it in place rather than creating a new one.
-function startEditEstimate(estimate) {
-  editingEstimateId = estimate.id;
-  $('#f-est-no').value = estimate.estimateNo;
-  $('#f-est-date').value = estimate.date;
-  $('#f-est-note').value = estimate.note || '';
-  $('#payapp-form-title').textContent = `Pay App -- Editing ${estimate.estimateNo}`;
-  $('#btn-record-estimate').textContent = 'Save Changes';
-  $('#btn-cancel-edit-estimate').hidden = false;
-  renderEstimateHistory();
-  renderPayAppItemsTable();
-  $('#payapp-form-title').scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
-function cancelEditEstimate() {
-  editingEstimateId = null;
-  $('#f-est-no').value = nextEstimateNo(project.billingEstimates);
-  $('#f-est-date').value = todayIso();
-  $('#f-est-note').value = '';
-  $('#payapp-form-title').textContent = 'Pay App';
-  $('#btn-record-estimate').textContent = '+ Record Pay App';
-  $('#btn-cancel-edit-estimate').hidden = true;
-  renderEstimateHistory();
-  renderPayAppItemsTable();
-}
-
-$('#btn-cancel-edit-estimate').addEventListener('click', cancelEditEstimate);
-
-// The "Inspector Total" column is a reference figure, not what gets saved:
-// normally today's running total (effectivePayItemFlatEntries -- the
-// latest Pay App on file, if any, plus whatever's been reported since).
-// While editing an existing Pay App, it's instead that Pay App's own
-// baseline -- the Pay App before it (if any) plus reports up to its own
-// date, excluding its own not-yet-resaved figures from "latest" -- and the
-// adjacent input pre-fills from that Pay App's actual saved itemTotals
-// rather than the reference, since editing means showing what's really
-// there, not a fresh guess.
-// Builds just the input (plus its % or $ decoration) for one card's Pay App
-// Total field -- pulled out on its own so both the initial render and the
-// $ /Qty/% mode toggle (payAppToggleMode, below) can produce the exact same
-// markup instead of two copies drifting apart. `mode` is 'qty' (plain
-// quantity, the default for a normal unit), 'pct' (percent of contract
-// value, the default for Lump Sum), or 'cost' (a raw dollar amount, typed
-// straight off the pay application when neither a quantity nor a percent
-// comes out even -- see payAppRowContractorCost for how each mode turns
-// back into a dollar figure).
-function payAppInputMarkup(itemNumber, isLump, unitPrice, inspectorCost, mode, value) {
-  const dataAttrs = isLump ? `data-lump-price="${unitPrice}"` : `data-unit-price="${unitPrice != null ? unitPrice : ''}"`;
-  const common = `class="payapp-qty-input" data-item="${escapeHtml(itemNumber)}" data-mode="${mode}" ${dataAttrs} data-inspector-cost="${inspectorCost != null ? inspectorCost : ''}"`;
-  if (mode === 'cost') return `$ <input type="number" step="0.01" ${common} value="${value}">`;
-  if (mode === 'pct') return `<input type="number" step="any" min="0" max="100" ${common} value="${value}"> %`;
-  return `<input type="number" step="any" ${common} value="${value}">`;
-}
-
-function payAppModeToggleLabel(mode, isLump) {
-  if (mode === 'cost') return isLump ? 'Enter by %' : 'Enter by Qty';
-  return 'Enter by $';
-}
-
-function renderPayAppItemsTable() {
-  const editing = editingEstimateId ? (project.billingEstimates || []).find((e) => e.id === editingEstimateId) : null;
-  const items = fullPayItemCatalogOverview(
-    effectivePayItemFlatEntries(allReports, project.billingEstimates, editingEstimateId),
-    project.payItemCatalog
-  );
-  const list = $('#payapp-items-list');
-  if (items.length === 0) {
-    list.innerHTML = '';
-    $('#payapp-summary').hidden = true;
-    return;
-  }
-  $('#payapp-summary').hidden = false;
-  list.innerHTML = items.map((it) => {
-    // A Lump Sum item's "quantity" is already a dollar figure (see
-    // earnedTotalFor) -- editing/showing that directly here would mean
-    // typing a raw dollar amount instead of the percent complete a
-    // Lump Sum is actually billed by. Converted to/from percent of its
-    // Unit Price (already that item's whole contract value for Lump
-    // Sum, see contractTotalFor) purely at this UI layer -- what
-    // actually gets stored in itemTotals stays a dollar figure, same
-    // as every other unit, so none of the earned-value math elsewhere
-    // needs to know the difference. Falls back to a plain dollar entry
-    // if the item has no Unit Price on file to compute a percent of.
-    const isLump = isLumpSumUnit(it.unit) && it.unitPrice != null && it.unitPrice > 0;
-    const pct = isLump ? (it.total / it.unitPrice) * 100 : null;
-    // Editing pre-fills from what's actually saved for this item, not
-    // the reference -- falling back to the reference if this Pay App
-    // never had a figure for it (e.g. the item was added after it was
-    // recorded).
-    const savedRaw = editing && editing.itemTotals && editing.itemTotals[it.itemNumber] != null
-      ? Number(editing.itemTotals[it.itemNumber])
-      : null;
-    const prefill = savedRaw != null ? (isLump ? (savedRaw / it.unitPrice) * 100 : savedRaw) : (isLump ? pct : it.total);
-    const defaultMode = isLump ? 'pct' : 'qty';
-    const inspectorCost = it.earnedTotal != null ? it.earnedTotal : null;
-    // The $-entry toggle only makes sense where there's a Unit Price to
-    // convert against -- with none on file there's nothing to turn a
-    // dollar figure back into for itemTotals (or elsewhere, back into %/qty).
-    const canToggle = it.unitPrice != null && it.unitPrice > 0;
-    const inputHtml = payAppInputMarkup(
-      it.itemNumber, isLump, it.unitPrice, inspectorCost, defaultMode,
-      isLump ? pct.toFixed(1) : prefill
-    );
-    return `
-    <div class="payapp-card">
-      <div class="pac-top">
-        <span class="pac-label">${escapeHtml(it.itemNumber)}<span class="pac-desc">${escapeHtml(it.description)}</span></span>
-        <span class="pac-unit">${escapeHtml(it.unit || '')}</span>
-      </div>
-      <div class="pac-compare">
-        <div class="pac-field">
-          <div class="pac-field-label">Inspector Total</div>
-          <div class="pac-field-value">${isLump ? pct.toFixed(1) + '%' : it.total.toLocaleString()}</div>
-          <div class="pac-field-money">${inspectorCost != null ? fmtMoney(inspectorCost) : '—'}</div>
-        </div>
-        <div class="pac-field">
-          <div class="pac-field-label">Pay App Total</div>
-          <div class="pac-field-input-row">${inputHtml}</div>
-          <div class="pac-field-money payapp-contractor-money">—</div>
-          ${canToggle ? `<button type="button" class="pac-mode-toggle">${payAppModeToggleLabel(defaultMode, isLump)}</button>` : ''}
-        </div>
-      </div>
-      <div class="pac-diff">
-        <span class="pill payapp-diff-pill payapp-diff-match">—</span>
-        <span class="pac-diff-cost payapp-diff-cost">—</span>
-      </div>
-    </div>`;
-  }).join('');
-  $$('.payapp-qty-input', list).forEach((input) => input.addEventListener('input', updatePayAppDiffs));
-  updatePayAppDiffs();
-}
-
-// Swaps one card's Pay App Total field between its default mode (Qty, or %
-// for Lump Sum) and a raw $ entry -- for the item whose billed dollar
-// figure just doesn't divide back into a clean quantity or percent, so
-// typing the $ amount directly (instead of hand-solving for whatever
-// quantity happens to produce it) is the whole point. Converts the
-// currently-entered value across the switch via its own dollar equivalent
-// (payAppRowContractorCost), so toggling never loses what's already typed.
-$('#payapp-items-list').addEventListener('click', (e) => {
-  const btn = e.target.closest('.pac-mode-toggle');
-  if (!btn) return;
-  const card = btn.closest('.payapp-card');
-  const input = card.querySelector('.payapp-qty-input');
-  const isLump = input.dataset.lumpPrice != null;
-  const unitPrice = Number(isLump ? input.dataset.lumpPrice : input.dataset.unitPrice);
-  const currentCost = payAppRowContractorCost(input);
-  const nextMode = input.dataset.mode === 'cost' ? (isLump ? 'pct' : 'qty') : 'cost';
-  let nextValue = '';
-  if (currentCost != null && unitPrice > 0) {
-    if (nextMode === 'cost') nextValue = currentCost.toFixed(2);
-    else if (nextMode === 'pct') nextValue = ((currentCost / unitPrice) * 100).toFixed(1);
-    else nextValue = String(Math.round((currentCost / unitPrice) * 1e6) / 1e6);
-  }
-  const inspectorCost = input.dataset.inspectorCost !== '' ? Number(input.dataset.inspectorCost) : null;
-  const rowEl = card.querySelector('.pac-field-input-row');
-  rowEl.innerHTML = payAppInputMarkup(input.dataset.item, isLump, unitPrice, inspectorCost, nextMode, nextValue);
-  rowEl.querySelector('.payapp-qty-input').addEventListener('input', updatePayAppDiffs);
-  btn.textContent = payAppModeToggleLabel(nextMode, isLump);
-  updatePayAppDiffs();
-});
-
-// A card's contractor-side dollar cost from its Pay App Total input's
-// current value -- null when there's nothing to compute it from (no Unit
-// Price on file, or the field's not a valid number), same "can't compute,
-// don't pretend to" rule as the rest of this app's earned-value math. $
-// mode needs no conversion at all -- the typed value already is the cost.
-function payAppRowContractorCost(input) {
-  const v = Number(input.value);
-  if (!isFinite(v) || input.value.trim() === '') return null;
-  if (input.dataset.mode === 'cost') return v;
-  if (input.dataset.lumpPrice != null) return (v / 100) * Number(input.dataset.lumpPrice);
-  const unitPrice = input.dataset.unitPrice;
-  return unitPrice ? v * Number(unitPrice) : null;
-}
-
-// Which severity band a % diff falls into -- not a claim about direction
-// (over- vs under-billed), just how far apart the two totals are, so the
-// pill reads as a flag worth a second look rather than an accusation.
-function payAppDiffSeverity(pctDiff) {
-  if (pctDiff === 0) return 'match';
-  if (pctDiff <= 0.01) return 'ok';
-  if (pctDiff <= 0.05) return 'warn';
-  return 'over';
-}
-
-// Same formula as the reference comparison sheet this was built to match:
-// $ Diff = Inspector Total - Pay App (contractor) Total, % Diff = that
-// difference's size relative to Inspector Total. Recomputed on every
-// keystroke in any card (see renderPayAppItemsTable's own input listeners)
-// rather than only at render time, so it reads as genuinely live instead
-// of a snapshot that goes stale the moment something's typed.
-function updatePayAppDiffs() {
-  const list = $('#payapp-items-list');
-  let totalContractor = 0, totalInspector = 0, hasAny = false;
-  $$('.payapp-qty-input', list).forEach((input) => {
-    const card = input.closest('.payapp-card');
-    const contractorCost = payAppRowContractorCost(input);
-    const inspectorCostRaw = input.dataset.inspectorCost;
-    const inspectorCost = inspectorCostRaw !== '' ? Number(inspectorCostRaw) : null;
-    const moneyEl = card.querySelector('.payapp-contractor-money');
-    const pillEl = card.querySelector('.payapp-diff-pill');
-    const costEl = card.querySelector('.payapp-diff-cost');
-    moneyEl.textContent = contractorCost != null ? fmtMoney(contractorCost) : '—';
-    if (contractorCost == null || inspectorCost == null) {
-      pillEl.textContent = '—';
-      pillEl.className = 'pill payapp-diff-pill payapp-diff-match';
-      costEl.textContent = '—';
-      return;
-    }
-    const costDiff = inspectorCost - contractorCost;
-    const pctDiff = inspectorCost !== 0 ? Math.abs(costDiff) / inspectorCost : (costDiff === 0 ? 0 : null);
-    pillEl.textContent = pctDiff != null ? (pctDiff * 100).toFixed(1) + '% diff' : 'n/a';
-    pillEl.className = 'pill payapp-diff-pill payapp-diff-' + (pctDiff != null ? payAppDiffSeverity(pctDiff) : 'match');
-    costEl.textContent = fmtMoney(costDiff);
-    totalContractor += contractorCost;
-    totalInspector += inspectorCost;
-    hasAny = true;
-  });
-  const totalCostDiff = totalInspector - totalContractor;
-  const totalPctDiff = totalInspector !== 0 ? Math.abs(totalCostDiff) / totalInspector : null;
-  $('#payapp-total-inspector').textContent = hasAny ? fmtMoney(totalInspector) : '—';
-  $('#payapp-total-contractor').textContent = hasAny ? fmtMoney(totalContractor) : '—';
-  $('#payapp-total-pctdiff').textContent = totalPctDiff != null ? (totalPctDiff * 100).toFixed(1) + '%' : '—';
-  $('#payapp-total-costdiff').textContent = hasAny ? fmtMoney(totalCostDiff) : '—';
-}
-
-$('#btn-record-estimate').addEventListener('click', async () => {
-  const estimateNo = $('#f-est-no').value.trim();
-  const date = $('#f-est-date').value;
-  const note = $('#f-est-note').value.trim();
-  $('#estimate-error').hidden = true;
-  if (!estimateNo || !date) {
-    $('#estimate-error').textContent = 'Pay App No. and Date are both required.';
-    $('#estimate-error').hidden = false;
-    return;
-  }
-  // See renderEstimateHistory's own comment -- a second Pay App on the same
-  // date isn't a cosmetic issue, it silently drops one of them from the
-  // progress chart and dashboard math entirely. Confirmed rather than just
-  // a passive warning, since it's easy to miss a one-line note and this is
-  // the one mistake here that isn't obviously recoverable later.
-  const dateCollision = (project.billingEstimates || []).find((e) => e.date === date && e.id !== editingEstimateId);
-  if (dateCollision) {
-    const ok = confirm(
-      `Pay App ${dateCollision.estimateNo} is already dated ${date}. Two Pay Apps on the same date can't both show on the progress chart -- only one will actually count toward it or the dashboard.\n\nSave with this date anyway?`
-    );
-    if (!ok) return;
-  }
-  const itemTotals = {};
-  $$('.payapp-qty-input').forEach((input) => {
-    const v = input.value.trim();
-    if (v === '') return;
-    // itemTotals always stores the same convention regardless of which
-    // mode a row was actually entered in -- a dollar figure for Lump Sum
-    // (see earnedTotalFor), a plain quantity for everything else -- so
-    // this is the one place that needs to know whether the input held a
-    // percent, a raw quantity, or (the $-entry toggle) a dollar amount
-    // that still needs converting back to whichever of those two the item
-    // actually uses.
-    const isLump = input.dataset.lumpPrice != null;
-    const unitPrice = Number(isLump ? input.dataset.lumpPrice : input.dataset.unitPrice);
-    let stored;
-    if (input.dataset.mode === 'cost') {
-      const cost = Number(v);
-      stored = isLump ? cost : (unitPrice > 0 ? cost / unitPrice : null);
-    } else if (isLump) {
-      stored = (Number(v) / 100) * unitPrice; // pct mode
-    } else {
-      stored = Number(v); // qty mode
-    }
-    if (stored != null && isFinite(stored)) itemTotals[input.dataset.item] = stored;
-  });
-  if (!project.billingEstimates) project.billingEstimates = [];
-  let savedEstimate;
-  if (editingEstimateId) {
-    savedEstimate = project.billingEstimates.find((e) => e.id === editingEstimateId);
-    Object.assign(savedEstimate, { estimateNo, date, note, itemTotals });
-  } else {
-    savedEstimate = { id: crypto.randomUUID(), estimateNo, date, note, itemTotals };
-    project.billingEstimates.push(savedEstimate);
-  }
-  await saveProject(project);
-  const wasEditing = !!editingEstimateId;
-  editingEstimateId = null;
-  $('#payapp-form-title').textContent = 'Pay App';
-  $('#btn-record-estimate').textContent = '+ Record Pay App';
-  $('#btn-cancel-edit-estimate').hidden = true;
-  renderEstimateHistory();
-  renderPayAppItemsTable();
-  $('#f-est-no').value = '';
-  $('#f-est-date').value = '';
-  $('#f-est-note').value = '';
-  $('#f-est-no').value = nextEstimateNo(project.billingEstimates);
-  if (wasEditing) $('#f-est-date').value = todayIso();
-  if (rangeMode === 'estimate') {
-    selectedEstimateId = savedEstimate.id;
-    renderRangeMode();
-  }
-});
-
 $('#f-estimate').addEventListener('change', (e) => {
   selectedEstimateId = e.target.value || null;
   updateControls();
@@ -927,6 +537,40 @@ function renderQuantityTotals() {
   allQtyItems = selectedRangeItems();
   $('#qty-controls').hidden = allQtyItems.length === 0;
   renderFilteredQuantityItems();
+  renderTotalsPreviewTable();
+}
+
+// A literal preview of the Totals sheet the Excel download will contain --
+// same columns, same order (see buildQuantitySheetWorkbook's Totals section
+// below) -- so what's on screen here is what actually downloads, not just a
+// similar-looking summary. Styled with .xlsx-table to carry the same
+// brand-header/zebra look the real export gets from ExcelJS.
+function renderTotalsPreviewTable() {
+  const table = $('#totals-preview-table');
+  const items = allQtyItems;
+  if (items.length === 0) {
+    table.innerHTML = '';
+    return;
+  }
+  const header = `<thead><tr>
+    <th>Item Number</th><th>Description</th><th class="dt-num">Per Plans Total</th><th>Unit</th>
+    <th class="dt-num">Total Quantity</th><th class="dt-num">Remaining Quantity</th>
+    <th class="dt-num">% Complete</th><th class="dt-num">Overrun/Underrun</th>
+  </tr></thead>`;
+  const body = items.map((it) => {
+    const remaining = it.planned != null ? Math.round((it.planned - it.total) * 1000) / 1000 : null;
+    return `<tr>
+      <td>${escapeHtml(it.itemNumber)}</td>
+      <td>${escapeHtml(it.description)}</td>
+      <td class="dt-num">${it.planned != null ? it.planned.toLocaleString() : ''}</td>
+      <td>${escapeHtml(it.unit || '')}</td>
+      <td class="dt-num">${it.total.toLocaleString()}</td>
+      <td class="dt-num">${remaining != null ? remaining.toLocaleString() : ''}</td>
+      <td class="dt-num">${it.pct != null ? (it.pct * 100).toFixed(1) + '%' : ''}</td>
+      <td class="dt-num">${it.overrun != null ? it.overrun.toLocaleString() : ''}</td>
+    </tr>`;
+  }).join('');
+  table.innerHTML = header + `<tbody>${body}</tbody>`;
 }
 
 function renderFilteredQuantityItems() {

@@ -361,6 +361,26 @@ body {
   font-weight: 700;
 }
 
+/* Quantity Sheet's Totals/By Day/By Estimate/Detail Log tab bar -- plain
+   .segmented squeezes all four labels into one row, which is fine at
+   desktop width but crushes "By Estimate"/"Detail Log" into wrapped,
+   barely-tappable slivers on a phone. Below the same breakpoint the rest of
+   the app switches to single-column at, this instead lays the four out as a
+   proper 2x2 grid of full-size tap targets. */
+@media (max-width: 560px) {
+  .view-tabs { display: grid; grid-template-columns: repeat(2, 1fr); border-radius: var(--radius-sm); overflow: hidden; }
+  .view-tabs button { border-right: 1.5px solid var(--border); border-bottom: 1.5px solid var(--border); white-space: normal; text-align: center; }
+  .view-tabs button:nth-child(2n) { border-right: none; }
+  .view-tabs button:nth-child(n+3) { border-bottom: none; }
+}
+
+.qty-range-footer {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+  flex-wrap: wrap; margin-top: 0.6rem;
+}
+.qty-range-footer .hint { margin: 0; flex: 1 1 auto; }
+.qty-range-footer .text-btn { flex: 0 0 auto; white-space: nowrap; }
+
 /* Colour swatches (accent colour, etc). Each shows its own colour, so they
    can't reuse .segmented's aria-pressed rule (that forces the brand colour
    as the "selected" background, which would erase the swatch it's for). */
@@ -1191,11 +1211,25 @@ input[type="checkbox"], input[type="radio"] {
   width: 1.35rem; height: 1.35rem; min-height: 0; accent-color: var(--brand-light);
 }
 input[type="file"] { min-height: 0; }
+/* A grid track's implied minimum is its content's min-content size, not 0 --
+   a native date input's internal mm/dd/yyyy segments + calendar icon have
+   enough min-content width to blow past a narrow 1fr column and overflow
+   its card on a phone, "width: 100%" notwithstanding. min-width: 0 lets the
+   track (and this) actually shrink to what's available instead. */
+input[type="date"] { min-width: 0; }
 
 .field-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0 0.75rem;
+}
+/* Quantity Sheet's From/To date range -- the two fields most likely to
+   collide with the min-content issue above, since both are dates at once
+   (most other .field-grid forms only ever have one). Stacks to one column
+   below the app's usual mobile breakpoint so each date input gets the
+   full card width, rather than leaning on shrinking alone. */
+@media (max-width: 480px) {
+  #range-fields { grid-template-columns: 1fr; }
 }
 /* Three logical fields (Estimate No. / Date / Note) forced into two columns
    left the third stranded alone on its own row -- give it the column it
@@ -1225,6 +1259,14 @@ input[type="file"] { min-height: 0; }
 .data-table tbody tr:hover { background: var(--surface-2); }
 .data-table .dt-group-row td { background: var(--surface-2); font-weight: 700; }
 .data-table .dt-group-row td.dt-num { font-weight: 700; }
+
+/* Mirrors the brand-header/zebra look the actual .xlsx download gets from
+   ExcelJS (see styleHeaderRow/styleDataRows in quantity-sheet.html) -- so
+   the on-screen table reads as a genuine preview of the download, not just
+   a similarly-shaped one. */
+.data-table.xlsx-table th { background: #1c3d5a; color: #fff; position: sticky; top: 0; }
+.data-table.xlsx-table tbody tr:nth-child(even) { background: var(--surface-2); }
+.data-table.xlsx-table tbody tr:nth-child(even):hover { background: var(--surface-3, var(--surface-2)); }
 
 .detail-group-toggle { display: flex; align-items: center; gap: 0.4rem; flex: 0 0 auto; font-size: 0.85rem; color: var(--text-dim); margin-bottom: 0; }
 .detail-group-toggle input { width: 1.1rem; height: 1.1rem; }
