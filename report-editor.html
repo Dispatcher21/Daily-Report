@@ -116,6 +116,35 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="pa-overlay" hidden>
+  <div class="photo-annotate-card">
+    <div class="pa-toolbar">
+      <div class="pa-colors" id="pa-colors">
+        <button type="button" class="pa-color" data-color="#e0212a" style="background:#e0212a" aria-label="Red" aria-pressed="true"></button>
+        <button type="button" class="pa-color" data-color="#ffd400" style="background:#ffd400" aria-label="Yellow"></button>
+        <button type="button" class="pa-color" data-color="#2ecc71" style="background:#2ecc71" aria-label="Green"></button>
+        <button type="button" class="pa-color" data-color="#ffffff" style="background:#ffffff;border-color:var(--border-strong);" aria-label="White"></button>
+        <button type="button" class="pa-color" data-color="#000000" style="background:#000000" aria-label="Black"></button>
+      </div>
+      <div class="pa-tools" id="pa-tools">
+        <button type="button" class="pa-tool-btn" data-tool="pen" aria-pressed="true">&#9998; Pen</button>
+        <button type="button" class="pa-tool-btn" data-tool="arrow">&#8599; Arrow</button>
+      </div>
+      <div class="pa-actions">
+        <button type="button" class="text-btn" id="pa-undo">Undo</button>
+        <button type="button" class="text-btn" id="pa-clear">Clear</button>
+      </div>
+    </div>
+    <div class="pa-canvas-wrap">
+      <canvas id="pa-canvas"></canvas>
+    </div>
+    <div class="pa-footer">
+      <button type="button" class="btn-secondary" id="pa-cancel">Cancel</button>
+      <button type="button" class="btn-primary" id="pa-save">Save Markup</button>
+    </div>
+  </div>
+</div>
+
 <script src="common.js"></script>
 <script src="defaults.js"></script>
 <script src="storage.js"></script>
@@ -1490,6 +1519,7 @@ function renderPhotoGrid() {
         return `
           <div class="photo-slot" data-idx="${i}">
             <img src="${url}" alt="Photo ${i + 1}">
+            <button type="button" class="photo-annotate" data-annotate="${i}" title="Mark up this photo" aria-label="Mark up this photo">&#9998;</button>
             <button type="button" class="photo-remove" data-remove="${i}">&times;</button>
             <span class="photo-num">Photo ${i + 1}</span>
           </div>`;
@@ -1524,7 +1554,180 @@ function renderPhotoGrid() {
       renderPhotoGrid();
     });
   });
+  $$('[data-annotate]', grid).forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openAnnotator(Number(btn.dataset.annotate));
+    });
+  });
 }
+
+// ---------- Photo markup ----------
+//
+// Draws directly onto the photo's own pixels and replaces it on Save --
+// same destructive-edit philosophy as compressImage already applies on
+// upload (there's no kept "original" to revert to). Undo works by
+// snapshotting the canvas with getImageData before each stroke begins and
+// restoring it, rather than replaying a list of recorded strokes -- simpler
+// to get right, and the canvas here is capped at compressImage's own
+// maxDim (1600px), so a snapshot is a few MB at most, bounded further by
+// PA_MAX_UNDO.
+const PA_MAX_UNDO = 15;
+let paCanvas = null;
+let paCtx = null;
+let paPhotoIdx = null;
+let paTool = 'pen';
+let paColor = '#e0212a';
+let paDrawing = false;
+let paLastPoint = null;
+let paStrokeStartSnapshot = null; // this stroke's "before" state -- what arrow rubber-banding restores each frame, and what gets pushed to undo once the stroke commits
+let paUndoStack = [];
+
+function paCanvasPoint(e) {
+  const rect = paCanvas.getBoundingClientRect();
+  const scaleX = paCanvas.width / rect.width;
+  const scaleY = paCanvas.height / rect.height;
+  return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
+}
+
+function paStrokeWidth() {
+  return Math.max(4, Math.round(paCanvas.width * 0.008));
+}
+
+function paDrawArrow(ctx, from, to, color, width) {
+  const headLen = width * 4.5;
+  const angle = Math.atan2(to.y - from.y, to.x - from.x);
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = width;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(from.x, from.y);
+  ctx.lineTo(to.x, to.y);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(to.x, to.y);
+  ctx.lineTo(to.x - headLen * Math.cos(angle - Math.PI / 7), to.y - headLen * Math.sin(angle - Math.PI / 7));
+  ctx.lineTo(to.x - headLen * Math.cos(angle + Math.PI / 7), to.y - headLen * Math.sin(angle + Math.PI / 7));
+  ctx.closePath();
+  ctx.fill();
+}
+
+function paPushUndo(snapshot) {
+  paUndoStack.push(snapshot || paCtx.getImageData(0, 0, paCanvas.width, paCanvas.height));
+  if (paUndoStack.length > PA_MAX_UNDO) paUndoStack.shift();
+}
+
+function paPointerDown(e) {
+  paCanvas.setPointerCapture(e.pointerId);
+  paDrawing = true;
+  const snapshot = paCtx.getImageData(0, 0, paCanvas.width, paCanvas.height);
+  paPushUndo(snapshot);
+  paStrokeStartSnapshot = snapshot;
+  paLastPoint = paCanvasPoint(e);
+}
+
+function paPointerMove(e) {
+  if (!paDrawing) return;
+  const p = paCanvasPoint(e);
+  const width = paStrokeWidth();
+  if (paTool === 'pen') {
+    paCtx.strokeStyle = paColor;
+    paCtx.lineWidth = width;
+    paCtx.lineCap = 'round';
+    paCtx.lineJoin = 'round';
+    paCtx.beginPath();
+    paCtx.moveTo(paLastPoint.x, paLastPoint.y);
+    paCtx.lineTo(p.x, p.y);
+    paCtx.stroke();
+    paLastPoint = p;
+  } else if (paTool === 'arrow') {
+    // Rubber-banding: repaint the pre-stroke state fresh each move, then
+    // preview the arrow from where the stroke started to the pointer's
+    // current position -- an arrow (unlike a pen stroke) isn't additive,
+    // its whole shape depends on where it ends.
+    paCtx.putImageData(paStrokeStartSnapshot, 0, 0);
+    paDrawArrow(paCtx, paLastPoint, p, paColor, width);
+  }
+}
+
+function paPointerUp() {
+  paDrawing = false;
+}
+
+function paSetTool(tool) {
+  paTool = tool;
+  $$('.pa-tool-btn', $('#pa-tools')).forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tool === tool)));
+}
+
+function paSetColor(color) {
+  paColor = color;
+  $$('.pa-color', $('#pa-colors')).forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.color === color)));
+}
+
+async function openAnnotator(idx) {
+  const blob = report.photos[idx];
+  if (!blob) return;
+  paPhotoIdx = idx;
+  paUndoStack = [];
+  paSetTool('pen');
+  paSetColor('#e0212a');
+
+  paCanvas = $('#pa-canvas');
+  paCtx = paCanvas.getContext('2d');
+  const bitmap = await createImageBitmap(blob);
+  paCanvas.width = bitmap.width;
+  paCanvas.height = bitmap.height;
+  paCtx.drawImage(bitmap, 0, 0);
+  bitmap.close();
+
+  $('#pa-overlay').hidden = false;
+}
+
+function closeAnnotator() {
+  $('#pa-overlay').hidden = true;
+  paCanvas = null;
+  paCtx = null;
+  paPhotoIdx = null;
+}
+
+$('#pa-colors').addEventListener('click', (e) => {
+  const btn = e.target.closest('.pa-color');
+  if (btn) paSetColor(btn.dataset.color);
+});
+$('#pa-tools').addEventListener('click', (e) => {
+  const btn = e.target.closest('.pa-tool-btn');
+  if (btn) paSetTool(btn.dataset.tool);
+});
+$('#pa-undo').addEventListener('click', () => {
+  if (paUndoStack.length === 0) return;
+  paCtx.putImageData(paUndoStack.pop(), 0, 0);
+});
+$('#pa-clear').addEventListener('click', () => {
+  if (!confirm('Clear every mark on this photo?')) return;
+  openAnnotator(paPhotoIdx); // simplest way back to the untouched photo -- just reload it (also resets Undo, since there's nothing meaningful left to undo to)
+});
+$('#pa-cancel').addEventListener('click', closeAnnotator);
+$('#pa-overlay').addEventListener('click', (e) => {
+  if (e.target.id === 'pa-overlay') closeAnnotator();
+});
+$('#pa-save').addEventListener('click', async () => {
+  const idx = paPhotoIdx;
+  const blob = await new Promise((resolve) => paCanvas.toBlob(resolve, 'image/jpeg', 0.85));
+  if (blob) {
+    report.photos[idx] = blob;
+    report.photosFetched[idx] = true;
+    scheduleSave();
+    renderPhotoGrid();
+  }
+  closeAnnotator();
+});
+
+const paCanvasEl = $('#pa-canvas');
+paCanvasEl.addEventListener('pointerdown', paPointerDown);
+paCanvasEl.addEventListener('pointermove', paPointerMove);
+paCanvasEl.addEventListener('pointerup', paPointerUp);
+paCanvasEl.addEventListener('pointercancel', paPointerUp);
 
 // ---------- Signature pads ----------
 
