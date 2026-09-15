@@ -183,13 +183,208 @@ function readAccent() {
     applyAccent();
   }
 
-  // Every page gets the same header-right cluster: a sync button (only
-  // when actually connected to a company -- a local-only device has
-  // nothing to pull/push) and a settings gear (every page except Settings
-  // itself, which is where the gear would just link to). Replaces what
-  // used to be four separate, differently-behaved refresh/sync buttons
-  // scattered across Home, Reports, Settings, and Company Management --
-  // one control, same place, on every page.
+  // Global search -- a magnifying glass alongside the sync/gear cluster
+  // that expands in place to cover them (rather than navigating to a
+  // separate page), searching every report on every project this login
+  // can see -- projectInScope is the exact same access boundary index.html
+  // and project.html already enforce, so search never surfaces anything
+  // this device couldn't already open directly. Matches on date, person
+  // (representative/creator/editor), free text (Activity/Notes/Work
+  // Summary), report number, and pay item number/description, and groups
+  // results by project, then by date within each.
+  //
+  // Lives here rather than its own file so every page gets it for free the
+  // same way the sync/gear cluster already does -- see mountHeaderControls
+  // below, which is the only caller.
+  function buildSearchControl(header, controls) {
+    if (typeof getAllReports !== 'function' || typeof getAllProjects !== 'function') return;
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'header-search-btn';
+    btn.title = 'Search reports';
+    btn.setAttribute('aria-label', 'Search reports');
+    btn.innerHTML = '&#128269;';
+
+    const box = document.createElement('div');
+    box.className = 'header-search-box';
+    box.hidden = true;
+    const input = document.createElement('input');
+    input.type = 'search';
+    input.placeholder = 'Search reports…';
+    input.setAttribute('aria-label', 'Search reports');
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'header-search-close';
+    closeBtn.setAttribute('aria-label', 'Close search');
+    closeBtn.innerHTML = '&times;';
+    box.appendChild(input);
+    box.appendChild(closeBtn);
+
+    const panel = document.createElement('div');
+    panel.className = 'global-search-panel';
+    panel.hidden = true;
+    document.body.appendChild(panel);
+
+    // Built once per page load, the first time search is actually opened --
+    // not worth the IndexedDB round-trip on every page just in case someone
+    // searches. Simple substring matching, not an index: nothing here runs
+    // often enough (a few hundred/thousand reports, typed by a person, not
+    // a hot loop) to earn the complexity of a real search index.
+    let cache = null;
+    let searchTimer = null;
+
+    async function ensureCache() {
+      if (cache) return cache;
+      const room = typeof getCompanyRoom === 'function' ? await getCompanyRoom().catch(() => null) : null;
+      const [allProjects, allReports] = await Promise.all([getAllProjects(), getAllReports()]);
+      const projects = new Map(
+        allProjects
+          .filter((p) => (typeof projectInScope === 'function' ? projectInScope(p, room) : true))
+          .map((p) => [p.id, p])
+      );
+      const reports = allReports.filter((r) => projects.has(r.projectId));
+      cache = { projects, reports };
+      return cache;
+    }
+
+    function fmtDateShort(iso) {
+      if (!iso) return '';
+      const parts = iso.split('-');
+      return parts.length === 3 ? `${parts[1]}/${parts[2]}/${parts[0]}` : iso;
+    }
+
+    function reportMatches(r, q) {
+      if (r.date && (r.date.includes(q) || fmtDateShort(r.date).includes(q))) return true;
+      if (String(r.reportNo ?? '').includes(q)) return true;
+      const person = `${r.representative || ''} ${r.createdBy || ''} ${r.lastEditedBy || ''}`.toLowerCase();
+      if (person.includes(q)) return true;
+      const text = `${r.activity || ''} ${r.notes || ''} ${r.workSummary || ''}`.toLowerCase();
+      if (text.includes(q)) return true;
+      return (r.payItems || []).some(
+        (it) => String(it.itemNumber || '').toLowerCase().includes(q) || String(it.description || '').toLowerCase().includes(q)
+      );
+    }
+
+    const MAX_RESULTS = 60; // a wide, early query (e.g. a single letter) shouldn't render an unbounded DOM
+
+    async function runSearch(query) {
+      const q = query.trim().toLowerCase();
+      if (!q) {
+        panel.hidden = true;
+        panel.innerHTML = '';
+        return;
+      }
+      const { projects, reports } = await ensureCache();
+      const matched = reports.filter((r) => reportMatches(r, q));
+      if (matched.length === 0) {
+        panel.innerHTML = `<div class="gsp-empty">No reports match &ldquo;${escapeHtml(query.trim())}&rdquo;.</div>`;
+        panel.hidden = false;
+        return;
+      }
+      const byProject = new Map();
+      matched.forEach((r) => {
+        if (!byProject.has(r.projectId)) byProject.set(r.projectId, []);
+        byProject.get(r.projectId).push(r);
+      });
+      const projectIds = Array.from(byProject.keys()).sort((a, b) => {
+        const pa = projects.get(a), pb = projects.get(b);
+        return (pa ? pa.name : '').localeCompare(pb ? pb.name : '');
+      });
+
+      let shown = 0;
+      let html = '';
+      outer:
+      for (const pid of projectIds) {
+        const project = projects.get(pid);
+        const rows = byProject.get(pid).slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+        html += `<div class="gsp-group"><div class="gsp-group-title">${escapeHtml(project ? project.name : 'Unknown project')}</div>`;
+        for (const r of rows) {
+          if (shown >= MAX_RESULTS) break outer;
+          shown++;
+          const snippet = (r.activity || r.workSummary || r.notes || '').trim();
+          html += `
+            <a class="gsp-row" href="report-editor.html?project=${pid}&report=${r.id}">
+              <span class="gsp-row-date">${escapeHtml(r.date || '(no date)')}</span>
+              <span class="gsp-row-main">
+                <span class="gsp-row-no">#${escapeHtml(String(r.reportNo ?? ''))}</span>
+                ${snippet ? `<span class="gsp-row-snippet">${escapeHtml(snippet)}</span>` : ''}
+              </span>
+              ${r.representative ? `<span class="gsp-row-person">${escapeHtml(r.representative)}</span>` : ''}
+            </a>`;
+        }
+        html += `</div>`;
+      }
+      if (matched.length > shown) {
+        const rest = matched.length - shown;
+        html += `<div class="gsp-more">${rest} more match${rest === 1 ? '' : 'es'} — refine your search to narrow it down.</div>`;
+      }
+      panel.innerHTML = html;
+      panel.hidden = false;
+    }
+
+    // The panel is fixed to the viewport (so it can overlay page content
+    // below the header rather than pushing it down), positioned off the
+    // header's own live bounding rect rather than a hardcoded height --
+    // .app-header is position:sticky, so this stays correct whether the
+    // page is scrolled to the top or not.
+    function positionPanel() {
+      panel.style.top = `${header.getBoundingClientRect().bottom}px`;
+    }
+
+    function onKeydown(e) {
+      if (e.key === 'Escape') closeSearch();
+    }
+    function onDocClick(e) {
+      if (box.contains(e.target) || panel.contains(e.target) || btn.contains(e.target)) return;
+      closeSearch();
+    }
+
+    function openSearch() {
+      controls.classList.add('search-open');
+      header.classList.add('search-active');
+      box.hidden = false;
+      positionPanel();
+      input.value = '';
+      input.focus();
+      document.addEventListener('keydown', onKeydown);
+      document.addEventListener('click', onDocClick, true);
+    }
+
+    function closeSearch() {
+      controls.classList.remove('search-open');
+      header.classList.remove('search-active');
+      box.hidden = true;
+      panel.hidden = true;
+      panel.innerHTML = '';
+      input.value = '';
+      document.removeEventListener('keydown', onKeydown);
+      document.removeEventListener('click', onDocClick, true);
+    }
+
+    btn.addEventListener('click', () => {
+      if (controls.classList.contains('search-open')) closeSearch();
+      else openSearch();
+    });
+    closeBtn.addEventListener('click', closeSearch);
+    input.addEventListener('input', () => {
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => runSearch(input.value), 200);
+    });
+    window.addEventListener('resize', () => { if (!panel.hidden) positionPanel(); });
+
+    controls.appendChild(btn);
+    controls.appendChild(box);
+  }
+
+  // Every page gets the same header-right cluster: a search button, a
+  // sync button (only when actually connected to a company -- a
+  // local-only device has nothing to pull/push), and a settings gear
+  // (every page except Settings itself, which is where the gear would
+  // just link to). Replaces what used to be four separate,
+  // differently-behaved refresh/sync buttons scattered across Home,
+  // Reports, Settings, and Company Management -- one control, same
+  // place, on every page.
   //
   // Run from DOMContentLoaded (same as before), which is late enough that
   // firebase-sync.js and common.js -- both plain synchronous scripts
@@ -203,6 +398,8 @@ function readAccent() {
 
     const controls = document.createElement('div');
     controls.className = 'header-controls';
+
+    buildSearchControl(header, controls);
 
     if (typeof getCompanyRoom === 'function') {
       const room = await getCompanyRoom().catch(() => null);
