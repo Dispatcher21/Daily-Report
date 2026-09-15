@@ -82,6 +82,8 @@
         <button type="button" data-view="detail">Detail Log</button>
       </div>
 
+      <label class="qty-opt-toggle" style="margin-top:0.75rem;"><input type="checkbox" id="opt-show-zero"> Show items at 0 qty / 0% complete</label>
+
       <div id="view-totals" style="margin-top:0.9rem;">
         <div id="qty-status-summary"></div>
         <div class="pi-controls" id="qty-controls" hidden>
@@ -133,7 +135,12 @@
         <p class="hint" id="detail-summary" style="margin-bottom:0;"></p>
       </div>
 
-      <div class="panel-tip-row" style="margin-top:1rem;margin-bottom:-0.4rem;"><button type="button" class="info-tip" data-tip="Includes a Cover page, By Day and By Estimate breakdowns, and a filterable Detail Log of every entry, alongside these totals." aria-label="What this does">i</button></div>
+      <div class="eyebrow" style="margin-top:1.25rem;">Export Options</div>
+      <div class="qty-export-options">
+        <label><input type="checkbox" id="opt-include-byday" checked> Include "By Day" sheet</label>
+        <label><input type="checkbox" id="opt-include-detail" checked> Include "Detail Log" sheet</label>
+      </div>
+      <div class="panel-tip-row" style="margin-top:0.5rem;margin-bottom:-0.4rem;"><button type="button" class="info-tip" data-tip="Includes a Cover page and whichever of the By Day / By Estimate / Detail Log breakdowns are checked above, alongside the Totals." aria-label="What this does">i</button></div>
       <button type="button" class="btn-primary" id="btn-generate" disabled style="margin-top:1rem;">Download as Excel</button>
     </div>
   </div>
@@ -159,6 +166,24 @@ let project = null;
 let allReports = [];
 let rangeMode = 'range'; // 'range' | 'all' | 'estimate'
 let selectedEstimateId = null;
+
+// Export/view options -- affect both the on-screen Totals/By Day/By
+// Estimate tabs and the Excel download, so the two never drift apart on
+// what they include (see itemsForFlat, and buildQuantitySheetWorkbook's own
+// use of these same three flags).
+const qtyOptions = { showZero: false, includeByDay: true, includeDetail: true };
+
+// aggregatePayItemTotals only ever returns items actually used somewhere in
+// the flat entries passed in -- a catalog item nobody's logged against yet
+// in this range just isn't in its output. fullPayItemCatalogOverview is the
+// other function in quantity-calc.js that starts from the full catalog
+// instead and fills in zeros for anything untouched, which is exactly what
+// "Show items at 0 qty / 0% complete" needs.
+function itemsForFlat(flat) {
+  return qtyOptions.showZero
+    ? fullPayItemCatalogOverview(flat, project.payItemCatalog)
+    : aggregatePayItemTotals(flat, project.payItemCatalog);
+}
 
 async function init() {
   project = projectId ? await getProject(projectId) : null;
@@ -298,7 +323,7 @@ function renderByDayTable() {
   }
   const dates = Array.from(byDate.keys()).sort(compareDateKeys);
   const flat = dates.flatMap((d) => byDate.get(d));
-  const items = aggregatePayItemTotals(flat, project.payItemCatalog);
+  const items = itemsForFlat(flat);
   $('#byday-empty').hidden = items.length > 0;
   if (items.length === 0) {
     $('#byday-table').innerHTML = '';
@@ -342,7 +367,7 @@ function renderByEstimateTable() {
   const flat = selected.flatMap((r) =>
     (r.payItems || []).filter((it) => it && String(it.itemNumber || '').trim() !== '').map((it) => ({ ...it, __date: r.date }))
   );
-  const items = aggregatePayItemTotals(flat, project.payItemCatalog);
+  const items = itemsForFlat(flat);
   if (items.length === 0) {
     $('#byestimate-table').innerHTML = '';
     $('#byestimate-empty').textContent = 'No pay items logged on any report in this range.';
@@ -530,7 +555,7 @@ let allQtyItems = [];
 // the by-day breakdown that only the Excel export needs.
 function selectedRangeItems() {
   const flat = selectedReports().flatMap((r) => (r.payItems || []).filter((it) => it && String(it.itemNumber || '').trim() !== ''));
-  return aggregatePayItemTotals(flat, project.payItemCatalog);
+  return itemsForFlat(flat);
 }
 
 function renderQuantityTotals() {
@@ -658,6 +683,12 @@ $('#qty-sort').addEventListener('change', (e) => {
   qtyFilterState.sort = e.target.value;
   renderFilteredQuantityItems();
 });
+$('#opt-show-zero').addEventListener('change', (e) => {
+  qtyOptions.showZero = e.target.checked;
+  renderActiveView();
+});
+$('#opt-include-byday').addEventListener('change', (e) => { qtyOptions.includeByDay = e.target.checked; });
+$('#opt-include-detail').addEventListener('change', (e) => { qtyOptions.includeDetail = e.target.checked; });
 
 $('#range-mode-picker').addEventListener('click', (e) => {
   const btn = e.target.closest('button');
@@ -800,7 +831,8 @@ function buildCoverSheet(wb, project, room, dates, items, contentsLines) {
 // per billing checkpoint, skipped entirely if none are recorded), and
 // Detail Log (every individual entry, filterable by any column -- station,
 // side, date, estimate, inspector).
-function buildQuantitySheetWorkbook(reports, project, room) {
+function buildQuantitySheetWorkbook(reports, project, room, options) {
+  const { showZero = false, includeByDay = true, includeDetail = true } = options || {};
   const byDate = new Map(); // date -> flat array of pay-item entries, each tagged with its report
   for (const r of reports) {
     const date = r.date || NO_DATE_KEY;
@@ -815,7 +847,13 @@ function buildQuantitySheetWorkbook(reports, project, room) {
   // Flattened in the same order as the By Day columns (chronological,
   // undated last) so "first seen" means the same thing in both sheets.
   const flatItems = dates.flatMap((date) => byDate.get(date));
-  const items = aggregatePayItemTotals(flatItems, project.payItemCatalog);
+  // showZero pulls in the full catalog (with zeros filled in for anything
+  // untouched this range) instead of just what's actually been logged --
+  // same choice the on-screen tabs make via itemsForFlat, kept independent
+  // here since this function also runs standalone in tests.
+  const items = showZero
+    ? fullPayItemCatalogOverview(flatItems, project.payItemCatalog)
+    : aggregatePayItemTotals(flatItems, project.payItemCatalog);
   if (items.length === 0) return null;
   const itemOrder = items.map((it) => it.itemNumber);
   const catalogByNumber = new Map((project.payItemCatalog || []).map((c) => [c.itemNumber, c]));
@@ -844,9 +882,9 @@ function buildQuantitySheetWorkbook(reports, project, room) {
   // Cover first so it reads like an actual cover page when the file opens.
   buildCoverSheet(wb, project, room, dates, items, [
     ['Totals', 'Summed quantity per pay item, with % complete and Overrun where tracked'],
-    ['By Day', 'Quantity per item, one column per reporting day'],
+    ...(includeByDay ? [['By Day', 'Quantity per item, one column per reporting day']] : []),
     ...(sortedBillingEstimates.length > 0 ? [['By Estimate', 'Quantity per item, one column per billing period']] : []),
-    ['Detail Log', 'Every logged entry -- station, side, date, inspector, filterable'],
+    ...(includeDetail ? [['Detail Log', 'Every logged entry -- station, side, date, inspector, filterable']] : []),
   ]);
 
   // ---------- Totals ----------
@@ -886,20 +924,22 @@ function buildQuantitySheetWorkbook(reports, project, room) {
   totalsWs.autoFilter = { from: 'A1', to: { row: 1 + itemRowCount, column: 8 } };
 
   // ---------- By Day ----------
-  const matrixWs = wb.addWorksheet('By Day', { views: [{ state: 'frozen', xSplit: 3, ySplit: 1 }] });
-  matrixWs.columns = [
-    { header: 'Item Number', width: 16 },
-    { header: 'Description', width: 42 },
-    { header: 'Unit', width: 8 },
-    ...dates.map((d) => ({ header: displayDate(d), width: 12 })),
-  ];
-  items.forEach((it) => {
-    const row = [it.itemNumber, it.description, it.unit];
-    dates.forEach((date) => row.push(perDateQty.get(date).get(it.itemNumber)));
-    matrixWs.addRow(row);
-  });
-  styleHeaderRow(matrixWs, 1, matrixWs.columns.length);
-  styleDataRows(matrixWs, 2, 1 + items.length, matrixWs.columns.length);
+  if (includeByDay) {
+    const matrixWs = wb.addWorksheet('By Day', { views: [{ state: 'frozen', xSplit: 3, ySplit: 1 }] });
+    matrixWs.columns = [
+      { header: 'Item Number', width: 16 },
+      { header: 'Description', width: 42 },
+      { header: 'Unit', width: 8 },
+      ...dates.map((d) => ({ header: displayDate(d), width: 12 })),
+    ];
+    items.forEach((it) => {
+      const row = [it.itemNumber, it.description, it.unit];
+      dates.forEach((date) => row.push(perDateQty.get(date).get(it.itemNumber)));
+      matrixWs.addRow(row);
+    });
+    styleHeaderRow(matrixWs, 1, matrixWs.columns.length);
+    styleDataRows(matrixWs, 2, 1 + items.length, matrixWs.columns.length);
+  }
 
   // ---------- By Estimate ----------
   if (sortedBillingEstimates.length > 0) {
@@ -931,32 +971,34 @@ function buildQuantitySheetWorkbook(reports, project, room) {
   }
 
   // ---------- Detail Log ----------
-  const detailWs = wb.addWorksheet('Detail Log', { views: [{ state: 'frozen', xSplit: 2, ySplit: 1 }] });
-  detailWs.columns = [
-    { header: 'Item Number', width: 14 }, { header: 'Description', width: 40 },
-    { header: 'Date', width: 12 }, { header: 'Station', width: 10 }, { header: 'Stop Station', width: 12 },
-    { header: 'Side', width: 6 }, { header: 'Length', width: 8 }, { header: 'Width', width: 7 },
-    { header: 'Qty', width: 8 }, { header: 'Unit', width: 7 }, { header: 'Theoretical Qty', width: 14 },
-    { header: 'Overrun/Underrun', width: 15 }, { header: 'Estimate No.', width: 11 }, { header: 'Inspector', width: 16 },
-  ];
-  const sortedFlat = flatItems.slice().sort((a, b) => {
-    const byItem = String(a.itemNumber).localeCompare(String(b.itemNumber), undefined, { numeric: true });
-    if (byItem !== 0) return byItem;
-    return (a.__report.date || '').localeCompare(b.__report.date || '');
-  });
-  sortedFlat.forEach((it) => {
-    const overrun = it.theoreticalQty ? computeOverrun(it.qty, it.theoreticalQty) : '';
-    detailWs.addRow([
-      it.itemNumber, it.description, it.__report.date || '',
-      it.startStation || '', it.endStation || '', it.side || '',
-      it.length || '', it.width || '', Number(it.qty) || 0, it.unit || '',
-      it.theoreticalQty || '', overrun != null ? overrun : '',
-      estimateNoForDate(sortedBillingEstimates, it.__report.date), it.__report.representative || '',
-    ]);
-  });
-  styleHeaderRow(detailWs, 1, detailWs.columns.length);
-  styleDataRows(detailWs, 2, 1 + sortedFlat.length, detailWs.columns.length);
-  detailWs.autoFilter = { from: 'A1', to: { row: 1 + sortedFlat.length, column: detailWs.columns.length } };
+  if (includeDetail) {
+    const detailWs = wb.addWorksheet('Detail Log', { views: [{ state: 'frozen', xSplit: 2, ySplit: 1 }] });
+    detailWs.columns = [
+      { header: 'Item Number', width: 14 }, { header: 'Description', width: 40 },
+      { header: 'Date', width: 12 }, { header: 'Station', width: 10 }, { header: 'Stop Station', width: 12 },
+      { header: 'Side', width: 6 }, { header: 'Length', width: 8 }, { header: 'Width', width: 7 },
+      { header: 'Qty', width: 8 }, { header: 'Unit', width: 7 }, { header: 'Theoretical Qty', width: 14 },
+      { header: 'Overrun/Underrun', width: 15 }, { header: 'Estimate No.', width: 11 }, { header: 'Inspector', width: 16 },
+    ];
+    const sortedFlat = flatItems.slice().sort((a, b) => {
+      const byItem = String(a.itemNumber).localeCompare(String(b.itemNumber), undefined, { numeric: true });
+      if (byItem !== 0) return byItem;
+      return (a.__report.date || '').localeCompare(b.__report.date || '');
+    });
+    sortedFlat.forEach((it) => {
+      const overrun = it.theoreticalQty ? computeOverrun(it.qty, it.theoreticalQty) : '';
+      detailWs.addRow([
+        it.itemNumber, it.description, it.__report.date || '',
+        it.startStation || '', it.endStation || '', it.side || '',
+        it.length || '', it.width || '', Number(it.qty) || 0, it.unit || '',
+        it.theoreticalQty || '', overrun != null ? overrun : '',
+        estimateNoForDate(sortedBillingEstimates, it.__report.date), it.__report.representative || '',
+      ]);
+    });
+    styleHeaderRow(detailWs, 1, detailWs.columns.length);
+    styleDataRows(detailWs, 2, 1 + sortedFlat.length, detailWs.columns.length);
+    detailWs.autoFilter = { from: 'A1', to: { row: 1 + sortedFlat.length, column: detailWs.columns.length } };
+  }
 
   return { wb, dates };
 }
@@ -973,7 +1015,7 @@ $('#btn-generate').addEventListener('click', async () => {
   btn.textContent = 'Generating...';
   try {
     const room = await getCompanyRoom();
-    const result = buildQuantitySheetWorkbook(selected, project, room);
+    const result = buildQuantitySheetWorkbook(selected, project, room, qtyOptions);
     if (!result) {
       alert('None of the selected reports have any pay items listed -- nothing to build.');
       return;

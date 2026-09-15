@@ -1270,6 +1270,12 @@ input[type="date"] { min-width: 0; }
 
 .detail-group-toggle { display: flex; align-items: center; gap: 0.4rem; flex: 0 0 auto; font-size: 0.85rem; color: var(--text-dim); margin-bottom: 0; }
 .detail-group-toggle input { width: 1.1rem; height: 1.1rem; }
+
+.qty-opt-toggle { display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; color: var(--text-dim); margin-bottom: 0; }
+.qty-opt-toggle input { width: 1.1rem; height: 1.1rem; flex: 0 0 auto; }
+.qty-export-options { display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.4rem; }
+.qty-export-options label { display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; color: var(--text-dim); margin-bottom: 0; }
+.qty-export-options input { width: 1.1rem; height: 1.1rem; flex: 0 0 auto; }
 .warn {
   background: var(--warn-bg); border: 1px solid var(--warn-border);
   border-radius: var(--radius-sm); padding: 0.7rem 0.85rem; font-size: 0.82rem;
