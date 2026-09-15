@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Report Viewer</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1c3d5a">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Daily Reports">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="print-sheet.css">
+<script src="theme.js"></script>
+</head>
+<body>
+
+<header class="app-header">
+  <div>
+    <h1 id="viewer-title">Report</h1>
+    <div class="app-sub" id="project-name-sub"></div>
+  </div>
+  <span></span>
+</header>
+<div class="back-bar">
+  <a href="#" id="bb-back-link">&larr; Reports</a>
+  <span class="bb-sep">//</span>
+  <span class="bb-cur">Viewing</span>
+  <!-- A real navigation to the separate editor page, not an in-place
+       unlock -- editing stays its own function, reached deliberately. -->
+  <a href="#" id="bb-edit-link" class="btn-sm" style="margin-left:auto;">&#9998; Edit</a>
+</div>
+
+<main>
+  <!-- Solely the printed page, nothing else -- no form, no click-to-edit,
+       no Save/Generate/Delete. Editing and downloading are each their own
+       separate, explicit actions reachable from reports.html, not
+       something this page leads into. -->
+  <div class="rb-preview-frame" id="rv-preview"></div>
+</main>
+
+<script src="common.js"></script>
+<script src="defaults.js"></script>
+<script src="storage.js"></script>
+<script src="render-report.js"></script>
+<script type="module" src="firebase-init.js"></script>
+<script src="firebase-sync.js"></script>
+<script>
+const projectId = queryParam('project');
+const reportId = queryParam('report');
+
+// Same technique report-editor.html's refreshLivePreview uses -- a page
+// rendered off-screen-but-attached has a real layout box to measure, a
+// bare detached element doesn't.
+function scalePreviewPage(pageEl, targetWidthPx) {
+  const rect = pageEl.getBoundingClientRect();
+  const scale = targetWidthPx / rect.width;
+  const wrap = document.createElement('div');
+  wrap.className = 'rb-preview-page-wrap';
+  wrap.style.width = targetWidthPx + 'px';
+  wrap.style.height = Math.round(rect.height * scale) + 'px';
+  pageEl.style.transform = `scale(${scale})`;
+  pageEl.style.transformOrigin = 'top left';
+  wrap.appendChild(pageEl);
+  return wrap;
+}
+
+async function renderPreview(layout, report, logoBlob) {
+  const previewEl = $('#rv-preview');
+  const sandbox = document.createElement('div');
+  sandbox.style.cssText = 'position:fixed; top:0; left:-20000px; z-index:-1;';
+  document.body.appendChild(sandbox);
+  const pages = renderReportPages(sandbox, layout, report, logoBlob);
+  const frameStyle = getComputedStyle(previewEl);
+  const paddingX = parseFloat(frameStyle.paddingLeft) + parseFloat(frameStyle.paddingRight);
+  const targetWidth = Math.max(200, previewEl.clientWidth - paddingX);
+  const wraps = pages.map(({ el }) => scalePreviewPage(el, targetWidth));
+  sandbox.remove();
+  previewEl.innerHTML = '';
+  wraps.forEach((wrap) => previewEl.appendChild(wrap));
+}
+
+(async () => {
+  const room = await getCompanyRoom();
+  const project = projectId ? await getProject(projectId) : null;
+  if (!project || !projectInScope(project, room)) {
+    location.href = 'index.html';
+    return;
+  }
+  $('#project-name-sub').textContent = project.name;
+  $('#bb-back-link').href = `reports.html?project=${project.id}`;
+
+  let report = await getReport(reportId);
+  if (!report || report.projectId !== project.id || !reportInScope(report, room)) {
+    location.href = `reports.html?project=${project.id}`;
+    return;
+  }
+
+  if ((report.photosFetched || []).some((f) => !f) || report.signatureFetched === false) {
+    $('#viewer-title').textContent = 'Loading photos…';
+    report = await fetchReportMedia(report);
+    // putReportRaw, not saveReport -- viewing a report shouldn't bump
+    // updatedAt or restamp lastEditedBy as if it had been edited.
+    await putReportRaw(report);
+  }
+
+  document.title = `Report #${report.reportNo} — ${project.name}`;
+  $('#viewer-title').textContent = `Report #${report.reportNo} - ${report.date || ''}`;
+  // Always shown, same as reports.html's own Edit link -- report-editor.html
+  // itself is what gates on permission (lockReportEditor), not this page.
+  $('#bb-edit-link').href = `report-editor.html?project=${project.id}&report=${report.id}`;
+
+  try {
+    const [layout, logoBlob] = await Promise.all([loadPrintLayout(), getReportLogo()]);
+    await renderPreview(layout, report, logoBlob);
+  } catch (err) {
+    console.error(err);
+    $('#rv-preview').innerHTML = '<p class="hint">Preview unavailable.</p>';
+  }
+})();
+</script>
+</body>
+</html>

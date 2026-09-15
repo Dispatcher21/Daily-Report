@@ -545,9 +545,12 @@ function render() {
       updateBulkBar();
     });
   });
+  // Tapping a report itself is a view intent -- the separate "Edit" link
+  // (renderRow/renderCard) is the deliberate, explicit way into actually
+  // editing one.
   $$('[data-open]', container).forEach((el) => {
     el.addEventListener('click', () => {
-      location.href = `report-editor.html?project=${project.id}&report=${el.dataset.open}`;
+      location.href = `report-viewer.html?project=${project.id}&report=${el.dataset.open}`;
     });
   });
 
