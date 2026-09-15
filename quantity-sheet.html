@@ -761,11 +761,40 @@ function estimateNoForDate(sortedList, date) {
   return hit ? hit.estimateNo : '';
 }
 
+// The device's report logo (settings.html/company-management.html), turned
+// into whatever ExcelJS's addImage actually accepts -- an arbitrary
+// uploaded image could be any format (HEIC already converted away by the
+// time it's saved, but still PNG/JPEG/WebP/etc.), and ExcelJS only embeds
+// jpeg/png/gif, so it's redrawn through a canvas to normalize on PNG
+// regardless of the original. Scaled down to a sane on-page size here too,
+// rather than embedding a multi-megapixel photo at full resolution into
+// every download. Never blocks the export -- a broken or missing logo just
+// means no logo, not a failed download.
+async function loadCoverLogoImage() {
+  try {
+    const blob = await getReportLogo();
+    if (!blob) return null;
+    const bitmap = await createImageBitmap(blob);
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    canvas.getContext('2d').drawImage(bitmap, 0, 0);
+    const pngBlob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+    const buffer = await pngBlob.arrayBuffer();
+    const maxWidth = 160, maxHeight = 80;
+    const scale = Math.min(1, maxWidth / bitmap.width, maxHeight / bitmap.height);
+    return { buffer, width: Math.round(bitmap.width * scale), height: Math.round(bitmap.height * scale) };
+  } catch (err) {
+    console.error('cover logo:', err);
+    return null;
+  }
+}
+
 // A plain FIELD/VALUE header page -- project/company identity, the range
 // this workbook covers, and a short table of contents, so the workbook
 // still makes sense to someone who opens it with no other context (a
 // contractor's biller, an auditor) months later.
-function buildCoverSheet(wb, project, room, dates, items, contentsLines) {
+async function buildCoverSheet(wb, project, room, dates, items, contentsLines) {
   const realDates = dates.filter((d) => d !== NO_DATE_KEY);
   const { totalContract, totalEarned } = contractValueSummary(items);
   const overall = overallPercentComplete(items);
@@ -773,13 +802,26 @@ function buildCoverSheet(wb, project, room, dates, items, contentsLines) {
   const ws = wb.addWorksheet('Cover', { views: [{ showGridLines: false }] });
   ws.columns = [{ width: 3 }, { width: 26 }, { width: 62 }];
 
-  ws.mergeCells('B2:C2');
-  ws.getCell('B2').value = 'Pay Item Quantity & Billing Report';
-  ws.getCell('B2').font = { bold: true, size: 16, color: { argb: 'FF1C3D5A' } };
-  ws.mergeCells('B3:C3');
-  ws.getCell('B3').value = 'Generated from Daily Work Reports';
-  ws.getCell('B3').font = { italic: true, color: { argb: 'FF6E7A85' } };
-  ws.getRow(2).height = 24;
+  // Logo (if any) sits above the title, reserving just enough rows for its
+  // own scaled height (~20px/row at the default row height) plus a little
+  // padding -- the title/subtitle/everything below just shifts down by
+  // however many extra rows that took, rather than needing two separate
+  // layouts.
+  const logo = await loadCoverLogoImage();
+  let titleRow = 2;
+  if (logo) {
+    const imageId = wb.addImage({ buffer: logo.buffer, extension: 'png' });
+    ws.addImage(imageId, { tl: { col: 1, row: 0.15 }, ext: { width: logo.width, height: logo.height } });
+    titleRow = 2 + Math.max(3, Math.ceil(logo.height / 20) + 1);
+  }
+
+  ws.mergeCells(`B${titleRow}:C${titleRow}`);
+  ws.getCell(`B${titleRow}`).value = 'Pay Item Quantity & Billing Report';
+  ws.getCell(`B${titleRow}`).font = { bold: true, size: 16, color: { argb: 'FF1C3D5A' } };
+  ws.mergeCells(`B${titleRow + 1}:C${titleRow + 1}`);
+  ws.getCell(`B${titleRow + 1}`).value = 'Generated from Daily Work Reports';
+  ws.getCell(`B${titleRow + 1}`).font = { italic: true, color: { argb: 'FF6E7A85' } };
+  ws.getRow(titleRow).height = 24;
 
   // [label, value, numFmt] -- null entries are blank spacer rows, same
   // grouping the plain-text version used.
@@ -799,7 +841,7 @@ function buildCoverSheet(wb, project, room, dates, items, contentsLines) {
     ['Total Earned to Date', totalEarned != null ? totalEarned : 'N/A -- no Unit Price on file', totalEarned != null ? '$#,##0.00' : null],
   ];
 
-  let r = 5;
+  let r = titleRow + 3;
   fieldRows.forEach((entry) => {
     if (!entry) { r++; return; }
     const [label, value, fmt] = entry;
@@ -831,7 +873,7 @@ function buildCoverSheet(wb, project, room, dates, items, contentsLines) {
 // per billing checkpoint, skipped entirely if none are recorded), and
 // Detail Log (every individual entry, filterable by any column -- station,
 // side, date, estimate, inspector).
-function buildQuantitySheetWorkbook(reports, project, room, options) {
+async function buildQuantitySheetWorkbook(reports, project, room, options) {
   const { showZero = false, includeByDay = true, includeDetail = true } = options || {};
   const byDate = new Map(); // date -> flat array of pay-item entries, each tagged with its report
   for (const r of reports) {
@@ -880,7 +922,7 @@ function buildQuantitySheetWorkbook(reports, project, room, options) {
   wb.created = new Date();
 
   // Cover first so it reads like an actual cover page when the file opens.
-  buildCoverSheet(wb, project, room, dates, items, [
+  await buildCoverSheet(wb, project, room, dates, items, [
     ['Totals', 'Summed quantity per pay item, with % complete and Overrun where tracked'],
     ...(includeByDay ? [['By Day', 'Quantity per item, one column per reporting day']] : []),
     ...(sortedBillingEstimates.length > 0 ? [['By Estimate', 'Quantity per item, one column per billing period']] : []),
@@ -1015,7 +1057,7 @@ $('#btn-generate').addEventListener('click', async () => {
   btn.textContent = 'Generating...';
   try {
     const room = await getCompanyRoom();
-    const result = buildQuantitySheetWorkbook(selected, project, room, qtyOptions);
+    const result = await buildQuantitySheetWorkbook(selected, project, room, qtyOptions);
     if (!result) {
       alert('None of the selected reports have any pay items listed -- nothing to build.');
       return;
