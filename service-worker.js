@@ -1,7 +1,7 @@
 // Caches the app shell so it keeps working with no signal in the field.
 // Bump CACHE_NAME whenever any of these files change so the new version
 // actually gets picked up.
-const CACHE_NAME = 'daily-report-app-v250';
+const CACHE_NAME = 'daily-report-app-v251';
 const ASSETS = [
   './',
   './login.html',
@@ -37,6 +37,7 @@ const ASSETS = [
   './firebase-init.js',
   './firebase-sync.js',
   './lib/xlsx.min.js',
+  './lib/exceljs.min.js',
   './lib/jspdf.umd.min.js',
   './lib/html2canvas.min.js',
   './lib/fflate.min.js',
