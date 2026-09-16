@@ -11,15 +11,15 @@
 // download of the same contents (see buildProjectSyncZip below).
 //
 // Folder layout written:
-//   manifest.json
 //   reports/R{no}_{date}.pdf             -- the visual report, one PDF each
+//   data/manifest.json
 //   data/project.json
 //   data/reports/R{no}_{date}/report.json
 //   data/reports/R{no}_{date}/photos/photoN.jpg
 //   data/reports/R{no}_{date}/signature.png   (if signed)
 // The top-level reports/ folder is what someone opens to actually look at a
-// report; everything raw/machine-readable is tucked under data/ instead of
-// sitting alongside it.
+// report; every JSON file (raw/machine-readable, nothing to open by hand)
+// is tucked under data/ instead of sitting loose next to it.
 
 function folderSyncSupported() {
   return typeof window !== 'undefined' && typeof window.showDirectoryPicker === 'function';
@@ -144,7 +144,7 @@ async function buildOneReportPdf(ctx, report) {
 async function collectProjectSyncFiles(project, reports, onProgress, includePdfs = true) {
   const files = [];
   files.push(['data/project.json', new Blob([JSON.stringify(await serializeProjectForExport(project))], { type: 'application/json' })]);
-  files.push(['manifest.json', new Blob([JSON.stringify({
+  files.push(['data/manifest.json', new Blob([JSON.stringify({
     formatVersion: 2,
     kind: 'daily-report-app-folder-sync',
     project: project.name,
