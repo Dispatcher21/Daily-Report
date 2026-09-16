@@ -34,6 +34,11 @@
   }
   .settings-tab[aria-selected="true"] { background: var(--brand); border-color: var(--brand); color: var(--on-brand); }
   .settings-panel[hidden] { display: none; }
+  .app-version {
+    display: block; text-align: right; margin: 1.5rem 0 0.5rem;
+    font-size: 0.72rem; color: var(--text-dim); opacity: 0.7; text-decoration: none;
+  }
+  .app-version:hover { text-decoration: underline; opacity: 1; }
 
   /* An expanding section is a .step-shaped <details> -- same visual family
      as everything else in this app, just collapsible. Defaults to closed
@@ -728,6 +733,8 @@
     <div id="company-status" class="hint" style="margin-top:0.75rem;" hidden></div>
     <div class="err" id="company-error" hidden></div>
   </div>
+
+  <a class="app-version" href="patch-notes.txt" target="_blank" rel="noopener">v0.009</a>
 
 </main>
 

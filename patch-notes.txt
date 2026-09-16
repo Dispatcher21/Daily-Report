@@ -1,0 +1,93 @@
+DAILY WORK REPORTS -- PATCH NOTES
+==================================
+
+Newest first. Dates are when the work shipped.
+
+0.009 -- 2026-09-16
+  - Added folder sync/backup: pick a folder on this device and every report
+    syncs to it automatically as a real PDF, plus a full Quantity Sheet and
+    the raw data behind it -- no manual export needed.
+  - New reports sync to that folder in the background the moment you save,
+    with a small status icon on anything not caught up yet.
+  - The header refresh button now also catches up the current project's
+    folder sync.
+  - Reworked both dashboards' overview stats into one consistent, cleaner
+    layout.
+  - Compacted the No Work Day / Weather Day buttons into a single row.
+  - Activity, Representative, and PE Name each now fill their old duplicate
+    box automatically -- one entry instead of two. Short Work Summary
+    retired.
+
+0.008 -- 2026-09-15
+  - Split report viewing into its own page, separate from editing.
+  - Added manual drag-to-reorder and folder favoriting on the home screen.
+  - Overhauled the Quantity Sheet into a tabbed, quantities-first page;
+    moved Pay Apps to its own page.
+  - Restyled Quantity Sheet exports with real spreadsheet formatting, new
+    export options, and the company logo on the cover page.
+  - Added "Duplicate This Report."
+  - Added global search in the header.
+  - Added photo markup -- pen and arrow annotations on report photos.
+
+0.007 -- 2026-09-14
+  - Existing reports now open in a locked, view-only mode by default --
+    tap a field to unlock and edit it.
+  - View mode shows just the clean printed preview.
+
+0.006 -- 2026-09-11
+  - Added drag-to-organize project folders on the home screen, with
+    iOS-style open/close animations.
+  - Folder cards now preview the projects inside them; added custom
+    project icons and folder backgrounds.
+  - Consolidated every refresh/sync button into one, in the header.
+  - Overhauled Settings into a unified You/Company tabbed page.
+  - Added a Force Update option, with automatic prompts when an update's
+    ready to install.
+  - Assorted fixes: folder drag-and-drop with a mouse, touch drag fighting
+    the page's own scroll, folder tiles hiding behind a background image,
+    a folder modal capped too narrow, sloppy Company Management layout.
+
+0.005 -- 2026-09-10
+  - Confirmed a report's sync actually lands when Save is pressed, instead
+    of trusting it silently.
+  - Company syncs are noticeably faster (delta sync instead of re-reading
+    everything every time).
+  - Added a full Company Theme Builder -- accent color, home screen
+    background, and decorative artwork, with a live preview and animated
+    GIF support.
+  - Added a Company Management link to Settings, admin-only.
+  - Theme changes now log to the Audit Log in plain language.
+  - Fixed a save-blocking error message that could get squeezed out of view
+    on desktop.
+
+0.004 -- 2026-09-09
+  - Fixed HEIC photos (the default iPhone camera format) showing up as
+    broken images.
+
+0.003 -- 2026-09-08
+  - Added a Daily Work Report Excel importer to Project Setup, including
+    embedded photos.
+  - The report upload zone on the Project page now also accepts Excel
+    imports.
+  - Report imports show live progress instead of a silent wait.
+  - A Pay App Total can now be typed in as a raw dollar amount.
+  - Fixed bulk report imports silently losing data on the way to the
+    company.
+  - Fixed a company sync slowdown that could take several minutes.
+  - Report editor now returns to the Reports list after Save.
+  - Fixed Progress Over Time and Lump Sum % Complete undercounting.
+
+0.002 -- 2026-09-07
+  - Added a third comparison to the rotating fun-fact card.
+
+0.001 -- 2026-09-04
+  - Removed two dashboard tiles that weren't earning their space (Lump Sum
+    Value, Earned to Date).
+  - Added a rotating fun-fact card comparing logged quantities to real
+    notable engineering projects.
+  - Project page's action buttons now show as a cleaner 2-up grid on
+    mobile.
+
+Not seeing a fix or feature you were told about? The app itself is always
+more current than this file could ever be kept by hand -- ask whoever's
+helping you for specifics if something doesn't match what you're seeing.
