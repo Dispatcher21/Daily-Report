@@ -10,6 +10,13 @@
 // decide whether to offer this at all vs. falling back to a plain zip
 // download of the same contents (see buildProjectSyncZip below).
 //
+// Nothing synced here is ever actually deleted from the folder, even once
+// its report is deleted or renamed (Report No./date edited) inside the
+// app: the old file/folder is renamed with a DELETED_ prefix instead (see
+// tagEntryDeleted) and left in place. A folder the user chose to sync to
+// is theirs -- the app updates it, but never removes anything from it on
+// its own.
+//
 // Folder layout written:
 //   reports/R{no}_{date}.pdf             -- the visual report, one PDF each
 //   Quantity_Sheet.xlsx                  -- every pay item, every report on file
@@ -326,25 +333,87 @@ async function removeEntryIfExists(dirHandle, name, opts) {
   }
 }
 
-async function removeReportFilesFromFolder(dirHandle, baseName) {
+async function copyFileEntry(dirHandle, srcName, destName) {
+  const srcHandle = await dirHandle.getFileHandle(srcName);
+  const file = await srcHandle.getFile();
+  const destHandle = await dirHandle.getFileHandle(destName, { create: true });
+  const writable = await destHandle.createWritable();
+  await writable.write(file);
+  await writable.close();
+}
+
+// Recursively copies every file/subdirectory from srcDir into destDir --
+// used by tagEntryDeleted below since the File System Access API has no
+// reliable cross-browser directory rename/move, only per-file writes.
+async function copyDirTree(srcDir, destDir) {
+  for await (const handle of srcDir.values()) {
+    if (handle.kind === 'file') {
+      const file = await handle.getFile();
+      const destHandle = await destDir.getFileHandle(handle.name, { create: true });
+      const writable = await destHandle.createWritable();
+      await writable.write(file);
+      await writable.close();
+    } else {
+      const subDest = await destDir.getDirectoryHandle(handle.name, { create: true });
+      await copyDirTree(handle, subDest);
+    }
+  }
+}
+
+// Renames a file or directory to a DELETED_-prefixed name instead of
+// removing it -- nothing the app syncs to a chosen folder should ever
+// actually disappear from it, even once the report behind it is deleted or
+// renamed inside the app. "Rename" here means copy-then-remove-the-
+// original rather than a real move, since that's the operation the API
+// actually offers; the content is what matters and it's fully preserved
+// either way. No-op if `name` was never synced in the first place, or
+// already carries the tag (nothing left to do).
+async function tagEntryDeleted(dirHandle, name, isDirectory) {
+  if (name.startsWith('DELETED_')) return;
+  const deletedName = `DELETED_${name}`;
+  try {
+    if (isDirectory) {
+      const srcDir = await dirHandle.getDirectoryHandle(name).catch(() => null);
+      if (!srcDir) return;
+      // A report renamed more than once tags a new name each time (dates/
+      // numbers differ), but clear out any leftover from an earlier tag of
+      // this exact same name first so a copy never merges stale content in.
+      await removeEntryIfExists(dirHandle, deletedName, { recursive: true });
+      const destDir = await dirHandle.getDirectoryHandle(deletedName, { create: true });
+      await copyDirTree(srcDir, destDir);
+      await dirHandle.removeEntry(name, { recursive: true });
+    } else {
+      const exists = await dirHandle.getFileHandle(name).catch(() => null);
+      if (!exists) return;
+      await removeEntryIfExists(dirHandle, deletedName);
+      await copyFileEntry(dirHandle, name, deletedName);
+      await dirHandle.removeEntry(name);
+    }
+  } catch (err) {
+    console.error('tag deleted:', err); // best-effort -- never blocks the rest of a sync
+  }
+}
+
+async function tagReportFilesDeleted(dirHandle, baseName) {
   const reportsDir = await dirHandle.getDirectoryHandle('reports', { create: true }).catch(() => null);
-  if (reportsDir) await removeEntryIfExists(reportsDir, `${baseName}.pdf`);
+  if (reportsDir) await tagEntryDeleted(reportsDir, `${baseName}.pdf`, false);
   const dataDir = await dirHandle.getDirectoryHandle('data', { create: true })
     .then((d) => d.getDirectoryHandle('reports', { create: true }))
     .catch(() => null);
-  if (dataDir) await removeEntryIfExists(dataDir, baseName, { recursive: true });
+  if (dataDir) await tagEntryDeleted(dataDir, baseName, true);
 }
 
 // Rebuilds Quantity_Sheet.xlsx from every report currently on file and
 // rewrites it -- called after a single report's own save/delete, since that
 // report's pay items may have changed the project-wide totals the sheet
-// shows. Removes the file instead once nothing has any pay item activity
-// left (the last pay-item-bearing report on the project was just deleted).
+// shows. Tags it deleted instead of rewriting once nothing has any pay
+// item activity left (the last pay-item-bearing report on the project was
+// just deleted) -- same "never actually remove it" rule as everything else.
 async function refreshQuantitySheetInFolder(dirHandle, project) {
   const reports = await getReportsForProject(project.id);
   const blob = await buildQuantitySheetSyncFile(project, reports);
   if (blob) await writeFileToDir(dirHandle, 'Quantity_Sheet.xlsx', blob);
-  else await removeEntryIfExists(dirHandle, 'Quantity_Sheet.xlsx');
+  else await tagEntryDeleted(dirHandle, 'Quantity_Sheet.xlsx', false);
 }
 
 // Silent version of getOrPickSyncDirectory -- a background save can't pop a
@@ -435,7 +504,7 @@ async function syncSingleReportToFolder(project, report, dirHandle) {
   }
   const base = reportSyncBaseName(full);
   if (prevEntry && prevEntry.baseName && prevEntry.baseName !== base) {
-    await removeReportFilesFromFolder(dirHandle, prevEntry.baseName);
+    await tagReportFilesDeleted(dirHandle, prevEntry.baseName);
   }
 
   await ensurePdfSyncLibs();
@@ -463,11 +532,11 @@ async function syncSingleReportToFolder(project, report, dirHandle) {
   await refreshQuantitySheetInFolder(dirHandle, project);
 }
 
-async function removeSingleReportFromFolder(project, report, dirHandle) {
+async function tagSingleReportDeleted(project, report, dirHandle) {
   const state = await getFolderSyncState(project.id);
   const entry = state[report.id];
   const base = entry ? entry.baseName : reportSyncBaseName(report);
-  await removeReportFilesFromFolder(dirHandle, base);
+  await tagReportFilesDeleted(dirHandle, base);
   if (entry) {
     delete state[report.id];
     await saveFolderSyncState(project.id, state);
@@ -534,8 +603,8 @@ async function onLocalFolderSyncReportChanged(report, deleted) {
   if (!dirHandle) return; // permission lapsed -- stays flagged unsynced (cloud icon) until the next manual Sync
 
   if (deleted) {
-    await runFolderSyncWithBanner('Removing from folder', 'Removed from folder', () =>
-      removeSingleReportFromFolder(project, report, dirHandle));
+    await runFolderSyncWithBanner('Updating folder', 'Folder updated', () =>
+      tagSingleReportDeleted(project, report, dirHandle));
   } else {
     await runFolderSyncWithBanner('Saving to folder', 'Synced to folder', () =>
       syncSingleReportToFolder(project, report, dirHandle));

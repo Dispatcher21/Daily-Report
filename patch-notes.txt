@@ -3,6 +3,11 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.010 -- 2026-09-16
+  - Folder sync no longer deletes anything. A report deleted or renamed in
+    the app now renames its old files in the synced folder with a
+    DELETED_ prefix and leaves them in place, instead of removing them.
+
 0.009 -- 2026-09-16
   - Added folder sync/backup: pick a folder on this device and every report
     syncs to it automatically as a real PDF, plus a full Quantity Sheet and
