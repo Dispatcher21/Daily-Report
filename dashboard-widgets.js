@@ -169,7 +169,11 @@ function unitFunFacts(items) {
 
 // `strokeColorOverride` lets a caller encode its own health judgement (e.g.
 // a schedule ring: more elapsed isn't "good" the way more complete is, so
-// it can't reuse this function's default green-at-100% logic).
+// it can't reuse this function's default green-at-100% logic). Returns just
+// the SVG + percent label, not a wrapping element -- ringCardHtml below is
+// what places that inside a sized .ring-wrap, so the same markup works at
+// both the compact size (the Overview card's ring row) and anywhere else
+// that ever wants a bigger one.
 function ringSvg(pct, strokeColorOverride) {
   const r = 36;
   const c = 2 * Math.PI * r;
@@ -182,14 +186,41 @@ function ringSvg(pct, strokeColorOverride) {
   // in the DOM.
   const pctCountAttrs = pct != null ? ` data-count-target="${pct * 100}" data-count-fmt="pct"` : '';
   return `
-    <div class="ring-wrap">
       <svg viewBox="0 0 90 90">
         <circle class="ring-track" cx="45" cy="45" r="${r}"></circle>
         <circle class="ring-fill" cx="45" cy="45" r="${r}" stroke="${strokeColor}"
           stroke-dasharray="${c}" stroke-dashoffset="${c}" data-target-offset="${pct == null ? c : offset}"></circle>
       </svg>
-      <span class="ring-pct"${pctCountAttrs}>${pct == null ? '—' : '0%'}</span>
+      <span class="ring-pct"${pctCountAttrs}>${pct == null ? '—' : '0%'}</span>`;
+}
+
+// A compact ring card for the Overview card's ring row -- ring above a
+// short label, centered, sized to actually sit two (or three) across on a
+// phone instead of the old dc-headline treatment, where each ring+text
+// pairing claimed a full-width row of its own.
+function ringCardHtml(pct, label, sub, tip, colorOverride) {
+  const tipAttrs = tip ? ` data-tip="${escapeHtml(tip)}" tabindex="0"` : '';
+  return `
+    <div class="dash-ring-card"${tipAttrs}>
+      <div class="ring-wrap">${ringSvg(pct, colorOverride)}</div>
+      <span class="dc-label">${escapeHtml(label)}</span>
+      ${sub ? `<span class="dc-sub">${escapeHtml(sub)}</span>` : ''}
     </div>`;
+}
+
+// Lays out ring cards or stat tiles (whichever of them actually apply --
+// callers already filter out the ones with no applicable data) in a strict
+// 2-column grid, widening the last one to fill the row when the count is
+// odd rather than leaving it alone with dead space beside it. Shared by
+// project.html's own dashboard and index.html's Manager Dashboard.
+function dashGridRow(cards) {
+  const list = cards.filter(Boolean);
+  if (list.length === 0) return '';
+  if (list.length % 2 === 1) {
+    const last = list.length - 1;
+    list[last] = list[last].replace(/^(\s*<div class="[a-z-]+)"/, '$1 dc-full-row"');
+  }
+  return `<div class="dash-grid-2col">${list.join('')}</div>`;
 }
 
 const DASH_COUNT_FORMATS = {

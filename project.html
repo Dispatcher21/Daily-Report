@@ -61,7 +61,13 @@
   <div class="dash-empty" id="dash-empty" hidden>No reports filed yet &mdash; the dashboard fills in once you've saved a few.</div>
 
   <div id="dash-content" hidden>
-    <div class="dash-grid" id="dash-stats"></div>
+    <div class="step">
+      <div class="step-header">
+        <span class="step-num">OVERVIEW</span>
+        <h2>Dashboard</h2>
+      </div>
+      <div class="step-body" id="dash-stats"></div>
+    </div>
 
     <div class="step-pair">
     <div class="step">
@@ -339,68 +345,66 @@ function renderDashboard(reports, project) {
       ? `${Math.round(timeFrac * 100)}% of the contract's ${contractLength} days have elapsed, versus ${Math.round(overall * 100)}% of planned work complete. ` +
         (overall + 0.05 >= timeFrac ? 'On pace or ahead of schedule.' : 'Behind schedule -- more time used than work done.')
       : `${Math.round(timeFrac * 100)}% of the contract's ${contractLength} days have elapsed. Add a Per Plans Total to pay items to compare this against % complete.`;
-    scheduleCardHtml = `<div class="dash-card dc-headline" data-tip="${escapeHtml(scheduleTip)}" tabindex="0">
-      ${ringSvg(timeFrac, scheduleColor)}
-      <div>
-        <span class="dc-label">Schedule Used</span>
-        <span class="dc-sub">${daysRemaining >= 0 ? `${daysRemaining} day(s) left` : `${Math.abs(daysRemaining)} day(s) over`}</span>
-      </div>
-    </div>`;
+    scheduleCardHtml = ringCardHtml(
+      timeFrac, 'Schedule Used',
+      daysRemaining >= 0 ? `${daysRemaining} day(s) left` : `${Math.abs(daysRemaining)} day(s) over`,
+      scheduleTip, scheduleColor
+    );
   }
 
-  $('#dash-stats').innerHTML =
-    (overall != null ? `<div class="dash-card dc-headline" data-tip="${escapeHtml(overallTip)}" tabindex="0">
-      ${ringSvg(overall)}
-      <div>
-        <span class="dc-label">Estimated Pay Item Usage</span>
-        <span class="dc-sub">By quantity, excludes Lump Sum</span>
-      </div>
-    </div>` : '') +
-    (payAppFlat != null ? `<div class="dash-card dc-headline" data-tip="${escapeHtml(payAppValueTip)}" tabindex="0">
-      ${ringSvg(payAppPctByValue)}
-      <div>
-        <span class="dc-label">Contract Value Used</span>
-        <span class="dc-sub">By dollars billed, latest Pay App only</span>
-      </div>
-    </div>` : '') +
-    scheduleCardHtml +
-    statCard(reports.length, 'Reports Filed', '', 'Number of daily reports saved for this project.', null, 'int') +
-    (daysSinceNtp != null ? statCard(
+  const ringsRow = dashGridRow([
+    overall != null ? ringCardHtml(overall, 'Estimated Pay Item Usage', 'By quantity, excludes Lump Sum', overallTip) : '',
+    payAppFlat != null ? ringCardHtml(payAppPctByValue, 'Contract Value Used', 'By dollars billed, latest Pay App only', payAppValueTip) : '',
+    scheduleCardHtml,
+  ]);
+
+  // Kept visually separate (its own always-full-width row, see
+  // .dash-contract-row) rather than just another tile in the grid below --
+  // both because it's the one figure people scan for first, and because
+  // that's what keeps it from ever landing as the odd tile stuck alone in
+  // that grid.
+  const contractRow = totalContract != null
+    ? `<div class="dash-contract-row" data-tip="Sum of Per Plans Total × Unit Price across every pay item that has both on file." tabindex="0">
+        <span class="dc-label">Total Contract Value</span>
+        <span class="dc-value">${escapeHtml(fmtMoney(totalContract))}</span>
+      </div>`
+    : '';
+
+  const tilesRow = dashGridRow([
+    statCard(reports.length, 'Reports Filed', '', 'Number of daily reports saved for this project.', null, 'int'),
+    daysSinceNtp != null ? statCard(
       daysSinceNtp,
       'Days Since NTP',
       '',
       `Calendar days from the NTP Date (${ntpDate}) to today.` +
         (hasContractLength ? '' : ' Not a days-remaining-in-contract figure -- there\'s no total contract length on file.'),
       null, 'int'
-    ) : '') +
-    (daysRemaining != null ? statCard(
+    ) : '',
+    daysRemaining != null ? statCard(
       daysRemaining,
       'Days Remaining (Contract)',
       daysRemaining < 0 ? 'Past contract length' : '',
       `Total Contract Length (${contractLength} days) minus Days Since NTP. Negative means the contract's allotted days have been exceeded.`,
       null, 'int'
-    ) : '') +
+    ) : '',
     statCard(
       totalHours, 'Total Hours Worked', '',
       'Sum of the Hours field across every report on file for this project.',
       null, 'decimal1'
-    ) +
-    (avgHoursPerWeek ? statCard(
+    ),
+    avgHoursPerWeek ? statCard(
       avgHoursPerWeek, 'Avg Hours / Week', '',
       'Total hours worked, divided by the number of weeks between the earliest and latest dated report.',
       null, 'decimal1'
-    ) : '') +
+    ) : '',
     statCard(
       items.length, 'Pay Items in Catalog', '',
       'Number of distinct pay item numbers on this project, whether or not they\'ve shown up on a report yet.',
       null, 'int'
-    ) +
-    (totalContract != null ? statCard(
-      totalContract, 'Total Contract Value', '',
-      'Sum of Per Plans Total × Unit Price across every pay item that has both on file.',
-      null, 'money'
-    ) : '') +
-    funFactCardHtml(funFacts);
+    ),
+  ]);
+
+  $('#dash-stats').innerHTML = ringsRow + contractRow + tilesRow + funFactCardHtml(funFacts);
 
   renderPayItems(items);
   renderTrendChart(progressOverTime(dated, project.payItemCatalog, project.billingEstimates));

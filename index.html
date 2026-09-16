@@ -102,7 +102,13 @@
         <div id="md-project-checks"></div>
       </div>
 
-      <div class="dash-grid" id="md-stats"></div>
+      <div class="step" id="md-overview-step">
+        <div class="step-header">
+          <span class="step-num">OVERVIEW</span>
+          <h2>Portfolio</h2>
+        </div>
+        <div class="step-body" id="md-stats"></div>
+      </div>
       <div class="empty-state" id="md-empty" hidden style="padding:1.25rem;">No projects included yet -- use "Manage Included Projects" above to add some.</div>
 
       <div id="md-content">
@@ -1016,7 +1022,7 @@ async function renderManagerDashboard() {
 
   $('#md-empty').hidden = included.length > 0;
   $('#md-content').hidden = included.length === 0;
-  $('#md-stats').hidden = included.length === 0;
+  $('#md-overview-step').hidden = included.length === 0;
   if (included.length === 0) { $('#md-stats').innerHTML = ''; return; }
 
   const today = todayIso();
@@ -1095,33 +1101,40 @@ function renderMdStats(projectStats, reports) {
 
   const portfolioPct = hasContract && hasEarned && totalContractSum > 0 ? totalEarnedSum / totalContractSum : null;
 
-  $('#md-stats').innerHTML =
-    (portfolioPct != null ? `<div class="dash-card dc-headline" data-tip="Earned to date divided by total contract value, across every included project. A dollar-based figure (includes Lump Sum items) -- not the same measure as a project's own Estimated Pay Item Usage, which is quantity-based and excludes Lump Sum." tabindex="0">
-      ${ringSvg(portfolioPct)}
-      <div>
-        <span class="dc-label">% of Contract Value Earned</span>
-        <span class="dc-sub">Included projects, combined</span>
-      </div>
-    </div>` : '') +
-    statCard(projectStats.length, 'Active Projects', mdExcluded.size ? `${mdExcluded.size} excluded from this view` : '', 'Projects currently included in this dashboard.', null, 'int') +
-    statCard(reportsThisWeek, 'Reports This Week', '', 'Dated reports in the last 7 days, across included projects.', null, 'int') +
-    (classified > 0 ? statCard(
+  const ringsRow = dashGridRow([
+    portfolioPct != null ? ringCardHtml(
+      portfolioPct, '% of Contract Value Earned', 'Included projects, combined',
+      'Earned to date divided by total contract value, across every included project. A dollar-based figure (includes Lump Sum items) -- not the same measure as a project\'s own Estimated Pay Item Usage, which is quantity-based and excludes Lump Sum.'
+    ) : '',
+  ]);
+
+  // Kept visually separate (its own always-full-width row) rather than a
+  // tile in the grid below, same reasoning as project.html's own dashboard.
+  const contractRow = hasContract
+    ? `<div class="dash-contract-row" data-tip="Sum of Total Contract Value across included projects." tabindex="0">
+        <span class="dc-label">Total Contract Value</span>
+        <span class="dc-value">${escapeHtml(fmtMoney(totalContractSum))}</span>
+      </div>`
+    : '';
+
+  const tilesRow = dashGridRow([
+    statCard(projectStats.length, 'Active Projects', mdExcluded.size ? `${mdExcluded.size} excluded from this view` : '', 'Projects currently included in this dashboard.', null, 'int'),
+    statCard(reportsThisWeek, 'Reports This Week', '', 'Dated reports in the last 7 days, across included projects.', null, 'int'),
+    classified > 0 ? statCard(
       behind, 'Projects Behind Schedule',
       `${aheadOnPace} ahead/on pace · ${slightlyBehind} slightly behind`,
       'More of the contract\'s days have elapsed than work completed, by more than 20%. Only counts projects with an NTP Date, Total Contract Length, and at least one priced pay item.',
       null, 'int'
-    ) : '') +
-    (hasContract ? statCard(
-      totalContractSum, 'Total Contract Value', '',
-      'Sum of Total Contract Value across included projects.',
-      null, 'money'
-    ) : '') +
-    (hasEarned ? statCard(
+    ) : '',
+    hasEarned ? statCard(
       totalEarnedSum, 'Earned to Date',
       portfolioPct != null ? `${(portfolioPct * 100).toFixed(1)}% of contract value` : '',
       'Sum of Earned to Date across included projects.',
       portfolioPct, 'money'
-    ) : '');
+    ) : '',
+  ]);
+
+  $('#md-stats').innerHTML = ringsRow + contractRow + tilesRow;
 }
 
 // One line per included project, each its own color -- each project's
