@@ -12,6 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Daily Reports">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="print-sheet.css">
 <script src="theme.js"></script>
 </head>
 <body>
@@ -180,7 +181,7 @@
       <div class="step-header">
         <span class="step-num">BACKUP</span>
         <h2>Sync to Folder</h2>
-        <button type="button" class="info-tip" data-tip="Writes every report in this project (data, photos, signatures) out as plain files in a folder you choose -- run it again anytime to update that folder with anything new or changed. Available on desktop Chrome/Edge and Android Chrome; other browsers (including iPhone/iPad) get a zip file to save instead, since they can't write to a folder directly." aria-label="What this does">i</button>
+        <button type="button" class="info-tip" data-tip="Writes every report in this project out to a folder you choose -- a Reports folder with one PDF per report to actually look at, and a Data folder underneath with the raw report/photo files. Run it again anytime to update the folder with anything new or changed. Available on desktop Chrome/Edge and Android Chrome; other browsers (including iPhone/iPad) get a zip file with the same layout to save instead, since they can't write to a folder directly." aria-label="What this does">i</button>
       </div>
       <div class="step-body">
         <button type="button" class="btn-secondary" id="btn-sync-folder" style="margin-bottom:0.5rem;">&#8635; Sync Project to Folder</button>
@@ -194,12 +195,15 @@
 
 <script src="lib/xlsx.min.js"></script>
 <script src="lib/fflate.min.js"></script>
+<script src="lib/html2canvas.min.js"></script>
+<script src="lib/jspdf.umd.min.js"></script>
 <script src="common.js"></script>
 <script src="defaults.js"></script>
 <script src="storage.js"></script>
 <script src="audit-log.js"></script>
 <script src="project-file.js"></script>
 <script src="report-bundle.js"></script>
+<script src="pdf-export.js"></script>
 <script src="local-sync.js"></script>
 <script src="render-report.js"></script>
 <script src="quantity-calc.js"></script>
