@@ -3,6 +3,12 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.014 -- 2026-09-16
+  - Removed a couple of old, unused code paths left over from features that
+    were already retired (an old export format nothing pointed to anymore,
+    and the "share a report" half of a feature that only ever supported
+    receiving, not sending). No visible change -- just less to maintain.
+
 0.013 -- 2026-09-16
   - Company/admin/custom-setup passwords now need at least 8 characters.
   - The company password, join, and admin unlock screens now slow down

@@ -503,25 +503,24 @@ pdf-export.js
 
 report-bundle.js
   The .report file format -- a zip (fflate) wearing a custom extension,
-  same convention as .docx/.kmz. buildReportBundle packages one project +
-  one report (data + real photo/signature files, not base64) into a
-  shareable file; tryParseReportBundle reads one back, used by project.html's
-  "Import Reports" upload zone to accept .report files alongside Excel
-  files. See DEAD CODE below -- the build/export side (buildReportBundle,
-  reportBundleFilename) currently has no caller anywhere in the app; only
-  the read side is used.
+  same convention as .docx/.kmz. tryParseReportBundle reads one back, used
+  by project.html's "Import Reports" upload zone to accept .report files
+  alongside Excel files. Read-only as of 2026-09-16 -- the unused build/
+  export side (buildReportBundle, reportBundleFilename) was removed; see
+  patch-notes.txt 0.014. A device can only ever receive a .report file
+  someone else (or an older version of this app) produced.
 
-sync-export.js
-  See DEAD CODE below. Builds a "master spreadsheet" summary workbook
-  (one row per report) that its own header comment says is used by a
-  "Sync Selected" button on reports.html -- no such button, or any other
-  caller, currently exists. The whole file is unreferenced.
+[REMOVED 2026-09-16] sync-export.js was deleted -- it was entirely dead
+  (see patch-notes.txt 0.014). It built a "master spreadsheet" summary
+  workbook that its own header comment said was used by a "Sync Selected"
+  button on reports.html; no such button, or any other caller, existed by
+  the time this was found.
 
 ---- Vendored libraries (lib/) ----
 
 xlsx.min.js (SheetJS 0.20.3) -- reads/writes plain .xlsx (project data
   files, imported Daily Work Report archives, quick raw exports). Used by
-  project-file.js, render-report.js's import path, sync-export.js (dead).
+  project-file.js, render-report.js's import path.
 exceljs.min.js -- writes *styled* .xlsx (the Quantity Sheet, with a brand-
   colored header row, zebra striping, borders). Used by
   quantity-sheet-export.js only. Loaded eagerly on quantity-sheet.html,
@@ -707,8 +706,9 @@ Local folder sync (a project kept as real files on disk)
 
 DEAD CODE / THINGS WORTH A LOOK
 
-1. sync-export.js is entirely unused -- the whole file is dead.
-   It is NOT in service-worker.js's ASSETS precache list (unlike every
+1. [RESOLVED 2026-09-16, see patch-notes.txt 0.014] sync-export.js was
+   entirely unused -- the whole file was dead, and has since been deleted.
+   It was NOT in service-worker.js's ASSETS precache list (unlike every
    other JS file in the app), and grepping confirmed why: no HTML page has
    a <script src="sync-export.js"> tag, and no dynamic script-loading code
    anywhere (local-sync.js's lsLoadScript, or any other) ever loads it
@@ -760,26 +760,17 @@ DEAD CODE / THINGS WORTH A LOOK
    cache). Worth a mental note for future changes to that lazy-load list,
    not a bug today.
 
-3. report-bundle.js's export/build side is unused -- only the import side
-   is wired up. buildReportBundle() and reportBundleFilename() were
-   grepped as whole words across every .html/.js file in the repo; the
-   only matches are their own definitions in report-bundle.js. Only
-   tryParseReportBundle() (the read/import direction) has a real caller,
-   in project.html's "Import Reports" upload zone. The file's own header
-   comment describes .report bundles as "meant to be handed to the OS
-   share sheet... and later opened back into the app via Settings >
-   Import" -- but there is currently no UI path anywhere in the app that
-   actually calls buildReportBundle() to create one of these files in the
-   first place; a user can only ever receive/import a .report file someone
-   else (or an older version of this app) produced. This is the same
-   shape of finding as setup-share.js, which already documents its own
-   send-side removal explicitly in its header comment -- report-bundle.js
-   looks like the same situation but without that comment being updated
-   to say so. Worth either restoring a "Share this report" button
-   somewhere (project.html or reports.html would be the natural spot,
-   next to the existing Sync/Download actions) or removing
-   buildReportBundle/reportBundleFilename and updating the header comment
-   to match reality, the way setup-share.js's already does.
+3. [RESOLVED 2026-09-16, see patch-notes.txt 0.014] report-bundle.js's
+   export/build side was unused -- only the import side was wired up.
+   buildReportBundle() and reportBundleFilename() grepped as whole words
+   across every .html/.js file in the repo turned up only their own
+   definitions in report-bundle.js; tryParseReportBundle() (the read/
+   import direction) was the only one with a real caller, in project.html's
+   "Import Reports" upload zone. Confirmed a deliberately retired "share a
+   report" feature, not coming back -- buildReportBundle/
+   reportBundleFilename were removed and the file's header comment updated
+   to describe it as read-only, the same way setup-share.js's already
+   does for its own removed send side.
 
 4. company-management.html is a 19-line redirect-only stub
    (location.replace('settings.html?tab=company')) -- not dead exactly
