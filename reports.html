@@ -369,9 +369,18 @@ async function refreshFolderSyncBadgeState() {
   folderSyncState = folderLinked ? await getFolderSyncState(project.id) : {};
 }
 
+// A plain inline SVG rather than a Unicode/emoji cloud character -- the
+// latter renders as a full-color glossy emoji on some platforms (iOS,
+// Android, anywhere with a color emoji font) and a plain outline on others,
+// which is exactly the kind of loud/inconsistent look this is meant to
+// avoid. One small monochrome glyph, same everywhere, no background pill --
+// just a quiet corner marker, not another badge competing with NO WORK
+// DAY/WEATHER DAY/author for attention in the main text line.
+const CLOUD_ICON_SVG = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>';
+
 function reportCloudBadgeHtml(r) {
   if (!folderLinked || isReportFolderSynced(r, folderSyncState)) return '';
-  return '<span class="report-row-cloud" title="Not yet synced to the local folder">&#9729;</span>';
+  return `<span class="report-row-cloud" title="Not yet synced to the local folder">${CLOUD_ICON_SVG}</span>`;
 }
 
 function reportBadgesHtml(r) {
@@ -379,8 +388,6 @@ function reportBadgesHtml(r) {
   if (isNoWorkDayReport(r)) badges.push('<span class="report-row-nwd">NO WORK DAY</span>');
   if (isWeatherDayReport(r)) badges.push('<span class="report-row-wd">WEATHER DAY</span>');
   if (r.createdBy || r.representative) badges.push(`<span class="report-row-author">${escapeHtml(r.createdBy || r.representative)}</span>`);
-  const cloud = reportCloudBadgeHtml(r);
-  if (cloud) badges.push(cloud);
   return badges.join(' ');
 }
 
@@ -481,6 +488,7 @@ function renderRow(r) {
         <span class="report-row-sub">${escapeHtml(r.activity || 'No activity noted')}</span>
       </div>
       <div class="report-row-actions">
+        ${reportCloudBadgeHtml(r)}
         ${reportWarningHtml(r)}
         <a class="btn-sm" href="report-editor.html?project=${project.id}&report=${r.id}">Edit</a>
         <span class="report-row-no">#${r.reportNo}</span>

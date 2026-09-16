@@ -1724,9 +1724,14 @@ input[type="date"] { min-width: 0; }
 /* Mirrors how OneDrive/Google Drive mark a file that hasn't made it to a
    synced folder yet -- shown on a report only once its project is actually
    linked to one (see reports.html's folderLinked), so a project that's
-   never touched the feature never shows it at all. */
+   never touched the feature never shows it at all. A plain inline SVG (see
+   CLOUD_ICON_SVG), not text/emoji, so it stays this same small, muted,
+   one-color mark everywhere rather than risking a platform's own loud
+   color emoji rendering. Sits with the warning icon in the quiet actions
+   corner, not in the badge row, so it never competes with NO WORK DAY/
+   WEATHER DAY/author for attention. */
 .report-row-cloud {
-  font-size: 0.85rem; vertical-align: middle; opacity: 0.75; cursor: default;
+  display: inline-flex; color: var(--text-dim); opacity: 0.7; vertical-align: middle; cursor: default;
 }
 .report-row .report-row-sub { font-size: 0.83rem; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .report-row .report-row-actions { display: flex; align-items: center; gap: 0.5rem; }
