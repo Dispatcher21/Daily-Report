@@ -12,14 +12,16 @@
 //
 // Folder layout written:
 //   reports/R{no}_{date}.pdf             -- the visual report, one PDF each
+//   Quantity_Sheet.xlsx                  -- every pay item, every report on file
 //   data/manifest.json
 //   data/project.json
 //   data/reports/R{no}_{date}/report.json
 //   data/reports/R{no}_{date}/photos/photoN.jpg
 //   data/reports/R{no}_{date}/signature.png   (if signed)
-// The top-level reports/ folder is what someone opens to actually look at a
-// report; every JSON file (raw/machine-readable, nothing to open by hand)
-// is tucked under data/ instead of sitting loose next to it.
+// The top-level reports/ folder (and the Quantity Sheet beside it) is what
+// someone opens to actually look at something; every JSON file (raw/
+// machine-readable, nothing to open by hand) is tucked under data/ instead
+// of sitting loose next to it.
 
 function folderSyncSupported() {
   return typeof window !== 'undefined' && typeof window.showDirectoryPicker === 'function';
@@ -137,6 +139,38 @@ async function buildOneReportPdf(ctx, report) {
   return blob;
 }
 
+// buildQuantitySheetWorkbook/ExcelJS/quantity-calc.js are loaded on demand
+// for the same reason the PDF libs are -- most pages that can save a report
+// have no other reason to carry a spreadsheet engine's weight.
+let quantitySheetLibsPromise = null;
+function ensureQuantitySheetLibs() {
+  if (!quantitySheetLibsPromise) {
+    quantitySheetLibsPromise = (async () => {
+      if (typeof ExcelJS === 'undefined') await lsLoadScript('lib/exceljs.min.js');
+      if (typeof aggregatePayItemTotals !== 'function') await lsLoadScript('quantity-calc.js');
+      if (typeof buildQuantitySheetWorkbook !== 'function') await lsLoadScript('quantity-sheet-export.js');
+    })();
+  }
+  return quantitySheetLibsPromise;
+}
+
+// Always built from every report on file, not some date range -- "full
+// project info", the same way data/project.json is the whole project
+// record rather than a snapshot of what anyone happened to have open.
+// Returns null (nothing to write) once there's genuinely no pay item
+// activity anywhere in the project yet, same as buildQuantitySheetWorkbook
+// itself.
+async function buildQuantitySheetSyncFile(project, reports) {
+  await ensureQuantitySheetLibs();
+  const room = await getCompanyRoom();
+  const result = await buildQuantitySheetWorkbook(reports, project, room, {
+    showZero: false, includeByDay: true, includeDetail: true,
+  });
+  if (!result) return null;
+  const buffer = await result.wb.xlsx.writeBuffer();
+  return new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+}
+
 // Shared by both the real folder sync and the zip fallback so the two never
 // drift apart in what they include. `includePdfs` is on by default -- off
 // only lets a caller skip the (much slower) rasterization step if it's ever
@@ -151,6 +185,9 @@ async function collectProjectSyncFiles(project, reports, onProgress, includePdfs
     syncedAt: Date.now(),
     reportCount: reports.length,
   })], { type: 'application/json' })]);
+
+  const qtyBlob = await buildQuantitySheetSyncFile(project, reports);
+  if (qtyBlob) files.push(['Quantity_Sheet.xlsx', qtyBlob]);
 
   let pdfCtx = null;
   try {
@@ -216,9 +253,10 @@ async function buildProjectSyncZip(project, onProgress) {
   const files = await collectProjectSyncFiles(project, reports, onProgress);
   const zipInput = {};
   for (const [path, blob] of files) {
-    // Already-compressed formats (JPEG photos, PNG signatures, PDFs) gain
-    // nothing from re-deflating -- level 0 just stores them.
-    const level = /\.(jpg|png|pdf)$/i.test(path) ? 0 : 6;
+    // Already-compressed formats (JPEG photos, PNG signatures, PDFs, and
+    // .xlsx -- itself a zip archive internally) gain nothing from
+    // re-deflating -- level 0 just stores them.
+    const level = /\.(jpg|png|pdf|xlsx)$/i.test(path) ? 0 : 6;
     zipInput[path] = [new Uint8Array(await blob.arrayBuffer()), { level }];
   }
   const zipped = fflate.zipSync(zipInput, { level: 6 });
@@ -286,6 +324,18 @@ async function removeReportFilesFromFolder(dirHandle, baseName) {
     .then((d) => d.getDirectoryHandle('reports', { create: true }))
     .catch(() => null);
   if (dataDir) await removeEntryIfExists(dataDir, baseName, { recursive: true });
+}
+
+// Rebuilds Quantity_Sheet.xlsx from every report currently on file and
+// rewrites it -- called after a single report's own save/delete, since that
+// report's pay items may have changed the project-wide totals the sheet
+// shows. Removes the file instead once nothing has any pay item activity
+// left (the last pay-item-bearing report on the project was just deleted).
+async function refreshQuantitySheetInFolder(dirHandle, project) {
+  const reports = await getReportsForProject(project.id);
+  const blob = await buildQuantitySheetSyncFile(project, reports);
+  if (blob) await writeFileToDir(dirHandle, 'Quantity_Sheet.xlsx', blob);
+  else await removeEntryIfExists(dirHandle, 'Quantity_Sheet.xlsx');
 }
 
 // Silent version of getOrPickSyncDirectory -- a background save can't pop a
@@ -400,6 +450,8 @@ async function syncSingleReportToFolder(project, report) {
 
   state[report.id] = { baseName: base, syncedAt: Date.now() };
   await saveFolderSyncState(project.id, state);
+
+  await refreshQuantitySheetInFolder(dirHandle, project);
 }
 
 async function removeSingleReportFromFolder(project, report) {
@@ -414,6 +466,8 @@ async function removeSingleReportFromFolder(project, report) {
     delete state[report.id];
     await saveFolderSyncState(project.id, state);
   }
+
+  await refreshQuantitySheetInFolder(dirHandle, project);
 }
 
 // The hook itself -- see storage.js's saveReport/deleteReport. Bails out
