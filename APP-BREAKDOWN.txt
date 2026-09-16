@@ -1,0 +1,812 @@
+DAILY WORK REPORTS -- APP BREAKDOWN
+====================================
+
+WHAT THIS DOCUMENT IS
+
+This is a standalone reference map of the whole app: every file, what it's
+for, its key functions and what calls what, the data model, and the main
+user workflows traced end to end across files. It is NOT wired into the app
+or the website in any way -- it's just a text file sitting in the repo root
+for the developer and whoever they show it to (an IT contact, a future
+maintainer). Nothing here is read by the app at runtime.
+
+It reflects the code as of 2026-09-16 (repo state at the time this was
+written). It will drift out of date as the app changes -- there's no
+mechanism keeping it in sync -- so treat it as a snapshot, not a live
+source of truth, and re-generate or hand-edit it whenever the app changes
+in a way that would make this wrong. If you add a file, add a function that
+other files call, or change how the data model or sync works, update the
+matching section here.
+
+Methodology note: every JS module in the repo (18 files) was read in full.
+Every HTML page's <script src> load order was checked. Every HTML page's
+own inline <script> block was scanned for its top-level function names
+(and several of the largest ones -- project.html, reports.html,
+report-editor.html, index.html, settings.html -- were read in relevant part
+for the workflow tracing below), but given their size (some pages are
+1,000-1,800+ lines of inline script), this document describes each page's
+role and its function list by name/purpose rather than reproducing every
+line of UI logic verbatim. Dead-code claims were verified by grepping every
+candidate function name as a whole word across every .html and .js file in
+the repo (never just the file it's defined in), so a function only ever
+referenced inside a template-literal-generated onclick="" string, or only
+ever called from a different page's inline script, is still counted as
+used. A function is only called "dead" below when that grep turned up
+nothing but its own definition line, anywhere in the repo.
+
+
+THE BIG PICTURE
+
+Daily Work Reports is a client-only Progressive Web App -- there is no
+application server. It's a set of static HTML/CSS/JS files (hostable
+anywhere, including GitHub Pages per the CNAME file) that runs entirely in
+the browser. It works fully offline once installed/cached.
+
+Local storage is IndexedDB (one database, `daily-report-app`, wrapped by
+storage.js) -- every project, report, photo, signature, audit-log entry,
+and app setting lives there on-device. A service worker (service-worker.js)
+precaches the app shell (HTML/CSS/JS/vendored libs/icons) so the whole UI
+still loads with zero network.
+
+Three independent, optional sync mechanisms layer on top of that local
+store, none of which the app requires to function:
+
+  1. Company (cloud) sync -- firebase-sync.js talks to a single shared
+     Firebase project (Firestore for data, Cloud Storage for photos/logo/
+     theme images). A "company room" is addressed by a SHA-256 hash of a
+     password the team shares; joining pulls the room's data down and
+     merges it into IndexedDB, and every local save/delete pushes back out
+     in real time. This is how multiple devices/people share the same set
+     of projects and reports.
+
+  2. Local folder sync -- local-sync.js writes a project's reports (as
+     PDFs, a Quantity Sheet .xlsx, and raw JSON+photos) out to a real
+     folder on disk via the File System Access API, so a project keeps a
+     human-browsable, offline copy outside the app. This is per-device,
+     per-project, and entirely separate from company sync -- a project can
+     be synced to a company, a folder, both, or neither.
+
+  3. Manual import/export -- .report bundle files (report-bundle.js,
+     zip via fflate), plain Daily Work Report Excel files (a company's own
+     hand-filled archive, parsed by render-report.js's import path), and
+     project data Excel files (project-file.js) let data move between
+     devices without either of the above, e.g. by email or a shared drive.
+
+All three sync paths, and local-only use with no sync at all, converge on
+the same IndexedDB record shape and the same "newer updatedAt wins" merge
+rule (storage.js's mergeReportRecord/mergeProjectRecord), so a report
+behaves the same regardless of how it got onto a given device.
+
+The UI is a set of ~15 server-rendered-nothing HTML pages, each a plain
+document with <script src> tags (no bundler, no framework, no build step)
+plus its own inline <script> block for page logic. Pages share global
+scope-level helpers (storage.js, common.js, defaults.js, theme.js,
+firebase-sync.js, local-sync.js, audit-log.js, dashboard-widgets.js,
+quantity-calc.js) by simply loading the same <script src> files in the
+same order -- there is no module system for app code (only firebase-init.js
+is a real ES module, because the Firebase SDK requires it; everything else
+is a classic script and a plain global function/variable).
+
+
+DATA MODEL
+
+IndexedDB database: `daily-report-app`, version 6 (storage.js, openDb()).
+Six object stores:
+
+  reports (keyPath: id)
+    One record per daily report. Full shape is built by makeBlankReport()
+    in defaults.js -- id, projectId, companyCode, reportNo, date, hours,
+    timeEntries, activity/notes, peName, representative, ntpDate,
+    contractors[6] (name only), equipmentRows[22] (label + qty[6], one
+    column per contractor), workSummaryHeader/workSummary (the "top line"
+    and the big box), payItems[] (itemNumber/description/qty/unit/
+    startStation/endStation/location/side/length/width/theoreticalQty --
+    unbounded, though the printed template only has 6 physical rows),
+    controllingItem/commentsOnTime/controllingItemTimeFrom/To,
+    workingConditions, trafficControlSelect, workBegin/workEnd,
+    repSignatureName/repSignatureImage (a Blob), peSignatureName (no
+    image -- the engineer signs on paper), weatherDesc/tempHigh/tempLow,
+    photos[6] (Blobs or null), photosFetched[6]/signatureFetched (lazy-
+    pull flags, see Company sync below), thumbnail/thumbnailBack/
+    thumbnailAt (local-only preview images for reports.html, never
+    synced), createdAt/updatedAt, createdBy/lastEditedBy (the logged-in
+    device name), pendingPush (local-only "still needs to sync" flag).
+
+  projects (keyPath: id)
+    One record per project. Built by makeProjectFromParsedFile() in
+    defaults.js from an uploaded project-data Excel file (project-file.js)
+    -- id, companyCode, name, meta{} (project no./name/NTP date/PE name/
+    every "default" field a new report seeds from), defaultContractors[],
+    defaultEquipmentLabels[], payItemCatalog[] (itemNumber/description/
+    unit/plannedQty/unitPrice/stations/locations/side/computed/
+    theoretical flags), billingEstimates[] (Pay App history -- estimateNo/
+    date/note/itemTotals{}), requiredFields[]/hiddenFields[]/fieldOrder[]
+    (admin config from required-fields.html), backgroundImage (Blob,
+    optional, for index.html's project card)/backgroundImageFetched,
+    createdAt/updatedAt.
+
+  settings (keyPath: key)
+    Flat key/value store for everything else: the report logo blob
+    (reportLogo), the logged-in device's name (userName), per-person
+    favorite project IDs and home-screen folder layout (keyed by name, see
+    below), company room connection state (companyRoomCode/Name/IsAdmin/
+    Permissions/ProjectScope/RoleId), sync cursors/timestamps
+    (companyDeltaPullCursor, companyLastFullPullAt, companyLogoSyncedAt,
+    companyThemesSyncedAt, companyAutoPullAt), per-project local-folder
+    sync state (syncDirHandle:<projectId> -- an actual FileSystemHandle,
+    folderSyncState:<projectId>), and the accent/theme localStorage
+    mirrors live in the browser's localStorage instead (theme.js), not
+    here.
+
+  auditLog (keyPath: id)
+    Append-only entries written by audit-log.js -- id, timestamp,
+    userName, action (created/edited/deleted), entityType (report/
+    project/theme), entityId, entityLabel, changes[] ({label, from, to}),
+    companyCode, hash (a self-integrity hash, see audit-log.js). Never
+    edited or deleted once written.
+
+  reportDrafts (keyPath: reportId)
+    report-editor.html's in-progress, not-yet-committed edits, kept
+    separate from the real `reports` record so "Discard" just deletes the
+    draft. Never synced to the company by design.
+
+  companyThemes (keyPath: id)
+    Cached copy of the company's admin-curated theme list (name, accent
+    color, background/decal settings, plus lazily-fetched
+    backgroundImage/decalImage Blobs) -- see firebase-sync.js's theme
+    sync section and theme.js's appCompanyTheme.
+
+Two blob-bearing fields worth knowing about specifically: a report's
+photos/repSignatureImage and a project's backgroundImage are real Blobs
+sitting in IndexedDB. They round-trip to base64 only when leaving IndexedDB
+entirely (storage.js's blobToBase64/base64ToBlob, used by
+serializeProjectForExport/deserializeImportedProject for .report bundles
+and JSON backups) -- Firebase Storage and local-folder sync both write/read
+them as real binary, never base64.
+
+
+FILE BY FILE
+
+---- HTML pages ----
+
+login.html
+  Entry point (manifest's start_url). One-card "enter your name, optionally
+  a company password" screen. Calls saveUserName() + joinCompanyRoom() (if
+  a password was given) then redirects to index.html. If a name is already
+  set locally, skips straight past. Uses common.js's progress banner and
+  loginThrottle* (a per-device wrong-password speed bump, not real
+  security) around the join attempt.
+
+index.html
+  Home screen: the project grid/folder hub (drag-and-drop reordering,
+  favorites, folders with optional custom backgrounds -- buildHubLayout,
+  renderProjectCards, wireHubGridInteractions, moveHubEntry, folder modal
+  functions), unsaved-draft list (renderUnsavedDrafts), and (for anyone
+  with the membersCanViewManagerDashboard permission or an admin) the
+  Manager Dashboard -- a company-wide rollup across every visible project
+  (renderManagerDashboard and its render* helpers: checklist, stats, trend
+  chart via dashboard-widgets.js's renderTrendSvg, hours bars, per-project
+  status, activity feed). Also handles receiving a shared setup via the
+  #setup= URL fragment (handleIncomingSetup -> setup-share.js's
+  decodeSetupPayload/applySetupPayload) and applying the selected company
+  theme's background/decal (applyCompanyThemeVisuals).
+
+project.html
+  A single project's home page: its dashboard (renderDashboard -- rings/
+  stat cards from dashboard-widgets.js, pay item completion list, trend
+  chart, weather calendar/log), report list entry points, and project-level
+  actions (Sync to Folder via local-sync.js's syncProjectToFolder, importing
+  .report bundles or Daily Work Report Excel files via
+  importReportFilesIntoProject -> report-bundle.js's tryParseReportBundle /
+  render-report.js's parseReportExcelFile). Loads the most JS of any page
+  (xlsx, fflate, html2canvas, jspdf, report-bundle, pdf-export, local-sync,
+  render-report, quantity-calc, dashboard-widgets) because it's the hub for
+  export/import/sync/PDF actions.
+
+project-setup.html
+  Editing a project's own configuration: PROJECT INFO/PAY ITEMS/
+  CONTRACTORS/EQUIPMENT ROWS tabs (mirrors project-file.js's Excel sheet
+  layout), plus an "Import Reports" tab for bulk-loading a company's
+  existing archive of Daily Work Report Excel files (handleImportReportsChange
+  -> render-report.js's parseReportExcelFile, one file at a time, logged via
+  common.js's irLogRow). Autosaves via saveProject() (markDirty/saveNow).
+
+reports.html
+  The list of a project's reports: table/card view toggle, per-report
+  thumbnails (lazily rendered off-screen via html2canvas + render-report.js,
+  cached on the report record as thumbnail/thumbnailBack/thumbnailAt),
+  per-report cloud/folder sync-status badges (reportCloudBadgeHtml,
+  refreshFolderSyncBadgeState), filtering/sorting, bulk selection + mass
+  edit, and the entry points into report-editor.html, report-viewer.html,
+  and download.html.
+
+report-editor.html
+  The actual report-filling form -- by far the largest inline script in the
+  app (~1,600 lines of logic). Autosaves to the reportDrafts store every
+  ~400ms of inactivity (scheduleSave/commitSave), enforces admin-configured
+  required fields (applyRequiredFieldHighlights, getMissingRequiredFields
+  from defaults.js), renders a live thumbnail-style preview that mirrors
+  the printed layout as you type (setupLivePreview/refreshLivePreview,
+  using render-report.js's renderReportPages), and hosts the whole photo
+  workflow: per-slot capture/pick, HEIC conversion (common.js's
+  convertHeicIfNeeded), compression (compressImage), and an in-app photo
+  annotator/markup tool (the pa* functions -- freehand draw, arrows, undo,
+  color/tool picker, drawn onto a <canvas> then flattened back into the
+  stored photo Blob) plus a signature pad (setupSignaturePad).
+
+report-viewer.html
+  Read-only printed-page preview of one report (renderPreview, reusing
+  render-report.js's renderReportPages + a scale-to-fit wrapper). No edit
+  UI at all -- "Edit" is a real navigation to report-editor.html. Linked
+  only from reports.html.
+
+download.html
+  Builds and downloads a PDF of one or more selected reports via
+  pdf-export.js's buildPdfBlob, using a hidden #render-sandbox and the same
+  html2canvas rasterization pipeline local-sync.js reuses for folder sync.
+
+settings.html
+  The largest HTML file (2,300+ lines) -- covers: theme/accent/company-
+  theme picking, install-to-home-screen, the company connection lifecycle
+  (join/create/leave/sync now, admin unlock, change company or admin
+  password, recoverable-password viewer), the whole "Company" admin tab
+  (this is where company-management.html now redirects to -- company name,
+  permission toggles, Manager Dashboard project exclusions, per-project
+  chips, custom setups/roles, company Theme Builder, and the plain-text
+  Activity feed reader wired to audit-log.js's data), device name, logo
+  upload, and data export/import (project data Excel, JSON backup).
+
+company-management.html
+  A 19-line redirect stub: `location.replace('settings.html?tab=company')`.
+  Kept only so old bookmarks/in-app error copy referencing "Company
+  Management" still land somewhere. All the actual admin UI lives in
+  settings.html now.
+
+audit-log.html
+  Renders the plain-text-formatted audit trail (audit-log.js's
+  formatAuditLogAsText) with a project filter and a download-as-.txt
+  button. Admin-only in practice (nothing here checks that directly beyond
+  what settings.html's own gating implies, but it's only linked from
+  there).
+
+quantity-sheet.html
+  The pay-item quantity/billing view for a project: totals/By Day/By
+  Estimate/Detail tables (mirroring quantity-sheet-export.js's Excel
+  sheets on-screen), date-range and single-estimate filtering, and the
+  Download button that calls quantity-sheet-export.js's
+  buildQuantitySheetWorkbook directly. Links to pay-apps.html for recording
+  a new billing checkpoint.
+
+pay-apps.html
+  Recording/editing a project's billing checkpoints ("Pay Apps" --
+  billingEstimates on the project record): history list, an editable
+  per-item table with contractor-cost/diff-severity indicators
+  (payAppRowContractorCost, updatePayAppDiffs), and Lump Sum percent-of-
+  value entry (see quantity-calc.js's isLumpSumUnit/contractTotalFor
+  handling).
+
+quick-quantity.html
+  A fast, report-independent way to log pay-item quantities without opening
+  the full report editor -- prefills from the most recent report on that
+  date if one exists (prefillFromReport), otherwise creates/attaches a
+  minimal one. Meant for logging quantities on the fly.
+
+required-fields.html
+  Admin picker for which report fields are required/hidden and in what
+  order (project.requiredFields/hiddenFields/fieldOrder, defined in
+  defaults.js's REQUIRED_FIELD_DEFS/ORDERABLE_FIELD_DEFS). Shows a live
+  click-through preview of the printed report with each field's real
+  printed box highlighted (render-report.js's FIELD_HIGHLIGHT_REGIONS is
+  what makes this possible -- coordinates on the actual print grid, not a
+  guess).
+
+---- JS modules (loaded via <script src>, plain globals, no bundler) ----
+
+storage.js
+  The IndexedDB layer -- see DATA MODEL above for the schema. Key exports:
+  openDb/withStore (low-level), getSetting/saveSetting/deleteSetting,
+  getReportLogo/saveReportLogo/clearReportLogo, getUserName/saveUserName,
+  getFavoriteProjectIds/toggleFavoriteProject, getProjectLayout/
+  saveProjectLayout (index.html's hub layout), applyHeaderLogo (renders the
+  header logo on every page, called from common.js's DOMContentLoaded
+  hook), saveReport/deleteReport/getReport/getAllReports/
+  getReportsForProject/getNextReportNo, saveReportDraft/getReportDraft/
+  deleteReportDraft/getAllReportDrafts, saveProject/deleteProject/
+  getProject/getAllProjects, adoptOrphanReportsIfAny (one-time migration
+  for pre-projects-feature data), blobToBase64/base64ToBlob/
+  serializeProjectForExport/deserializeImportedProject (for .report
+  bundles/JSON backups), mergeReportRecord/mergeProjectRecord (the "newer
+  updatedAt wins" merge rule every sync path shares), saveAuditEntry/
+  getAuditEntry/getAllAuditEntries/mergeAuditEntry, getAllCompanyThemes/
+  getCompanyTheme/putCompanyThemeRaw/replaceAllCompanyThemes/
+  saveThemeImageBlob.
+  Notably: saveReport/deleteReport/saveProject/deleteProject each call a
+  handful of *optional* hooks by name only if they're defined --
+  onCompanySyncReportChanged/onCompanySyncProjectChanged (firebase-sync.js),
+  onLocalFolderSyncReportChanged (local-sync.js), logAuditableChange
+  (audit-log.js). storage.js itself never imports or knows those files
+  exist; this is how a page that only loads storage.js (none currently do)
+  would still work standalone, and how the three sync mechanisms stay
+  decoupled from the core data layer.
+
+common.js
+  Small shared helpers loaded on every page: $/$$ (querySelector shorthand),
+  escapeHtml, onEnterSubmit, the shared progress banner (ensureProgressBanner/
+  startProgressBanner/progressStep/finishProgressBanner/
+  progressBannerError/hideProgressBanner/reportCompanyProgress),
+  irLogRow (per-item import log row), ERROR_CODES + userError (appends a
+  lookup code to user-facing errors -- see error-codes.txt), the
+  loginThrottle* family (per-device password-guess speed bump),
+  triggerDownload, convertHeicIfNeeded/compressImage/capImageDimensions
+  (photo pipeline), queryParam, service-worker registration + the "new
+  version ready, reload?" prompt, applyBranding (calls storage.js's
+  applyHeaderLogo on DOMContentLoaded), beforeinstallprompt/appinstalled
+  handling (isAppInstalled), and the site-wide [data-tip] tooltip
+  positioning/tap-to-open logic (positionTip/positionAllTips).
+
+defaults.js
+  Shapes and starting values for reports/projects, and the "what does this
+  report need" rules. makeBlankReport/duplicateReport (new report
+  creation), convergeField/convergeLegacyReportFields/normalizeReport (bring
+  an older-shaped report up to date), makeProjectFromParsedFile/
+  findSimilarProject/applyProjectUpdate (project creation/re-upload),
+  nextEstimateNo, REQUIRED_FIELD_DEFS/ORDERABLE_FIELD_DEFS/
+  REPORT_BUILDER_GROUPS/getFieldOrder/isFieldHidden/
+  getMissingRequiredFields (the required/hidden/ordered-field system
+  required-fields.html and report-editor.html both read), plus small pure
+  helpers used across pages: isNoWorkDayReport/isWeatherDayReport,
+  payItemNeedsMultiple, computeOverrun/overrunLabel, parseStation,
+  computeAreaQty.
+
+theme.js
+  Light/dark theming + accent color derivation (deriveAccentVars,
+  hexToRgb/rgbToHex/rgbToHsl/hslToRgb/adjustLightness/relativeLuminance --
+  a small hand-rolled color-math library), loaded in <head> on every page so
+  the saved theme applies before first paint. Also owns: the global search
+  control (buildSearchControl -- searches every in-scope report by date/
+  person/text/pay item, only built once actually opened), and
+  mountHeaderControls, which injects the same search+sync+gear cluster into
+  every page's header (run on DOMContentLoaded). Exposes window.appTheme,
+  window.appAccent, window.appCompanyTheme as the public API other pages'
+  inline scripts use.
+
+firebase-init.js
+  The only ES module in the app (`<script type="module">`), because the
+  Firebase v10 SDK ships as ES modules only. Initializes the Firebase app/
+  auth/Firestore/Storage, exposes ensureSignedIn() (anonymous auth,
+  memoized), and bridges everything to window.FirebaseCore + a
+  'firebase-core-ready' event so the rest of the app (plain scripts) can
+  use it without a bundler.
+
+firebase-sync.js
+  Company (cloud) sync -- by far the largest file (~2,000 lines). Room
+  lifecycle: createCompanyRoom/joinCompanyRoom/unlockCompanyAdmin/
+  leaveCompanyRoom/syncCompanyRoomNow/changeCompanyPassword/
+  changeCompanyAdminPassword. Permissions: getCompanyPermissions/
+  companyCan/getReportPermissionContext/canEditReportWithContext/
+  updateCompanyPermissions. Custom setups (project-scoped guest logins):
+  listCustomRoles/createCustomRole/deleteCustomRole/
+  getRecoverablePasswords. Logo sync: pushCompanyLogo/pullCompanyLogo.
+  Theme sync: saveCompanyThemes/pullCompanyThemes/fetchThemeAsset. Per-
+  person layout/favorites sync: pushUserLayout/pullUserLayout/
+  onCompanySyncUserLayoutChanged. Bulk pull/push:
+  pullAllCompanyData (full), pullDeltaCompanyData (changed-since-cursor
+  only), pullCompanyDataSmart (picks one), pushAllLocalData. Live hooks
+  called from storage.js: onCompanySyncProjectChanged/
+  onCompanySyncReportChanged (push immediately, with retry, on every
+  save/delete) and onCompanySyncAuditEntry (called from audit-log.js).
+  Also: fetchReportMedia (lazy photo/signature download), autoPullCompanyData
+  + wireAutoPull (background pull on load/tab-focus, throttled), and the
+  admin-password-derived encryption used to store a recoverable copy of the
+  company/custom-setup passwords (hashAdminPassword/verifyAdminPassword/
+  encryptWithAdminPassword/decryptWithAdminPassword/pbkdf2Hash/
+  deriveAdminKey).
+
+local-sync.js
+  Local folder sync via the File System Access API. folderSyncSupported/
+  getOrPickSyncDirectory/getLinkedSyncFolderName/forgetSyncFolder (folder
+  linking), syncProjectToFolder/writeProjectToFolder (full manual sync,
+  writes reports/*.pdf + Quantity_Sheet.xlsx + data/*.json),
+  buildProjectSyncZip (same contents, zipped -- fallback for browsers
+  without the File System Access API, e.g. iOS Safari),
+  onLocalFolderSyncReportChanged (the live per-report hook storage.js
+  calls), syncCurrentProjectToFolderIfLinked (rides along on the header
+  refresh button), and tagEntryDeleted/tagReportFilesDeleted (renames
+  instead of deleting -- nothing synced to a folder is ever actually
+  removed from it). Also lazy-loads html2canvas/jsPDF/render-report.js/
+  pdf-export.js/quantity-sheet-export.js/exceljs on demand via its own
+  lsLoadScript/lsLoadStylesheet, since most pages that can trigger a
+  background sync (report-editor, quick-quantity, reports.html's mass
+  edit) have no other reason to carry that weight.
+
+quantity-sheet-export.js
+  Builds the styled 5-sheet Quantity Sheet workbook (Cover/Totals/By Day/
+  By Estimate/Detail Log) via ExcelJS -- buildQuantitySheetWorkbook is the
+  single entry point, called by quantity-sheet.html's own Download button
+  and by local-sync.js's buildQuantitySheetSyncFile (folder/zip sync).
+  Depends on quantity-calc.js for the actual aggregation math.
+
+setup-share.js
+  Receiving side only of "shared setups" (a link/QR that hands another
+  device a copy of some projects + the company logo). decodeSetupPayload/
+  base64UrlToBytes/gunzip (decode the #setup= URL fragment),
+  applySetupPayload (merge into local projects), describeSetupPayload
+  (preview text). The file's own header comment says the *sending* side
+  (whatever screen built the link/QR) was removed from the app -- this file
+  only needs to read one, and that's exactly what it does.
+
+common.js / defaults.js / theme.js -- see above.
+
+audit-log.js
+  Builds the audit trail. logAuditableChange (called from storage.js after
+  every report/project save or delete) coalesces rapid-fire autosave edits
+  into one entry per ~4s burst (AUDIT_COALESCE_MS, pendingEdits Map) so
+  report-editor.html's autosave doesn't spam the log, while create/delete
+  log immediately. diffReport/diffProject/diffPayItems/
+  diffPayItemCatalog/diffGeneric/diffByLabelMap build the human-readable
+  field-level diff each entry carries. logThemeChanges (called directly
+  from firebase-sync.js's saveCompanyThemes, not through the coalescing
+  path) does the same for the company Theme Builder. writeAuditEntry is
+  the actual write (+ hashAuditEntryContent/verifyAuditEntry, a self-
+  integrity hash so a later hand-edit of an entry can be flagged, though
+  not a deletion). formatAuditLogAsText is what audit-log.html and the
+  Settings Activity tab actually render.
+
+project-file.js
+  Parses/builds the "project data" Excel file (PROJECT INFO / PAY ITEMS /
+  CONTRACTORS / EQUIPMENT ROWS / ESTIMATES sheets) via SheetJS.
+  parseProjectDataFile is the read side (used by project-setup.html and
+  project.html when a project file is uploaded); buildProjectDataWorkbook/
+  downloadProjectDataTemplate/downloadProjectDataFile are the write side
+  (settings.html's "Download Project Data Template" and project-setup.html's
+  "Export"). normalizeDateValue handles the various date formats a
+  hand-typed Excel cell might carry.
+
+quantity-calc.js
+  Pure pay-item aggregation math shared by the Quantity Sheet and both
+  dashboards. aggregatePayItemTotals (sums usage + attaches catalog
+  planned/price/pct), fullPayItemCatalogOverview (same, but includes
+  untouched catalog items too), contractValueSummary, progressOverTime
+  (the trend-chart data), overallPercentComplete, completionBand,
+  effectivePayItemFlatEntries/latestPayAppFlatEntries/
+  estimatePeriodBounds (how a recorded Pay App becomes the new floor
+  everything else builds on), sortPayItems.
+
+dashboard-widgets.js
+  Shared rendering pieces for project.html's dashboard and index.html's
+  Manager Dashboard: ringSvg/ringCardHtml/statCard/dashGridRow (the visual
+  building blocks), animateDashboardFills/fitDashboardValues (count-up
+  animation + text-shrink-to-fit), renderTrendSvg (the hand-rolled SVG
+  progress-over-time line chart, used by both dashboards), unitFunFacts
+  (the "that's about 3x a football field" comparisons), and
+  setupCollapsibleSteps (generic collapsible-card wiring used by several
+  pages).
+
+render-report.js
+  Report -> printed-page DOM rendering, driven entirely by print-layout.json
+  (a JSON description of the original Excel template's grid geometry,
+  styles, and merges). renderReportPages is the entry point -- used by
+  download.html/local-sync.js (feeding html2canvas -> PDF), report-viewer.html
+  and report-editor.html (live/static preview), and required-fields.html
+  (click-target preview). The inverse direction -- parseReportExcelFile/
+  parseDailyWorkReportSheet/extractEmbeddedPhotos -- reads a hand-filled
+  Daily Work Report Excel file back into a report record + its embedded
+  photos, by walking the .xlsx's own OOXML relationships (workbook.xml ->
+  sheet rels -> drawing -> drawing rels -> image bytes), used by
+  project-setup.html's bulk importer and project.html's own upload zone.
+
+pdf-export.js
+  buildPdfBlob: renders each report via render-report.js, rasterizes each
+  page at ~300dpi with html2canvas, and assembles a multi-page PDF with
+  jsPDF. Shared by download.html and local-sync.js's per-report/per-project
+  folder sync -- one PDF-building pipeline, not two.
+
+report-bundle.js
+  The .report file format -- a zip (fflate) wearing a custom extension,
+  same convention as .docx/.kmz. buildReportBundle packages one project +
+  one report (data + real photo/signature files, not base64) into a
+  shareable file; tryParseReportBundle reads one back, used by project.html's
+  "Import Reports" upload zone to accept .report files alongside Excel
+  files. See DEAD CODE below -- the build/export side (buildReportBundle,
+  reportBundleFilename) currently has no caller anywhere in the app; only
+  the read side is used.
+
+sync-export.js
+  See DEAD CODE below. Builds a "master spreadsheet" summary workbook
+  (one row per report) that its own header comment says is used by a
+  "Sync Selected" button on reports.html -- no such button, or any other
+  caller, currently exists. The whole file is unreferenced.
+
+---- Vendored libraries (lib/) ----
+
+xlsx.min.js (SheetJS 0.20.3) -- reads/writes plain .xlsx (project data
+  files, imported Daily Work Report archives, quick raw exports). Used by
+  project-file.js, render-report.js's import path, sync-export.js (dead).
+exceljs.min.js -- writes *styled* .xlsx (the Quantity Sheet, with a brand-
+  colored header row, zebra striping, borders). Used by
+  quantity-sheet-export.js only. Loaded eagerly on quantity-sheet.html,
+  loaded on demand elsewhere via local-sync.js's lsLoadScript.
+jspdf.umd.min.js -- assembles the final PDF from rasterized page images.
+  Used by pdf-export.js.
+html2canvas.min.js -- rasterizes a rendered report DOM into a bitmap for
+  the PDF pipeline and for reports.html's thumbnails. Used by pdf-export.js,
+  local-sync.js, reports.html.
+fflate.min.js -- zip/gzip. Used by report-bundle.js (.report files),
+  local-sync.js (zip fallback for folder sync), render-report.js (reading
+  the .xlsx-as-zip to extract embedded photos), setup-share.js (gzip
+  decode of the #setup= fragment).
+heic2any.min.js -- converts iPhone HEIC/HEIF photos to JPEG so they can be
+  decoded outside Safari. Used by common.js's convertHeicIfNeeded, loaded
+  on every page that can accept a photo upload (index.html, report-editor,
+  settings.html).
+
+---- Other files ----
+
+print-layout.json -- machine-generated description of the original Excel
+  report template's grid (column widths, row heights, cell styles,
+  merges, print area) for both sheets (Daily Work Report, Photo Log).
+  render-report.js is the only reader (loadPrintLayout).
+error-codes.txt -- the human-readable table behind common.js's
+  ERROR_CODES/userError -- a short made-up (Transformers) name for every
+  user-facing failure point, referenced in the error message itself so a
+  bug report can be matched straight to the code path.
+patch-notes.txt -- plain-text changelog, newest first. Not read by the app;
+  just a project history doc, same style as this file.
+manifest.json -- PWA manifest (name, start_url = login.html, icons, theme
+  color). Read by the browser, not by app code.
+style.css -- the whole app's stylesheet (2,500+ lines) -- every page links
+  it.
+print-sheet.css -- the small stylesheet specifically for the .print-grid/
+  .sheet-page rendering render-report.js produces (the print-pixel-perfect
+  layout), loaded eagerly on download.html/report-viewer.html/
+  report-editor.html/required-fields.html and lazily elsewhere via
+  local-sync.js's lsLoadStylesheet.
+
+
+KEY WORKFLOWS END TO END
+
+Creating and saving a report
+  1. reports.html (or project.html) links to
+     report-editor.html?project=<id>&report=<new-or-existing-id>.
+  2. report-editor.html's init() calls defaults.js's makeBlankReport()
+     (new) or storage.js's getReport()/getReportDraft() (existing/
+     resuming an in-progress edit), then normalizeReport() to bring an
+     older-shaped record up to date.
+  3. Every field edit calls setDirty() -> scheduleSave() (debounced
+     ~400ms) -> storage.js's saveReportDraft() (NOT saveReport() yet --
+     drafts are separate from committed reports).
+  4. Clicking "Generate Report" (gated by defaults.js's
+     getMissingRequiredFields()) calls commitSave() -> storage.js's
+     saveReport(report). saveReport() itself:
+       a. stamps updatedAt/createdBy/lastEditedBy,
+       b. writes to IndexedDB (putReportRaw),
+       c. fires (not awaited) onCompanySyncReportChanged() if
+          firebase-sync.js is loaded and a company is joined -- pushes to
+          Firestore/Storage with retry, sets pendingPush on failure,
+       d. fires (not awaited) onLocalFolderSyncReportChanged() if
+          local-sync.js is loaded and this project is linked to a folder
+          -- lazy-loads html2canvas/jsPDF/render-report.js/pdf-export.js,
+          rebuilds this report's PDF + JSON + Quantity_Sheet.xlsx in the
+          linked folder,
+       e. fires (not awaited) logAuditableChange() if audit-log.js is
+          loaded -- coalesces into one audit entry ~4s after the last
+          edit in this burst, which itself pushes to the company via
+          onCompanySyncAuditEntry() if joined.
+  5. The draft record is deleted (deleteReportDraft) once committed.
+
+Exporting a Quantity Sheet
+  1. quantity-sheet.html's Download button (or local-sync.js's automatic
+     per-save Quantity_Sheet.xlsx rebuild) calls
+     quantity-sheet-export.js's buildQuantitySheetWorkbook(reports,
+     project, room, options).
+  2. That function calls quantity-calc.js's aggregatePayItemTotals()/
+     fullPayItemCatalogOverview() to sum every pay-item entry across the
+     selected reports and attach catalog planned-qty/unit-price/percent-
+     complete, then builds 5 ExcelJS sheets (Cover/Totals/By Day/By
+     Estimate/Detail Log) styled with a brand header row and zebra
+     striping.
+  3. quantity-sheet.html's caller writes the resulting workbook buffer to
+     a downloaded .xlsx via triggerDownload() (common.js). local-sync.js's
+     caller instead writes the same Blob straight into the linked folder
+     via writeFileToDir().
+
+Syncing a project to a company
+  1. Join: login.html or settings.html calls firebase-sync.js's
+     joinCompanyRoom(password) -- hashes the password (hashText), looks up
+     companies/{hash} in Firestore, saves the room's code/name/admin flag/
+     permissions locally (storage.js's saveSetting), then calls
+     pullAllCompanyData() (every project/report/audit entry, photos
+     deferred), pullCompanyThemes(), pullUserLayout(), and kicks off
+     pullCompanyMediaInBackground() (logo + project background photos,
+     not awaited).
+  2. Ongoing: every local saveReport()/saveProject()/deleteReport()/
+     deleteProject() call fires the onCompanySync*Changed hooks above in
+     real time (fire-and-forget from storage.js, retried 3x inside
+     firebase-sync.js).
+  3. wireAutoPull() (called once per page, from firebase-sync.js) re-pulls
+     in the background on page load and every tab-focus, throttled to
+     once per 3 minutes, using pullCompanyDataSmart() -- a cheap delta
+     pull (only records changed since the last cursor, via each record's
+     updatedAt) that falls back to a full pull once a day or if this
+     device has no cursor yet.
+  4. Manual "Sync Now" (the header sync button, theme.js's
+     mountHeaderControls) calls syncCompanyRoomNow() -- pulls (smart),
+     then pushes only this device's pendingPush-flagged records
+     (pushAllLocalData with dirtyOnly:true) -- live pushes already cover
+     the normal case, so this button exists to catch what a live push
+     failed to land.
+
+Photo upload with HEIC conversion and markup
+  1. report-editor.html's photo picker calls common.js's
+     convertHeicIfNeeded(file) first (HEIC/HEIF -> JPEG via the
+     heic2any library, only if the file is actually HEIC), then
+     compressImage(file) (downscale + re-encode to JPEG, ~150-400KB
+     target).
+  2. The compressed Blob is stored directly on report.photos[slot].
+  3. Opening the annotator (openAnnotator) draws the photo onto a
+     <canvas>; the pa* functions (paPointerDown/Move/Up, paDrawArrow,
+     paPushUndo, paSetTool/paSetColor) implement freehand draw/arrow/undo
+     on top of it. Closing the annotator flattens the canvas back into a
+     new Blob that replaces the original in report.photos[slot] -- the
+     original, unmarked photo is not separately retained.
+  4. Saving the report (see "Creating and saving a report" above) carries
+     that Blob through IndexedDB and, if applicable, out to the company
+     (Firebase Storage, per-slot, at companies/{code}/reports/{id}/
+     photo-{i}) and/or the linked local folder
+     (data/reports/R{no}_{date}/photos/photo{N}.jpg).
+  5. A device that pulled a report from the company but hasn't downloaded
+     its photos yet (photosFetched[i] === false) shows it with that slot
+     null until report-editor.html or download.html calls
+     firebase-sync.js's fetchReportMedia() on open, which lazily
+     downloads just the missing slots.
+
+The audit log
+  1. Every report/project save or delete calls audit-log.js's
+     logAuditableChange() via storage.js's optional-hook pattern (see
+     "Creating and saving a report" step 4e above). Edits to the same
+     record within a ~4s window are coalesced into one entry
+     (pendingEdits Map); create/delete log immediately.
+  2. logAuditableChange() diffs the before/after record (diffReport/
+     diffProject, with special identity-based diffing for pay items and
+     the pay item catalog so reordering doesn't look like every row
+     changed) and, if anything actually changed, calls writeAuditEntry(),
+     which stamps a self-integrity hash (hashAuditEntryContent) and saves
+     to the auditLog IndexedDB store.
+  3. If a company is joined, writeAuditEntry() also fires
+     onCompanySyncAuditEntry() (firebase-sync.js), a plain idempotent push
+     to companies/{code}/auditLog/{id} -- audit entries are immutable, so
+     there's no merge-by-updatedAt logic needed, just "add if not already
+     local" (storage.js's mergeAuditEntry), which both pullAllCompanyData
+     and pullDeltaCompanyData use on pull.
+  4. audit-log.html (and Settings' Activity tab) read every local entry
+     (storage.js's getAllAuditEntries), filter by project, and render them
+     through audit-log.js's formatAuditLogAsText() -- the same function
+     that also produces the downloadable .txt export, so what's on screen
+     is exactly what you'd get in the file.
+
+Local folder sync (a project kept as real files on disk)
+  1. project.html's "Sync to Folder" button calls local-sync.js's
+     syncProjectToFolder() -> getOrPickSyncDirectory() (prompts via
+     showDirectoryPicker() the first time, silently reuses the stored
+     FileSystemHandle after, re-requesting permission if it lapsed) ->
+     writeProjectToFolder(), which calls collectProjectSyncFiles()
+     (builds every report's PDF via pdf-export.js's buildPdfBlob, the
+     Quantity_Sheet.xlsx via quantity-sheet-export.js, and raw JSON/photos)
+     and writes them all via writeFileToDir().
+  2. From then on, every saveReport()/deleteReport() on that project fires
+     onLocalFolderSyncReportChanged() (storage.js's optional hook), which
+     writes/updates just that one report's files
+     (syncSingleReportToFolder) or tags its old files DELETED_-prefixed
+     (tagSingleReportDeleted) without ever actually removing anything
+     from the folder, then rebuilds Quantity_Sheet.xlsx
+     (refreshQuantitySheetInFolder).
+  3. Browsers without the File System Access API (iOS Safari) fall back
+     to buildProjectSyncZip() -- the identical file set, packed as one
+     .zip via fflate for the user to save by hand.
+
+
+DEAD CODE / THINGS WORTH A LOOK
+
+1. sync-export.js is entirely unused -- the whole file is dead.
+   It is NOT in service-worker.js's ASSETS precache list (unlike every
+   other JS file in the app), and grepping confirmed why: no HTML page has
+   a <script src="sync-export.js"> tag, and no dynamic script-loading code
+   anywhere (local-sync.js's lsLoadScript, or any other) ever loads it
+   either. Every one of its exported functions --
+   pathSafe/projectFolderName/masterSpreadsheetFilename/summarizePayItems/
+   summarizeContractors/reportToMasterRow/buildMasterWorkbook -- was
+   grepped as a whole word across every .html and .js file in the repo;
+   the only matches are their own definitions inside sync-export.js
+   itself. Its header comment claims it's "used by 'Sync Selected' on the
+   Reports page" -- no such button exists in reports.html today (grepped
+   for "Sync Selected" and for every one of this file's function names
+   there; zero hits). local-sync.js's Quantity_Sheet.xlsx-only folder sync
+   (built via quantity-sheet-export.js) appears to be what superseded it:
+   that's the only "project summary spreadsheet" folder sync produces
+   today, and it covers the same "handful of columns, one row per report"
+   intent this file's header comment describes, just via a different
+   (styled, ExcelJS-based) pipeline instead of this file's plain SheetJS
+   one.
+   Conclusion for the specific lead this doc was asked to chase: (a) the
+   file exists but is not loaded anywhere, by any means; (b) it is fully
+   dead/orphaned code; (c) since it's never loaded at all, its absence
+   from the service worker's precache list is moot -- it wouldn't matter
+   whether it was in that list or not, because nothing on any page ever
+   requests it. This is different from exceljs.min.js (also outside the
+   static <script src> list on every page): that file IS actually used,
+   just loaded on demand via local-sync.js's lsLoadScript rather than
+   eagerly on every page, and its omission from ASSETS is a real (if
+   minor) gap -- see item 2 below.
+
+2. lib/exceljs.min.js and print-sheet.css are dynamically loaded (via
+   local-sync.js's lsLoadScript/lsLoadStylesheet) on pages that don't
+   statically <script src> them, but BOTH already are covered because
+   they're each statically loaded by at least one other page that IS in
+   the precache list (exceljs.min.js by quantity-sheet.html,
+   print-sheet.css by download.html/report-viewer.html/
+   report-editor.html/required-fields.html), and both are already present
+   in service-worker.js's ASSETS array. So this isn't actually a gap in
+   practice -- flagged here only because it's the one part of the
+   "sync-export.js lead" that could plausibly have generalized into a
+   real bug, and it's worth knowing that local-sync.js's whole "lazy-load
+   what a background sync needs" design (html2canvas, jsPDF,
+   render-report.js, pdf-export.js, quantity-sheet-export.js, exceljs,
+   print-sheet.css) depends on every one of those also being reachable
+   from some page's static script tags for offline use to actually work
+   -- if a future change ever made one of those lazy-loaded-only assets
+   NOT also statically loaded somewhere, it would silently break local
+   folder sync the first time it ran fully offline (the on-demand
+   <script>/<link> injection would 404 against the service worker's
+   cache). Worth a mental note for future changes to that lazy-load list,
+   not a bug today.
+
+3. report-bundle.js's export/build side is unused -- only the import side
+   is wired up. buildReportBundle() and reportBundleFilename() were
+   grepped as whole words across every .html/.js file in the repo; the
+   only matches are their own definitions in report-bundle.js. Only
+   tryParseReportBundle() (the read/import direction) has a real caller,
+   in project.html's "Import Reports" upload zone. The file's own header
+   comment describes .report bundles as "meant to be handed to the OS
+   share sheet... and later opened back into the app via Settings >
+   Import" -- but there is currently no UI path anywhere in the app that
+   actually calls buildReportBundle() to create one of these files in the
+   first place; a user can only ever receive/import a .report file someone
+   else (or an older version of this app) produced. This is the same
+   shape of finding as setup-share.js, which already documents its own
+   send-side removal explicitly in its header comment -- report-bundle.js
+   looks like the same situation but without that comment being updated
+   to say so. Worth either restoring a "Share this report" button
+   somewhere (project.html or reports.html would be the natural spot,
+   next to the existing Sync/Download actions) or removing
+   buildReportBundle/reportBundleFilename and updating the header comment
+   to match reality, the way setup-share.js's already does.
+
+4. company-management.html is a 19-line redirect-only stub
+   (location.replace('settings.html?tab=company')) -- not dead exactly
+   (it's still reachable and still in service-worker.js's precache list,
+   and its own comment explains it's kept intentionally for old bookmarks/
+   in-app copy), but worth flagging as the one HTML page in the app that
+   has no real UI of its own anymore. If nothing in the app still links to
+   "Company Management" by name/href anywhere (a live grep at the time of
+   writing found company-management.html referenced from settings.html
+   and a few other pages' inline copy/links), this redirect could
+   eventually be retired the same way setup-share.js's send side already
+   was -- but unlike the other findings above, this one is clearly
+   intentional today, not an oversight.
+
+5. Every other top-level function across all 18 standalone JS modules
+   (roughly 340 total function declarations) was checked the same way and
+   has at least one real caller elsewhere in the app (an HTML inline
+   script, another JS module, or a template-literal-generated onclick=""
+   string) -- nothing else turned up as fully orphaned. A number of
+   small helpers (e.g. render-report.js's rrColLetterToIndex,
+   audit-log.js's fmtLeaf, theme.js's hexToRgb) are used only once, inside
+   their own file -- that's normal, intentional private-helper structure,
+   not dead code, and is called out here only so it isn't mistaken for a
+   dead-code finding by a future pass using the same grep-count method
+   this document used.
+
+6. All 15 HTML pages are reachable -- none is a fully orphaned page with
+   zero inbound links/redirects from the rest of the app (checked by
+   grepping each filename across every other .html/.js file). No stale/
+   unlinked page was found.
