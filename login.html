@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://www.gstatic.com https://*.googleapis.com https://api.open-meteo.com https://geocoding-api.open-meteo.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';">
 <title>Daily Work Reports</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="manifest" href="manifest.json">
@@ -73,6 +74,13 @@ $('#btn-continue').addEventListener('click', async () => {
     return;
   }
 
+  const wait = password ? loginThrottleRemaining('join-company') : 0;
+  if (wait > 0) {
+    errorEl.textContent = `Too many attempts. Try again in ${wait}s.`;
+    errorEl.hidden = false;
+    return;
+  }
+
   btn.disabled = true;
   startProgressBanner();
   progressStep('saving', password ? 'Signing you in' : 'Saving your name');
@@ -80,11 +88,13 @@ $('#btn-continue').addEventListener('click', async () => {
     await saveUserName(name);
     if (password) {
       await joinCompanyRoom(password, reportCompanyProgress);
+      loginThrottleReset('join-company');
     }
     finishProgressBanner("You're all set!");
     location.href = 'index.html';
   } catch (err) {
     console.error(err);
+    if (password) loginThrottleRecordFailure('join-company');
     const msg = password
       ? "Couldn't join with that company password: " + err.message + ' Your name is saved, though -- clear the password and continue if you want to join later instead.'
       : "Couldn't continue: " + err.message;

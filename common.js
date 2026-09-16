@@ -241,6 +241,52 @@ function userError(message, key) {
   return `${message}\n\nReference code: ${code} (see error-codes.txt if you need to report this)`;
 }
 
+// Slows down repeated wrong-password guesses against a company/admin
+// password screen. This is a per-device speed bump, not real protection --
+// anyone in devtools can call the underlying function directly and skip it
+// -- but it raises the cost of someone sitting at the login/unlock screen
+// itself trying passwords by hand. `key` scopes the counter to a specific
+// screen+target (e.g. 'admin-unlock:ABC123') so guessing one company's
+// admin password doesn't lock out a different company on the same device.
+const LOGIN_THROTTLE_PREFIX = 'dwr_throttle_';
+const LOGIN_THROTTLE_BASE_MS = 1500;
+const LOGIN_THROTTLE_MAX_MS = 60000;
+const LOGIN_THROTTLE_FREE_ATTEMPTS = 2;
+
+function loginThrottleState(key) {
+  try {
+    return JSON.parse(localStorage.getItem(LOGIN_THROTTLE_PREFIX + key) || 'null') || { fails: 0, until: 0 };
+  } catch {
+    return { fails: 0, until: 0 };
+  }
+}
+function saveLoginThrottleState(key, state) {
+  try { localStorage.setItem(LOGIN_THROTTLE_PREFIX + key, JSON.stringify(state)); } catch {}
+}
+
+// Returns seconds still remaining on an active lockout, or 0 if a guess can
+// proceed right now.
+function loginThrottleRemaining(key) {
+  const { until } = loginThrottleState(key);
+  return Math.max(0, Math.ceil((until - Date.now()) / 1000));
+}
+// Call after a failed password attempt. Doubles the lockout each fail past
+// the first couple of free tries, capped at a minute.
+function loginThrottleRecordFailure(key) {
+  const state = loginThrottleState(key);
+  state.fails += 1;
+  const extraFails = Math.max(0, state.fails - LOGIN_THROTTLE_FREE_ATTEMPTS);
+  if (extraFails > 0) {
+    const delay = Math.min(LOGIN_THROTTLE_BASE_MS * 2 ** (extraFails - 1), LOGIN_THROTTLE_MAX_MS);
+    state.until = Date.now() + delay;
+  }
+  saveLoginThrottleState(key, state);
+}
+// Call after a successful attempt to clear the counter for that screen.
+function loginThrottleReset(key) {
+  saveLoginThrottleState(key, { fails: 0, until: 0 });
+}
+
 function triggerDownload(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://www.gstatic.com https://*.googleapis.com https://api.open-meteo.com https://geocoding-api.open-meteo.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';">
 <title>Audit Log</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="manifest" href="manifest.json">
@@ -60,6 +61,7 @@
       <h2>Activity</h2>
     </div>
     <div class="step-body">
+      <p class="warn" id="al-tamper-warning" hidden style="margin-top:0;"></p>
       <pre class="al-log" id="al-log-text"></pre>
       <button type="button" class="btn-primary" id="btn-download-log" style="margin-top:1rem;">Download as .txt</button>
     </div>
@@ -85,6 +87,14 @@ async function init() {
   $('#al-company-sub').textContent = `Admin — ${room.name || 'Audit Log'}`;
 
   allEntries = (await getAllAuditEntries()).filter((e) => auditEntryInCompany(e, room));
+  await Promise.all(allEntries.map(async (e) => { e.tampered = (await verifyAuditEntry(e)) === false; }));
+  const tamperedCount = allEntries.filter((e) => e.tampered).length;
+  $('#al-tamper-warning').hidden = tamperedCount === 0;
+  if (tamperedCount > 0) {
+    $('#al-tamper-warning').textContent =
+      `${tamperedCount} ${tamperedCount === 1 ? 'entry doesn\'t' : 'entries don\'t'} match what was originally recorded -- ` +
+      `marked with [!] below. That can mean someone edited the underlying data directly, not through the app.`;
+  }
 
   // A report entry's label already carries its project name ("Report #14
   // — PR#439 ..."); a project entry's label IS the project name. Either way,
