@@ -224,8 +224,17 @@ async function collectProjectSyncFiles(project, reports, onProgress, includePdfs
 // Writes every file straight into the chosen folder, prompting for it (or
 // reusing the last one, if still permitted) on the way in.
 async function syncProjectToFolder(project, onProgress) {
-  const reports = await getReportsForProject(project.id);
   const dirHandle = await getOrPickSyncDirectory(project.id);
+  return writeProjectToFolder(project, dirHandle, onProgress);
+}
+
+// The actual write, shared by syncProjectToFolder above (prompts for a
+// folder if needed -- project.html's own Sync button, a real user gesture)
+// and syncCurrentProjectToFolderIfLinked below (never prompts -- ridealong
+// on the header refresh button, where popping a folder picker out of
+// nowhere on what looks like a plain data refresh would be a bad surprise).
+async function writeProjectToFolder(project, dirHandle, onProgress) {
+  const reports = await getReportsForProject(project.id);
   const files = await collectProjectSyncFiles(project, reports, onProgress);
   for (const [path, blob] of files) {
     await writeFileToDir(dirHandle, path, blob);
@@ -489,6 +498,11 @@ function folderSyncBannerAvailable() {
   return !el || el.hidden || pbCurrentStepKey === 'folder-sync';
 }
 
+// `task` receives an onProgress(done, total) it can call as often as it
+// likes -- a single-report sync just never calls it, a full project sync
+// (see the header refresh button in theme.js) turns it into a real "X of Y"
+// fill instead of an indeterminate shimmer, the same as any other
+// multi-item job on this banner.
 async function runFolderSyncWithBanner(activeLabel, doneLabel, task) {
   const showBanner = folderSyncBannerAvailable();
   if (showBanner) {
@@ -497,7 +511,9 @@ async function runFolderSyncWithBanner(activeLabel, doneLabel, task) {
     progressStep('folder-sync', activeLabel);
   }
   try {
-    await task();
+    await task((done, total) => {
+      if (showBanner && total) progressStep('folder-sync', activeLabel, `${done} of ${total}`);
+    });
   } finally {
     if (showBanner) {
       activeFolderSyncCount = Math.max(0, activeFolderSyncCount - 1);
@@ -524,4 +540,24 @@ async function onLocalFolderSyncReportChanged(report, deleted) {
     await runFolderSyncWithBanner('Saving to folder', 'Synced to folder', () =>
       syncSingleReportToFolder(project, report, dirHandle));
   }
+}
+
+// Used by the header refresh button (theme.js) -- when the page currently
+// in view is scoped to a project, a full resync of it rides along with
+// the company data pull, so anything that refresh just brought down (a
+// teammate's new report, say) makes it out to the linked folder too,
+// instead of waiting on this project's next individual save. Silent no-op
+// for everything that doesn't apply: no project in view on this page, that
+// project was never linked to a folder, or -- same as the per-report
+// auto-sync -- permission has lapsed and needs a real click on Sync to
+// Folder to renew (never prompts on its own; see writeProjectToFolder's
+// comment for why).
+async function syncCurrentProjectToFolderIfLinked(projectId) {
+  if (!projectId) return;
+  const dirHandle = await getSyncDirectoryIfPermitted(projectId);
+  if (!dirHandle) return;
+  const project = await getProject(projectId);
+  if (!project) return;
+  await runFolderSyncWithBanner('Syncing to folder', 'Synced to folder', (onProgress) =>
+    writeProjectToFolder(project, dirHandle, onProgress));
 }

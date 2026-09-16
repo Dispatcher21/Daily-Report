@@ -421,6 +421,20 @@ function readAccent() {
             // that doesn't just shows the fresh data next time it loads,
             // same as it would have before this button existed.
             window.dispatchEvent(new CustomEvent('company-data-pulled'));
+
+            // If the page currently open is scoped to a project (project.html's
+            // ?id=, everywhere else's ?project=) and that project is linked to
+            // a local folder, ride a full folder resync along with the
+            // company pull -- local-sync.js isn't loaded on every page, and
+            // syncCurrentProjectToFolderIfLinked itself no-ops when nothing's
+            // linked, so this is a harmless no-op almost everywhere it runs.
+            // Its own failure doesn't turn a successful company sync into an
+            // error -- same reasoning as the per-report auto-sync never
+            // surfacing a folder problem beyond the cloud icon.
+            if (typeof syncCurrentProjectToFolderIfLinked === 'function' && typeof queryParam === 'function') {
+              const projectId = queryParam('id') || queryParam('project');
+              await syncCurrentProjectToFolderIfLinked(projectId).catch((err) => console.error('header folder sync:', err));
+            }
           } catch (err) {
             console.error('header sync:', err);
             alert(
