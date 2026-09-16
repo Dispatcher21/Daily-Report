@@ -3,6 +3,15 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.013 -- 2026-09-16
+  - Company/admin/custom-setup passwords now need at least 8 characters.
+  - The company password, join, and admin unlock screens now slow down
+    automatically after a few wrong tries in a row, instead of allowing
+    unlimited guesses back-to-back.
+  - The Audit Log now flags an entry if its content doesn't match what was
+    originally recorded, as a heads-up that it may have been altered
+    outside the app.
+
 0.012 -- 2026-09-16
   - Updated the Excel library (SheetJS) to close a known security issue in
     the older version. Excel import/export files you use are unaffected --

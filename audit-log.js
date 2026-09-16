@@ -316,10 +316,40 @@ function projectEntityLabel(project) {
   return project.name || (project.meta && project.meta.projectNo) || 'Project';
 }
 
+// Ties an entry's hash to its own content only (id, timestamp, who/what/
+// changed) -- not to any other entry -- so it can be checked in isolation.
+// That's a deliberate tradeoff: this app's audit log is written
+// independently by whichever device is in someone's hand at the time and
+// merged later (see mergeAuditEntry in storage.js), often across devices
+// that haven't synced with each other yet. A single running chain across
+// all entries would treat that completely normal situation as "tampered"
+// every time two people worked at once. A self-hash instead catches the
+// more realistic risk -- someone going back and editing what an existing
+// entry says happened -- without crying wolf over ordinary concurrent use.
+// It can't detect an entry being deleted outright; that would need a
+// separate, server-enforced ledger (see Firestore security rules).
+async function hashAuditEntryContent(entry) {
+  const payload = JSON.stringify({
+    id: entry.id, timestamp: entry.timestamp, userName: entry.userName,
+    action: entry.action, entityType: entry.entityType, entityId: entry.entityId,
+    entityLabel: entry.entityLabel, changes: entry.changes || [],
+  });
+  return hashText(payload);
+}
+
+// null = nothing to check (an entry written before this feature existed --
+// not a red flag, just unverifiable). true/false = whether the entry's
+// current content still matches what was hashed when it was written.
+async function verifyAuditEntry(entry) {
+  if (!entry.hash) return null;
+  return (await hashAuditEntryContent(entry)) === entry.hash;
+}
+
 async function writeAuditEntry(entityType, entityId, entityLabel, action, changes) {
   const userName = (await getUserName()) || 'Unknown User';
   const room = typeof getCompanyRoom === 'function' ? await getCompanyRoom() : null;
   const entry = { id: crypto.randomUUID(), timestamp: Date.now(), userName, action, entityType, entityId, entityLabel, changes: changes || [], companyCode: room ? room.code : null };
+  entry.hash = await hashAuditEntryContent(entry);
   await saveAuditEntry(entry);
   if (typeof onCompanySyncAuditEntry === 'function') {
     onCompanySyncAuditEntry(entry).catch((err) => console.error('audit sync:', err));
@@ -394,7 +424,8 @@ function formatAuditLogAsText(entries) {
   return entries
     .map((e) => {
       const verb = AUDIT_ACTION_VERBS[e.action] || e.action;
-      const header = `${fmtEntryTimestamp(e.timestamp)}  ${e.userName}  ${verb} ${e.entityLabel}`;
+      const flag = e.tampered ? '  [!] DOES NOT MATCH ITS ORIGINAL RECORD -- may have been edited after the fact' : '';
+      const header = `${fmtEntryTimestamp(e.timestamp)}  ${e.userName}  ${verb} ${e.entityLabel}${flag}`;
       const lines = (e.changes || []).map((c) => `  ${c.label}: ${c.from} → ${c.to}`);
       return [header, ...lines].join('\n');
     })

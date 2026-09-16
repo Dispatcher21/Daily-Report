@@ -735,7 +735,7 @@
     <div class="err" id="company-error" hidden></div>
   </div>
 
-  <a class="app-version" href="patch-notes.txt" target="_blank" rel="noopener">v0.012</a>
+  <a class="app-version" href="patch-notes.txt" target="_blank" rel="noopener">v0.013</a>
 
 </main>
 
@@ -1023,6 +1023,16 @@ function companyError(text) {
 function cmStatus(text) { companyStatus(text); }
 function cmError(text) { companyError(text); }
 
+// Anyone who knows a company/admin/custom-setup password can sync or manage
+// company data from any device, so a short or blank one is a real risk, not
+// just a nuisance. Length alone (no required symbols/mixed case) keeps this
+// simple for a crew that's typing these on a phone in the field.
+const MIN_PASSWORD_LENGTH = 8;
+function passwordTooShort(pw) {
+  return !pw || pw.length < MIN_PASSWORD_LENGTH;
+}
+const PASSWORD_TOO_SHORT_MSG = `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`;
+
 wirePencil('#cc-logo-pencil', '#cc-logo-controls');
 wirePencil('#cm-logo-pencil', '#cm-logo-controls');
 
@@ -1037,7 +1047,17 @@ async function requireAdminPassword(promptText) {
   if (cachedAdminPassword) return cachedAdminPassword;
   const pw = prompt(promptText || 'Enter the admin password to continue:');
   if (!pw) throw new Error('Admin password required.');
-  await unlockCompanyAdmin(pw);
+  const room = await getCompanyRoom();
+  const throttleKey = `admin-unlock:${room ? room.code : ''}`;
+  const wait = loginThrottleRemaining(throttleKey);
+  if (wait > 0) throw new Error(`Too many attempts. Try again in ${wait}s.`);
+  try {
+    await unlockCompanyAdmin(pw);
+  } catch (err) {
+    loginThrottleRecordFailure(throttleKey);
+    throw err;
+  }
+  loginThrottleReset(throttleKey);
   cachedAdminPassword = pw;
   return pw;
 }
@@ -1164,6 +1184,8 @@ $('#btn-create-company').addEventListener('click', async () => {
   if (!password || password !== passwordConfirm) return companyError('Company password and confirmation must match.');
   if (!adminPassword || adminPassword !== adminPasswordConfirm) return companyError('Admin password and confirmation must match.');
   if (adminPassword === password) return companyError('Admin password must be different from the company password.');
+  if (passwordTooShort(password)) return companyError('Company ' + PASSWORD_TOO_SHORT_MSG.toLowerCase());
+  if (passwordTooShort(adminPassword)) return companyError('Admin ' + PASSWORD_TOO_SHORT_MSG.toLowerCase());
 
   setCcFormDisabled(true);
   startProgressBanner();
@@ -1202,17 +1224,21 @@ $('#btn-join-company').addEventListener('click', async () => {
   const btn = $('#btn-join-company');
   companyError('');
   const password = $('#jc-password').value;
+  const wait = loginThrottleRemaining('join-company');
+  if (wait > 0) return companyError(`Too many attempts. Try again in ${wait}s.`);
   btn.disabled = true;
   btn.textContent = 'Joining...';
   startProgressBanner();
   try {
     const result = await joinCompanyRoom(password, reportCompanyProgress);
+    loginThrottleReset('join-company');
     $('#jc-password').value = '';
     await refreshCompanySection();
     applyHeaderLogo();
     finishProgressBanner(`You're connected! Got ${result.projectsPulled} project(s) and ${result.reportsPulled} report(s).`);
   } catch (err) {
     console.error(err);
+    loginThrottleRecordFailure('join-company');
     progressBannerError(userError("Couldn't join with that company password: " + err.message, 'JOIN_COMPANY'));
   } finally {
     btn.disabled = false;
@@ -1226,13 +1252,19 @@ $('#btn-unlock-admin').addEventListener('click', async () => {
   const btn = $('#btn-unlock-admin');
   companyError('');
   const password = $('#ua-password').value;
+  const room = await getCompanyRoom();
+  const throttleKey = `admin-unlock:${room ? room.code : ''}`;
+  const wait = loginThrottleRemaining(throttleKey);
+  if (wait > 0) return companyError(`Too many attempts. Try again in ${wait}s.`);
   btn.disabled = true;
   try {
     await unlockCompanyAdmin(password);
+    loginThrottleReset(throttleKey);
     $('#ua-password').value = '';
     await refreshCompanySection();
     companyStatus('Admin access unlocked.');
   } catch (err) {
+    loginThrottleRecordFailure(throttleKey);
     companyError(userError(err.message, 'UNLOCK_ADMIN'));
   } finally {
     btn.disabled = false;
@@ -2066,6 +2098,7 @@ $('#btn-create-setup').addEventListener('click', async () => {
   const confirmPw = $('#cs-password-confirm').value;
   if (!name) return cmError('Name this setup.');
   if (!pw || pw !== confirmPw) return cmError('Setup password and confirmation must match.');
+  if (passwordTooShort(pw)) return cmError('Setup ' + PASSWORD_TOO_SHORT_MSG.toLowerCase());
 
   const allProjects = $('#cs-all-projects').checked;
   const projectIds = allProjects ? null : $$('.cs-project-check:checked').map((cb) => cb.value);
@@ -2146,6 +2179,7 @@ $('#btn-change-admin-password').addEventListener('click', async () => {
   const pw = $('#cm-admin-password').value;
   const confirmPw = $('#cm-admin-password-confirm').value;
   if (!pw || pw !== confirmPw) return cmError('New admin password and confirmation must match.');
+  if (passwordTooShort(pw)) return cmError('New admin ' + PASSWORD_TOO_SHORT_MSG.toLowerCase());
 
   btn.disabled = true;
   try {
@@ -2169,6 +2203,7 @@ $('#btn-change-company-password').addEventListener('click', async () => {
   const pw = $('#cm-company-password').value;
   const confirmPw = $('#cm-company-password-confirm').value;
   if (!pw || pw !== confirmPw) return cmError('New company password and confirmation must match.');
+  if (passwordTooShort(pw)) return cmError('New company ' + PASSWORD_TOO_SHORT_MSG.toLowerCase());
 
   if (!confirm(
     'Change the company password?\n\n' +
