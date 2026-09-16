@@ -1398,11 +1398,19 @@ input[type="date"] { min-width: 0; }
   color: var(--warn); margin-top: -0.35rem; display: flex; flex-direction: column; gap: 0.3rem;
 }
 
-.no-work-day-bar {
+/* One compact row for both buttons (used to be two separate dashed boxes,
+   each with a button plus a permanently-visible paragraph of explanation --
+   the explanation now lives in the adjoining .info-tip instead, so this
+   takes a fraction of the vertical space at the top of the report before
+   anyone's even reached the form). Wraps on narrow screens rather than
+   overflowing. */
+.blank-day-bar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem;
   background: var(--surface); border: 1.5px dashed var(--border);
-  border-radius: var(--radius); padding: 0.85rem 1rem; margin-bottom: 1rem;
+  border-radius: var(--radius); padding: 0.6rem 0.75rem; margin-bottom: 1rem;
 }
-.no-work-day-bar .btn-secondary { margin-top: 0; }
+.blank-day-bar .btn-secondary { margin-top: 0; }
+.blank-day-bar .info-tip { margin-right: 0.5rem; }
 
 /* ---------- Upload zones ---------- */
 

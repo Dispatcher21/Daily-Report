@@ -37,14 +37,11 @@
     You don't have permission to edit reports for this company &mdash; ask an admin to unlock this, or open Company Management to change it.
   </div>
 
-  <div class="no-work-day-bar">
-    <button type="button" class="btn-secondary" id="btn-no-work-day">&#128683; Mark as No Work Day</button>
-    <p class="hint" style="margin:0.4rem 0 0;">Sets Notes to "NO WORK DAY" and Hours to 0, leaves everything else as-is -- counted on the project dashboard.</p>
-  </div>
-
-  <div class="no-work-day-bar">
-    <button type="button" class="btn-secondary" id="btn-weather-day">&#9925; Mark as Weather Day</button>
-    <p class="hint" style="margin:0.4rem 0 0;">Sets Notes to "WEATHER DAY" and Hours to 0, leaves everything else as-is -- counted on the project dashboard.</p>
+  <div class="blank-day-bar">
+    <button type="button" class="btn-secondary" id="btn-no-work-day">&#128683; No Work Day</button>
+    <button type="button" class="info-tip" data-tip="Sets Notes to &quot;NO WORK DAY&quot; and Hours to 0, leaves everything else as-is -- counted on the project dashboard." aria-label="What this does">i</button>
+    <button type="button" class="btn-secondary" id="btn-weather-day">&#9925; Weather Day</button>
+    <button type="button" class="info-tip" data-tip="Sets Notes to &quot;WEATHER DAY&quot; and Hours to 0, leaves everything else as-is -- counted on the project dashboard." aria-label="What this does">i</button>
   </div>
 
   <div class="rb-mobile-tabs" id="rb-mobile-tabs">
@@ -365,16 +362,25 @@ function bindText(id, field) {
   });
 }
 
+// A field that no longer has its own box (see bindDynamicFields' calls
+// below) but still has to carry a value on the report -- just keeps
+// report[secondaryField] equal to the primary box's value as it's typed.
+// Doesn't call scheduleSave() itself: bindText already wired one on the
+// same element for the primary field, and both fire on the same input event.
+function mirrorField(primaryId, secondaryField) {
+  const el = $(primaryId);
+  if (!el) return;
+  el.addEventListener('input', () => { report[secondaryField] = el.value; });
+}
+
 // ---------- Dynamic field rendering (admin-configurable order/visibility) ----------
 
 const SIMPLE_FIELD_CONFIG = {
-  activity: { type: 'text' },
+  activity: { type: 'text', hint: 'Also fills the "WORK SUMMARY:" top line on the printed report -- no need to type it twice.' },
   notes: { type: 'textarea', rows: 2 },
-  representative: { type: 'text' },
-  peName: { type: 'text' },
+  representative: { type: 'text', hint: 'Also fills the Representative name on the sign-off line.' },
+  peName: { type: 'text', hint: 'Also fills the Project Engineer name on the sign-off line.' },
   ntpDate: { type: 'date', hint: 'Notice to Proceed. Calendar Day on the report counts from this date.' },
-  workSummaryHeader: { type: 'text', hint: 'Prints on the "WORK SUMMARY:" line at the top of the box.' },
-  trafficControlNote: { type: 'text' },
   workSummary: { type: 'textarea', rows: 6 },
   controllingItem: { type: 'text' },
   commentsOnTime: { type: 'textarea', rows: 2 },
@@ -383,8 +389,6 @@ const SIMPLE_FIELD_CONFIG = {
   workingConditions: { type: 'text' },
   workBegin: { type: 'text', placeholder: '7:00 AM' },
   workEnd: { type: 'text', placeholder: '3:30 PM' },
-  repSignatureName: { type: 'text' },
-  peSignatureName: { type: 'text', hint: "The engineer's name prints on the report; their signature line is left blank for them to sign." },
   weatherDesc: { type: 'text', placeholder: 'Sunny, dry' },
   tempHigh: { type: 'number' },
   tempLow: { type: 'number' },
@@ -804,6 +808,16 @@ async function refreshLivePreview() {
 // conditional on the element existing rather than assumed.
 function bindDynamicFields() {
   Object.keys(SIMPLE_FIELD_CONFIG).forEach((key) => bindText('#f-' + key, key));
+
+  // Work Summary (top line)/Representative Name/Project Engineer Name no
+  // longer have their own boxes (see REPORT_BUILDER_GROUPS in defaults.js)
+  // -- they still exist on the report, and still print on their own lines,
+  // just mirrored live off the one box that's left instead of typed twice.
+  // bindText above already saves report[primary]; this just also updates
+  // report[secondary] on the same keystroke, no separate save needed.
+  mirrorField('#f-activity', 'workSummaryHeader');
+  mirrorField('#f-representative', 'repSignatureName');
+  mirrorField('#f-peName', 'peSignatureName');
 
   const radios = $$('input[name="f-trafficControlSelect"]');
   if (radios.length) {

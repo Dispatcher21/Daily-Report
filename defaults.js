@@ -145,7 +145,7 @@ async function makeBlankReport(nextReportNo, project, previous) {
   const room = typeof getCompanyRoom === 'function' ? await getCompanyRoom() : null;
   const companyCode = (project && project.companyCode) || (room && room.code) || null;
 
-  return {
+  const report = {
     id: crypto.randomUUID(),
     projectId: project ? project.id : null,
     companyCode,
@@ -233,6 +233,13 @@ async function makeBlankReport(nextReportNo, project, previous) {
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
+  // A project's Default Activity and Default Work Summary (top line) are
+  // still two separately-set fields on the project file, so a brand-new
+  // report can start with both filled and differing -- convergeField
+  // leaves that alone rather than picking a winner, same as it would for a
+  // legacy report, and only steps in when exactly one side came back blank.
+  convergeLegacyReportFields(report);
+  return report;
 }
 
 // Seeds a brand-new report from an existing one -- unlike makeBlankReport's
@@ -252,7 +259,7 @@ async function duplicateReport(source, nextReportNo, project) {
   const companyCode = (project && project.companyCode) || (room && room.code) || null;
   const representative = loggedInName || source.representative || '';
 
-  return {
+  const report = {
     ...source,
     id: crypto.randomUUID(),
     projectId: project ? project.id : source.projectId,
@@ -285,6 +292,52 @@ async function duplicateReport(source, nextReportNo, project) {
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };
+  // Covers a source report that predates the Activity/Work Summary link or
+  // still had Short Work Summary content -- representative/PE name above are
+  // already set explicitly, so this is a no-op for those.
+  convergeLegacyReportFields(report);
+  return report;
+}
+
+// ---------- Legacy field convergence ----------
+//
+// Activity/Work Summary (top line), Representative/Representative Name
+// (sign-off), and PE Name/Project Engineer Name used to be independently
+// typed twice for the same thing -- report-editor.html now shows one box
+// for each pair (see REPORT_BUILDER_GROUPS below) and keeps the second
+// field in sync live as the first is typed. This is what catches
+// everything that predates that: a report saved before the link existed,
+// where the two sides drifted apart, or simply started apart from two
+// different project-file defaults.
+//
+// Only ever fills a blank side from a filled one -- never overwrites real
+// content on either side, since a report that's already been signed/
+// printed shouldn't have its printed text silently rewritten after the
+// fact. If both sides already carry (possibly different) content, both are
+// left exactly as they are.
+function convergeField(report, primaryKey, secondaryKey) {
+  const primary = String(report[primaryKey] || '').trim();
+  const secondary = String(report[secondaryKey] || '').trim();
+  if (!primary && secondary) report[primaryKey] = report[secondaryKey];
+  else if (!secondary && primary) report[secondaryKey] = report[primaryKey];
+}
+
+function convergeLegacyReportFields(report) {
+  // Short Work Summary is retired outright -- there's no third box it links
+  // to going forward, so this is a one-time fold-in rather than a live
+  // link: if it's the only place with real content, that content becomes
+  // the Work Summary top line; either way it's cleared after, so it can
+  // never keep printing on a report from here on. Done before the
+  // Activity/Work Summary convergence below so its content gets first
+  // claim on an empty top line rather than losing a race to it.
+  if (String(report.trafficControlNote || '').trim() && !String(report.workSummaryHeader || '').trim()) {
+    report.workSummaryHeader = report.trafficControlNote;
+  }
+  report.trafficControlNote = '';
+
+  convergeField(report, 'activity', 'workSummaryHeader');
+  convergeField(report, 'representative', 'repSignatureName');
+  convergeField(report, 'peName', 'peSignatureName');
 }
 
 // Brings a stored report up to the current shape. Reports saved before the
@@ -307,6 +360,7 @@ function normalizeReport(report) {
     while (row.qty.length < CONTRACTOR_COUNT) row.qty.push('');
   });
   if (report.workSummaryHeader == null) report.workSummaryHeader = '';
+  convergeLegacyReportFields(report);
   // Drop any engineer signature captured before that box was removed, so it
   // can't keep printing on a report the engineer never actually signed.
   delete report.peSignatureImage;
@@ -431,8 +485,12 @@ const REQUIRED_FIELD_DEFS = [
   { key: 'ntpDate', label: 'NTP Date', isEmpty: (r) => !String(r.ntpDate || '').trim() },
   { key: 'contractors', label: 'Contractors (at least one named)', isEmpty: (r) => !Array.isArray(r.contractors) || r.contractors.every((c) => !c.name || !c.name.trim()) },
   { key: 'equipmentRows', label: 'Equipment (at least one quantity entered)', isEmpty: (r) => !Array.isArray(r.equipmentRows) || r.equipmentRows.every((row) => !Array.isArray(row.qty) || row.qty.every((q) => !String(q || '').trim())) },
+  // Short Work Summary is retired (see convergeLegacyReportFields) -- no
+  // entry here for it, since nothing on the form could ever fill it in to
+  // satisfy a required check anymore. Work Summary (top line) stays: it's
+  // linked to Activity now (see REPORT_BUILDER_GROUPS below), so it's kept
+  // non-empty automatically the moment Activity is.
   { key: 'workSummaryHeader', label: 'Work Summary (top line)', isEmpty: (r) => !String(r.workSummaryHeader || '').trim() },
-  { key: 'trafficControlNote', label: 'Short Work Summary', isEmpty: (r) => !String(r.trafficControlNote || '').trim() },
   { key: 'workSummary', label: 'Summary of Work Performed', isEmpty: (r) => !String(r.workSummary || '').trim() },
   { key: 'payItems', label: 'Pay Items (at least one entered)', isEmpty: (r) => !Array.isArray(r.payItems) || r.payItems.every((pi) => !((pi.itemNumber || pi.description) && String(pi.qty || '').trim())) },
   { key: 'controllingItem', label: 'Controlling Item', isEmpty: (r) => !String(r.controllingItem || '').trim() },
@@ -468,8 +526,12 @@ const ORDERABLE_FIELD_DEFS = [
   { key: 'peName', label: 'PE Name', kind: 'simple' },
   { key: 'ntpDate', label: 'NTP Date', kind: 'simple' },
   { key: 'contractorsEquipment', label: 'Contractors & Equipment', kind: 'block' },
-  { key: 'workSummaryHeader', label: 'Work Summary (top line)', kind: 'simple' },
-  { key: 'trafficControlNote', label: 'Short Work Summary', kind: 'simple' },
+  // Work Summary (top line), Short Work Summary, Representative Name, and
+  // Project Engineer Name used to be their own orderable/hideable fields
+  // here -- they're not any more (see convergeLegacyReportFields): the
+  // first is linked to Activity, the last two to Representative/PE Name,
+  // and Short Work Summary is retired outright. Nothing left for an admin
+  // to independently show/hide/reorder/require for any of them.
   { key: 'workSummary', label: 'Summary of Work Performed', kind: 'simple' },
   { key: 'payItems', label: 'Pay Items', kind: 'block' },
   { key: 'controllingItem', label: 'Controlling Item', kind: 'simple' },
@@ -480,9 +542,7 @@ const ORDERABLE_FIELD_DEFS = [
   { key: 'trafficControlSelect', label: 'Traffic Control Status', kind: 'block' },
   { key: 'workBegin', label: 'Work Begin', kind: 'simple' },
   { key: 'workEnd', label: 'Work End', kind: 'simple' },
-  { key: 'repSignatureName', label: 'Representative Name', kind: 'simple' },
   { key: 'repSignatureImage', label: 'Representative Signature', kind: 'block' },
-  { key: 'peSignatureName', label: 'Project Engineer Name', kind: 'simple' },
   { key: 'weatherDesc', label: 'Weather Description', kind: 'simple' },
   { key: 'tempHigh', label: 'High Temp', kind: 'simple' },
   { key: 'tempLow', label: 'Low Temp', kind: 'simple' },
@@ -501,12 +561,12 @@ const DEFAULT_FIELD_ORDER = ORDERABLE_FIELD_DEFS.map((d) => d.key);
 const REPORT_BUILDER_GROUPS = [
   { id: 'overview', icon: '\u{1F4DD}', label: 'Overview', keys: ['activity', 'notes', 'representative', 'peName', 'ntpDate'] },
   { id: 'contractorsEquipment', icon: '\u{1F477}', label: 'Contractors & Equipment', keys: ['contractorsEquipment'], hint: '22 personnel/equipment rows are fixed by the template, but only ones already in use show by default -- use the "+" buttons to reveal more. You can rename any row, and quantities are per contractor tab.' },
-  { id: 'workSummary', icon: '\u{270D}\u{FE0F}', label: 'Work Summary', keys: ['workSummaryHeader', 'trafficControlNote', 'workSummary'] },
+  { id: 'workSummary', icon: '\u{270D}\u{FE0F}', label: 'Work Summary', keys: ['workSummary'] },
   { id: 'payItems', icon: '\u{1F4CA}', label: 'Pay Items', keys: ['payItems'], hint: "No limit on how many you add. The printed template has room for 6 in the table itself; anything past that lists automatically at the end of the Summary of Work Performed, the same way it'd be written in by hand." },
   { id: 'controllingItem', icon: '\u{23F1}\u{FE0F}', label: 'Controlling Item & Time Charged', keys: ['controllingItem', 'commentsOnTime', 'controllingItemTimeFrom', 'controllingItemTimeTo'] },
   { id: 'siteConditions', icon: '\u{1F6A7}', label: 'Site Conditions', keys: ['workingConditions', 'trafficControlSelect', 'workBegin', 'workEnd'] },
   { id: 'weather', icon: '\u{1F324}\u{FE0F}', label: 'Weather', keys: ['weatherDesc', 'tempHigh', 'tempLow'] },
-  { id: 'signOff', icon: '\u{1F58B}\u{FE0F}', label: 'Sign-Off', keys: ['repSignatureName', 'repSignatureImage', 'peSignatureName'] },
+  { id: 'signOff', icon: '\u{1F58B}\u{FE0F}', label: 'Sign-Off', keys: ['repSignatureImage'] },
   { id: 'photos', icon: '\u{1F4F7}', label: 'Photos', keys: ['photos'] },
 ];
 
