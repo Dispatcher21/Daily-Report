@@ -3,6 +3,11 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.012 -- 2026-09-16
+  - Updated the Excel library (SheetJS) to close a known security issue in
+    the older version. Excel import/export files you use are unaffected --
+    just handled by a patched library now.
+
 0.011 -- 2026-09-16
   - Added a Content-Security-Policy to every page, limiting what scripts,
     connections, and embedded content the app will run or load.
