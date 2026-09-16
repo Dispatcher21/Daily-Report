@@ -251,6 +251,9 @@ async function saveReport(report) {
   if (typeof onCompanySyncReportChanged === 'function') {
     onCompanySyncReportChanged(report, false).catch((err) => console.error('company sync mirror:', err));
   }
+  if (typeof onLocalFolderSyncReportChanged === 'function') {
+    onLocalFolderSyncReportChanged(report, false).catch((err) => console.error('local folder sync:', err));
+  }
   if (typeof logAuditableChange === 'function') {
     logAuditableChange('report', before, report, false).catch((err) => console.error('audit log:', err));
   }
@@ -269,13 +272,18 @@ async function saveReport(report) {
 // than the old behavior of failing silently to the console and letting it
 // quietly reappear later with no explanation.
 async function deleteReport(id) {
-  const needsExisting = typeof onCompanySyncReportChanged === 'function' || typeof logAuditableChange === 'function';
+  const needsExisting = typeof onCompanySyncReportChanged === 'function'
+    || typeof onLocalFolderSyncReportChanged === 'function'
+    || typeof logAuditableChange === 'function';
   const report = needsExisting ? await getReport(id) : null;
   await withStore(REPORTS_STORE, 'readwrite', (store) => store.delete(id));
   await deleteReportDraft(id);
   if (report) {
     if (typeof logAuditableChange === 'function') {
       logAuditableChange('report', report, null, true).catch((err) => console.error('audit log:', err));
+    }
+    if (typeof onLocalFolderSyncReportChanged === 'function') {
+      onLocalFolderSyncReportChanged(report, true).catch((err) => console.error('local folder sync:', err));
     }
     if (typeof onCompanySyncReportChanged === 'function') {
       await onCompanySyncReportChanged(report, true);

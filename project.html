@@ -764,9 +764,16 @@ async function refreshSyncFolderStatus() {
     return;
   }
   const folderName = await getLinkedSyncFolderName(project.id);
-  status.textContent = folderName
-    ? `Linked to folder "${folderName}". Sync again anytime to update it.`
-    : 'Not linked to a folder yet -- Sync will ask you to choose one.';
+  if (!folderName) {
+    status.textContent = 'Not linked to a folder yet -- Sync will ask you to choose one.';
+    return;
+  }
+  const reports = await getReportsForProject(project.id);
+  const state = await getFolderSyncState(project.id);
+  const pending = reports.filter((r) => !isReportFolderSynced(r, state)).length;
+  status.textContent = pending > 0
+    ? `Linked to folder "${folderName}" -- ${pending} report(s) waiting to sync. New saves sync automatically from here on; click Sync to catch these up now.`
+    : `Linked to folder "${folderName}". Every report is up to date -- new saves sync automatically.`;
 }
 
 $('#btn-sync-folder').addEventListener('click', async () => {
@@ -989,6 +996,7 @@ $('#btn-delete-project').addEventListener('click', async () => {
     console.error(err);
     alert(userError(err.message, 'DELETE_PROJECT'));
   }
+  await forgetSyncFolder(project.id);
   location.href = 'index.html';
 });
 

@@ -1721,6 +1721,13 @@ input[type="date"] { min-width: 0; }
   background: var(--warn); padding: 2px 8px; border-radius: 10px;
   vertical-align: middle; white-space: nowrap;
 }
+/* Mirrors how OneDrive/Google Drive mark a file that hasn't made it to a
+   synced folder yet -- shown on a report only once its project is actually
+   linked to one (see reports.html's folderLinked), so a project that's
+   never touched the feature never shows it at all. */
+.report-row-cloud {
+  font-size: 0.85rem; vertical-align: middle; opacity: 0.75; cursor: default;
+}
 .report-row .report-row-sub { font-size: 0.83rem; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .report-row .report-row-actions { display: flex; align-items: center; gap: 0.5rem; }
 .report-row-no {

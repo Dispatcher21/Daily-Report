@@ -123,6 +123,7 @@
 <script src="defaults.js"></script>
 <script src="storage.js"></script>
 <script src="audit-log.js"></script>
+<script src="local-sync.js"></script>
 <script type="module" src="firebase-init.js"></script>
 <script src="firebase-sync.js"></script>
 <script>
@@ -148,37 +149,16 @@ let thumbnailInFlight = new Set();
 let thumbnailLibsPromise = null;
 const THUMB_CAPTURE_WIDTH = 150; // device px, before scaling for a retina screen -- shared by both the smaller list-row thumbs and the bigger grid-view ones, sized for the larger of the two so neither looks soft
 
-function loadScriptOnce(src) {
-  return new Promise((resolve, reject) => {
-    const s = document.createElement('script');
-    s.src = src;
-    s.onload = resolve;
-    s.onerror = () => reject(new Error('Failed to load ' + src));
-    document.head.appendChild(s);
-  });
-}
-function loadStylesheetOnce(href) {
-  return new Promise((resolve, reject) => {
-    const l = document.createElement('link');
-    l.rel = 'stylesheet';
-    l.href = href;
-    l.onload = resolve;
-    l.onerror = () => reject(new Error('Failed to load ' + href));
-    document.head.appendChild(l);
-  });
-}
-// A single shared promise so two overlapping ensureThumbnails() calls (e.g.
-// the admin changes a filter while thumbnails are still generating) can't
-// both inject render-report.js -- a second copy would throw redeclaring its
-// top-level consts.
+// html2canvas/render-report.js/print-sheet.css are loaded through
+// local-sync.js's ensureReportRenderLibs() -- local-sync.js's own
+// background folder-sync (see onLocalFolderSyncReportChanged in storage.js)
+// can load the exact same pair on this same page (a mass edit save right as
+// thumbnails are generating), and two independent "inject render-report.js"
+// loaders racing would throw redeclaring its top-level `let`. Routing both
+// through the one memoized loader is what keeps that to a single script tag
+// no matter which caller gets there first.
 function ensureThumbnailLibs() {
-  if (!thumbnailLibsPromise) {
-    thumbnailLibsPromise = Promise.all([
-      loadStylesheetOnce('print-sheet.css'),
-      loadScriptOnce('lib/html2canvas.min.js'),
-      loadScriptOnce('render-report.js'),
-    ]);
-  }
+  if (!thumbnailLibsPromise) thumbnailLibsPromise = ensureReportRenderLibs();
   return thumbnailLibsPromise;
 }
 
@@ -335,6 +315,7 @@ async function init() {
   $$('#view-toggle .view-toggle-btn').forEach((btn) => btn.classList.toggle('active', btn.dataset.view === viewMode));
 
   allReports = await getReportsForProject(project.id);
+  await refreshFolderSyncBadgeState();
   render();
 }
 
@@ -374,11 +355,32 @@ function reportThumbsHtml(r) {
   return `<div class="report-thumbs" data-thumb="${r.id}">${page(1, t && t.front)}${page(2, t && t.back)}</div>`;
 }
 
+// Whether this project is linked to a local sync folder, and which reports
+// still need to be written out to it -- populated once by
+// refreshFolderSyncBadgeState() (called at init and after anything that can
+// change either side of that: a save, a delete, an incoming company pull).
+// No icon shows at all for a project that's never linked one, same as the
+// step on project.html itself only mattering once that's set up.
+let folderLinked = false;
+let folderSyncState = {};
+
+async function refreshFolderSyncBadgeState() {
+  folderLinked = !!(await getLinkedSyncFolderName(project.id));
+  folderSyncState = folderLinked ? await getFolderSyncState(project.id) : {};
+}
+
+function reportCloudBadgeHtml(r) {
+  if (!folderLinked || isReportFolderSynced(r, folderSyncState)) return '';
+  return '<span class="report-row-cloud" title="Not yet synced to the local folder">&#9729;</span>';
+}
+
 function reportBadgesHtml(r) {
   const badges = [];
   if (isNoWorkDayReport(r)) badges.push('<span class="report-row-nwd">NO WORK DAY</span>');
   if (isWeatherDayReport(r)) badges.push('<span class="report-row-wd">WEATHER DAY</span>');
   if (r.createdBy || r.representative) badges.push(`<span class="report-row-author">${escapeHtml(r.createdBy || r.representative)}</span>`);
+  const cloud = reportCloudBadgeHtml(r);
+  if (cloud) badges.push(cloud);
   return badges.join(' ');
 }
 
@@ -504,6 +506,7 @@ function renderCard(r) {
       <div class="report-card-top">
         ${reportCheckboxHtml(r)}
         ${reportWarningHtml(r)}
+        ${reportCloudBadgeHtml(r)}
         <span class="report-row-no">#${r.reportNo}</span>
       </div>
       <div class="report-card-body" data-open="${r.id}">
@@ -651,6 +654,7 @@ $('#btn-delete-selected').addEventListener('click', async () => {
     }
     selectedIds.clear();
     allReports = await getReportsForProject(project.id);
+    await refreshFolderSyncBadgeState();
     render();
     if (syncErrors.length) {
       alert(userError(`Deleted locally, but ${syncErrors.length} report(s) didn't sync -- they may come back on next sync: ${syncErrors[0].message}`, 'DELETE_REPORTS'));
@@ -733,6 +737,7 @@ $('#btn-apply-mass-edit').addEventListener('click', async () => {
     }
     $('#mass-edit-panel').hidden = true;
     allReports = await getReportsForProject(project.id);
+    await refreshFolderSyncBadgeState();
     render();
     alert(`Updated ${selected.length} report(s).`);
   } catch (err) {
@@ -749,6 +754,7 @@ init().then(wireAutoPull);
 // so a teammate's new/changed report shows up without a manual reload.
 window.addEventListener('company-data-pulled', async () => {
   allReports = await getReportsForProject(project.id);
+  await refreshFolderSyncBadgeState();
   render();
 });
 </script>

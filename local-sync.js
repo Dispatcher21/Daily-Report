@@ -64,6 +64,7 @@ async function getLinkedSyncFolderName(projectId) {
 
 async function forgetSyncFolder(projectId) {
   await deleteSetting(syncDirHandleSettingKey(projectId));
+  await deleteSetting(folderSyncStateSettingKey(projectId));
 }
 
 async function writeFileToDir(dirHandle, path, blob) {
@@ -192,6 +193,18 @@ async function syncProjectToFolder(project, onProgress) {
   for (const [path, blob] of files) {
     await writeFileToDir(dirHandle, path, blob);
   }
+
+  // Marks every report just written as synced (as of now), so per-report
+  // auto-sync (onLocalFolderSyncReportChanged) only has to catch up on
+  // whatever changes next, and reports.html's cloud badges clear immediately
+  // rather than waiting on each report's own next edit.
+  const now = Date.now();
+  const state = {};
+  for (const report of reports) {
+    state[report.id] = { baseName: reportSyncBaseName(report), syncedAt: now };
+  }
+  await saveFolderSyncState(project.id, state);
+
   if (onProgress) onProgress(reports.length, reports.length, null);
   return { mode: 'folder', folderName: dirHandle.name, reportCount: reports.length };
 }
@@ -219,4 +232,198 @@ function projectSyncZipFilename(project) {
     .replace(/^_+|_+$/g, '')
     .slice(0, 60);
   return `${slug || 'project'}_backup.zip`;
+}
+
+// ---------- Auto-sync on save/delete ----------
+//
+// Once a project is linked to a folder (via the manual Sync button on
+// project.html), every later saveReport()/deleteReport() call -- from
+// report-editor.html, quick-quantity.html, reports.html's mass edit, a
+// project-setup.html bulk import, wherever -- mirrors that one report out
+// to the folder in the background, the same way onCompanySyncReportChanged
+// already mirrors it to the company. storage.js knows nothing about this;
+// it just calls onLocalFolderSyncReportChanged if this file happened to be
+// loaded on the page (see the `typeof` guard there), same pattern as the
+// firebase-sync.js hook.
+//
+// { [reportId]: { baseName, syncedAt } } per project -- doubles as: (a) how
+// isReportFolderSynced (below) tells reports.html which reports still need
+// a folder update, and (b) how a rename (Report No./date edit) knows the
+// OLD filename to delete so a folder sync never leaves a stale duplicate
+// behind under the report's previous name.
+function folderSyncStateSettingKey(projectId) {
+  return `folderSyncState:${projectId}`;
+}
+
+async function getFolderSyncState(projectId) {
+  return (await getSetting(folderSyncStateSettingKey(projectId))) || {};
+}
+
+async function saveFolderSyncState(projectId, state) {
+  await saveSetting(folderSyncStateSettingKey(projectId), state);
+}
+
+// A report counts as synced once its folder copy was written at or after
+// its last edit -- an entry from before the report's most recent updatedAt
+// means it changed since, so the folder copy is stale, not synced.
+function isReportFolderSynced(report, state) {
+  const entry = state && state[report.id];
+  return !!entry && entry.syncedAt >= (report.updatedAt || 0);
+}
+
+async function removeEntryIfExists(dirHandle, name, opts) {
+  try {
+    await dirHandle.removeEntry(name, opts);
+  } catch (err) {
+    // Already gone (never synced under that name, or removed by hand) -- fine.
+  }
+}
+
+async function removeReportFilesFromFolder(dirHandle, baseName) {
+  const reportsDir = await dirHandle.getDirectoryHandle('reports', { create: true }).catch(() => null);
+  if (reportsDir) await removeEntryIfExists(reportsDir, `${baseName}.pdf`);
+  const dataDir = await dirHandle.getDirectoryHandle('data', { create: true })
+    .then((d) => d.getDirectoryHandle('reports', { create: true }))
+    .catch(() => null);
+  if (dataDir) await removeEntryIfExists(dataDir, baseName, { recursive: true });
+}
+
+// Silent version of getOrPickSyncDirectory -- a background save can't pop a
+// folder picker (no user gesture, and it'd be a jarring interruption mid
+// typing/save anyway), so this only returns a handle when permission is
+// already granted. A null here just means "stays flagged unsynced until the
+// next manual Sync," which is what re-establishes permission.
+async function getSyncDirectoryIfPermitted(projectId) {
+  const stored = await getSetting(syncDirHandleSettingKey(projectId));
+  if (!stored) return null;
+  try {
+    return (await stored.queryPermission({ mode: 'readwrite' })) === 'granted' ? stored : null;
+  } catch (err) {
+    return null; // handle no longer valid (folder moved/deleted)
+  }
+}
+
+// Loads html2canvas/jsPDF/the report renderer/pdf-export.js/print-sheet.css
+// on demand -- most pages that can save or delete a report (report-editor,
+// quick-quantity, reports.html's mass edit, project-setup's import) have no
+// other reason to carry this weight, so it's only fetched the moment a
+// background sync actually needs to rasterize a PDF. A page that already
+// has one of these loaded (project.html) skips reloading it -- checked by
+// what it defines, not by what loaded it.
+let pdfSyncLibsPromise = null;
+function lsLoadScript(src) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = resolve;
+    s.onerror = () => reject(new Error('Failed to load ' + src));
+    document.head.appendChild(s);
+  });
+}
+function lsLoadStylesheet(href) {
+  if (document.querySelector(`link[href="${href}"]`)) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const l = document.createElement('link');
+    l.rel = 'stylesheet';
+    l.href = href;
+    l.onload = resolve;
+    l.onerror = () => reject(new Error('Failed to load ' + href));
+    document.head.appendChild(l);
+  });
+}
+// The html2canvas/render-report.js/print-sheet.css trio is shared with
+// reports.html's own on-demand thumbnail generator (see its
+// ensureThumbnailLibs) -- routed through this one memoized promise so
+// whichever caller gets there first is the only one that actually injects
+// render-report.js. A second independent loader racing to inject it would
+// throw redeclaring its top-level `let`.
+let reportRenderLibsPromise = null;
+function ensureReportRenderLibs() {
+  if (!reportRenderLibsPromise) {
+    reportRenderLibsPromise = (async () => {
+      await lsLoadStylesheet('print-sheet.css');
+      if (typeof html2canvas !== 'function') await lsLoadScript('lib/html2canvas.min.js');
+      if (typeof renderReportPages !== 'function') await lsLoadScript('render-report.js');
+    })();
+  }
+  return reportRenderLibsPromise;
+}
+
+function ensurePdfSyncLibs() {
+  if (!pdfSyncLibsPromise) {
+    pdfSyncLibsPromise = (async () => {
+      await ensureReportRenderLibs();
+      if (typeof window.jspdf === 'undefined') await lsLoadScript('lib/jspdf.umd.min.js');
+      if (typeof buildPdfBlob !== 'function') await lsLoadScript('pdf-export.js');
+    })();
+  }
+  return pdfSyncLibsPromise;
+}
+
+// Writes just this one report's PDF + data files into the project's linked
+// folder, and cleans up the old files first if the report's name changed
+// (Report No. or date edited since the last sync).
+async function syncSingleReportToFolder(project, report) {
+  const dirHandle = await getSyncDirectoryIfPermitted(project.id);
+  if (!dirHandle) return;
+
+  const state = await getFolderSyncState(project.id);
+  const prevEntry = state[report.id];
+
+  let full = normalizeReport({ ...report, photos: [...(report.photos || [])] });
+  if ((full.photosFetched || []).some((f) => !f) || full.signatureFetched === false) {
+    full = await fetchReportMedia(full);
+  }
+  const base = reportSyncBaseName(full);
+  if (prevEntry && prevEntry.baseName && prevEntry.baseName !== base) {
+    await removeReportFilesFromFolder(dirHandle, prevEntry.baseName);
+  }
+
+  await ensurePdfSyncLibs();
+  const pdfCtx = await preparePdfContext();
+  try {
+    const pdfBlob = await buildOneReportPdf(pdfCtx, full);
+    await writeFileToDir(dirHandle, `reports/${base}.pdf`, pdfBlob);
+  } finally {
+    pdfCtx.sandbox.remove();
+  }
+
+  const dataFolder = `data/reports/${base}`;
+  await writeFileToDir(dirHandle, `${dataFolder}/report.json`, new Blob([JSON.stringify(reportPayloadForSync(full))], { type: 'application/json' }));
+  const photos = full.photos || [];
+  for (let p = 0; p < photos.length; p++) {
+    if (photos[p]) await writeFileToDir(dirHandle, `${dataFolder}/photos/photo${p + 1}.jpg`, photos[p]);
+  }
+  if (full.repSignatureImage) {
+    await writeFileToDir(dirHandle, `${dataFolder}/signature.png`, full.repSignatureImage);
+  }
+
+  state[report.id] = { baseName: base, syncedAt: Date.now() };
+  await saveFolderSyncState(project.id, state);
+}
+
+async function removeSingleReportFromFolder(project, report) {
+  const dirHandle = await getSyncDirectoryIfPermitted(project.id);
+  if (!dirHandle) return;
+
+  const state = await getFolderSyncState(project.id);
+  const entry = state[report.id];
+  const base = entry ? entry.baseName : reportSyncBaseName(report);
+  await removeReportFilesFromFolder(dirHandle, base);
+  if (entry) {
+    delete state[report.id];
+    await saveFolderSyncState(project.id, state);
+  }
+}
+
+// The hook itself -- see storage.js's saveReport/deleteReport. Bails out
+// immediately, before loading anything, for the overwhelming common case of
+// a project that was never linked to a folder.
+async function onLocalFolderSyncReportChanged(report, deleted) {
+  const linked = await getSetting(syncDirHandleSettingKey(report.projectId));
+  if (!linked) return;
+  const project = await getProject(report.projectId);
+  if (!project) return;
+  if (deleted) await removeSingleReportFromFolder(project, report);
+  else await syncSingleReportToFolder(project, report);
 }
