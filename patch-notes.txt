@@ -3,6 +3,13 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.015 -- 2026-09-16
+  - Fixed the report editor's live preview flashing on every character
+    typed -- photos and the logo were reloading from scratch on every
+    update instead of staying put.
+  - Settings no longer flashes "You" and then jumps to "Company" when an
+    admin opens it. It stays on "You" until Company is actually clicked.
+
 0.014 -- 2026-09-16
   - Removed a couple of old, unused code paths left over from features that
     were already retired (an old export format nothing pointed to anymore,

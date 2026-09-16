@@ -735,7 +735,7 @@
     <div class="err" id="company-error" hidden></div>
   </div>
 
-  <a class="app-version" href="patch-notes.txt" target="_blank" rel="noopener">v0.014</a>
+  <a class="app-version" href="patch-notes.txt" target="_blank" rel="noopener">v0.015</a>
 
 </main>
 
@@ -2290,13 +2290,19 @@ $('#btn-save-user-name').addEventListener('click', async () => {
 
 // ---------- Init ----------
 
+// Decided synchronously, before anything below is awaited, so whichever
+// tab this lands on is the one already painted in the very first frame --
+// no flash of "You" while an async check for a connected company room
+// resolves and swaps it over. Only an explicit ?tab=company link (e.g.
+// company-management.html's redirect) opens straight to Company; being
+// connected to a company is no longer enough on its own -- Settings always
+// defaults to You otherwise, same as someone with no company at all.
+setSettingsTab(queryParam('tab') === 'company' ? 'company' : 'you');
+
 (async () => {
   $('#f-user-name').value = (await getUserName()) || '';
   renderInstallSection();
   await refreshCompanySection();
-
-  const wantsCompanyTab = queryParam('tab') === 'company' || (await getCompanyRoom());
-  setSettingsTab(wantsCompanyTab ? 'company' : 'you');
 })();
 </script>
 </body>

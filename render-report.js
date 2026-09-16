@@ -2,6 +2,26 @@
 // drawn as a CSS Grid sized in pt straight from print-layout.json, so it
 // matches what the Excel template actually prints.
 
+// report-editor.html's live preview calls this on a debounce after every
+// keystroke, re-rendering the whole page fresh each time (necessary --
+// typed text can reflow the layout). Photos and the logo don't change while
+// someone's typing, though, so re-running URL.createObjectURL(blob) on the
+// same blob every render was handing each new <img> a brand-new URL despite
+// identical bytes -- the browser has no way to know that's the same image
+// it already decoded, so it re-fetched/re-decoded/re-painted from scratch
+// every 250ms, which is what showed up as a flash on every character typed.
+// Caching by blob identity means the same blob always gets the same URL, so
+// the browser's own image cache recognizes it and paints instantly instead.
+const RR_OBJECT_URL_CACHE = new WeakMap();
+function rrObjectUrl(blob) {
+  let url = RR_OBJECT_URL_CACHE.get(blob);
+  if (!url) {
+    url = URL.createObjectURL(blob);
+    RR_OBJECT_URL_CACHE.set(blob, url);
+  }
+  return url;
+}
+
 // ---------- Grid geometry helpers ----------
 
 // NOTE: the rr* prefixes date from when this file shared a page with the old
@@ -140,7 +160,7 @@ function renderSheetGrid(sheetData, coordValues, coordImages) {
         const blob = coordImages[coord];
         if (blob) {
           const img = document.createElement('img');
-          img.src = URL.createObjectURL(blob);
+          img.src = rrObjectUrl(blob);
           cellEl.appendChild(img);
           cellEl.style.padding = '0';
         }
@@ -199,7 +219,7 @@ function appendLogo(grid, logoBlob) {
   cell.style.gridColumn = `1 / span ${RR_LOGO_LAST_COL}`;
   cell.style.gridRow = `1 / span ${RR_LOGO_LAST_ROW}`;
   const img = document.createElement('img');
-  img.src = URL.createObjectURL(logoBlob);
+  img.src = rrObjectUrl(logoBlob);
   cell.appendChild(img);
   grid.appendChild(cell);
 }
