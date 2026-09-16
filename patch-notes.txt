@@ -3,6 +3,14 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.011 -- 2026-09-16
+  - Added a Content-Security-Policy to every page, limiting what scripts,
+    connections, and embedded content the app will run or load.
+  - Strengthened the admin password check to a much slower, salted method
+    (existing companies upgrade automatically the next time an admin logs
+    in -- no action needed).
+  - Updated the PDF library (jsPDF) to the latest 2.x release.
+
 0.010 -- 2026-09-16
   - Folder sync no longer deletes anything. A report deleted or renamed in
     the app now renames its old files in the synced folder with a

@@ -116,6 +116,47 @@ function base64ToBytes(b64) {
   return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
 }
 
+// ---------- Admin password verification ----------
+//
+// The admin password is the one secret this whole app treats as its root
+// of trust (it's what everything else -- recoverable passwords, custom
+// setups -- ultimately answers to), so it gets the same PBKDF2 cost as the
+// encryption key derivation above, not hashText's plain single-round
+// SHA-256. hashText itself stays exactly as it was: it's also what turns a
+// plaintext company/custom-setup password into the Firestore document ID
+// those are looked up by, which has to be a fast, reproducible, unsalted
+// function of the password alone -- there's nowhere to store a salt ahead
+// of a lookup that only has the plaintext to go on.
+async function pbkdf2Hash(password, saltB64, iterations) {
+  const salt = saltB64 ? base64ToBytes(saltB64) : crypto.getRandomValues(new Uint8Array(16));
+  const iters = iterations || PBKDF2_ITERATIONS;
+  const keyMaterial = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: iters, hash: 'SHA-256' }, keyMaterial, 256);
+  return { salt: bytesToBase64(salt), hash: bytesToBase64(new Uint8Array(bits)), iterations: iters };
+}
+
+async function hashAdminPassword(password) {
+  const { salt, hash, iterations } = await pbkdf2Hash(password);
+  return { alg: 'pbkdf2', iterations, salt, hash };
+}
+
+// Accepts either the current PBKDF2 record or a legacy plain-SHA-256 hex
+// string (every admin password hash saved before this existed) -- returns
+// whether it matched, and whether the match came through the legacy path
+// so the caller can silently upgrade it to the stronger format on a
+// successful check rather than needing a one-time migration script.
+async function verifyAdminPassword(password, stored) {
+  if (!stored) return { valid: false, legacy: false };
+  if (typeof stored === 'string') {
+    return { valid: (await hashText(password)) === stored, legacy: true };
+  }
+  if (stored.alg === 'pbkdf2') {
+    const { hash } = await pbkdf2Hash(password, stored.salt, stored.iterations);
+    return { valid: hash === stored.hash, legacy: false };
+  }
+  return { valid: false, legacy: false };
+}
+
 async function deriveAdminKey(adminPassword, saltB64) {
   const salt = saltB64 ? base64ToBytes(saltB64) : crypto.getRandomValues(new Uint8Array(16));
   const keyMaterial = await crypto.subtle.importKey('raw', new TextEncoder().encode(adminPassword), 'PBKDF2', false, ['deriveKey']);
@@ -222,7 +263,7 @@ async function createCompanyRoom({ name, password, adminPassword }, onProgress) 
   const code = await hashText(password);
   await setDoc(doc(db, 'companies', code), {
     name: name || '',
-    adminPasswordHash: await hashText(adminPassword),
+    adminPasswordHash: await hashAdminPassword(adminPassword),
     companyPasswordEnc: await encryptWithAdminPassword(adminPassword, password),
     permissions: DEFAULT_PERMISSIONS,
     createdAt: serverTimestamp(),
@@ -318,13 +359,19 @@ async function unlockCompanyAdmin(adminPassword) {
   if (!adminPassword) throw new Error('Enter the admin password.');
 
   const { db, ensureSignedIn } = await waitForFirebaseCore();
-  const { doc, getDoc } = await import(FIRESTORE_SDK);
+  const { doc, getDoc, updateDoc } = await import(FIRESTORE_SDK);
   await ensureSignedIn();
 
-  const snap = await getDoc(doc(db, 'companies', room.code));
-  const expected = snap.exists() ? snap.data().adminPasswordHash : null;
-  if (!expected || (await hashText(adminPassword)) !== expected) {
-    throw new Error('Incorrect admin password.');
+  const companyRef = doc(db, 'companies', room.code);
+  const snap = await getDoc(companyRef);
+  const { valid, legacy } = await verifyAdminPassword(adminPassword, snap.exists() ? snap.data().adminPasswordHash : null);
+  if (!valid) throw new Error('Incorrect admin password.');
+  if (legacy) {
+    // Now that the password's confirmed correct, quietly upgrade this
+    // company off the old plain-SHA-256 hash -- every login after this one
+    // goes through the stronger PBKDF2 check instead. A failure here isn't
+    // this login's problem; it just tries again next time.
+    await updateDoc(companyRef, { adminPasswordHash: await hashAdminPassword(adminPassword) }).catch((err) => console.error('admin hash upgrade:', err));
   }
   await saveSetting(COMPANY_ADMIN_SETTING, true);
   // Admin overrides any custom setup's project scope this device might
@@ -573,15 +620,18 @@ async function changeCompanyPassword(newPassword, adminPassword, onProgress) {
 
   const oldSnap = await getDoc(doc(db, 'companies', room.code));
   const oldData = oldSnap.exists() ? oldSnap.data() : {};
-  if (!oldData.adminPasswordHash || (await hashText(adminPassword)) !== oldData.adminPasswordHash) {
-    throw new Error('Incorrect admin password.');
-  }
+  const { valid } = await verifyAdminPassword(adminPassword, oldData.adminPasswordHash);
+  if (!valid) throw new Error('Incorrect admin password.');
 
   const newCode = await hashText(newPassword);
   if (onProgress) onProgress({ phase: 'creating' });
   await setDoc(doc(db, 'companies', newCode), {
     name: oldData.name || '',
-    adminPasswordHash: oldData.adminPasswordHash,
+    // Recomputed fresh rather than carried over from oldData -- the
+    // password's already confirmed correct above, so this is a free
+    // opportunity to leave the old plain-SHA-256 hash behind for any
+    // company still on it, same as unlockCompanyAdmin's own upgrade path.
+    adminPasswordHash: await hashAdminPassword(adminPassword),
     companyPasswordEnc: await encryptWithAdminPassword(adminPassword, newPassword),
     permissions: oldData.permissions || DEFAULT_PERMISSIONS,
     managerDashboard: oldData.managerDashboard || null,
@@ -649,13 +699,12 @@ async function changeCompanyAdminPassword(currentAdminPassword, newAdminPassword
   const companyRef = doc(db, 'companies', room.code);
   const companySnap = await getDoc(companyRef);
   const companyData = companySnap.exists() ? companySnap.data() : {};
-  if (!companyData.adminPasswordHash || (await hashText(currentAdminPassword)) !== companyData.adminPasswordHash) {
-    throw new Error('Incorrect current admin password.');
-  }
+  const { valid } = await verifyAdminPassword(currentAdminPassword, companyData.adminPasswordHash);
+  if (!valid) throw new Error('Incorrect current admin password.');
 
   const rolesSnap = await getDocs(collection(db, 'companies', room.code, 'roles'));
 
-  const companyUpdate = { adminPasswordHash: await hashText(newAdminPassword) };
+  const companyUpdate = { adminPasswordHash: await hashAdminPassword(newAdminPassword) };
   if (companyData.companyPasswordEnc) {
     const plainCompanyPassword = await decryptWithAdminPassword(currentAdminPassword, companyData.companyPasswordEnc);
     companyUpdate.companyPasswordEnc = await encryptWithAdminPassword(newAdminPassword, plainCompanyPassword);
@@ -714,7 +763,7 @@ async function createCustomRole({ name, password, permissions, projectIds, admin
 
   const companySnap = await getDoc(doc(db, 'companies', room.code));
   const companyData = companySnap.exists() ? companySnap.data() : {};
-  if (!companyData.adminPasswordHash || (await hashText(adminPassword)) !== companyData.adminPasswordHash) {
+  if (!(await verifyAdminPassword(adminPassword, companyData.adminPasswordHash)).valid) {
     throw new Error('Incorrect admin password.');
   }
 
@@ -779,7 +828,7 @@ async function getRecoverablePasswords(adminPassword) {
 
   const companySnap = await getDoc(doc(db, 'companies', room.code));
   const companyData = companySnap.exists() ? companySnap.data() : {};
-  if (!companyData.adminPasswordHash || (await hashText(adminPassword)) !== companyData.adminPasswordHash) {
+  if (!(await verifyAdminPassword(adminPassword, companyData.adminPasswordHash)).valid) {
     throw new Error('Incorrect admin password.');
   }
 
