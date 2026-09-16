@@ -176,6 +176,18 @@
     </div>
     </div>
 
+    <div class="step">
+      <div class="step-header">
+        <span class="step-num">BACKUP</span>
+        <h2>Sync to Folder</h2>
+        <button type="button" class="info-tip" data-tip="Writes every report in this project (data, photos, signatures) out as plain files in a folder you choose -- run it again anytime to update that folder with anything new or changed. Available on desktop Chrome/Edge and Android Chrome; other browsers (including iPhone/iPad) get a zip file to save instead, since they can't write to a folder directly." aria-label="What this does">i</button>
+      </div>
+      <div class="step-body">
+        <button type="button" class="btn-secondary" id="btn-sync-folder" style="margin-bottom:0.5rem;">&#8635; Sync Project to Folder</button>
+        <div class="hint" id="sync-folder-status"></div>
+      </div>
+    </div>
+
     <button type="button" class="btn-danger" id="btn-delete-project">Delete This Project</button>
   </div>
 </main>
@@ -188,6 +200,7 @@
 <script src="audit-log.js"></script>
 <script src="project-file.js"></script>
 <script src="report-bundle.js"></script>
+<script src="local-sync.js"></script>
 <script src="render-report.js"></script>
 <script src="quantity-calc.js"></script>
 <script src="dashboard-widgets.js"></script>
@@ -237,6 +250,7 @@ async function init() {
   const reports = await getReportsForProject(project.id);
   $('#report-count').textContent = reports.length;
   renderDashboard(reports, project);
+  refreshSyncFolderStatus();
 
   const m = project.meta || {};
   const extraDefaultKeys = [
@@ -734,6 +748,53 @@ $('#btn-toggle-settings').addEventListener('click', () => {
   panel.hidden = !open;
   btn.setAttribute('aria-expanded', String(open));
   if (open) panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+});
+
+async function refreshSyncFolderStatus() {
+  if (!project) return;
+  const btn = $('#btn-sync-folder');
+  const status = $('#sync-folder-status');
+  if (!folderSyncSupported()) {
+    btn.textContent = '⤓ Download Backup Zip';
+    status.textContent = 'This browser can’t write to a folder directly -- Sync downloads a backup zip instead.';
+    return;
+  }
+  const folderName = await getLinkedSyncFolderName(project.id);
+  status.textContent = folderName
+    ? `Linked to folder "${folderName}". Sync again anytime to update it.`
+    : 'Not linked to a folder yet -- Sync will ask you to choose one.';
+}
+
+$('#btn-sync-folder').addEventListener('click', async () => {
+  if (!project) return;
+  const btn = $('#btn-sync-folder');
+  const status = $('#sync-folder-status');
+  btn.disabled = true;
+  const originalLabel = btn.textContent;
+  try {
+    if (folderSyncSupported()) {
+      const result = await syncProjectToFolder(project, (done, total) => {
+        btn.textContent = `Syncing ${done}/${total}…`;
+      });
+      status.textContent = `Synced ${result.reportCount} report(s) to folder "${result.folderName}" just now.`;
+    } else {
+      const { blob, reportCount } = await buildProjectSyncZip(project, (done, total) => {
+        btn.textContent = `Building ${done}/${total}…`;
+      });
+      triggerDownload(blob, projectSyncZipFilename(project));
+      status.textContent = `Downloaded a backup zip with ${reportCount} report(s).`;
+    }
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      // User closed the folder picker -- not an error worth alerting over.
+    } else {
+      console.error(err);
+      alert(userError("Couldn't sync this project to a folder: " + err.message, 'FOLDER_SYNC'));
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+  }
 });
 
 $('#btn-download-project-file').addEventListener('click', () => {

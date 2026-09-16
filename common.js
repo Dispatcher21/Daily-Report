@@ -229,6 +229,7 @@ const ERROR_CODES = {
   SAVE_SYNC_CONFIRM: 'SKIDS',
   THEME_SAVE: 'WHIRL',
   HEADER_SYNC: 'BRAWN',
+  FOLDER_SYNC: 'HOTROD',
 };
 
 // Appends a reference code to a user-facing error message -- use for every
