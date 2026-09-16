@@ -412,11 +412,11 @@ function ensurePdfSyncLibs() {
 
 // Writes just this one report's PDF + data files into the project's linked
 // folder, and cleans up the old files first if the report's name changed
-// (Report No. or date edited since the last sync).
-async function syncSingleReportToFolder(project, report) {
-  const dirHandle = await getSyncDirectoryIfPermitted(project.id);
-  if (!dirHandle) return;
-
+// (Report No. or date edited since the last sync). `dirHandle` is resolved
+// by the caller (onLocalFolderSyncReportChanged) -- it decides up front
+// whether there's actually a permitted folder to write to, which is also
+// what tells it whether to show the progress banner at all.
+async function syncSingleReportToFolder(project, report, dirHandle) {
   const state = await getFolderSyncState(project.id);
   const prevEntry = state[report.id];
 
@@ -454,10 +454,7 @@ async function syncSingleReportToFolder(project, report) {
   await refreshQuantitySheetInFolder(dirHandle, project);
 }
 
-async function removeSingleReportFromFolder(project, report) {
-  const dirHandle = await getSyncDirectoryIfPermitted(project.id);
-  if (!dirHandle) return;
-
+async function removeSingleReportFromFolder(project, report, dirHandle) {
   const state = await getFolderSyncState(project.id);
   const entry = state[report.id];
   const base = entry ? entry.baseName : reportSyncBaseName(report);
@@ -470,6 +467,45 @@ async function removeSingleReportFromFolder(project, report) {
   await refreshQuantitySheetInFolder(dirHandle, project);
 }
 
+// ---------- Progress banner ----------
+//
+// Same bottom banner (common.js) every other background job in the app
+// already uses -- login, company sync, PDF building, a bulk import -- so a
+// background folder sync looks and feels like everything else async here
+// instead of happening invisibly. storage.js's save/delete call is still
+// fire-and-forget, so this never delays the save itself; it just narrates
+// the write that's already happening after the fact.
+//
+// Skips showing anything when the banner is already busy with something
+// else (a bulk import's own per-file progressStep, say) rather than
+// stealing it mid-sequence -- the sync still happens, just without its own
+// narration that turn. pbCurrentStepKey is common.js's own global (a plain
+// script, not a module, so it really is one), 'folder-sync' is this file's
+// key on it.
+let activeFolderSyncCount = 0;
+function folderSyncBannerAvailable() {
+  if (typeof startProgressBanner !== 'function') return false; // page never loaded common.js's banner (shouldn't happen, but don't assume)
+  const el = document.getElementById('global-progress-banner');
+  return !el || el.hidden || pbCurrentStepKey === 'folder-sync';
+}
+
+async function runFolderSyncWithBanner(activeLabel, doneLabel, task) {
+  const showBanner = folderSyncBannerAvailable();
+  if (showBanner) {
+    activeFolderSyncCount++;
+    if (activeFolderSyncCount === 1) startProgressBanner();
+    progressStep('folder-sync', activeLabel);
+  }
+  try {
+    await task();
+  } finally {
+    if (showBanner) {
+      activeFolderSyncCount = Math.max(0, activeFolderSyncCount - 1);
+      if (activeFolderSyncCount === 0) finishProgressBanner(doneLabel);
+    }
+  }
+}
+
 // The hook itself -- see storage.js's saveReport/deleteReport. Bails out
 // immediately, before loading anything, for the overwhelming common case of
 // a project that was never linked to a folder.
@@ -478,6 +514,14 @@ async function onLocalFolderSyncReportChanged(report, deleted) {
   if (!linked) return;
   const project = await getProject(report.projectId);
   if (!project) return;
-  if (deleted) await removeSingleReportFromFolder(project, report);
-  else await syncSingleReportToFolder(project, report);
+  const dirHandle = await getSyncDirectoryIfPermitted(project.id);
+  if (!dirHandle) return; // permission lapsed -- stays flagged unsynced (cloud icon) until the next manual Sync
+
+  if (deleted) {
+    await runFolderSyncWithBanner('Removing from folder', 'Removed from folder', () =>
+      removeSingleReportFromFolder(project, report, dirHandle));
+  } else {
+    await runFolderSyncWithBanner('Saving to folder', 'Synced to folder', () =>
+      syncSingleReportToFolder(project, report, dirHandle));
+  }
 }
