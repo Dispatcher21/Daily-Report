@@ -3,6 +3,15 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.024 -- 2026-09-21
+  - Info tooltips ("i" bubbles) across the app now clear the content
+    around them a bit better, and close automatically the moment you
+    scroll or tap/tab to something else instead of sticking around and
+    covering things. A couple of the worst offenders (Your Name on the
+    welcome screen, No Work Day/Weather Day) also got shorter text so
+    their bubbles take up less room. This is a first pass, not a full
+    rebuild -- some very tight spots can still get covered briefly.
+
 0.023 -- 2026-09-21
   - The Audit Log now shows per-inspector detail again -- who was added or
     removed on a report and whose Hours changed, not just the combined

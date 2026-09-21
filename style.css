@@ -1942,10 +1942,16 @@ input[type="date"] { min-width: 0; }
    the left or right edge of the screen -- the arrow stays centered on the
    trigger either way, only the bubble body shifts. */
 [data-tip] { position: relative; cursor: help; }
+/* Gap bumped from the original 10px/4px -- a dense card or a label sitting
+   right above its own input left barely any breathing room before the
+   bubble was already overlapping whatever's next; a few more pixels alone
+   won't fix a truly cramped spot, but it measurably helps the near-miss
+   cases without changing the flip logic itself (see the UI audit this
+   responds to). */
 [data-tip]::after {
   content: attr(data-tip);
   position: absolute;
-  left: 50%; bottom: calc(100% + 10px);
+  left: 50%; bottom: calc(100% + 14px);
   transform: translateX(calc(-50% + var(--tip-offset, 0px))) translateY(4px);
   background: var(--text); color: var(--bg);
   font-size: 0.74rem; font-weight: 500; line-height: 1.4;
@@ -1957,7 +1963,7 @@ input[type="date"] { min-width: 0; }
 }
 [data-tip]::before {
   content: '';
-  position: absolute; left: 50%; bottom: calc(100% + 4px);
+  position: absolute; left: 50%; bottom: calc(100% + 8px);
   transform: translateX(-50%) translateY(4px);
   border: 6px solid transparent; border-top-color: var(--text);
   opacity: 0; visibility: hidden; pointer-events: none; z-index: 30;
@@ -1979,11 +1985,11 @@ input[type="date"] { min-width: 0; }
    same flip .bar-row-top/the weather calendar's first row already do for
    their one specific known container each. */
 [data-tip].tip-flip-down::after {
-  bottom: auto; top: calc(100% + 10px);
+  bottom: auto; top: calc(100% + 14px);
   transform: translateX(calc(-50% + var(--tip-offset, 0px))) translateY(-4px);
 }
 [data-tip].tip-flip-down::before {
-  bottom: auto; top: calc(100% + 4px);
+  bottom: auto; top: calc(100% + 8px);
   border-top-color: transparent; border-bottom-color: var(--text);
   transform: translateX(-50%) translateY(-4px);
 }
@@ -2048,11 +2054,11 @@ input[type="date"] { min-width: 0; }
    container's top edge, so the usual upward-opening bubble pops out above
    the clip boundary and never shows -- open it downward there instead. */
 .bar-row-top[data-tip]::after {
-  bottom: auto; top: calc(100% + 10px);
+  bottom: auto; top: calc(100% + 14px);
   transform: translateX(calc(-50% + var(--tip-offset, 0px))) translateY(-4px);
 }
 .bar-row-top[data-tip]::before {
-  bottom: auto; top: calc(100% + 4px);
+  bottom: auto; top: calc(100% + 8px);
   transform: translateX(-50%) translateY(-4px);
   border-top-color: transparent; border-bottom-color: var(--text);
 }
@@ -2531,11 +2537,11 @@ input[type="date"] { min-width: 0; }
    row of a month card sits at (or above) this scrollable list's own top
    edge, same clipping problem as the pay item list's first row. */
 .weather-calendar .wcal-month:first-child .wcal-grid > :nth-child(-n+7)[data-tip]::after {
-  bottom: auto; top: calc(100% + 10px);
+  bottom: auto; top: calc(100% + 14px);
   transform: translateX(calc(-50% + var(--tip-offset, 0px))) translateY(-4px);
 }
 .weather-calendar .wcal-month:first-child .wcal-grid > :nth-child(-n+7)[data-tip]::before {
-  bottom: auto; top: calc(100% + 4px);
+  bottom: auto; top: calc(100% + 8px);
   transform: translateX(-50%) translateY(-4px);
   border-top-color: transparent; border-bottom-color: var(--text);
 }

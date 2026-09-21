@@ -527,8 +527,22 @@ document.addEventListener('pointerover', (e) => {
 });
 document.addEventListener('focusin', (e) => {
   const el = e.target.closest('[data-tip]');
-  if (el) positionTip(el);
+  if (el) { positionTip(el); return; }
+  // Focus landed somewhere that isn't a tooltip trigger -- tabbing past a
+  // tapped "i" icon into the very field it was explaining, say. The click
+  // that focuses something already closes an open bubble in the common
+  // case (see the click handler below), but a focus change with no
+  // synthetic click behind it (keyboard nav, autofill, programmatic focus)
+  // wouldn't otherwise -- left it stuck open over whatever was just
+  // focused instead of closing the way tapping elsewhere already does.
+  $$('[data-tip].tip-open').forEach((t) => t.classList.remove('tip-open'));
 });
+// A bubble that's covering something is exactly what someone would
+// instinctively scroll past -- close it the moment that happens rather
+// than have it ride along, still covering the same relative spot.
+document.addEventListener('scroll', () => {
+  $$('[data-tip].tip-open').forEach((t) => t.classList.remove('tip-open'));
+}, { passive: true, capture: true });
 
 // [data-tip]'s bubble is only hidden via opacity/visibility (so it can
 // transition in), never display:none -- so even closed, it's still laid
