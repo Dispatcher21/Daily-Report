@@ -1204,13 +1204,24 @@ function renderMdTrendChart(projectStats, included, reports, today) {
 // than threaded through as click-handler arguments, since the delegated
 // listener (wired once, below) fires long after this function returns.
 const MDCAL_WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-const MDCAL_MAX_PILLS = 8; // beyond this a cell shows "+N" rather than overflowing
+const MDCAL_MAX_PILLS = 4; // beyond this a cell shows "+N more" rather than growing the cell indefinitely -- text chips take real room, unlike the plain dots this started as
 let mdCalendarByDate = new Map(); // date -> Map(projectId -> report)
 let mdCalendarProjectById = new Map();
 let mdCalendarColorByProjectId = new Map();
 
 function mdReportHasPhotos(r) {
   return (r.photos || []).some((p, i) => p || (r.photosFetched && r.photosFetched[i] === false));
+}
+
+// Project names run long ("PR#214 - GNOEC - Safety Bay Incident Ahead
+// Signs") and a pill has maybe 90px to work with -- most of this app's real
+// project names put the short, recognizable part (a PO/contract number, or
+// a short site name) before the first " - ", so that's what shows on the
+// pill itself; the full name is still the pill's title tooltip and is
+// spelled out in full in the legend and the day-detail modal.
+function mdShortProjectLabel(name) {
+  const first = (name || '').split(' - ')[0].trim() || name || '';
+  return first.length > 20 ? first.slice(0, 19) + '…' : first;
 }
 
 function renderMdCalendar(included, reports) {
@@ -1249,17 +1260,20 @@ function renderMdCalendar(included, reports) {
       const iso = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       const dayMap = mdCalendarByDate.get(iso);
       if (!dayMap || dayMap.size === 0) {
-        cells.push(`<div class="wcal-day"><span class="wcal-day-num">${d}</span></div>`);
+        cells.push(`<div class="wcal-day" data-date="${iso}"><span class="wcal-day-num">${d}</span></div>`);
         continue;
       }
       const projectIds = [...dayMap.keys()];
       const shown = projectIds.slice(0, MDCAL_MAX_PILLS);
       const extra = projectIds.length - shown.length;
       const pills = shown
-        .map((pid) => `<span class="mdcal-pill" style="background:${mdCalendarColorByProjectId.get(pid)}"></span>`)
-        .join('') + (extra > 0 ? `<span class="mdcal-pill-more">+${extra}</span>` : '');
+        .map((pid) => {
+          const project = mdCalendarProjectById.get(pid);
+          return `<span class="mdcal-pill" style="background:${mdCalendarColorByProjectId.get(pid)}" title="${escapeHtml(project ? project.name : '')}">${escapeHtml(mdShortProjectLabel(project ? project.name : ''))}</span>`;
+        })
+        .join('') + (extra > 0 ? `<span class="mdcal-pill-more">+${extra} more</span>` : '');
       cells.push(`
-        <div class="wcal-day wcal-clickable" tabindex="0" data-cal-date="${iso}">
+        <div class="wcal-day wcal-clickable" tabindex="0" data-date="${iso}" data-cal-date="${iso}">
           <span class="wcal-day-num">${d}</span>
           <div class="mdcal-pills">${pills}</div>
         </div>`);
@@ -1271,6 +1285,29 @@ function renderMdCalendar(included, reports) {
         <div class="wcal-grid">${cells.join('')}</div>
       </div>`;
   }).join('');
+
+  // Default to showing today's date, not the earliest month on file -- the
+  // calendar spans a project's whole history, and someone opening this
+  // dashboard almost always cares about "what happened recently", not what
+  // happened on day one. Centers today's row in the scrollable area rather
+  // than just snapping it to the very top, so a few days of context above
+  // today are visible too.
+  requestAnimationFrame(() => {
+    const container = $('#md-calendar');
+    const todayCell = container.querySelector(`[data-date="${todayIso()}"]`);
+    if (!todayCell) { container.scrollTop = container.scrollHeight; return; } // no exact cell (e.g. today's month has no data yet) -- fall back to the most recent end
+    // offsetTop is relative to the nearest *positioned* ancestor, which
+    // isn't necessarily this scroll container (none of .wcal-month/.wcal-grid
+    // set position, so it can resolve all the way up to <body>) --
+    // getBoundingClientRect diffed against the container's own is the only
+    // reliable way to get "how far down this container's own content" a
+    // cell sits, however deep the wrapper markup between them goes.
+    const cellRect = todayCell.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    const offsetWithinContainer = cellRect.top - containerRect.top + container.scrollTop;
+    const target = offsetWithinContainer - container.clientHeight / 2 + todayCell.offsetHeight / 2;
+    container.scrollTop = Math.max(0, target);
+  });
 }
 
 function mdDayDetailRow(label, value) {

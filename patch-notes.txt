@@ -3,6 +3,13 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.031 -- 2026-09-21
+  - Manager Dashboard calendar: each project's pill now shows its name
+    (the short part before " - ", e.g. "PR#439" out of "PR#439 - Causeway
+    Striping" -- full name still on hover and in the legend/day popup),
+    and the calendar now opens already scrolled to today instead of the
+    very first month on file.
+
 0.030 -- 2026-09-21
   - Fixed an iPhone photo set as a project card's background image (Settings
     > Company > project list) silently failing to convert from HEIC and
