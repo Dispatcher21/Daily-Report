@@ -3,6 +3,12 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.025 -- 2026-09-21
+  - Your Name and Company Password on the welcome screen, and No Work
+    Day/Weather Day in the report editor, no longer need a tap to see
+    their explanation -- it's just there under the field/buttons now.
+    Fewer things to accidentally cover the screen.
+
 0.024 -- 2026-09-21
   - Info tooltips ("i" bubbles) across the app now clear the content
     around them a bit better, and close automatically the moment you
