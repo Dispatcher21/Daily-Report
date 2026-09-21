@@ -562,7 +562,7 @@ function renderRow(r) {
       ${reportThumbsHtml(r)}
       <div class="report-row-main" data-open="${r.id}">
         <span class="report-row-date">${r.date || '(no date)'}${badges ? ' ' + badges : ''}</span>
-        <span class="report-row-sub">${escapeHtml(r.activity || 'No activity noted')}</span>
+        <span class="report-row-sub">${escapeHtml(reportActivityText(r) || 'No activity noted')}</span>
       </div>
       <div class="report-row-actions">
         ${reportCloudBadgeHtml(r)}
@@ -577,12 +577,12 @@ function renderCard(r) {
   // Activity leads the card -- it's the thing actually worth scanning for.
   // A true No Work Day/Weather Day report has nothing there by design (the
   // buttons that make one only touch Notes, never Activity), so its badge
-  // takes over that slot instead of every one just saying "No activity noted".
+  // takes over that slot instead of falling through to reportActivityText.
   const activityHtml = !r.activity && isNoWorkDayReport(r)
     ? '<span class="report-row-nwd">NO WORK DAY</span>'
     : !r.activity && isWeatherDayReport(r)
     ? '<span class="report-row-wd">WEATHER DAY</span>'
-    : escapeHtml(r.activity || 'No activity noted');
+    : escapeHtml(reportActivityText(r) || 'No activity noted');
   const authorBadges = reportAuthorBadgesHtml(r);
   const authorBadge = authorBadges ? ' ' + authorBadges : '';
   return `

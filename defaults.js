@@ -55,6 +55,25 @@ function isWeatherDayReport(report) {
   return !!report && (report.notes || '').trim().toUpperCase() === WEATHER_DAY_NOTE;
 }
 
+// The short "what happened" text used wherever a report needs to be
+// scanned at a glance (reports.html's list/card rows, project.html's
+// Weather & Schedule list/calendar) -- Activity if it's filled in,
+// otherwise the first non-blank line of Work Summary (the big box, more
+// likely to actually have something written on a day someone forgot to
+// fill in the short Activity line). Returns '' rather than a placeholder
+// when neither has anything, so a caller can tell "nothing to show" apart
+// from real text and pick its own placeholder wording (or none at all).
+// Doesn't special-case No Work Day/Weather Day -- those reports have
+// neither field filled in by design, so a caller that wants a distinct
+// "NO WORK DAY" badge instead still needs to check
+// isNoWorkDayReport/isWeatherDayReport itself first.
+function reportActivityText(report) {
+  const activity = (report && report.activity || '').trim();
+  if (activity) return activity;
+  const workSummary = (report && report.workSummary || '');
+  return workSummary.split('\n').map((l) => l.trim()).find(Boolean) || '';
+}
+
 // True for a catalog item that tracks Start/Stop Station, Side, and/or has a
 // Locations list (see the STATIONS/LOCATIONS/SIDE columns in project-file.js).
 // These can legitimately show up more than once on the same report --

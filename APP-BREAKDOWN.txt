@@ -393,8 +393,13 @@ defaults.js
   getMissingRequiredFields (the required/hidden/ordered-field system
   required-fields.html and report-editor.html both read), plus small pure
   helpers used across pages: isNoWorkDayReport/isWeatherDayReport,
-  payItemNeedsMultiple, computeOverrun/overrunLabel, parseStation,
-  computeAreaQty.
+  reportActivityText (Activity if filled in, else the first non-blank line
+  of Work Summary, else '' -- the "what happened" preview text in
+  reports.html's list/card rows, project.html's Weather & Schedule list/
+  calendar/day-detail modal, and index.html's Manager Dashboard day-detail
+  modal all share this one lookup rather than each reading report.activity
+  directly), payItemNeedsMultiple, computeOverrun/overrunLabel,
+  parseStation, computeAreaQty.
 
 theme.js
   Light/dark theming + accent color derivation (deriveAccentVars,

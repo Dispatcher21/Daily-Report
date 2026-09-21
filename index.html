@@ -1338,8 +1338,10 @@ function openMdDayDetailModal(date) {
     } else {
       const isAttention = r.trafficControlSelect === 'ATTENTION_REQUIRED';
       const temps = (r.tempHigh || r.tempLow) ? `${r.tempHigh || '—'}°/${r.tempLow || '—'}°F` : '';
+      const activity = (r.activity || '').trim();
+      const activityText = reportActivityText(r); // falls back to Work Summary's first line when Activity is blank
       body = [
-        mdDayDetailRow('Activity', r.activity),
+        activity ? mdDayDetailRow('Activity', activity) : (activityText ? mdDayDetailRow('Work Summary', activityText) : ''),
         mdDayDetailRow('Weather', [r.weatherDesc, temps].filter(Boolean).join(' · ')),
         mdDayDetailRow('Traffic Control', r.trafficControlSelect ? (isAttention ? 'Attention Required' : 'In Place') : ''),
         mdDayDetailRow('Hours', r.hours),

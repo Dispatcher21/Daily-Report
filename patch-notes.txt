@@ -3,6 +3,14 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.035 -- 2026-09-21
+  - Every place a report's Activity shows as a quick preview -- View
+    Reports' list/card rows, the project dashboard's Weather & Schedule
+    list/calendar/day-detail popup, and the Manager Dashboard's calendar
+    popup -- now falls back to the first line of Work Summary when
+    Activity itself is blank, instead of just saying "No activity noted"
+    on a report that actually has something written, just not there.
+
 0.034 -- 2026-09-21
   - Fixed a report with nothing notable in Weather & Schedule's own
     categories (no activity typed in, no adverse weather, no photos,

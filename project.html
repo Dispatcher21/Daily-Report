@@ -681,11 +681,12 @@ function renderWeatherLogList(loggable) {
       const temps = (r.tempHigh || r.tempLow) ? `${r.tempHigh || '—'}°/${r.tempLow || '—'}°F` : '';
       const weatherText = [r.weatherDesc, temps].filter(Boolean).join(' · ');
       const isAdverse = ADVERSE_WEATHER_RE.test(r.weatherDesc || '');
+      const activityText = reportActivityText(r); // falls back to Work Summary's first line when Activity is blank
       return `
         <div class="wlog-row">
           <div class="wlog-date">${escapeHtml(r.date)}</div>
           <div class="wlog-body">
-            ${r.activity ? `<div class="wlog-activity">${escapeHtml(r.activity)}</div>` : ''}
+            ${activityText ? `<div class="wlog-activity">${escapeHtml(activityText)}</div>` : ''}
             ${weatherText ? `<div class="wlog-weather">${isAdverse ? '<span title="Adverse weather">⛈️</span> ' : ''}${escapeHtml(weatherText)}</div>` : ''}
             ${r.trafficControlSelect ? `<div class="wlog-tc"><span class="status-dot ${isAttention ? 'status-over' : 'status-near'}"></span>Traffic Control: ${isAttention ? 'Attention Required' : 'In Place'}</div>` : ''}
             ${r.controllingItem ? `<div><strong>Controlling Item:</strong> ${escapeHtml(r.controllingItem)}</div>` : ''}
@@ -725,11 +726,16 @@ function weatherCalDayHtml(dayNum, r, iso) {
   }
   const isAttention = r.trafficControlSelect === 'ATTENTION_REQUIRED';
   const isAdverse = ADVERSE_WEATHER_RE.test(r.weatherDesc || '');
-  const hasActivity = !!String(r.activity || '').trim();
+  const activity = (r.activity || '').trim();
+  const activityText = reportActivityText(r); // falls back to Work Summary's first line when Activity is blank
+  const hasActivity = !!activityText;
   const temps = (r.tempHigh || r.tempLow) ? `${r.tempHigh || '—'}°/${r.tempLow || '—'}°F` : '';
   const weatherText = [r.weatherDesc, temps].filter(Boolean).join(' · ');
   const tipParts = [
-    hasActivity ? `Activity: ${r.activity}` : '',
+    // Labeled by which field it actually came from -- showing Work Summary
+    // text under an "Activity:" label would misrepresent what's actually on
+    // the report.
+    activity ? `Activity: ${activity}` : (activityText ? `Work Summary: ${activityText}` : ''),
     weatherText,
     r.trafficControlSelect ? `Traffic Control: ${isAttention ? 'Attention Required' : 'In Place'}` : '',
     r.controllingItem ? `Controlling Item: ${r.controllingItem}` : '',
@@ -849,8 +855,10 @@ function openDayDetailModal(r) {
   } else {
     const isAttention = r.trafficControlSelect === 'ATTENTION_REQUIRED';
     const temps = (r.tempHigh || r.tempLow) ? `${r.tempHigh || '—'}°/${r.tempLow || '—'}°F` : '';
+    const activity = (r.activity || '').trim();
+    const activityText = reportActivityText(r); // falls back to Work Summary's first line when Activity is blank
     bodyHtml = [
-      dayDetailRow('Activity', r.activity),
+      activity ? dayDetailRow('Activity', activity) : (activityText ? dayDetailRow('Work Summary', activityText) : ''),
       dayDetailRow('Weather', [r.weatherDesc, temps].filter(Boolean).join(' · ')),
       dayDetailRow('Traffic Control', r.trafficControlSelect ? (isAttention ? 'Attention Required' : 'In Place') : ''),
       dayDetailRow('Controlling Item', r.controllingItem),
