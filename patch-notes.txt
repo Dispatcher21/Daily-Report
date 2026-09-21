@@ -3,6 +3,18 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.023 -- 2026-09-21
+  - The Audit Log now shows per-inspector detail again -- who was added or
+    removed on a report and whose Hours changed, not just the combined
+    Representative name. Who actually made the edit was always the
+    logged-in device, unaffected either way.
+
+0.022 -- 2026-09-21
+  - View Reports now shows a banner at the top when the linked folder has
+    reports waiting to sync, with a Sync Now button right there -- no more
+    needing to notice a small cloud icon or go find the Sync button on the
+    Project page.
+
 0.021 -- 2026-09-21
   - View Reports now shows multiple inspectors as separate, differently
     colored name badges instead of one combined name.

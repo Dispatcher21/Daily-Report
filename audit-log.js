@@ -27,13 +27,14 @@ const REPORT_DIFF_SKIP = new Set([
   'id', 'projectId', 'updatedAt', 'createdBy', 'lastEditedBy',
   'photos', 'photosFetched', 'repSignatureImage', 'signatureFetched', 'peSignatureImage',
   'thumbnail', 'thumbnailBack', 'thumbnailAt',
-  // Raw per-segment start/end times read as noise, not a meaningful audit
-  // entry on their own -- Representative and Hours (both diffed normally,
-  // just below) already summarize who changed and by how much whenever
-  // an inspector or their time changes. timeEntries is the pre-multi-
-  // inspector field, superseded by inspectors and never touched again
-  // after a report is migrated, so it never has a diff to show anyway.
-  'inspectors', 'timeEntries',
+  // inspectors gets its own identity-matched diff instead (see
+  // diffInspectors, called separately in diffReport the same way payItems
+  // is) -- per-inspector added/removed/Hours changes, not raw per-segment
+  // start/end times, which would be noise the Hours figure already speaks
+  // to. timeEntries is the pre-multi-inspector field, superseded by
+  // inspectors and never touched again after a report is migrated, so it
+  // never has anything to show either way.
+  'timeEntries',
 ]);
 const PROJECT_DIFF_SKIP = new Set([
   'id', 'updatedAt', 'createdAt', 'backgroundImage', 'backgroundImageFetched',
@@ -192,13 +193,56 @@ function diffPayItemCatalog(before, after, out) {
   }
 }
 
+// Same identity-over-position reasoning as pay item rows -- matched by
+// name, since an inspector has no other stable identity. Two inspectors
+// can share a typed name; index among matches with that exact name breaks
+// the tie, same as payItemKey. Reports who was added/removed and whose
+// Hours changed -- not a play-by-play of their individual time segments,
+// which would be noise the aggregate Hours figure already speaks to.
+function diffInspectors(before, after, out) {
+  const realBefore = (before || []).filter((insp) => insp && (insp.name || '').trim());
+  const realAfter = (after || []).filter((insp) => insp && (insp.name || '').trim());
+  const usedAfter = new Set();
+  const seenNameCount = new Map();
+
+  for (const b of realBefore) {
+    const name = b.name.trim();
+    const occurrence = seenNameCount.get(name) || 0;
+    seenNameCount.set(name, occurrence + 1);
+    let matchIdx = -1;
+    let seenSoFar = 0;
+    for (let i = 0; i < realAfter.length; i++) {
+      if (usedAfter.has(i) || realAfter[i].name.trim() !== name) continue;
+      if (seenSoFar === occurrence) { matchIdx = i; break; }
+      seenSoFar++;
+    }
+    if (matchIdx === -1) {
+      out.push({ label: `Inspector ${name} removed`, from: `${fmtLeaf(b.hours)} hrs`, to: '' });
+      continue;
+    }
+    usedAfter.add(matchIdx);
+    const a = realAfter[matchIdx];
+    if (fmtLeaf(b.hours) !== fmtLeaf(a.hours)) {
+      out.push({ label: `Inspector ${name} Hours`, from: fmtLeaf(b.hours), to: fmtLeaf(a.hours) });
+    }
+  }
+  for (let i = 0; i < realAfter.length; i++) {
+    if (usedAfter.has(i)) continue;
+    const a = realAfter[i];
+    out.push({ label: `Inspector ${a.name.trim()} added`, from: '', to: `${fmtLeaf(a.hours)} hrs` });
+  }
+}
+
 function diffReport(before, after) {
   const out = [];
   diffPayItems(before.payItems, after.payItems, out);
+  diffInspectors(before.inspectors, after.inspectors, out);
   const beforeRest = { ...before };
   const afterRest = { ...after };
   delete beforeRest.payItems;
   delete afterRest.payItems;
+  delete beforeRest.inspectors;
+  delete afterRest.inspectors;
   diffByLabelMap(beforeRest, afterRest, REPORT_FIELD_LABELS, REPORT_DIFF_SKIP, '', out);
   return out;
 }
