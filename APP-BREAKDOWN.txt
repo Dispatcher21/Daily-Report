@@ -185,8 +185,12 @@ index.html
   with the membersCanViewManagerDashboard permission or an admin) the
   Manager Dashboard -- a company-wide rollup across every visible project
   (renderManagerDashboard and its render* helpers: checklist, stats, trend
-  chart via dashboard-widgets.js's renderTrendSvg, hours bars, per-project
-  status, activity feed). Also handles receiving a shared setup via the
+  chart via dashboard-widgets.js's renderTrendSvg, a portfolio-wide report
+  calendar (renderMdCalendar -- one color pill per project on each day it
+  filed a report, reusing project.html's own weather-calendar CSS/click
+  model; openMdDayDetailModal stacks one detail block + link set per
+  project when a day has more than one), hours bars, per-project status,
+  activity feed). Also handles receiving a shared setup via the
   #setup= URL fragment (handleIncomingSetup -> setup-share.js's
   decodeSetupPayload/applySetupPayload) and applying the selected company
   theme's background/decal (applyCompanyThemeVisuals).

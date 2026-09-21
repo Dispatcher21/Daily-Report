@@ -3,6 +3,20 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.030 -- 2026-09-21
+  - Fixed an iPhone photo set as a project card's background image (Settings
+    > Company > project list) silently failing to convert from HEIC and
+    showing as a broken image -- every other photo/logo/background upload
+    already had this fix, this one path was missed.
+  - Fixed Hours per Employee grouping a multi-inspector report's hours
+    under one combined "Name, Name" bar instead of crediting each person's
+    own logged hours to their own bar.
+  - Added a portfolio-wide calendar to the Manager Dashboard: one color-
+    coded pill per project on any day it filed a report, same click-a-day
+    popup model as the project dashboard's own calendar, but stacking one
+    block (with its own View Report/View Photos/Quantities/Edit links) per
+    project when more than one filed on the same day.
+
 0.029 -- 2026-09-21
   - Photos are now clickable: tap one in the report editor, on the printed
     report preview (report-viewer.html), or on a new read-only Photos page

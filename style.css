@@ -2593,6 +2593,27 @@ input[type="date"] { min-width: 0; }
 }
 .ddm-links a[hidden] { display: none; }
 
+/* ---------- Manager Dashboard calendar (index.html) ---------- */
+/* Reuses .wcal-month/.wcal-weekdays/.wcal-grid/.wcal-day/.wcal-clickable
+   from the project dashboard's own weather calendar directly (same grid
+   geometry, same click-to-open-a-day model) -- only the day cell's own
+   content differs: color pills per project instead of weather/activity
+   icons, since one day here can have a report from more than one project. */
+.mdcal-legend { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; margin-bottom: 0.9rem; font-size: 0.8rem; color: var(--text-dim); }
+.mdcal-legend-item { display: flex; align-items: center; gap: 0.35rem; }
+.mdcal-legend-swatch { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; display: inline-block; }
+.mdcal-pills { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 2px; flex: 1; }
+.mdcal-pill { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; }
+.mdcal-pill-more { font-size: 0.55rem; font-weight: 700; color: var(--text-dim); line-height: 1; }
+/* Wider/taller than the plain single-project day-detail modal (.ddm-card)
+   -- a day here can list several projects' worth of detail stacked
+   vertically, so this scrolls internally instead of overflowing the
+   viewport. */
+.mddm-card { max-width: 540px; max-height: calc(100vh - 3rem); overflow-y: auto; }
+.mddm-block { padding: 0.6rem 0; }
+.mddm-block-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.3rem; font-size: 0.95rem; font-weight: 700; }
+.mddm-sep { border: none; border-top: 1px solid var(--border); margin: 0.3rem 0; }
+
 .settings-toggle {
   width: 100%; display: flex; align-items: center; justify-content: space-between;
   gap: 0.6rem; padding: 0.85rem 1rem; margin-top: 0.5rem;
