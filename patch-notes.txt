@@ -3,6 +3,18 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.029 -- 2026-09-21
+  - Photos are now clickable: tap one in the report editor, on the printed
+    report preview (report-viewer.html), or on a new read-only Photos page
+    (report-photos.html) to open it full-size in its own tab.
+  - The project dashboard's Weather & Schedule calendar now shows a camera
+    icon on any day with photos attached, and a day with photos but no
+    other logged weather/activity now shows up on the calendar at all
+    (it used to be skipped entirely).
+  - Every day on that calendar is now clickable -- opens a popup with
+    what was logged that day and links to View Report, View Photos (if
+    any), Quantities for This Day, and Edit Report.
+
 0.028 -- 2026-09-21
   - Fixed the real cause of the unsynced-reports banner on View Reports:
     a CSS bug meant it could never actually hide itself, on any project --

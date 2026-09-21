@@ -1648,7 +1648,7 @@ input[type="date"] { min-width: 0; }
   display: flex; align-items: center; justify-content: center; position: relative;
   overflow: hidden; background: var(--surface-2); font-size: 0.88rem; color: var(--text-dim);
 }
-.photo-slot img { width: 100%; height: 100%; object-fit: cover; }
+.photo-slot img { width: 100%; height: 100%; object-fit: cover; cursor: pointer; }
 .photo-slot .photo-remove {
   position: absolute; top: 5px; right: 5px; background: rgba(0,0,0,0.65); color: #fff;
   border: none; border-radius: 50%; width: 32px; height: 32px; font-size: 1.1rem; cursor: pointer;
@@ -2531,6 +2531,11 @@ input[type="date"] { min-width: 0; }
   cursor: default;
 }
 .wcal-day[data-tip] { cursor: help; }
+/* A day with a real report opens the day-detail modal on click -- takes
+   priority over the plain data-tip "help" cursor above since a clickable
+   day should read as clickable, not just hoverable. */
+.wcal-day.wcal-clickable { cursor: pointer; }
+.wcal-day.wcal-clickable:hover { border-color: var(--brand-light); }
 .wcal-day-empty { border-color: transparent; background: none; }
 .wcal-day-num { font-size: 0.72rem; font-weight: 600; color: var(--text-dim); }
 .wcal-day-icons { display: flex; align-items: center; flex-wrap: wrap; gap: 3px; }
@@ -2568,6 +2573,25 @@ input[type="date"] { min-width: 0; }
 .weather-calendar .wcal-month:first-child .wcal-grid > :nth-child(-n+7)[data-tip].tip-open::before {
   transform: translateX(-50%) translateY(0);
 }
+
+/* ---------- Day detail modal (project.html weather calendar) ---------- */
+.ddm-card { max-width: 420px; }
+.ddm-header { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.9rem; }
+.ddm-header h2 { margin: 0; font-size: 1.1rem; }
+.ddm-close {
+  background: none; border: none; font-size: 1.4rem; line-height: 1; cursor: pointer;
+  color: var(--text-dim); padding: 0.2rem 0.4rem;
+}
+.ddm-row { display: flex; flex-direction: column; gap: 0.15rem; padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
+.ddm-row:last-child { border-bottom: none; }
+.ddm-label { font-size: 0.72rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.02em; }
+.ddm-value { font-size: 0.92rem; }
+.ddm-badge { font-weight: 700; padding: 0.5rem 0; }
+.ddm-links { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1.1rem; }
+.ddm-links a {
+  text-decoration: none; text-align: center; display: block;
+}
+.ddm-links a[hidden] { display: none; }
 
 .settings-toggle {
   width: 100%; display: flex; align-items: center; justify-content: space-between;

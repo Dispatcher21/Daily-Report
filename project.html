@@ -194,6 +194,22 @@
   </div>
 </main>
 
+<div class="modal-overlay" id="day-detail-overlay" hidden>
+  <div class="modal-card ddm-card">
+    <div class="ddm-header">
+      <h2 id="ddm-title">Day</h2>
+      <button type="button" class="ddm-close" id="ddm-close" aria-label="Close">&times;</button>
+    </div>
+    <div id="ddm-body"></div>
+    <div class="ddm-links">
+      <a class="btn-secondary" id="ddm-link-report">View Report</a>
+      <a class="btn-secondary" id="ddm-link-photos">View Photos</a>
+      <a class="btn-secondary" id="ddm-link-quantity">Quantities for This Day</a>
+      <a class="btn-secondary" id="ddm-link-edit">Edit Report</a>
+    </div>
+  </div>
+</div>
+
 <script src="lib/xlsx.min.js"></script>
 <script src="lib/fflate.min.js"></script>
 <script src="lib/html2canvas.min.js"></script>
@@ -598,13 +614,22 @@ function renderTrendChart(points) {
 let weatherViewMode = 'list';
 let weatherLoggableCache = [];
 
+// True if any photo slot has a real Blob locally, OR is confirmed to exist
+// remotely but just hasn't been downloaded to this device yet
+// (photosFetched[i] === false still means "there's a photo there" -- see
+// firebase-sync.js's pull path). Only photosFetched[i] === true with a null
+// Blob means "confirmed empty".
+function reportHasPhotos(r) {
+  return (r.photos || []).some((p, i) => p || (r.photosFetched && r.photosFetched[i] === false));
+}
+
 function renderWeatherSchedule(dated) {
   const step = $('#dash-weather-step');
   // A No Work Day/Weather Day report is blank apart from its Notes by design
   // (see the report-editor.html buttons) -- included here too now so it can
   // be annotated in the list/calendar, not just counted in the stat card.
   const loggable = dated.filter((r) =>
-    r.weatherDesc || r.tempHigh || r.tempLow || r.trafficControlSelect || r.controllingItem || r.commentsOnTime || r.activity || isNoWorkDayReport(r) || isWeatherDayReport(r)
+    r.weatherDesc || r.tempHigh || r.tempLow || r.trafficControlSelect || r.controllingItem || r.commentsOnTime || r.activity || isNoWorkDayReport(r) || isWeatherDayReport(r) || reportHasPhotos(r)
   );
   const noWorkDays = dated.filter(isNoWorkDayReport).length;
   const weatherDays = dated.filter(isWeatherDayReport).length;
@@ -673,18 +698,24 @@ const WCAL_WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
 function weatherCalDayHtml(dayNum, r) {
   if (!r) return `<div class="wcal-day"><span class="wcal-day-num">${dayNum}</span></div>`;
+  const hasPhotos = reportHasPhotos(r);
+  // Every branch below gets data-report-id + .wcal-clickable so the single
+  // delegated listener in renderWeatherCalendar can open the day-detail
+  // modal for any day that has a real report, regardless of its type.
   if (isNoWorkDayReport(r)) {
     return `
-      <div class="wcal-day wcal-nwd" data-tip="No Work Day" tabindex="0">
+      <div class="wcal-day wcal-nwd wcal-clickable" data-tip="No Work Day" tabindex="0" data-report-id="${r.id}">
         <span class="wcal-day-num">${dayNum}</span>
         <span class="wcal-badge">NWD</span>
+        ${hasPhotos ? '<div class="wcal-day-icons"><span class="wcal-icon" title="Photos attached">📷</span></div>' : ''}
       </div>`;
   }
   if (isWeatherDayReport(r)) {
     return `
-      <div class="wcal-day wcal-nwd" data-tip="Weather Day" tabindex="0">
+      <div class="wcal-day wcal-nwd wcal-clickable" data-tip="Weather Day" tabindex="0" data-report-id="${r.id}">
         <span class="wcal-day-num">${dayNum}</span>
         <span class="wcal-badge">WD</span>
+        ${hasPhotos ? '<div class="wcal-day-icons"><span class="wcal-icon" title="Photos attached">📷</span></div>' : ''}
       </div>`;
   }
   const isAttention = r.trafficControlSelect === 'ATTENTION_REQUIRED';
@@ -697,19 +728,21 @@ function weatherCalDayHtml(dayNum, r) {
     weatherText,
     r.trafficControlSelect ? `Traffic Control: ${isAttention ? 'Attention Required' : 'In Place'}` : '',
     r.controllingItem ? `Controlling Item: ${r.controllingItem}` : '',
+    hasPhotos ? 'Photos attached' : '',
   ].filter(Boolean);
-  const cls = ['wcal-day'];
+  const cls = ['wcal-day', 'wcal-clickable'];
   if (isAdverse) cls.push('wcal-adverse');
   if (isAttention) cls.push('wcal-attention');
   // Icons stay small and iconic rather than showing activity text inline --
   // a day's Activity write-up can run to paragraphs, which would blow out a
   // grid cell sized for a two-digit date. Full text lives in the tooltip.
   return `
-    <div class="${cls.join(' ')}"${tipParts.length ? ` data-tip="${escapeHtml(tipParts.join(' — '))}" tabindex="0"` : ''}>
+    <div class="${cls.join(' ')}"${tipParts.length ? ` data-tip="${escapeHtml(tipParts.join(' — '))}"` : ''} tabindex="0" data-report-id="${r.id}">
       <span class="wcal-day-num">${dayNum}</span>
       <div class="wcal-day-icons">
         ${isAdverse ? '<span class="wcal-icon" title="Adverse weather">⛈️</span>' : ''}
         ${hasActivity ? '<span class="wcal-icon" title="Activity logged">📝</span>' : ''}
+        ${hasPhotos ? '<span class="wcal-icon" title="Photos attached">📷</span>' : ''}
         ${r.trafficControlSelect ? `<span class="wcal-dot ${isAttention ? 'wcal-dot-attention' : 'wcal-dot-ok'}"></span>` : ''}
       </div>
     </div>`;
@@ -744,6 +777,65 @@ $$('#weather-view-toggle .view-toggle-btn').forEach((btn) => {
     $$('#weather-view-toggle .view-toggle-btn').forEach((b) => b.classList.toggle('active', b === btn));
     renderWeatherView();
   });
+});
+
+// ---------- Day detail modal ----------
+//
+// One delegated listener rather than one per cell, since the calendar
+// re-renders its innerHTML wholesale on every view switch/date change --
+// per-cell listeners would need re-wiring every time, a delegated one on
+// the never-replaced container just keeps working.
+$('#dash-weather-calendar').addEventListener('click', (e) => {
+  const cell = e.target.closest('.wcal-clickable[data-report-id]');
+  if (!cell) return;
+  const r = weatherLoggableCache.find((x) => x.id === cell.dataset.reportId);
+  if (r) openDayDetailModal(r);
+});
+$('#dash-weather-calendar').addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const cell = e.target.closest('.wcal-clickable[data-report-id]');
+  if (!cell) return;
+  e.preventDefault();
+  const r = weatherLoggableCache.find((x) => x.id === cell.dataset.reportId);
+  if (r) openDayDetailModal(r);
+});
+
+function dayDetailRow(label, value) {
+  if (!value) return '';
+  return `<div class="ddm-row"><span class="ddm-label">${escapeHtml(label)}</span><span class="ddm-value">${escapeHtml(value)}</span></div>`;
+}
+
+function openDayDetailModal(r) {
+  $('#ddm-title').textContent = r.date || `Report #${r.reportNo}`;
+
+  let bodyHtml;
+  if (isNoWorkDayReport(r) || isWeatherDayReport(r)) {
+    bodyHtml = `<div class="ddm-badge">${isNoWorkDayReport(r) ? '&#128683; No Work Day' : '&#9925; Weather Day'}</div>`;
+  } else {
+    const isAttention = r.trafficControlSelect === 'ATTENTION_REQUIRED';
+    const temps = (r.tempHigh || r.tempLow) ? `${r.tempHigh || '—'}°/${r.tempLow || '—'}°F` : '';
+    bodyHtml = [
+      dayDetailRow('Activity', r.activity),
+      dayDetailRow('Weather', [r.weatherDesc, temps].filter(Boolean).join(' · ')),
+      dayDetailRow('Traffic Control', r.trafficControlSelect ? (isAttention ? 'Attention Required' : 'In Place') : ''),
+      dayDetailRow('Controlling Item', r.controllingItem),
+      dayDetailRow('Comments on Time', r.commentsOnTime),
+      dayDetailRow('Hours', r.hours),
+    ].filter(Boolean).join('') || '<p class="hint" style="margin:0;">Nothing logged beyond the report itself.</p>';
+  }
+  $('#ddm-body').innerHTML = bodyHtml;
+
+  $('#ddm-link-report').href = `report-viewer.html?project=${project.id}&report=${r.id}`;
+  $('#ddm-link-edit').href = `report-editor.html?project=${project.id}&report=${r.id}`;
+  $('#ddm-link-quantity').href = `quick-quantity.html?project=${project.id}&date=${r.date}`;
+  $('#ddm-link-photos').hidden = !reportHasPhotos(r);
+  $('#ddm-link-photos').href = `report-photos.html?project=${project.id}&report=${r.id}`;
+
+  $('#day-detail-overlay').hidden = false;
+}
+$('#ddm-close').addEventListener('click', () => { $('#day-detail-overlay').hidden = true; });
+$('#day-detail-overlay').addEventListener('click', (e) => {
+  if (e.target === $('#day-detail-overlay')) $('#day-detail-overlay').hidden = true;
 });
 
 $('#btn-toggle-settings').addEventListener('click', () => {

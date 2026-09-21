@@ -1734,6 +1734,12 @@ function renderPhotoGrid() {
       openAnnotator(Number(btn.dataset.annotate));
     });
   });
+  // The photo itself (not the pencil/remove buttons, which already
+  // stopPropagation above) opens full-size in a new tab -- annotating stays
+  // a deliberate action via the pencil icon, not the default tap target.
+  $$('.photo-slot img', grid).forEach((img) => {
+    img.addEventListener('click', () => window.open(img.src, '_blank'));
+  });
 }
 
 // ---------- Photo markup ----------

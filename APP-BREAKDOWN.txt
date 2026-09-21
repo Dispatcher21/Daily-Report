@@ -202,6 +202,19 @@ project.html
   (xlsx, fflate, html2canvas, jspdf, report-bundle, pdf-export, local-sync,
   render-report, quantity-calc, dashboard-widgets) because it's the hub for
   export/import/sync/PDF actions.
+  The weather calendar (renderWeatherCalendar/weatherCalDayHtml) shows a
+  camera icon on any day with photos (reportHasPhotos -- true for a real
+  local Blob, or a slot confirmed to exist remotely but not yet fetched,
+  since photosFetched[i]===false still means "there's a photo there"); the
+  loggable-days filter in renderWeatherSchedule also now treats
+  reportHasPhotos as its own reason for a day to appear, so a day with only
+  photos and nothing else logged still shows up. Every day cell with a real
+  report (.wcal-clickable, one delegated click/keydown listener on the
+  calendar container) opens a day-detail modal (openDayDetailModal, markup
+  in #day-detail-overlay) summarizing what was logged that day plus links
+  to View Report (report-viewer.html), View Photos (report-photos.html,
+  hidden if the report has none), Quantities for This Day
+  (quick-quantity.html?date=), and Edit Report (report-editor.html).
 
 project-setup.html
   Editing a project's own configuration: PROJECT INFO/PAY ITEMS/
@@ -238,7 +251,22 @@ report-viewer.html
   Read-only printed-page preview of one report (renderPreview, reusing
   render-report.js's renderReportPages + a scale-to-fit wrapper). No edit
   UI at all -- "Edit" is a real navigation to report-editor.html. Linked
-  only from reports.html.
+  only from reports.html and project.html's day-detail modal (see below).
+  Every photo/signature image rendered here opens full-size in a new tab
+  on click (render-report.js's own click handler, added directly to each
+  <img> it creates) -- report-editor.html's live preview reuses the same
+  render path but overlays its own "jump to field" click targets on top,
+  so there this handler exists but never actually fires.
+
+report-photos.html
+  Read-only grid of just one report's photos (no upload/remove/annotate --
+  that's report-editor.html's job), each clickable to open full-size in a
+  new tab, same as report-editor's own photo grid and report-viewer's
+  printed preview. Modeled directly on report-viewer.html's structure
+  (same scope checks, same lazy fetchReportMedia-then-putReportRaw if
+  photos haven't been downloaded yet). Linked only from project.html's
+  day-detail modal ("View Photos", shown only when the report actually
+  has a photo -- see reportHasPhotos below).
 
 download.html
   Builds and downloads a PDF of one or more selected reports via
@@ -289,7 +317,9 @@ quick-quantity.html
   A fast, report-independent way to log pay-item quantities without opening
   the full report editor -- prefills from the most recent report on that
   date if one exists (prefillFromReport), otherwise creates/attaches a
-  minimal one. Meant for logging quantities on the fly.
+  minimal one. Meant for logging quantities on the fly. Defaults its date
+  field to today, but an optional ?date= query param (used by project.html's
+  day-detail modal to deep-link a specific day) overrides that.
 
 required-fields.html
   Admin picker for which report fields are required/hidden and in what

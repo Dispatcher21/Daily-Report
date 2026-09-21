@@ -156,7 +156,9 @@ async function init() {
   $('#bb-back-link').href = `project.html?id=${project.id}`;
 
   allReports = await getReportsForProject(project.id);
-  $('#f-date').value = todayIso();
+  // ?date= lets another page (the project dashboard's calendar) deep-link
+  // straight to a specific day instead of always landing on today.
+  $('#f-date').value = queryParam('date') || todayIso();
 
   renderCatalogList();
   await updateDateContext();
