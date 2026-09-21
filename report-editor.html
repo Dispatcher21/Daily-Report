@@ -886,10 +886,23 @@ function renderEditor() {
   if (!Array.isArray(report.inspectors) || report.inspectors.length === 0) {
     report.inspectors = [{
       name: report.representative || '',
+      hours: report.hours,
       timeEntries: Array.isArray(report.timeEntries) && report.timeEntries.length
         ? report.timeEntries
         : [{ start: '', end: '' }],
     }];
+  } else {
+    // Reports saved after multiple inspectors existed but before each one
+    // had its own Hours box -- backfill from whatever their own segments
+    // already compute to; with just one inspector, the report-level total
+    // is unambiguously theirs. With more than one and no segments to go
+    // on, there's no way to know how to split the total, so it's left
+    // blank rather than guessed at.
+    report.inspectors.forEach((insp) => {
+      if (insp.hours != null && insp.hours !== '') return;
+      const total = totalHours(insp.timeEntries || []);
+      insp.hours = total > 0 ? Number(total.toFixed(2)) : (report.inspectors.length === 1 ? report.hours : '');
+    });
   }
   // Hours is the one box everyone needs; the Inspectors section (names,
   // per-inspector time segments) is opt-in -- collapsed by default unless
@@ -1077,10 +1090,14 @@ function entryHours(entry) {
 function totalHours(timeEntries) {
   return timeEntries.reduce((sum, e) => sum + (entryHours(e) || 0), 0);
 }
-// Every inspector's own segments, summed -- what Hours auto-fills from and
-// what the Total Hours row (all inspectors) shows.
+// Every inspector's own Hours box, summed -- what the top-level Hours field
+// and the Total Hours row (all inspectors) both show. Each inspector's own
+// Hours is itself auto-filled from their Time Segments when those are used
+// (see onInspectorsChanged), but always the typed/stored value here, not a
+// live re-computation -- same "auto-filled, editable" contract the
+// top-level Hours box already has.
 function totalHoursAllInspectors() {
-  return report.inspectors.reduce((sum, insp) => sum + totalHours(insp.timeEntries), 0);
+  return report.inspectors.reduce((sum, insp) => sum + (Number(insp.hours) || 0), 0);
 }
 function allTimeEntries() {
   return report.inspectors.flatMap((insp) => insp.timeEntries);
@@ -1172,12 +1189,11 @@ function renderInspectors() {
             </div>`;
         })
         .join('');
-      const inspTotal = totalHours(insp.timeEntries);
       return `
         <div class="inspector-card${openInspectorCards.has(i) ? ' open' : ''}" data-insp="${i}">
           <div class="inspector-card-hd">
             <input type="text" class="inspector-name" data-insp="${i}" placeholder="Inspector name" value="${escapeHtml(insp.name || '')}">
-            <span class="inspector-subtotal">${inspTotal.toFixed(2)} hrs</span>
+            <input type="number" inputmode="decimal" step="0.25" class="inspector-hours" data-insp="${i}" placeholder="Hrs" value="${insp.hours != null && insp.hours !== '' ? insp.hours : ''}">
             <button type="button" class="inspector-remove" data-insp="${i}" ${report.inspectors.length <= 1 ? 'hidden' : ''} title="Remove this inspector" aria-label="Remove this inspector">&times;</button>
           </div>
           <div class="rb-subtoggle-hd insp-toggle" data-insp="${i}">
@@ -1226,9 +1242,10 @@ function renderInspectors() {
       onInspectorsChanged();
     });
   });
-  // Name typed live, same as the Contractor name pattern elsewhere on this
-  // page -- update the model and re-derive Representative without a full
-  // re-render, so the input doesn't lose focus/cursor position mid-word.
+  // Name/Hours typed live, same as the Contractor name pattern elsewhere on
+  // this page -- update the model directly rather than going through a
+  // full re-render, so the input doesn't lose focus/cursor position
+  // mid-word (or mid-number).
   $$('.inspector-name', container).forEach((el) => {
     el.addEventListener('input', () => {
       report.inspectors[Number(el.dataset.insp)].name = el.value;
@@ -1236,15 +1253,41 @@ function renderInspectors() {
       scheduleSave();
     });
   });
+  $$('.inspector-hours', container).forEach((el) => {
+    el.addEventListener('input', () => {
+      report.inspectors[Number(el.dataset.insp)].hours = el.value;
+      syncHoursFromInspectors();
+      scheduleSave();
+    });
+  });
 
   updateTotalHoursDisplay();
 }
 
-function onInspectorsChanged() {
-  renderInspectors();
+// The top-level Hours box, kept in sync from every inspector's own Hours --
+// same "auto-filled, editable" rule the top-level box itself already
+// follows (see bindText('#f-hours', ...)): only overwritten when there's
+// an actual total to show, never zeroed out just because every inspector's
+// own box happens to be blank.
+function syncHoursFromInspectors() {
   const total = totalHoursAllInspectors();
   report.hours = total > 0 ? Number(total.toFixed(2)) : report.hours;
-  $('#f-hours').value = report.hours;
+  const hoursEl = $('#f-hours');
+  if (hoursEl) hoursEl.value = report.hours;
+}
+
+function onInspectorsChanged() {
+  // Auto-fills each inspector's own Hours from their Time Segments when
+  // there's something to compute -- typing directly into an inspector's
+  // Hours box (handled above, no re-render) is what actually overrides
+  // this; adding/editing/removing a segment always wins over a stale
+  // typed value the same way the pre-multi-inspector calculator did.
+  report.inspectors.forEach((insp) => {
+    const total = totalHours(insp.timeEntries);
+    if (total > 0) insp.hours = Number(total.toFixed(2));
+  });
+  renderInspectors();
+  syncHoursFromInspectors();
   syncRepresentativeFromInspectors();
   autofillWorkBeginEnd();
   scheduleSave();
@@ -1261,7 +1304,7 @@ $$('.rb-mobile-tab').forEach((tab) => {
 
 $('#btn-add-inspector').addEventListener('click', () => {
   openInspectorCards.add(report.inspectors.length); // the new one's index, before the push
-  report.inspectors.push({ name: '', timeEntries: [{ start: '', end: '' }] });
+  report.inspectors.push({ name: '', hours: '', timeEntries: [{ start: '', end: '' }] });
   onInspectorsChanged();
 });
 

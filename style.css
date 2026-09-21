@@ -1585,7 +1585,7 @@ input[type="date"] { min-width: 0; }
 .inspectors-list-empty { color: var(--text-dim); font-size: 0.88rem; margin-bottom: 0.6rem; }
 .inspector-card-hd { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem; }
 .inspector-name { flex: 1; min-width: 0; }
-.inspector-subtotal { font-size: 0.82rem; color: var(--text-dim); white-space: nowrap; }
+.inspector-hours { width: 4.5rem; flex-shrink: 0; }
 .inspector-remove {
   background: none; border: none; color: var(--danger); font-size: 1.3rem;
   cursor: pointer; padding: 0 0.3rem; min-width: 2.4rem; min-height: 2.4rem; flex-shrink: 0;

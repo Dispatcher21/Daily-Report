@@ -167,7 +167,15 @@ async function makeBlankReport(nextReportNo, project, previous) {
     date: todayIso(),
     hours: previous ? previous.hours : '',
     timeEntries: [{ start: '', end: '' }],
-    inspectors: inspectorNames.map((name) => ({ name, timeEntries: [{ start: '', end: '' }] })),
+    // Hours carries forward the same way the report-level field above does,
+    // but only when there's exactly one inspector to unambiguously give it
+    // to -- splitting a carried-forward total across more than one
+    // carried-forward name would just be a guess, so those start blank.
+    inspectors: inspectorNames.map((name) => ({
+      name,
+      hours: inspectorNames.length === 1 ? (previous ? previous.hours : '') : '',
+      timeEntries: [{ start: '', end: '' }],
+    })),
     activity: meta.activity || '',
     notes: meta.notes || '',
     peName: previous ? previous.peName : meta.peName || '',

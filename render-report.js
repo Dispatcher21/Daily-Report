@@ -256,7 +256,11 @@ function fmtHoursShort(n) {
   return `${rounded % 1 === 0 ? rounded.toFixed(0) : String(rounded)}hr`;
 }
 
-function inspectorHours(insp) {
+// Only a fallback for an inspector with logged segments but no Hours value
+// of their own yet (shouldn't normally happen -- report-editor.html keeps
+// each inspector's Hours auto-filled from their segments -- but a report
+// synced from a device on an older app version could still have one).
+function inspectorHoursFromSegments(insp) {
   return (insp.timeEntries || []).reduce((sum, e) => {
     if (!e.start || !e.end) return sum;
     const [sh, sm] = e.start.split(':').map(Number);
@@ -279,7 +283,12 @@ function formatInspectorHoursLine(report) {
   const inspectors = Array.isArray(report.inspectors) ? report.inspectors : [];
   const named = inspectors.filter((insp) => insp && (insp.name || '').trim());
   if (!named.length) return report.hours != null && report.hours !== '' ? String(report.hours) : '';
-  return named.map((insp) => `${inspectorInitials(insp.name)} (${fmtHoursShort(inspectorHours(insp))})`).join(', ');
+  return named
+    .map((insp) => {
+      const hours = insp.hours != null && insp.hours !== '' ? Number(insp.hours) : inspectorHoursFromSegments(insp);
+      return `${inspectorInitials(insp.name)} (${fmtHoursShort(hours)})`;
+    })
+    .join(', ');
 }
 function calendarDay(date, ntpDate) {
   if (!date || !ntpDate) return '';
