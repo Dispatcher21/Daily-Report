@@ -145,6 +145,20 @@ async function makeBlankReport(nextReportNo, project, previous) {
   const room = typeof getCompanyRoom === 'function' ? await getCompanyRoom() : null;
   const companyCode = (project && project.companyCode) || (room && room.code) || null;
 
+  // Multiple inspectors, each with their own logged time -- see
+  // report-editor.html's Time Worked section. Same "who's on it" carry-
+  // forward as contractors/equipment labels below: a device logged in with
+  // a name still wins for the single-inspector case (today's exact
+  // behavior), but a previous report that already had more than one
+  // inspector carries the whole list of names forward -- likely the same
+  // crew, new day -- with each one's time starting blank again.
+  const inspectorNames = previous && Array.isArray(previous.inspectors) && previous.inspectors.length > 1
+    ? previous.inspectors.map((insp) => insp.name || '')
+    : [loggedInName || (previous ? previous.representative : meta.representative || '')];
+  // `representative` stays a plain joined-names string, kept in sync from
+  // the inspector list, for everything else that only understands one name
+  // (dashboard, search, Quantity Sheet, mass edit, the printed header cell).
+  const representativeName = inspectorNames.filter((n) => n.trim()).join(', ');
   const report = {
     id: crypto.randomUUID(),
     projectId: project ? project.id : null,
@@ -153,12 +167,13 @@ async function makeBlankReport(nextReportNo, project, previous) {
     date: todayIso(),
     hours: previous ? previous.hours : '',
     timeEntries: [{ start: '', end: '' }],
+    inspectors: inspectorNames.map((name) => ({ name, timeEntries: [{ start: '', end: '' }] })),
     activity: meta.activity || '',
     notes: meta.notes || '',
     peName: previous ? previous.peName : meta.peName || '',
     projectNo: meta.projectNo || '',
     projectName: meta.projectName || '',
-    representative: loggedInName || (previous ? previous.representative : meta.representative || ''),
+    representative: representativeName,
     ntpDate: meta.ntpDate || '',
     contractors: previous
       ? previous.contractors.map((c) => ({ name: c.name }))
@@ -257,7 +272,18 @@ async function duplicateReport(source, nextReportNo, project) {
   const loggedInName = typeof getUserName === 'function' ? await getUserName() : null;
   const room = typeof getCompanyRoom === 'function' ? await getCompanyRoom() : null;
   const companyCode = (project && project.companyCode) || (room && room.code) || null;
-  const representative = loggedInName || source.representative || '';
+  // Inspector names are descriptive ("who's assigned") and carry over like
+  // contractors/equipment labels below; their logged time is a measurement
+  // of that specific day and always starts blank, same reasoning as
+  // resetting equipment/pay item quantities further down. A device logged
+  // in with a name still overrides for the single-inspector case, matching
+  // `representative` itself -- with more than one inspector on the source
+  // report there's no one slot that login identity clearly replaces, so
+  // the carried-forward names are left as they were.
+  const inspectorNames = source.inspectors && source.inspectors.length > 1
+    ? source.inspectors.map((insp) => insp.name || '')
+    : [loggedInName || source.representative || ''];
+  const representative = inspectorNames.filter((n) => n.trim()).join(', ');
 
   const report = {
     ...source,
@@ -270,6 +296,7 @@ async function duplicateReport(source, nextReportNo, project) {
     repSignatureName: representative,
     peSignatureName: source.peName || '',
     timeEntries: [{ start: '', end: '' }],
+    inspectors: inspectorNames.map((name) => ({ name, timeEntries: [{ start: '', end: '' }] })),
     equipmentRows: (source.equipmentRows || []).map((row) => ({
       label: row.label || '',
       qty: Array.from({ length: CONTRACTOR_COUNT }, () => ''),

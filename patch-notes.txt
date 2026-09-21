@@ -3,6 +3,19 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.017 -- 2026-09-21
+  - Added support for multiple inspectors on one report, each with their
+    own logged time -- add them under Time Worked in the report editor.
+    Hours now totals everyone's segments together, and the printed report
+    lists each inspector's initials and hours on the sign-off line (e.g.
+    "JS (10hr), AF (2hr)") when there's more than one.
+  - The Time Worked box now always shows the Hours field up front, with
+    only the detailed time-segment calculator (per inspector) tucked
+    behind a small toggle -- it was easy to miss before.
+  - View Reports now shows the Representative/Inspector name on each
+    report row instead of whoever's device happened to create it, when
+    the two differ.
+
 0.016 -- 2026-09-21
   - Fixed Reports' multi-select checkboxes being unavailable to anyone
     without edit permission on a report -- they're needed for Generate
