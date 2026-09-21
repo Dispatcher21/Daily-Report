@@ -644,7 +644,7 @@ function renderWeatherSchedule(dated) {
   $('#dash-weather-stats').innerHTML =
     statCard(weatherFlagged, 'Weather-Flagged Days', '', 'Dated reports whose Weather Description mentions rain, snow, wind, or similar adverse conditions.', null, 'int') +
     statCard(attentionDays, 'Traffic Control Attention Days', '', 'Dated reports where Traffic Control Status was set to "Attention Required".', null, 'int') +
-    statCard(noWorkDays, 'No Work Days', '', 'Dated reports marked "NO WORK DAY" via the button at the top of the report editor.', null, 'int') +
+    statCard(noWorkDays, 'No Work Days', '', 'Dated reports whose Notes contains "no work" -- either from the button at the top of the report editor, or typed in by hand.', null, 'int') +
     statCard(weatherDays, 'Weather Days', '', 'Dated reports marked "WEATHER DAY" via the button at the top of the report editor.', null, 'int');
 
   weatherLoggableCache = loggable;

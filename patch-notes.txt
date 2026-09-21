@@ -3,6 +3,15 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.036 -- 2026-09-21
+  - No Work Day detection now matches "no work" anywhere in Notes
+    (case-insensitive, e.g. "No work - rain" or "Crew on site, no work
+    performed on item 12"), not just an exact "NO WORK DAY" match -- a
+    report where someone typed their own version instead of using the
+    button now gets treated as a No Work Day everywhere that matters
+    (the calendar badge, the No Work Days stat, required-field
+    exemptions). Won't fire on "no workers" or "no workforce".
+
 0.035 -- 2026-09-21
   - Every place a report's Activity shows as a quick preview -- View
     Reports' list/card rows, the project dashboard's Weather & Schedule
