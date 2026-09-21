@@ -3,6 +3,12 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.028 -- 2026-09-21
+  - Fixed the real cause of the unsynced-reports banner on View Reports:
+    a CSS bug meant it could never actually hide itself, on any project --
+    including ones with no synced folder set up at all -- so it always
+    showed, just empty when there was nothing to report.
+
 0.027 -- 2026-09-21
   - Fixed the "N reports haven't synced" banner (and the matching status
     on the Project page) staying up after clicking the header's sync

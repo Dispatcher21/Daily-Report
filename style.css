@@ -1389,6 +1389,19 @@ input[type="date"] { min-width: 0; }
   color: var(--warn); margin-bottom: 0.75rem;
 }
 
+/* reports.html's folder-sync banner: a row layout on top of .warn. Any
+   author-stylesheet display rule -- even this class, not just an inline
+   style -- overrides the browser's own [hidden] { display: none } (author
+   styles always win over user-agent ones regardless of specificity), so
+   the explicit [hidden] override below is required to actually hide it;
+   without it the banner stayed visible (just empty) whenever JS set
+   .hidden = true. */
+.warn-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 0.75rem; flex-wrap: wrap;
+}
+.warn-row[hidden] { display: none; }
+
 /* Live Report No./Date collision notice in report-editor.html -- same
    styling as .warn, just below the fields it's about instead of at the top
    of the page, and can hold two stacked lines (one per kind of collision). */
