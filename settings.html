@@ -735,7 +735,7 @@
     <div class="err" id="company-error" hidden></div>
   </div>
 
-  <a class="app-version" href="patch-notes.txt" target="_blank" rel="noopener">v0.016</a>
+  <a class="app-version" href="patch-notes.txt" target="_blank" rel="noopener">v0.017</a>
 
 </main>
 
@@ -2247,7 +2247,7 @@ async function renderCmActivity() {
 
   const byAuthor = new Map();
   for (const r of reports) {
-    const author = r.createdBy || r.representative || 'Unknown';
+    const author = r.representative || r.createdBy || 'Unknown';
     if (!byAuthor.has(author)) byAuthor.set(author, { count: 0, latest: 0, projects: new Set() });
     const entry = byAuthor.get(author);
     entry.count++;

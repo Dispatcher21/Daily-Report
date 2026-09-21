@@ -391,7 +391,7 @@ function reportBadgesHtml(r) {
   const badges = [];
   if (isNoWorkDayReport(r)) badges.push('<span class="report-row-nwd">NO WORK DAY</span>');
   if (isWeatherDayReport(r)) badges.push('<span class="report-row-wd">WEATHER DAY</span>');
-  if (r.createdBy || r.representative) badges.push(`<span class="report-row-author">${escapeHtml(r.createdBy || r.representative)}</span>`);
+  if (r.representative || r.createdBy) badges.push(`<span class="report-row-author">${escapeHtml(r.representative || r.createdBy)}</span>`);
   return badges.join(' ');
 }
 
@@ -515,8 +515,8 @@ function renderCard(r) {
     : !r.activity && isWeatherDayReport(r)
     ? '<span class="report-row-wd">WEATHER DAY</span>'
     : escapeHtml(r.activity || 'No activity noted');
-  const authorBadge = (r.createdBy || r.representative)
-    ? ` <span class="report-row-author">${escapeHtml(r.createdBy || r.representative)}</span>`
+  const authorBadge = (r.representative || r.createdBy)
+    ? ` <span class="report-row-author">${escapeHtml(r.representative || r.createdBy)}</span>`
     : '';
   return `
     <div class="report-card" data-id="${r.id}">
@@ -694,7 +694,9 @@ $('#btn-delete-selected').addEventListener('click', async () => {
 // per-report (projectNo/projectName/ntpDate).
 const MASS_EDIT_FIELDS = [
   { key: 'activity', label: 'Activity', type: 'text' },
-  { key: 'representative', label: 'Representative', type: 'text' },
+  // No Representative here -- it's derived from each report's own Inspector
+  // list now (see report-editor.html), not a flat value one edit could
+  // meaningfully overwrite across a batch of reports.
   { key: 'peName', label: 'PE Name', type: 'text' },
   { key: 'notes', label: 'Notes', type: 'textarea' },
   { key: 'workSummaryHeader', label: 'Work Summary Top Line', type: 'text' },

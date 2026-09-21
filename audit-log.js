@@ -27,6 +27,13 @@ const REPORT_DIFF_SKIP = new Set([
   'id', 'projectId', 'updatedAt', 'createdBy', 'lastEditedBy',
   'photos', 'photosFetched', 'repSignatureImage', 'signatureFetched', 'peSignatureImage',
   'thumbnail', 'thumbnailBack', 'thumbnailAt',
+  // Raw per-segment start/end times read as noise, not a meaningful audit
+  // entry on their own -- Representative and Hours (both diffed normally,
+  // just below) already summarize who changed and by how much whenever
+  // an inspector or their time changes. timeEntries is the pre-multi-
+  // inspector field, superseded by inspectors and never touched again
+  // after a report is migrated, so it never has a diff to show anyway.
+  'inspectors', 'timeEntries',
 ]);
 const PROJECT_DIFF_SKIP = new Set([
   'id', 'updatedAt', 'createdAt', 'backgroundImage', 'backgroundImageFetched',
@@ -36,7 +43,7 @@ const PROJECT_DIFF_SKIP = new Set([
 const REPORT_FIELD_LABELS = {
   reportNo: 'Report No.', date: 'Date', hours: 'Hours', activity: 'Activity', notes: 'Notes',
   peName: 'PE Name', projectNo: 'Project No.', projectName: 'Project Name', representative: 'Representative',
-  ntpDate: 'NTP Date', contractors: 'Contractors', equipmentRows: 'Equipment', timeEntries: 'Time Worked',
+  ntpDate: 'NTP Date', contractors: 'Contractors', equipmentRows: 'Equipment',
   workSummaryHeader: 'Work Summary (top line)', trafficControlNote: 'Short Work Summary', workSummary: 'Summary of Work Performed',
   payItems: 'Pay Items', controllingItem: 'Controlling Item', commentsOnTime: 'Comments on Time Charged',
   controllingItemTimeFrom: 'Controlling Item Time From', controllingItemTimeTo: 'Controlling Item Time To',

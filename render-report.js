@@ -238,6 +238,51 @@ function fmtDate(iso) {
   const [y, m, d] = iso.split('-');
   return `${m}/${d}/${y}`;
 }
+
+// "John Smith" -> "JS". A single-word name (or a mononym) gets its first
+// two letters instead, so the printed line still shows something rather
+// than one stray letter.
+function inspectorInitials(name) {
+  const words = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return '';
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return words.map((w) => w[0].toUpperCase()).join('');
+}
+// 10 -> "10hr", 7.5 -> "7.5hr" -- drops a trailing .00/.0 rather than
+// always printing two decimals, since a whole number is the common case
+// and "10.00hr" reads noisier than it needs to on a printed line.
+function fmtHoursShort(n) {
+  const rounded = Math.round(n * 100) / 100;
+  return `${rounded % 1 === 0 ? rounded.toFixed(0) : String(rounded)}hr`;
+}
+
+// The printed form has exactly one Representative line (both the K5 header
+// cell and the I39 sign-off line) -- multiple inspectors, each with their
+// own logged hours, are combined onto it as "JS (10hr), AF (2hr)" rather
+// than needing a template redesign. Falls through to the plain name
+// (repSignatureName/representative, today's exact behavior) whenever
+// there's zero or one inspector, which covers every report saved before
+// this existed and the common single-inspector case going forward.
+function formatRepresentativeLine(report) {
+  const inspectors = Array.isArray(report.inspectors) ? report.inspectors : [];
+  if (inspectors.length < 2) return report.repSignatureName || report.representative || '';
+  const parts = inspectors
+    .filter((insp) => insp && (insp.name || '').trim())
+    .map((insp) => {
+      const hours = (insp.timeEntries || []).reduce((sum, e) => {
+        const start = e.start, end = e.end;
+        if (!start || !end) return sum;
+        const [sh, sm] = start.split(':').map(Number);
+        let [eh, em] = end.split(':').map(Number);
+        if (Number.isNaN(sh) || Number.isNaN(sm) || Number.isNaN(eh) || Number.isNaN(em)) return sum;
+        let mins = (eh * 60 + em) - (sh * 60 + sm);
+        if (mins <= 0) mins += 24 * 60; // crossed midnight
+        return sum + mins / 60;
+      }, 0);
+      return `${inspectorInitials(insp.name)} (${fmtHoursShort(hours)})`;
+    });
+  return parts.length ? parts.join(', ') : (report.repSignatureName || report.representative || '');
+}
 function calendarDay(date, ntpDate) {
   if (!date || !ntpDate) return '';
   const d1 = new Date(date + 'T00:00:00');
@@ -285,7 +330,7 @@ function buildSheet1Values(report) {
   v['B9'] = report.peName || '';
   v['B5'] = report.projectNo || '';
   v['B7'] = report.projectName || '';
-  v['K5'] = report.representative || '';
+  v['K5'] = formatRepresentativeLine(report);
   v['Q7'] = fmtDate(report.ntpDate);
   v['Q9'] = String(calendarDay(report.date, report.ntpDate));
 
@@ -351,7 +396,7 @@ function buildSheet1Values(report) {
   v['K37'] = report.trafficControlSelect === 'ATTENTION_REQUIRED' ? 'X' : '';
   v['C39'] = report.workBegin || '';
   v['F39'] = report.workEnd || '';
-  v['I39'] = report.repSignatureName || '';
+  v['I39'] = formatRepresentativeLine(report);
   v['I41'] = report.peSignatureName || '';
   v['A41'] = report.weatherDesc || '';
   v['D41'] = report.tempHigh != null && report.tempHigh !== '' ? String(report.tempHigh) : '';
@@ -603,6 +648,7 @@ function reportFromImportedFields(fields, photos, forProject) {
     date: fields.date,
     hours: fields.hours,
     timeEntries: [{ start: '', end: '' }],
+    inspectors: [{ name: fields.representative || '', timeEntries: [{ start: '', end: '' }] }],
     activity: fields.activity,
     notes: fields.notes,
     peName: fields.peName,

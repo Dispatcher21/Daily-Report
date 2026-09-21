@@ -62,19 +62,12 @@
           <div id="rb-dupe-warn" class="rb-dupe-warn" hidden></div>
 
           <div class="time-worked-block">
-            <div class="rb-subtoggle-hd" id="time-worked-toggle">
-              <span class="sig-label" style="margin:0;">Time Worked</span>
-              <span class="rb-subtoggle-summary" id="time-worked-summary">0.00 hrs</span>
-              <span class="rb-chev">&#9656;</span>
-            </div>
-            <div class="rb-subtoggle-bd" id="time-worked-body">
-              <div id="time-entries"></div>
-              <button type="button" class="btn-secondary" id="btn-add-time-entry">+ Add Time Segment (e.g. after lunch)</button>
-              <div class="total-hours-row">
-                <span>Total Hours</span>
-                <span id="total-hours-value" class="total-hours-value">0.00</span>
-              </div>
-              <label class="hours-override">Hours (auto-filled, editable) <input type="number" inputmode="decimal" step="0.25" id="f-hours"></label>
+            <label class="hours-override">Hours <input type="number" inputmode="decimal" step="0.25" id="f-hours"></label>
+            <div id="inspectors-list"></div>
+            <button type="button" class="btn-secondary" id="btn-add-inspector">+ Add Inspector</button>
+            <div class="total-hours-row">
+              <span>Total Hours (All Inspectors)</span>
+              <span id="total-hours-value" class="total-hours-value">0.00</span>
             </div>
           </div>
         </div>
@@ -379,7 +372,7 @@ function mirrorField(primaryId, secondaryField) {
 const SIMPLE_FIELD_CONFIG = {
   activity: { type: 'text', hint: 'Also fills the "WORK SUMMARY:" top line on the printed report -- no need to type it twice.' },
   notes: { type: 'textarea', rows: 2 },
-  representative: { type: 'text', hint: 'Also fills the Representative name on the sign-off line.' },
+  representative: { type: 'text', disabled: true, hint: 'Set from the Inspector list in Time Worked, above -- add or rename inspectors there. With more than one, this lists everyone.' },
   peName: { type: 'text', hint: 'Also fills the Project Engineer name on the sign-off line.' },
   ntpDate: { type: 'date', hint: 'Notice to Proceed. Calendar Day on the report counts from this date.' },
   workSummary: { type: 'textarea', rows: 6 },
@@ -402,9 +395,10 @@ const SIMPLE_FIELD_CONFIG = {
 // a full step of its own.
 function simpleFieldBodyHtml(key, def) {
   const cfg = SIMPLE_FIELD_CONFIG[key];
+  const disabledAttr = cfg.disabled ? ' disabled' : '';
   const tag = cfg.type === 'textarea'
-    ? `<textarea id="f-${key}" rows="${cfg.rows || 3}"></textarea>`
-    : `<input type="${cfg.type}" id="f-${key}"${cfg.placeholder ? ` placeholder="${cfg.placeholder}"` : ''}>`;
+    ? `<textarea id="f-${key}" rows="${cfg.rows || 3}"${disabledAttr}></textarea>`
+    : `<input type="${cfg.type}" id="f-${key}"${cfg.placeholder ? ` placeholder="${cfg.placeholder}"` : ''}${disabledAttr}>`;
   const tip = cfg.hint ? ` <button type="button" class="info-tip" data-tip="${escapeHtml(cfg.hint)}" aria-label="What this does">i</button>` : '';
   const labelText = tip ? `<span class="label-tip">${escapeHtml(def.label)}${tip}</span>` : escapeHtml(def.label);
   return `<div class="rb-field" id="step-${key}"><label>${labelText}${tag}</label></div>`;
@@ -879,10 +873,19 @@ function renderEditor() {
   bindText('#f-date', 'date');
   bindText('#f-hours', 'hours');
 
-  if (!Array.isArray(report.timeEntries) || report.timeEntries.length === 0) {
-    report.timeEntries = [{ start: '', end: '' }];
+  // Reports saved before multiple inspectors existed only have a flat
+  // Representative name plus one shared time-entries array -- fold those
+  // into a single-inspector entry so an old report opens exactly as it
+  // always did, nothing to migrate by hand.
+  if (!Array.isArray(report.inspectors) || report.inspectors.length === 0) {
+    report.inspectors = [{
+      name: report.representative || '',
+      timeEntries: Array.isArray(report.timeEntries) && report.timeEntries.length
+        ? report.timeEntries
+        : [{ start: '', end: '' }],
+    }];
   }
-  renderTimeEntries();
+  renderInspectors();
 
   renderGroups();
   bindDynamicFields();
@@ -1062,15 +1065,24 @@ function entryHours(entry) {
 function totalHours(timeEntries) {
   return timeEntries.reduce((sum, e) => sum + (entryHours(e) || 0), 0);
 }
+// Every inspector's own segments, summed -- what Hours auto-fills from and
+// what the Total Hours row (all inspectors) shows.
+function totalHoursAllInspectors() {
+  return report.inspectors.reduce((sum, insp) => sum + totalHours(insp.timeEntries), 0);
+}
+function allTimeEntries() {
+  return report.inspectors.flatMap((insp) => insp.timeEntries);
+}
 
 // Work Begin/Work End (Site Conditions) are the fixed cells on the actual
 // printed form -- free text, since that's what the paper template always
 // was. Time Worked (right above, in Basics) is the app's own multi-segment
-// hours calculator. A crew that fills in Time Worked shouldn't also have to
-// retype the same start/end as free text a second time in a different
-// format, so mirror the first segment's start / last segment's end into
-// Work Begin/End automatically -- but only into whichever of those two is
-// still blank, never overwriting something typed in by hand.
+// hours calculator, now one per inspector. A crew that fills in Time Worked
+// shouldn't also have to retype the same start/end as free text a second
+// time in a different format, so mirror the earliest start / latest end
+// across every inspector's segments into Work Begin/End automatically --
+// but only into whichever of those two is still blank, never overwriting
+// something typed in by hand.
 function formatTimeForDisplay(hhmm) {
   const [h, m] = hhmm.split(':').map(Number);
   const period = h >= 12 ? 'PM' : 'AM';
@@ -1078,79 +1090,150 @@ function formatTimeForDisplay(hhmm) {
   return `${h12}:${String(m).padStart(2, '0')} ${period}`;
 }
 function autofillWorkBeginEnd() {
-  const valid = report.timeEntries.filter((e) => e.start && e.end && entryHours(e) !== null);
+  const valid = allTimeEntries().filter((e) => e.start && e.end && entryHours(e) !== null);
   if (!valid.length) return;
   if (!report.workBegin) {
-    report.workBegin = formatTimeForDisplay(valid[0].start);
+    const earliest = valid.reduce((a, b) => (b.start < a.start ? b : a));
+    report.workBegin = formatTimeForDisplay(earliest.start);
     const el = $('#f-workBegin'); if (el) el.value = report.workBegin;
   }
   if (!report.workEnd) {
-    report.workEnd = formatTimeForDisplay(valid[valid.length - 1].end);
+    const latest = valid.reduce((a, b) => (b.end > a.end ? b : a));
+    report.workEnd = formatTimeForDisplay(latest.end);
     const el = $('#f-workEnd'); if (el) el.value = report.workEnd;
   }
 }
 
-function renderTimeEntries() {
-  const container = $('#time-entries');
-  container.innerHTML = report.timeEntries
-    .map((entry, i) => {
-      const h = entryHours(entry);
-      const subtotal = entry.start && entry.end ? (h === null ? 'invalid' : `${h.toFixed(2)} hrs`) : '';
+// The plain-string "Representative" that everything outside this page
+// (the dashboard, search, Quantity Sheet, project defaults, mass edit,
+// the printed header cell) still reads -- kept in sync from the inspector
+// list rather than typed separately, so there's one source of truth for
+// who's on the report instead of two that can drift apart. See
+// SIMPLE_FIELD_CONFIG.representative, which is disabled/read-only for
+// exactly this reason.
+function syncRepresentativeFromInspectors() {
+  const names = report.inspectors.map((insp) => (insp.name || '').trim()).filter(Boolean);
+  report.representative = names.join(', ');
+  report.repSignatureName = report.representative;
+  const repEl = $('#f-representative');
+  if (repEl) repEl.value = report.representative;
+}
+
+// Which inspector cards' Time Segments are expanded -- purely a UI
+// convenience, tracked here rather than on the inspector objects themselves
+// so it never ends up saved/synced as part of the report or shows up as
+// audit-log noise every time someone opens a panel.
+const openInspectorCards = new Set();
+
+function renderInspectors() {
+  const container = $('#inspectors-list');
+  container.innerHTML = report.inspectors
+    .map((insp, i) => {
+      const entriesHtml = insp.timeEntries
+        .map((entry, j) => {
+          const h = entryHours(entry);
+          const subtotal = entry.start && entry.end ? (h === null ? 'invalid' : `${h.toFixed(2)} hrs`) : '';
+          return `
+            <div class="time-entry-row" data-insp="${i}" data-idx="${j}">
+              <input type="time" class="te-start" data-insp="${i}" data-idx="${j}" data-f="start" value="${entry.start || ''}">
+              <span class="te-to">to</span>
+              <input type="time" class="te-end" data-insp="${i}" data-idx="${j}" data-f="end" value="${entry.end || ''}">
+              <span class="te-subtotal">${subtotal}</span>
+              <button type="button" class="te-remove" data-insp="${i}" data-idx="${j}" ${insp.timeEntries.length <= 1 ? 'hidden' : ''}>&times;</button>
+            </div>`;
+        })
+        .join('');
+      const inspTotal = totalHours(insp.timeEntries);
       return `
-        <div class="time-entry-row" data-idx="${i}">
-          <input type="time" class="te-start" data-idx="${i}" data-f="start" value="${entry.start || ''}">
-          <span class="te-to">to</span>
-          <input type="time" class="te-end" data-idx="${i}" data-f="end" value="${entry.end || ''}">
-          <span class="te-subtotal">${subtotal}</span>
-          <button type="button" class="te-remove" data-idx="${i}" ${report.timeEntries.length <= 1 ? 'hidden' : ''}>&times;</button>
+        <div class="inspector-card${openInspectorCards.has(i) ? ' open' : ''}" data-insp="${i}">
+          <div class="inspector-card-hd">
+            <input type="text" class="inspector-name" data-insp="${i}" placeholder="Inspector name" value="${escapeHtml(insp.name || '')}">
+            <span class="inspector-subtotal">${inspTotal.toFixed(2)} hrs</span>
+            <button type="button" class="inspector-remove" data-insp="${i}" ${report.inspectors.length <= 1 ? 'hidden' : ''} title="Remove this inspector" aria-label="Remove this inspector">&times;</button>
+          </div>
+          <div class="rb-subtoggle-hd insp-toggle" data-insp="${i}">
+            <span class="sig-label" style="margin:0;font-size:0.82rem;">Time Segments</span>
+            <span class="rb-chev">&#9656;</span>
+          </div>
+          <div class="rb-subtoggle-bd">
+            <div class="insp-entries">${entriesHtml}</div>
+            <button type="button" class="btn-sm insp-add-segment" data-insp="${i}">+ Add Time Segment</button>
+          </div>
         </div>`;
     })
     .join('');
 
   $$('input[type="time"]', container).forEach((el) => {
     el.addEventListener('input', () => {
-      report.timeEntries[Number(el.dataset.idx)][el.dataset.f] = el.value;
-      onTimeEntriesChanged();
+      report.inspectors[Number(el.dataset.insp)].timeEntries[Number(el.dataset.idx)][el.dataset.f] = el.value;
+      onInspectorsChanged();
     });
   });
   $$('.te-remove', container).forEach((btn) => {
     btn.addEventListener('click', () => {
-      report.timeEntries.splice(Number(btn.dataset.idx), 1);
-      onTimeEntriesChanged();
+      report.inspectors[Number(btn.dataset.insp)].timeEntries.splice(Number(btn.dataset.idx), 1);
+      onInspectorsChanged();
+    });
+  });
+  $$('.insp-add-segment', container).forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const idx = Number(btn.dataset.insp);
+      report.inspectors[idx].timeEntries.push({ start: '', end: '' });
+      openInspectorCards.add(idx); // stays open -- just added a row to it
+      onInspectorsChanged();
+    });
+  });
+  $$('.insp-toggle', container).forEach((hd) => {
+    hd.addEventListener('click', () => {
+      const idx = Number(hd.dataset.insp);
+      if (openInspectorCards.has(idx)) openInspectorCards.delete(idx);
+      else openInspectorCards.add(idx);
+      hd.closest('.inspector-card').classList.toggle('open', openInspectorCards.has(idx));
+    });
+  });
+  $$('.inspector-remove', container).forEach((btn) => {
+    btn.addEventListener('click', () => {
+      report.inspectors.splice(Number(btn.dataset.insp), 1);
+      onInspectorsChanged();
+    });
+  });
+  // Name typed live, same as the Contractor name pattern elsewhere on this
+  // page -- update the model and re-derive Representative without a full
+  // re-render, so the input doesn't lose focus/cursor position mid-word.
+  $$('.inspector-name', container).forEach((el) => {
+    el.addEventListener('input', () => {
+      report.inspectors[Number(el.dataset.insp)].name = el.value;
+      syncRepresentativeFromInspectors();
+      scheduleSave();
     });
   });
 
   updateTotalHoursDisplay();
 }
 
-function onTimeEntriesChanged() {
-  renderTimeEntries();
-  const total = totalHours(report.timeEntries);
+function onInspectorsChanged() {
+  renderInspectors();
+  const total = totalHoursAllInspectors();
   report.hours = total > 0 ? Number(total.toFixed(2)) : report.hours;
   $('#f-hours').value = report.hours;
+  syncRepresentativeFromInspectors();
   autofillWorkBeginEnd();
   scheduleSave();
 }
 
 function updateTotalHoursDisplay() {
   if (!report || !$('#total-hours-value')) return;
-  $('#total-hours-value').textContent = totalHours(report.timeEntries).toFixed(2);
-  const hours = Number(report.hours);
-  $('#time-worked-summary').textContent = `${Number.isFinite(hours) ? hours.toFixed(2) : '0.00'} hrs`;
+  $('#total-hours-value').textContent = totalHoursAllInspectors().toFixed(2);
 }
 
 $$('.rb-mobile-tab').forEach((tab) => {
   tab.addEventListener('click', () => setRbMobileView(tab.dataset.view));
 });
 
-$('#time-worked-toggle').addEventListener('click', () => {
-  $('#step-reportInfo').querySelector('.time-worked-block').classList.toggle('open');
-});
-
-$('#btn-add-time-entry').addEventListener('click', () => {
-  report.timeEntries.push({ start: '', end: '' });
-  renderTimeEntries();
-  scheduleSave();
+$('#btn-add-inspector').addEventListener('click', () => {
+  openInspectorCards.add(report.inspectors.length); // the new one's index, before the push
+  report.inspectors.push({ name: '', timeEntries: [{ start: '', end: '' }] });
+  onInspectorsChanged();
 });
 
 // ---------- Contractors / equipment matrix ----------
