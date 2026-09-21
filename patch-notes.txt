@@ -3,6 +3,35 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.021 -- 2026-09-21
+  - View Reports now shows multiple inspectors as separate, differently
+    colored name badges instead of one combined name.
+  - Fixed the Edit button drifting to a different spot on some report
+    cards/rows depending on how much other content was above it -- it now
+    always sits flush at the bottom.
+
+0.020 -- 2026-09-21
+  - Each inspector now has their own plain Hours box, next to their name --
+    type a number directly instead of needing the time-segment calculator.
+    Using the calculator for an inspector still fills their Hours in
+    automatically and takes over from anything typed by hand.
+
+0.019 -- 2026-09-21
+  - The Inspectors section in Time Worked is now collapsed by default --
+    only the plain Hours box shows until you open it. It still opens
+    automatically for a report that already has real inspector time
+    logged, so nothing already filled in stays hidden.
+
+0.018 -- 2026-09-21
+  - Fixed the Hours and Representative lines on the printed report: Hours
+    now shows each inspector's initials and hours (e.g. "JS (1hr),
+    AF (2hr)") and the Representative line shows everyone's full name
+    (e.g. "John Sonnier, Alex Flores") -- these had been swapped.
+  - Folder sync now picks up where it left off if interrupted, instead of
+    starting the whole project over -- each report is marked done as soon
+    as it's written, not only after the entire sync finishes. It also
+    warns before leaving the page while a folder sync is actively running.
+
 0.017 -- 2026-09-21
   - Added support for multiple inspectors on one report, each with their
     own logged time -- add them under Time Worked in the report editor.

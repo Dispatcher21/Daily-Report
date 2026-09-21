@@ -1585,7 +1585,7 @@ input[type="date"] { min-width: 0; }
 .inspectors-list-empty { color: var(--text-dim); font-size: 0.88rem; margin-bottom: 0.6rem; }
 .inspector-card-hd { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem; }
 .inspector-name { flex: 1; min-width: 0; }
-.inspector-subtotal { font-size: 0.82rem; color: var(--text-dim); white-space: nowrap; }
+.inspector-hours { width: 4.5rem; flex-shrink: 0; }
 .inspector-remove {
   background: none; border: none; color: var(--danger); font-size: 1.3rem;
   cursor: pointer; padding: 0 0.3rem; min-width: 2.4rem; min-height: 2.4rem; flex-shrink: 0;
@@ -1724,7 +1724,15 @@ input[type="date"] { min-width: 0; }
    reasoning as the bar-list and hub-grid fixes: let a wide screen show
    more of them side by side instead of stretching one column full width. */
 @media (min-width: 900px) {
-  .report-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(480px, 1fr)); gap: 0.6rem 1rem; align-content: start; }
+  /* align-items: start -- without it, CSS Grid's default item-stretching
+     makes every row in a grid row match its tallest neighbor's height (one
+     report with several inspector badges wrapping onto a second line makes
+     a plain one-badge report next to it stretch too), and .report-row's
+     own align-items: center then re-centers Edit within that taller,
+     mismatched height -- Edit's position visibly drifting between rows
+     that should look identical. Keeping each row its own natural height
+     avoids the stretch entirely. */
+  .report-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(480px, 1fr)); gap: 0.6rem 1rem; align-content: start; align-items: start; }
 }
 .report-row {
   background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius);
@@ -1739,6 +1747,13 @@ input[type="date"] { min-width: 0; }
   background: var(--brand-dim); padding: 2px 8px; border-radius: 10px;
   vertical-align: middle; white-space: nowrap;
 }
+/* Multiple inspectors on one report each get their own badge, cycling
+   through these so they're distinguishable at a glance -- reusing the
+   app's existing status colors (already theme-safe in light/dark) rather
+   than inventing new ones just for this. */
+.report-row-author-1 { color: var(--ok); background: var(--ok-bg); }
+.report-row-author-2 { color: var(--warn); background: var(--warn-bg); }
+.report-row-author-3 { color: var(--danger); background: var(--danger-bg); }
 .report-row-nwd {
   font-size: 0.68rem; font-weight: 700; letter-spacing: 0.02em; color: #fff;
   background: var(--danger); padding: 2px 8px; border-radius: 10px;
@@ -1790,7 +1805,13 @@ input[type="date"] { min-width: 0; }
   padding: 0.6rem; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 0.4rem;
 }
 .report-card-top { display: flex; align-items: center; justify-content: space-between; }
-.report-card-body { cursor: pointer; display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; }
+/* flex: 1 absorbs whatever extra height CSS Grid's default row-stretching
+   gives this card over its neighbors (a card in the same row with more
+   badges/a longer activity line makes every card in that row match its
+   height) -- without this, the extra space sat below Edit instead of
+   above it, so Edit's position drifted between cards instead of staying
+   pinned to the bottom of every one. */
+.report-card-body { cursor: pointer; display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; flex: 1; }
 /* Activity leads the card -- it's what an inspector's actually scanning
    for, above even the thumbnails. A No Work Day report has nothing there
    (see renderCard in reports.html), so its badge fills the same slot

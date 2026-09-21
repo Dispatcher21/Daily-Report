@@ -256,32 +256,39 @@ function fmtHoursShort(n) {
   return `${rounded % 1 === 0 ? rounded.toFixed(0) : String(rounded)}hr`;
 }
 
-// The printed form has exactly one Representative line (both the K5 header
-// cell and the I39 sign-off line) -- multiple inspectors, each with their
-// own logged hours, are combined onto it as "JS (10hr), AF (2hr)" rather
-// than needing a template redesign. Falls through to the plain name
-// (repSignatureName/representative, today's exact behavior) whenever
-// there's zero or one inspector, which covers every report saved before
-// this existed and the common single-inspector case going forward.
-function formatRepresentativeLine(report) {
+// Only a fallback for an inspector with logged segments but no Hours value
+// of their own yet (shouldn't normally happen -- report-editor.html keeps
+// each inspector's Hours auto-filled from their segments -- but a report
+// synced from a device on an older app version could still have one).
+function inspectorHoursFromSegments(insp) {
+  return (insp.timeEntries || []).reduce((sum, e) => {
+    if (!e.start || !e.end) return sum;
+    const [sh, sm] = e.start.split(':').map(Number);
+    let [eh, em] = e.end.split(':').map(Number);
+    if (Number.isNaN(sh) || Number.isNaN(sm) || Number.isNaN(eh) || Number.isNaN(em)) return sum;
+    let mins = (eh * 60 + em) - (sh * 60 + sm);
+    if (mins <= 0) mins += 24 * 60; // crossed midnight
+    return sum + mins / 60;
+  }, 0);
+}
+
+// The Hours cell (K6) -- one number on the template, but with more than one
+// inspector "how many hours" is really "who logged what", so this prints
+// "JS (10hr), AF (2hr)" per named inspector instead of a single combined
+// total. Falls back to the plain report.hours number whenever there's no
+// named inspector at all (every report saved before multiple inspectors
+// existed, and the rare report with hours typed in by hand but no
+// inspector filled out).
+function formatInspectorHoursLine(report) {
   const inspectors = Array.isArray(report.inspectors) ? report.inspectors : [];
-  if (inspectors.length < 2) return report.repSignatureName || report.representative || '';
-  const parts = inspectors
-    .filter((insp) => insp && (insp.name || '').trim())
+  const named = inspectors.filter((insp) => insp && (insp.name || '').trim());
+  if (!named.length) return report.hours != null && report.hours !== '' ? String(report.hours) : '';
+  return named
     .map((insp) => {
-      const hours = (insp.timeEntries || []).reduce((sum, e) => {
-        const start = e.start, end = e.end;
-        if (!start || !end) return sum;
-        const [sh, sm] = start.split(':').map(Number);
-        let [eh, em] = end.split(':').map(Number);
-        if (Number.isNaN(sh) || Number.isNaN(sm) || Number.isNaN(eh) || Number.isNaN(em)) return sum;
-        let mins = (eh * 60 + em) - (sh * 60 + sm);
-        if (mins <= 0) mins += 24 * 60; // crossed midnight
-        return sum + mins / 60;
-      }, 0);
+      const hours = insp.hours != null && insp.hours !== '' ? Number(insp.hours) : inspectorHoursFromSegments(insp);
       return `${inspectorInitials(insp.name)} (${fmtHoursShort(hours)})`;
-    });
-  return parts.length ? parts.join(', ') : (report.repSignatureName || report.representative || '');
+    })
+    .join(', ');
 }
 function calendarDay(date, ntpDate) {
   if (!date || !ntpDate) return '';
@@ -324,13 +331,13 @@ function buildSheet1Values(report) {
   const v = Object.assign({}, LABEL_OVERRIDES);
   v['Q3'] = report.reportNo != null ? String(report.reportNo) : '';
   v['Q5'] = fmtDate(report.date);
-  v['K6'] = report.hours != null && report.hours !== '' ? String(report.hours) : '';
+  v['K6'] = formatInspectorHoursLine(report);
   v['K7'] = report.activity || '';
   v['K8'] = report.notes || '';
   v['B9'] = report.peName || '';
   v['B5'] = report.projectNo || '';
   v['B7'] = report.projectName || '';
-  v['K5'] = formatRepresentativeLine(report);
+  v['K5'] = report.representative || '';
   v['Q7'] = fmtDate(report.ntpDate);
   v['Q9'] = String(calendarDay(report.date, report.ntpDate));
 
@@ -396,7 +403,7 @@ function buildSheet1Values(report) {
   v['K37'] = report.trafficControlSelect === 'ATTENTION_REQUIRED' ? 'X' : '';
   v['C39'] = report.workBegin || '';
   v['F39'] = report.workEnd || '';
-  v['I39'] = formatRepresentativeLine(report);
+  v['I39'] = report.repSignatureName || '';
   v['I41'] = report.peSignatureName || '';
   v['A41'] = report.weatherDesc || '';
   v['D41'] = report.tempHigh != null && report.tempHigh !== '' ? String(report.tempHigh) : '';

@@ -235,31 +235,112 @@ async function syncProjectToFolder(project, onProgress) {
   return writeProjectToFolder(project, dirHandle, onProgress);
 }
 
+// Writes one report's PDF + data/photos/signature straight into the
+// folder, fetching any not-yet-local photo/signature bytes first (a report
+// pulled from a company without downloading its photo bytes yet would
+// otherwise silently sync a report.json with no matching photo files).
+// Returns the base filename actually used, so the caller can record it.
+async function writeReportFilesToFolder(dirHandle, pdfCtx, report) {
+  let full = normalizeReport({ ...report, photos: [...(report.photos || [])] });
+  if ((full.photosFetched || []).some((f) => !f) || full.signatureFetched === false) {
+    full = await fetchReportMedia(full);
+  }
+  const base = reportSyncBaseName(full);
+  const dataFolder = `data/reports/${base}`;
+
+  const pdfBlob = await buildOneReportPdf(pdfCtx, full);
+  await writeFileToDir(dirHandle, `reports/${base}.pdf`, pdfBlob);
+  await writeFileToDir(dirHandle, `${dataFolder}/report.json`, new Blob([JSON.stringify(reportPayloadForSync(full))], { type: 'application/json' }));
+  const photos = full.photos || [];
+  for (let p = 0; p < photos.length; p++) {
+    if (photos[p]) await writeFileToDir(dirHandle, `${dataFolder}/photos/photo${p + 1}.jpg`, photos[p]);
+  }
+  if (full.repSignatureImage) {
+    await writeFileToDir(dirHandle, `${dataFolder}/signature.png`, full.repSignatureImage);
+  }
+  return base;
+}
+
 // The actual write, shared by syncProjectToFolder above (prompts for a
 // folder if needed -- project.html's own Sync button, a real user gesture)
 // and syncCurrentProjectToFolderIfLinked below (never prompts -- ridealong
 // on the header refresh button, where popping a folder picker out of
 // nowhere on what looks like a plain data refresh would be a bad surprise).
+//
+// Resumable: a report already recorded as synced (isReportFolderSynced,
+// same check reports.html's cloud badges use) is skipped entirely rather
+// than rebuilt, and each report's own success is saved to folderSyncState
+// the moment it's written -- not once at the very end for the whole batch.
+// This app has no way to keep a sync running once its page is navigated
+// away from (there's no background-worker equivalent for writing to a
+// chosen folder), so the first full sync of a project with a real backlog
+// of reports can take a while and there's nothing stopping someone from
+// leaving mid-way. Recording progress as it happens means that doesn't
+// cost anything: the next sync -- another manual click, or the header
+// refresh ridealong -- picks up exactly where the interrupted one left
+// off instead of starting the whole project over.
+//
+// A full resync can run long enough that navigating away mid-way is a real
+// possibility (nothing here can keep running once that happens -- see the
+// comment above) -- warn before that happens, the same way an unsaved
+// report edit already does elsewhere in the app. Deliberately scoped to
+// this project-wide sync specifically, not every quick per-report
+// auto-sync on save (onLocalFolderSyncReportChanged), which finishes near-
+// instantly and would make this fire constantly for no real reason.
+let activeProjectFolderSyncCount = 0;
+window.addEventListener('beforeunload', (e) => {
+  if (activeProjectFolderSyncCount > 0) { e.preventDefault(); e.returnValue = ''; }
+});
+
 async function writeProjectToFolder(project, dirHandle, onProgress) {
-  const reports = await getReportsForProject(project.id);
-  const files = await collectProjectSyncFiles(project, reports, onProgress);
-  for (const [path, blob] of files) {
-    await writeFileToDir(dirHandle, path, blob);
-  }
+  activeProjectFolderSyncCount++;
+  try {
+    const reports = await getReportsForProject(project.id);
 
-  // Marks every report just written as synced (as of now), so per-report
-  // auto-sync (onLocalFolderSyncReportChanged) only has to catch up on
-  // whatever changes next, and reports.html's cloud badges clear immediately
-  // rather than waiting on each report's own next edit.
-  const now = Date.now();
-  const state = {};
-  for (const report of reports) {
-    state[report.id] = { baseName: reportSyncBaseName(report), syncedAt: now };
-  }
-  await saveFolderSyncState(project.id, state);
+    await writeFileToDir(dirHandle, 'data/project.json', new Blob([JSON.stringify(await serializeProjectForExport(project))], { type: 'application/json' }));
+    await writeFileToDir(dirHandle, 'data/manifest.json', new Blob([JSON.stringify({
+      formatVersion: 2,
+      kind: 'daily-report-app-folder-sync',
+      project: project.name,
+      syncedAt: Date.now(),
+      reportCount: reports.length,
+    })], { type: 'application/json' }));
 
-  if (onProgress) onProgress(reports.length, reports.length, null);
-  return { mode: 'folder', folderName: dirHandle.name, reportCount: reports.length };
+    const state = await getFolderSyncState(project.id);
+    const pending = reports.filter((r) => !isReportFolderSynced(r, state));
+    if (pending.length) {
+      // project.html (the only page with a Sync button) already carries
+      // html2canvas/jsPDF/render-report.js/pdf-export.js statically, but the
+      // header refresh ridealong (syncCurrentProjectToFolderIfLinked, below)
+      // can fire this from any page -- most of which don't. Same on-demand
+      // load syncSingleReportToFolder already uses for the same reason.
+      await ensurePdfSyncLibs();
+      const pdfCtx = await preparePdfContext();
+      try {
+        for (let i = 0; i < pending.length; i++) {
+          const report = pending[i];
+          if (onProgress) onProgress(i, pending.length, report);
+          const base = await writeReportFilesToFolder(dirHandle, pdfCtx, report);
+          // Re-read rather than reuse the copy from above -- a per-report
+          // auto-sync (onLocalFolderSyncReportChanged) could plausibly write
+          // its own entry in between iterations of this loop; last write
+          // should never clobber a concurrent one.
+          const latestState = await getFolderSyncState(project.id);
+          latestState[report.id] = { baseName: base, syncedAt: Date.now() };
+          await saveFolderSyncState(project.id, latestState);
+        }
+      } finally {
+        pdfCtx.sandbox.remove();
+      }
+    }
+    if (onProgress) onProgress(pending.length, pending.length, null);
+
+    await refreshQuantitySheetInFolder(dirHandle, project);
+
+    return { mode: 'folder', folderName: dirHandle.name, reportCount: reports.length };
+  } finally {
+    activeProjectFolderSyncCount--;
+  }
 }
 
 // Fallback for browsers without the File System Access API (notably iOS
