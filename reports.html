@@ -302,9 +302,12 @@ async function init() {
   $('#fab-new-report').href = `report-editor.html?project=${project.id}&report=new`;
 
   // Company members may be restricted from editing/deleting reports once
-  // saved (and "own reports only" restricts *which* ones -- see render(),
-  // which only gives a row a checkbox if this context allows it) -- gated
-  // here, not by hiding "+ New Report" (creating one is always allowed).
+  // saved (and "own reports only" restricts *which* ones -- see
+  // canEditReportWithContext, re-checked per report by the Mass Edit/Delete
+  // handlers themselves). That only affects those two actions -- selecting
+  // a report to begin with is also how Generate Selected/Build Quantity
+  // Sheet work, and those have nothing to do with edit permission, so
+  // checkboxes stay available to everyone regardless.
   reportPermCtx = await getReportPermissionContext();
   if (!reportPermCtx.isAdmin && !reportPermCtx.canEditAny && !reportPermCtx.canEditOwn) {
     $('#btn-delete-selected').hidden = true;
@@ -392,10 +395,15 @@ function reportBadgesHtml(r) {
   return badges.join(' ');
 }
 
+// Selecting a report is for Generate Selected / Build Quantity Sheet just
+// as much as it's for Mass Edit / Delete -- the first two are read-only and
+// have nothing to do with edit permission, so the checkbox itself isn't
+// gated by canEditReportWithContext. Mass Edit and Delete re-check that
+// permission themselves, per report, at the moment they actually act (see
+// their click handlers below) -- that's what keeps them safe, not whether
+// a checkbox was available to begin with.
 function reportCheckboxHtml(r) {
-  return canEditReportWithContext(r, reportPermCtx)
-    ? `<input type="checkbox" class="report-row-check" ${selectedIds.has(r.id) ? 'checked' : ''}>`
-    : `<span class="report-row-check-spacer"></span>`;
+  return `<input type="checkbox" class="report-row-check" ${selectedIds.has(r.id) ? 'checked' : ''}>`;
 }
 
 // ---------- Data-quality warnings ----------
@@ -566,8 +574,7 @@ function render() {
     });
   });
 
-  const editableCount = list.filter((r) => canEditReportWithContext(r, reportPermCtx)).length;
-  $('#btn-select-all').textContent = selectedIds.size === editableCount && editableCount > 0 ? 'Deselect all' : 'Select all';
+  $('#btn-select-all').textContent = selectedIds.size === list.length && list.length > 0 ? 'Deselect all' : 'Select all';
   updateBulkBar();
 
   if (list.length > 0) ensureThumbnails(list).catch((err) => console.error(err));
@@ -601,7 +608,7 @@ $('#btn-clear-filters').addEventListener('click', () => {
 });
 
 $('#btn-select-all').addEventListener('click', () => {
-  const list = getFilteredSorted().filter((r) => canEditReportWithContext(r, reportPermCtx));
+  const list = getFilteredSorted();
   if (selectedIds.size === list.length && list.length > 0) {
     selectedIds.clear();
   } else {

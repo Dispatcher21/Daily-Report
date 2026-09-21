@@ -3,6 +3,14 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.016 -- 2026-09-21
+  - Fixed Reports' multi-select checkboxes being unavailable to anyone
+    without edit permission on a report -- they're needed for Generate
+    Selected and Build Quantity Sheet too, which don't require editing at
+    all, so selecting reports is available to everyone again. Mass Edit
+    and Delete stay limited to whoever's actually allowed to make those
+    changes.
+
 0.015 -- 2026-09-16
   - Fixed the report editor's live preview flashing on every character
     typed -- photos and the logo were reloading from scratch on every

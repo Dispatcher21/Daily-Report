@@ -1711,7 +1711,6 @@ input[type="date"] { min-width: 0; }
   gap: 0.7rem; box-shadow: var(--shadow);
 }
 .report-row-check { width: 1.35rem; height: 1.35rem; flex-shrink: 0; }
-.report-row-check-spacer { display: inline-block; width: 1.35rem; height: 1.35rem; flex-shrink: 0; }
 .report-row .report-row-main { display: flex; flex-direction: column; flex: 1; min-width: 0; cursor: pointer; }
 .report-row .report-row-date { font-weight: 700; font-size: 1rem; }
 .report-row-author {
