@@ -404,9 +404,8 @@ function simpleFieldBodyHtml(key, def) {
   const tag = cfg.type === 'textarea'
     ? `<textarea id="f-${key}" rows="${cfg.rows || 3}"${disabledAttr}></textarea>`
     : `<input type="${cfg.type}" id="f-${key}"${cfg.placeholder ? ` placeholder="${cfg.placeholder}"` : ''}${disabledAttr}>`;
-  const tip = cfg.hint ? ` <button type="button" class="info-tip" data-tip="${escapeHtml(cfg.hint)}" aria-label="What this does">i</button>` : '';
-  const labelText = tip ? `<span class="label-tip">${escapeHtml(def.label)}${tip}</span>` : escapeHtml(def.label);
-  return `<div class="rb-field" id="step-${key}"><label>${labelText}${tag}</label></div>`;
+  const hint = cfg.hint ? `<span class="hint">${escapeHtml(cfg.hint)}</span>` : '';
+  return `<div class="rb-field" id="step-${key}"><label>${escapeHtml(def.label)}${tag}</label>${hint}</div>`;
 }
 
 function blockFieldBodyHtml(key, def) {

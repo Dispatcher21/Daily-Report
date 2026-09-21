@@ -3,6 +3,12 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.026 -- 2026-09-21
+  - Activity, PE Name, Representative, and NTP Date in the report editor
+    also no longer need a tap to see their explanation -- same change as
+    the last update, just the rest of the field-level ones that were
+    missed the first time around.
+
 0.025 -- 2026-09-21
   - Your Name and Company Password on the welcome screen, and No Work
     Day/Weather Day in the report editor, no longer need a tap to see
