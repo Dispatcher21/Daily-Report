@@ -3,6 +3,12 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.019 -- 2026-09-21
+  - The Inspectors section in Time Worked is now collapsed by default --
+    only the plain Hours box shows until you open it. It still opens
+    automatically for a report that already has real inspector time
+    logged, so nothing already filled in stays hidden.
+
 0.018 -- 2026-09-21
   - Fixed the Hours and Representative lines on the printed report: Hours
     now shows each inspector's initials and hours (e.g. "JS (1hr),

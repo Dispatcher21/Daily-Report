@@ -63,11 +63,17 @@
 
           <div class="time-worked-block">
             <label class="hours-override">Hours <input type="number" inputmode="decimal" step="0.25" id="f-hours"></label>
-            <div id="inspectors-list"></div>
-            <button type="button" class="btn-secondary" id="btn-add-inspector">+ Add Inspector</button>
-            <div class="total-hours-row">
-              <span>Total Hours (All Inspectors)</span>
-              <span id="total-hours-value" class="total-hours-value">0.00</span>
+            <div class="rb-subtoggle-hd" id="inspectors-toggle">
+              <span class="sig-label" style="margin:0;">Inspectors</span>
+              <span class="rb-chev">&#9656;</span>
+            </div>
+            <div class="rb-subtoggle-bd">
+              <div id="inspectors-list"></div>
+              <button type="button" class="btn-secondary" id="btn-add-inspector">+ Add Inspector</button>
+              <div class="total-hours-row">
+                <span>Total Hours (All Inspectors)</span>
+                <span id="total-hours-value" class="total-hours-value">0.00</span>
+              </div>
             </div>
           </div>
         </div>
@@ -885,6 +891,12 @@ function renderEditor() {
         : [{ start: '', end: '' }],
     }];
   }
+  // Hours is the one box everyone needs; the Inspectors section (names,
+  // per-inspector time segments) is opt-in -- collapsed by default unless
+  // there's already real content in it (a name typed, or any time logged),
+  // so opening a report that already has inspector detail doesn't hide it.
+  inspectorsSectionOpen = reportHasInspectorContent(report);
+  $('#step-reportInfo').querySelector('.time-worked-block').classList.toggle('open', inspectorsSectionOpen);
   renderInspectors();
 
   renderGroups();
@@ -1119,6 +1131,23 @@ function syncRepresentativeFromInspectors() {
   if (repEl) repEl.value = report.representative;
 }
 
+// Whether the whole Inspectors section (as opposed to just the plain Hours
+// box) is expanded -- same purely-local-UI-state treatment as
+// openInspectorCards just below, set once on load (see renderEditor) and
+// flipped by the #inspectors-toggle click handler.
+let inspectorsSectionOpen = false;
+// A lone inspector's name alone doesn't count -- makeBlankReport pre-fills
+// it from whoever's logged into this device, which isn't the same as
+// someone actually having engaged with this section yet. Only real logged
+// time, or more than one inspector, counts as content worth opening for.
+function reportHasInspectorContent(r) {
+  const inspectors = Array.isArray(r.inspectors) ? r.inspectors : [];
+  if (inspectors.length > 1) return true;
+  const insp = inspectors[0];
+  if (!insp) return false;
+  return (insp.timeEntries || []).some((e) => e.start && e.end);
+}
+
 // Which inspector cards' Time Segments are expanded -- purely a UI
 // convenience, tracked here rather than on the inspector objects themselves
 // so it never ends up saved/synced as part of the report or shows up as
@@ -1234,6 +1263,11 @@ $('#btn-add-inspector').addEventListener('click', () => {
   openInspectorCards.add(report.inspectors.length); // the new one's index, before the push
   report.inspectors.push({ name: '', timeEntries: [{ start: '', end: '' }] });
   onInspectorsChanged();
+});
+
+$('#inspectors-toggle').addEventListener('click', () => {
+  inspectorsSectionOpen = !inspectorsSectionOpen;
+  $('#step-reportInfo').querySelector('.time-worked-block').classList.toggle('open', inspectorsSectionOpen);
 });
 
 // ---------- Contractors / equipment matrix ----------
