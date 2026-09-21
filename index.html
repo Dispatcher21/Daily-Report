@@ -129,7 +129,7 @@
           </div>
         </div>
 
-        <div class="step step-collapsible">
+        <div class="step step-collapsible collapsed">
           <div class="step-header"><span class="step-num">TEAM</span><h2>Hours per Employee</h2><button type="button" class="info-tip" data-tip="Last 30 days, by Representative on file." aria-label="What this does">i</button></div>
           <div class="step-body">
             <div class="md-bars" id="md-hours-bars"></div>
@@ -137,7 +137,7 @@
           </div>
         </div>
 
-        <div class="step step-collapsible">
+        <div class="step step-collapsible collapsed">
           <div class="step-header"><span class="step-num">STATUS</span><h2>Projects: Ahead / Behind</h2></div>
           <div class="step-body">
             <div class="md-projlist" id="md-proj-status"></div>
@@ -145,7 +145,7 @@
           </div>
         </div>
 
-        <div class="step step-collapsible">
+        <div class="step step-collapsible collapsed">
           <div class="step-header"><span class="step-num">ACTIVITY</span><h2>Recent Reports</h2></div>
           <div class="step-body">
             <div class="md-feed" id="md-feed"></div>
@@ -1157,6 +1157,18 @@ function renderMdStats(projectStats, reports) {
   $('#md-stats').innerHTML = ringsRow + contractRow + tilesRow;
 }
 
+// One color per project, shared by the Trend chart and the Calendar below
+// it, so the same project is always the same color on both -- indexed by
+// position in the *full* included list, not whatever filtered subset a
+// given widget happens to work from (the Trend chart only plots projects
+// with an NTP Date, so indexing off its own filtered array would shift
+// every color after the first project missing one, out of sync with the
+// Calendar's own colors for those same projects).
+function mdProjectColor(project, included) {
+  const i = included.findIndex((p) => p.id === project.id);
+  return TREND_LINE_COLORS[(i < 0 ? 0 : i) % TREND_LINE_COLORS.length];
+}
+
 // One line per included project, each its own color -- each project's
 // progressOverTime points are already its own quantity-weighted percent
 // complete (same math as project.html's own trend chart), so unlike a
@@ -1173,7 +1185,7 @@ function renderMdStats(projectStats, reports) {
 function renderMdTrendChart(projectStats, included, reports, today) {
   const step = $('#md-trend-step');
   const withNtp = included.filter((project) => /^\d{4}-\d{2}-\d{2}$/.test((project.meta || {}).ntpDate || ''));
-  const series = withNtp.map((project, i) => {
+  const series = withNtp.map((project) => {
     const ntpDate = project.meta.ntpDate;
     const points = progressOverTime(reports.filter((r) => r.projectId === project.id && r.date), project.payItemCatalog || [], project.billingEstimates)
       .map((p) => ({ ...p, day: Math.max(0, daysBetween(ntpDate, p.date)) }));
@@ -1184,7 +1196,7 @@ function renderMdTrendChart(projectStats, included, reports, today) {
     if (points.length && points[0].day > 0) {
       points.unshift({ date: ntpDate, day: 0, pct: 0, earned: 0, synthetic: true });
     }
-    return { label: project.name, color: TREND_LINE_COLORS[i % TREND_LINE_COLORS.length], points, maxDay: daysBetween(ntpDate, today) };
+    return { label: project.name, color: mdProjectColor(project, included), points, maxDay: daysBetween(ntpDate, today) };
   }).filter((s) => s.points.length > 0);
 
   step.hidden = series.length === 0;
@@ -1230,12 +1242,9 @@ function renderMdCalendar(included, reports) {
   step.hidden = dated.length === 0;
   if (dated.length === 0) return;
 
-  // Same TREND_LINE_COLORS palette the trend chart uses, for a look
-  // consistent with the rest of this dashboard -- indexed by each project's
-  // position in the full included list (not the trend chart's own
-  // NTP-Date-only subset), so every included project gets a color here even
-  // one with no NTP Date, which the trend chart itself has to skip.
-  mdCalendarColorByProjectId = new Map(included.map((p, i) => [p.id, TREND_LINE_COLORS[i % TREND_LINE_COLORS.length]]));
+  // mdProjectColor is the same lookup the Trend chart above uses, so a
+  // project already plotted there keeps the exact same color here.
+  mdCalendarColorByProjectId = new Map(included.map((p) => [p.id, mdProjectColor(p, included)]));
   mdCalendarProjectById = new Map(included.map((p) => [p.id, p]));
 
   $('#md-cal-legend').innerHTML = included.map((p) => `

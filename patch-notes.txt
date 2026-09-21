@@ -3,6 +3,18 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.032 -- 2026-09-21
+  - Manager Dashboard: Hours per Employee, Projects: Ahead/Behind, and
+    Recent Reports now start collapsed (click to open, same as before) --
+    Portfolio, Progress Over Time, and the new Report Activity calendar
+    stay open, so the dashboard opens far shorter by default.
+  - Fixed the Trend chart and the Calendar potentially coloring the same
+    project differently: the Trend chart only plots projects with an NTP
+    Date, and was picking each project's color by its position in that
+    filtered list rather than the full included-projects list the
+    Calendar uses -- a project with no NTP Date could shift every color
+    after it out of sync between the two. Both now share one lookup.
+
 0.031 -- 2026-09-21
   - Manager Dashboard calendar: each project's pill now shows its name
     (the short part before " - ", e.g. "PR#439" out of "PR#439 - Causeway
