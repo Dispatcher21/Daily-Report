@@ -3,6 +3,19 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.033 -- 2026-09-21
+  - Fixed the project dashboard's Weather & Schedule section silently
+    skipping any report that had nothing in its own weather/activity/
+    traffic-control fields (e.g. one with only pay item quantities
+    logged) -- every dated report shows up now, matching the Manager
+    Dashboard's calendar.
+  - Weather & Schedule's calendar now shows labeled pills ("📝 Activity",
+    "⛈️ Weather", "📷 Photos", "⚠️ Traffic") instead of bare icons/a plain
+    dot, and opens already scrolled to today instead of the earliest
+    month on file -- same look and behavior as the Manager Dashboard's
+    own calendar, just colored by category instead of by project since
+    this one's already scoped to a single project.
+
 0.032 -- 2026-09-21
   - Manager Dashboard: Hours per Employee, Projects: Ahead/Behind, and
     Recent Reports now start collapsed (click to open, same as before) --

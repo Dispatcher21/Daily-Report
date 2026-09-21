@@ -625,15 +625,17 @@ function reportHasPhotos(r) {
 
 function renderWeatherSchedule(dated) {
   const step = $('#dash-weather-step');
-  // A No Work Day/Weather Day report is blank apart from its Notes by design
-  // (see the report-editor.html buttons) -- included here too now so it can
-  // be annotated in the list/calendar, not just counted in the stat card.
-  const loggable = dated.filter((r) =>
-    r.weatherDesc || r.tempHigh || r.tempLow || r.trafficControlSelect || r.controllingItem || r.commentsOnTime || r.activity || isNoWorkDayReport(r) || isWeatherDayReport(r) || reportHasPhotos(r)
-  );
+  // Every dated report shows up here, full stop -- this used to filter down
+  // to only reports with a weather/activity/traffic-control/etc field
+  // filled in, which silently hid a perfectly normal report that, say, only
+  // had pay item quantities logged and nothing in this section's own
+  // fields. From the dashboard that looked like "some reports just aren't
+  // here", which is exactly what got reported -- the fix is to not filter
+  // at all, same as the Manager Dashboard's own report-activity calendar.
+  const loggable = dated;
   const noWorkDays = dated.filter(isNoWorkDayReport).length;
   const weatherDays = dated.filter(isWeatherDayReport).length;
-  step.hidden = loggable.length === 0 && noWorkDays === 0 && weatherDays === 0;
+  step.hidden = loggable.length === 0;
   if (step.hidden) return;
 
   const weatherFlagged = dated.filter((r) => ADVERSE_WEATHER_RE.test(r.weatherDesc || '')).length;
@@ -696,26 +698,29 @@ function renderWeatherLogList(loggable) {
 
 const WCAL_WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
-function weatherCalDayHtml(dayNum, r) {
-  if (!r) return `<div class="wcal-day"><span class="wcal-day-num">${dayNum}</span></div>`;
+function weatherCalDayHtml(dayNum, r, iso) {
+  if (!r) return `<div class="wcal-day" data-date="${iso}"><span class="wcal-day-num">${dayNum}</span></div>`;
   const hasPhotos = reportHasPhotos(r);
+  const photoPill = hasPhotos ? '<span class="wcal-pill wcal-pill-photos">📷 Photos</span>' : '';
   // Every branch below gets data-report-id + .wcal-clickable so the single
   // delegated listener in renderWeatherCalendar can open the day-detail
-  // modal for any day that has a real report, regardless of its type.
+  // modal for any day that has a real report, regardless of its type; and
+  // data-date so the "scroll to today" logic below can find any day
+  // regardless of whether it has a report at all.
   if (isNoWorkDayReport(r)) {
     return `
-      <div class="wcal-day wcal-nwd wcal-clickable" data-tip="No Work Day" tabindex="0" data-report-id="${r.id}">
+      <div class="wcal-day wcal-nwd wcal-clickable" data-tip="No Work Day" tabindex="0" data-report-id="${r.id}" data-date="${iso}">
         <span class="wcal-day-num">${dayNum}</span>
         <span class="wcal-badge">NWD</span>
-        ${hasPhotos ? '<div class="wcal-day-icons"><span class="wcal-icon" title="Photos attached">📷</span></div>' : ''}
+        ${photoPill ? `<div class="wcal-pills">${photoPill}</div>` : ''}
       </div>`;
   }
   if (isWeatherDayReport(r)) {
     return `
-      <div class="wcal-day wcal-nwd wcal-clickable" data-tip="Weather Day" tabindex="0" data-report-id="${r.id}">
+      <div class="wcal-day wcal-nwd wcal-clickable" data-tip="Weather Day" tabindex="0" data-report-id="${r.id}" data-date="${iso}">
         <span class="wcal-day-num">${dayNum}</span>
         <span class="wcal-badge">WD</span>
-        ${hasPhotos ? '<div class="wcal-day-icons"><span class="wcal-icon" title="Photos attached">📷</span></div>' : ''}
+        ${photoPill ? `<div class="wcal-pills">${photoPill}</div>` : ''}
       </div>`;
   }
   const isAttention = r.trafficControlSelect === 'ATTENTION_REQUIRED';
@@ -733,18 +738,22 @@ function weatherCalDayHtml(dayNum, r) {
   const cls = ['wcal-day', 'wcal-clickable'];
   if (isAdverse) cls.push('wcal-adverse');
   if (isAttention) cls.push('wcal-attention');
-  // Icons stay small and iconic rather than showing activity text inline --
-  // a day's Activity write-up can run to paragraphs, which would blow out a
-  // grid cell sized for a two-digit date. Full text lives in the tooltip.
+  // Labeled pills instead of bare icons/a plain dot -- same visual language
+  // as the Manager Dashboard's own calendar (see mdcal-pill), just colored
+  // by category instead of by project since there's only one project here.
+  // Only shown for something actually worth flagging: adverse weather, not
+  // every clear day; Attention Required, not routine In Place (still in the
+  // tooltip either way) -- a normal day stays uncluttered.
+  const pills = [
+    isAdverse ? '<span class="wcal-pill wcal-pill-weather">⛈️ Weather</span>' : '',
+    hasActivity ? '<span class="wcal-pill wcal-pill-activity">📝 Activity</span>' : '',
+    photoPill,
+    isAttention ? '<span class="wcal-pill wcal-pill-traffic">⚠️ Traffic</span>' : '',
+  ].filter(Boolean).join('');
   return `
-    <div class="${cls.join(' ')}"${tipParts.length ? ` data-tip="${escapeHtml(tipParts.join(' — '))}"` : ''} tabindex="0" data-report-id="${r.id}">
+    <div class="${cls.join(' ')}"${tipParts.length ? ` data-tip="${escapeHtml(tipParts.join(' — '))}"` : ''} tabindex="0" data-report-id="${r.id}" data-date="${iso}">
       <span class="wcal-day-num">${dayNum}</span>
-      <div class="wcal-day-icons">
-        ${isAdverse ? '<span class="wcal-icon" title="Adverse weather">⛈️</span>' : ''}
-        ${hasActivity ? '<span class="wcal-icon" title="Activity logged">📝</span>' : ''}
-        ${hasPhotos ? '<span class="wcal-icon" title="Photos attached">📷</span>' : ''}
-        ${r.trafficControlSelect ? `<span class="wcal-dot ${isAttention ? 'wcal-dot-attention' : 'wcal-dot-ok'}"></span>` : ''}
-      </div>
+      ${pills ? `<div class="wcal-pills">${pills}</div>` : ''}
     </div>`;
 }
 
@@ -760,7 +769,7 @@ function renderWeatherCalendar(loggable) {
     for (let i = 0; i < first.getDay(); i++) cells.push('<div class="wcal-day wcal-day-empty"></div>');
     for (let d = 1; d <= daysInMonth; d++) {
       const iso = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      cells.push(weatherCalDayHtml(d, byDate.get(iso)));
+      cells.push(weatherCalDayHtml(d, byDate.get(iso), iso));
     }
     return `
       <div class="wcal-month">
@@ -769,6 +778,23 @@ function renderWeatherCalendar(loggable) {
         <div class="wcal-grid">${cells.join('')}</div>
       </div>`;
   }).join('');
+
+  // Default to today's row instead of the earliest month on file -- same
+  // reasoning and implementation as the Manager Dashboard's own calendar
+  // (see index.html's renderMdCalendar): offsetTop resolves against
+  // whatever positioned ancestor is nearest, not necessarily this scroll
+  // container, so getBoundingClientRect is the reliable way to find "how
+  // far down this container" a cell actually sits.
+  requestAnimationFrame(() => {
+    const container = $('#dash-weather-calendar');
+    const todayCell = container.querySelector(`[data-date="${todayIso()}"]`);
+    if (!todayCell) { container.scrollTop = container.scrollHeight; return; } // today's own month has nothing on file yet -- fall back to the most recent end
+    const cellRect = todayCell.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    const offsetWithinContainer = cellRect.top - containerRect.top + container.scrollTop;
+    const target = offsetWithinContainer - container.clientHeight / 2 + todayCell.offsetHeight / 2;
+    container.scrollTop = Math.max(0, target);
+  });
 }
 
 $$('#weather-view-toggle .view-toggle-btn').forEach((btn) => {

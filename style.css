@@ -2538,11 +2538,25 @@ input[type="date"] { min-width: 0; }
 .wcal-day.wcal-clickable:hover { border-color: var(--brand-light); }
 .wcal-day-empty { border-color: transparent; background: none; }
 .wcal-day-num { font-size: 0.72rem; font-weight: 600; color: var(--text-dim); }
-.wcal-day-icons { display: flex; align-items: center; flex-wrap: wrap; gap: 3px; }
-.wcal-icon { font-size: 0.8rem; line-height: 1; }
-.wcal-dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; }
-.wcal-dot-ok { background: var(--ok); }
-.wcal-dot-attention { background: var(--danger); }
+/* Labeled pills replaced the old bare-icon-row/plain-dot design (a "📝" or
+   a lone colored dot meant nothing without already knowing the legend by
+   heart) -- one column of small text chips instead, same visual language
+   as the Manager Dashboard's own calendar (.mdcal-pill), just colored by
+   category instead of by project. Needs real room a fixed square day cell
+   didn't have, so #dash-weather-calendar overrides that below -- scoped to
+   this calendar's own container, same pattern index.html's #md-calendar
+   uses, so it can never affect any other .wcal-day consumer. */
+#dash-weather-calendar .wcal-day { aspect-ratio: auto; min-height: 46px; }
+.wcal-pills { display: flex; flex-direction: column; gap: 2px; margin-top: 2px; }
+.wcal-pill {
+  display: block; width: 100%; box-sizing: border-box; color: #fff;
+  font-size: 0.56rem; font-weight: 700; line-height: 1.4; padding: 0 4px;
+  border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.wcal-pill-activity { background: var(--link); }
+.wcal-pill-weather { background: var(--warn); }
+.wcal-pill-photos { background: var(--ok); }
+.wcal-pill-traffic { background: var(--danger); }
 .wcal-adverse { border-color: var(--warn); }
 .wcal-attention { background: var(--danger-bg); border-color: var(--danger); }
 .wcal-nwd { background: var(--border); }

@@ -198,7 +198,11 @@ index.html
 project.html
   A single project's home page: its dashboard (renderDashboard -- rings/
   stat cards from dashboard-widgets.js, pay item completion list, trend
-  chart, weather calendar/log), report list entry points, and project-level
+  chart, weather calendar/log -- shows every dated report, each day's
+  calendar cell using labeled category pills (Activity/Weather/Photos/
+  Traffic) instead of bare icons, same visual language index.html's
+  Manager Dashboard calendar uses for its own per-project pills), report
+  list entry points, and project-level
   actions (Sync to Folder via local-sync.js's syncProjectToFolder, importing
   .report bundles or Daily Work Report Excel files via
   importReportFilesIntoProject -> report-bundle.js's tryParseReportBundle /
