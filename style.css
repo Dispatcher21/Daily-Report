@@ -2557,6 +2557,7 @@ input[type="date"] { min-width: 0; }
 .wcal-pill-weather { background: var(--warn); }
 .wcal-pill-photos { background: var(--ok); }
 .wcal-pill-traffic { background: var(--danger); }
+.wcal-pill-filed { background: var(--border-strong); }
 .wcal-adverse { border-color: var(--warn); }
 .wcal-attention { background: var(--danger-bg); border-color: var(--danger); }
 .wcal-nwd { background: var(--border); }

@@ -3,6 +3,15 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.034 -- 2026-09-21
+  - Fixed a report with nothing notable in Weather & Schedule's own
+    categories (no activity typed in, no adverse weather, no photos,
+    routine/unset traffic control -- e.g. one that only has pay item
+    quantities logged) rendering as a bare, blank-looking day, impossible
+    to tell apart from a day with no report at all. Those now get a
+    neutral "Report Filed" pill so every dated report is always visibly
+    marked as something being there.
+
 0.033 -- 2026-09-21
   - Fixed the project dashboard's Weather & Schedule section silently
     skipping any report that had nothing in its own weather/activity/

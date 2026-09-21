@@ -744,16 +744,25 @@ function weatherCalDayHtml(dayNum, r, iso) {
   // Only shown for something actually worth flagging: adverse weather, not
   // every clear day; Attention Required, not routine In Place (still in the
   // tooltip either way) -- a normal day stays uncluttered.
-  const pills = [
+  const categoryPills = [
     isAdverse ? '<span class="wcal-pill wcal-pill-weather">⛈️ Weather</span>' : '',
     hasActivity ? '<span class="wcal-pill wcal-pill-activity">📝 Activity</span>' : '',
     photoPill,
     isAttention ? '<span class="wcal-pill wcal-pill-traffic">⚠️ Traffic</span>' : '',
-  ].filter(Boolean).join('');
+  ].filter(Boolean);
+  // A report with nothing notable in any category above (no activity typed
+  // in, no adverse weather, no photos, traffic control routine or unset --
+  // e.g. one that only has pay item quantities logged) would otherwise
+  // render as a bare day number, indistinguishable from a day with no
+  // report at all. This neutral fallback pill only shows up when every
+  // other one is absent, so a real report is always visibly marked as
+  // "there's something here", without adding a second pill next to ones
+  // that already have one.
+  const pills = (categoryPills.length ? categoryPills : ['<span class="wcal-pill wcal-pill-filed">Report Filed</span>']).join('');
   return `
     <div class="${cls.join(' ')}"${tipParts.length ? ` data-tip="${escapeHtml(tipParts.join(' — '))}"` : ''} tabindex="0" data-report-id="${r.id}" data-date="${iso}">
       <span class="wcal-day-num">${dayNum}</span>
-      ${pills ? `<div class="wcal-pills">${pills}</div>` : ''}
+      <div class="wcal-pills">${pills}</div>
     </div>`;
 }
 
