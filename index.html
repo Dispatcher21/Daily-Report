@@ -1437,11 +1437,25 @@ function renderMdFeed(reports) {
   $('#md-feed').innerHTML = sorted.map((r) => {
     const project = projectById.get(r.projectId);
     const isAdverse = ADVERSE_WEATHER_RE.test(r.weatherDesc || '');
-    const who = r.representative || r.createdBy || 'Unknown';
+    // "Filed by" and "Inspectors" are two different things that used to get
+    // collapsed into one -- representative is a display string joining
+    // every inspector logged on the report (their own Hours, see
+    // defaults.js's report.inspectors), not who actually saved it. That
+    // showed "filed by John Sonnier, Alex Flores" for a report Alex was
+    // simply listed on, never touched himself. The device that actually
+    // saved it is lastEditedBy/createdBy.
+    const filer = r.lastEditedBy || r.createdBy || 'Unknown';
+    const inspectors = (r.representative || '').trim();
+    // Skip the second clause entirely when it's just the filer's own name
+    // again (the common case: one inspector on site who also files their
+    // own report) -- only worth calling out when it adds information.
+    const inspectorsHtml = inspectors && inspectors !== filer
+      ? ` &middot; Inspectors: ${escapeHtml(inspectors)}`
+      : '';
     return `
       <div class="md-feed-row">
         <span class="md-feed-date">${escapeHtml(r.date || '—')}</span>
-        <span class="md-feed-body"><strong>${escapeHtml(project ? project.name : 'Unknown project')}</strong> &middot; filed by ${escapeHtml(who)}${isAdverse ? '<span class="md-feed-flag">weather-flagged</span>' : ''}</span>
+        <span class="md-feed-body"><strong>${escapeHtml(project ? project.name : 'Unknown project')}</strong> &middot; filed by ${escapeHtml(filer)}${inspectorsHtml}${isAdverse ? '<span class="md-feed-flag">weather-flagged</span>' : ''}</span>
       </div>`;
   }).join('');
 }

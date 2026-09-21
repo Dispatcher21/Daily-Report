@@ -2247,7 +2247,12 @@ async function renderCmActivity() {
 
   const byAuthor = new Map();
   for (const r of reports) {
-    const author = r.representative || r.createdBy || 'Unknown';
+    // The device/person who actually saved the report, not representative
+    // (a display string joining every inspector logged on it) -- keying by
+    // that would split "John Sonnier" and "John Sonnier, Alex Flores" into
+    // two different authors for the same person, and credit Alex with
+    // reports he was simply listed on but never touched himself.
+    const author = r.lastEditedBy || r.createdBy || 'Unknown';
     if (!byAuthor.has(author)) byAuthor.set(author, { count: 0, latest: 0, projects: new Set() });
     const entry = byAuthor.get(author);
     entry.count++;

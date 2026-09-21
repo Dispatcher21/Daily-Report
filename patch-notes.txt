@@ -3,6 +3,19 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.037 -- 2026-09-21
+  - Fixed the Manager Dashboard's Recent Reports feed saying a report was
+    "filed by John Sonnier, Alex Flores" when Alex was simply listed as an
+    inspector on it and never touched it himself -- "filed by" now always
+    names the device that actually saved the report, with a separate
+    "Inspectors:" note only when that list says something the filer's name
+    doesn't already.
+  - Fixed the same mix-up in Settings' Company > Activity tab, which
+    grouped report counts by that same combined inspector-list string --
+    a report with two inspectors was counted as a distinct "author" from
+    either of them alone, and credited a listed-but-not-filing inspector
+    with reports they never touched. Now grouped by the actual filer.
+
 0.036 -- 2026-09-21
   - No Work Day detection now matches "no work" anywhere in Notes
     (case-insensitive, e.g. "No work - rain" or "Crew on site, no work
