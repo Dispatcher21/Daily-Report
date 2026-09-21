@@ -842,6 +842,15 @@ window.addEventListener('company-data-pulled', async () => {
   await refreshFolderSyncBadgeState();
   render();
 });
+
+// The header sync button's folder resync (see theme.js) finishes after
+// company-data-pulled already fired above, so the banner/cloud icons from
+// that handler are reading stale sync state -- refresh again once the
+// folder write itself is actually done.
+window.addEventListener('folder-sync-completed', async () => {
+  await refreshFolderSyncBadgeState();
+  render();
+});
 </script>
 </body>
 </html>

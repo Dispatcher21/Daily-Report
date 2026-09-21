@@ -3,6 +3,12 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.027 -- 2026-09-21
+  - Fixed the "N reports haven't synced" banner (and the matching status
+    on the Project page) staying up after clicking the header's sync
+    button, even once the linked folder was actually caught up -- it was
+    refreshing itself a moment too early, before that sync had finished.
+
 0.026 -- 2026-09-21
   - Activity, PE Name, Representative, and NTP Date in the report editor
     also no longer need a tap to see their explanation -- same change as

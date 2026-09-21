@@ -434,6 +434,12 @@ function readAccent() {
             if (typeof syncCurrentProjectToFolderIfLinked === 'function' && typeof queryParam === 'function') {
               const projectId = queryParam('id') || queryParam('project');
               await syncCurrentProjectToFolderIfLinked(projectId).catch((err) => console.error('header folder sync:', err));
+              // Fires after the folder resync above actually finishes writing,
+              // unlike company-data-pulled (already dispatched by now) which
+              // reports.html/project.html would otherwise use to refresh their
+              // synced/pending counts too early -- reading the old state and
+              // leaving a stale "N reports haven't synced" banner up.
+              window.dispatchEvent(new CustomEvent('folder-sync-completed'));
             }
           } catch (err) {
             console.error('header sync:', err);

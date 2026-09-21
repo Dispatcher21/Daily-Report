@@ -1017,6 +1017,12 @@ init().then(wireAutoPull);
 // the dashboard and pay item stats reflect a teammate's change without a
 // manual reload. init() itself is idempotent (see its own redirect guard).
 window.addEventListener('company-data-pulled', init);
+
+// The header sync button's folder resync (see theme.js) finishes after
+// company-data-pulled already fired above, so the pending-count text
+// init() -> refreshSyncFolderStatus() just showed is already stale by the
+// time the folder write actually completes -- refresh it once more here.
+window.addEventListener('folder-sync-completed', refreshSyncFolderStatus);
 </script>
 </body>
 </html>
