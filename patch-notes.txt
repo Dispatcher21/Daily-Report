@@ -3,6 +3,13 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.021 -- 2026-09-21
+  - View Reports now shows multiple inspectors as separate, differently
+    colored name badges instead of one combined name.
+  - Fixed the Edit button drifting to a different spot on some report
+    cards/rows depending on how much other content was above it -- it now
+    always sits flush at the bottom.
+
 0.020 -- 2026-09-21
   - Each inspector now has their own plain Hours box, next to their name --
     type a number directly instead of needing the time-segment calculator.

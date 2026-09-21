@@ -387,11 +387,29 @@ function reportCloudBadgeHtml(r) {
   return `<span class="report-row-cloud" title="Not yet synced to the local folder">${CLOUD_ICON_SVG}</span>`;
 }
 
+// Simple, theme-safe color rotation -- enough to tell two or three
+// inspectors on the same report apart at a glance without needing a real
+// per-person color picker anywhere in the app. A single inspector (or a
+// report from before multiple inspectors existed, with just a plain
+// representative/createdBy string) still gets one plain badge, unchanged.
+const AUTHOR_BADGE_COLOR_CLASSES = ['', ' report-row-author-1', ' report-row-author-2', ' report-row-author-3'];
+function reportAuthorBadgesHtml(r) {
+  const inspectors = Array.isArray(r.inspectors) ? r.inspectors.filter((insp) => insp && (insp.name || '').trim()) : [];
+  if (inspectors.length > 1) {
+    return inspectors
+      .map((insp, i) => `<span class="report-row-author${AUTHOR_BADGE_COLOR_CLASSES[i % AUTHOR_BADGE_COLOR_CLASSES.length]}">${escapeHtml(insp.name)}</span>`)
+      .join(' ');
+  }
+  const name = (inspectors[0] && inspectors[0].name) || r.representative || r.createdBy;
+  return name ? `<span class="report-row-author">${escapeHtml(name)}</span>` : '';
+}
+
 function reportBadgesHtml(r) {
   const badges = [];
   if (isNoWorkDayReport(r)) badges.push('<span class="report-row-nwd">NO WORK DAY</span>');
   if (isWeatherDayReport(r)) badges.push('<span class="report-row-wd">WEATHER DAY</span>');
-  if (r.representative || r.createdBy) badges.push(`<span class="report-row-author">${escapeHtml(r.representative || r.createdBy)}</span>`);
+  const authorBadges = reportAuthorBadgesHtml(r);
+  if (authorBadges) badges.push(authorBadges);
   return badges.join(' ');
 }
 
@@ -515,9 +533,8 @@ function renderCard(r) {
     : !r.activity && isWeatherDayReport(r)
     ? '<span class="report-row-wd">WEATHER DAY</span>'
     : escapeHtml(r.activity || 'No activity noted');
-  const authorBadge = (r.representative || r.createdBy)
-    ? ` <span class="report-row-author">${escapeHtml(r.representative || r.createdBy)}</span>`
-    : '';
+  const authorBadges = reportAuthorBadgesHtml(r);
+  const authorBadge = authorBadges ? ' ' + authorBadges : '';
   return `
     <div class="report-card" data-id="${r.id}">
       <div class="report-card-top">
