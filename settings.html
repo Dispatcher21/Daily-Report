@@ -1920,7 +1920,7 @@ $('#cm-project-list').addEventListener('change', async (e) => {
   const project = (await getAllProjects()).filter((p) => projectInScope(p, room)).find((p) => p.id === id);
   if (!project) return;
   try {
-    project.backgroundImage = await compressImage(file, { maxDim: 1600, quality: 0.75 });
+    project.backgroundImage = await compressImage(await convertHeicIfNeeded(file), { maxDim: 1600, quality: 0.75 });
     project.backgroundImageFetched = true;
     await saveProject(project);
     await renderCmProjects();
