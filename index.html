@@ -1183,10 +1183,22 @@ function renderMdHoursBars(reports) {
   const totals = new Map();
   reports.forEach((r) => {
     if (!r.date || r.date < cutoffIso) return;
-    const hours = Number(r.hours) || 0;
-    if (hours <= 0) return;
-    const name = (r.representative || '').trim() || 'Unassigned';
-    totals.set(name, (totals.get(name) || 0) + hours);
+    // Split by individual inspector, not report.representative (a display-
+    // only "A, B" string joined for the printed report) -- each inspector
+    // logs their own Hours (see defaults.js's report.inspectors), and this
+    // chart is specifically hours per person. A report saved before the
+    // multi-inspector feature shipped (or never reopened since) has no
+    // inspectors array at all; that falls back to the old single
+    // representative/hours pair as one entry.
+    const inspectors = Array.isArray(r.inspectors) && r.inspectors.length
+      ? r.inspectors
+      : [{ name: r.representative, hours: r.hours }];
+    inspectors.forEach((insp) => {
+      const hours = Number(insp.hours) || 0;
+      if (hours <= 0) return;
+      const name = (insp.name || '').trim() || 'Unassigned';
+      totals.set(name, (totals.get(name) || 0) + hours);
+    });
   });
 
   const sorted = [...totals.entries()].sort((a, b) => b[1] - a[1]);
