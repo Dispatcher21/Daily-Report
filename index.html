@@ -102,7 +102,7 @@
       </div>
 
       <div class="md-manage-panel" id="md-manage-panel" hidden>
-        <div class="panel-tip-row"><button type="button" class="info-tip" data-tip="Uncheck a project to leave it out of every stat below -- it still works normally everywhere else." aria-label="What this does">i</button></div>
+        <div class="panel-tip-row"><button type="button" class="info-tip" data-tip="Uncheck a project to leave it out of every stat below -- it still works normally everywhere else. This is just your own view of the dashboard; nobody else's is affected." aria-label="What this does">i</button></div>
         <div id="md-project-checks"></div>
       </div>
 
@@ -1027,15 +1027,23 @@ async function renderManagerDashboard() {
   } catch (e) {}
   setMdMobileExpanded(rememberedExpanded);
 
-  // Only an admin can edit which projects are included -- everyone else
-  // who can see the dashboard sees the same admin-chosen set.
-  $('#md-manage-btn').hidden = !room.isAdmin;
+  // Anyone who can see the dashboard (the companyCan check above -- admin
+  // or a member with the permission granted) can also curate their own
+  // view of it; #md-manage-btn has no separate visibility gate of its own.
 
-  const cfg = await getManagerDashboardConfig();
+  // Per-person, not shared -- getManagerDashboardExcludedProjectIds
+  // returns null the first time this person sees the dashboard (never
+  // customized), in which case the old shared company-wide list (whatever
+  // an admin had already curated before this became per-person) is their
+  // starting point, same idea as getProjectLayout's own null fallback.
+  let excludedProjectIds = await getManagerDashboardExcludedProjectIds();
+  if (excludedProjectIds === null) {
+    excludedProjectIds = (await getManagerDashboardConfig()).excludedProjectIds || [];
+  }
 
   const [allProjects, allReports] = await Promise.all([getAllProjects(), getAllReports()]);
   mdScopedProjects = allProjects.filter((p) => projectInScope(p, room));
-  mdExcluded = new Set(cfg.excludedProjectIds || []);
+  mdExcluded = new Set(excludedProjectIds);
   renderMdChecklist();
 
   const included = mdScopedProjects.filter((p) => !mdExcluded.has(p.id));
@@ -1086,7 +1094,7 @@ function renderMdChecklist() {
       if (cb.checked) nextExcluded.delete(id); else nextExcluded.add(id);
       cb.disabled = true;
       try {
-        await updateManagerDashboardConfig({ excludedProjectIds: [...nextExcluded] });
+        await saveManagerDashboardExcludedProjectIds([...nextExcluded]);
         await renderManagerDashboard();
       } catch (err) {
         console.error(err);

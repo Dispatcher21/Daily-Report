@@ -144,6 +144,30 @@ async function saveProjectLayout(layout) {
   syncUserLayout(userName);
 }
 
+// Which projects a person has chosen to leave out of the Manager
+// Dashboard's stats. Per person, same as favorites/layout above, not
+// shared company-wide -- two managers can each curate their own view
+// without stepping on each other's. `null` means "never customized";
+// index.html falls back to the old shared company-wide list (see
+// getManagerDashboardConfig, firebase-sync.js) as that person's starting
+// point the first time they see the dashboard, same idea as
+// getProjectLayout's null-means-never-customized fallback.
+function managerDashboardExcludedSettingKey(userName) {
+  return `managerDashboardExcluded:${userName || '_anon'}`;
+}
+
+async function getManagerDashboardExcludedProjectIds() {
+  const userName = await getUserName();
+  const v = await getSetting(managerDashboardExcludedSettingKey(userName));
+  return v || null;
+}
+
+async function saveManagerDashboardExcludedProjectIds(excludedProjectIds) {
+  const userName = await getUserName();
+  await saveSetting(managerDashboardExcludedSettingKey(userName), excludedProjectIds);
+  syncUserLayout(userName);
+}
+
 // Local marker of when this person's favorites/layout last changed on
 // THIS device -- compared against the company's copy on pull (see
 // pullUserLayout in firebase-sync.js) so an older copy synced from
