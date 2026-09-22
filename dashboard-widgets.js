@@ -461,10 +461,19 @@ function renderTrendSvg(container, series, opts) {
     const starXs = declutterStarX(coords, s.points);
     let pathSection = '';
     if (coords.length > 1) {
-      const linePath = 'M' + coords.map((c) => c.join(',')).join(' L');
       if (singlePlainSeries) {
         const areaPath = `M${coords[0][0]},${padT + innerH} L${coords.map((c) => c.join(',')).join(' L')} L${coords[coords.length - 1][0]},${padT + innerH} Z`;
-        pathSection = `<path d="${areaPath}" class="trend-area"></path><path d="${linePath}" class="trend-line"></path>`;
+        // One <path> per segment (same technique the multi-series branch
+        // below already uses for its dashed synthetic-point segments) so a
+        // stretch between two reports with no actual progress -- the same
+        // pct both ends, common on a long project's early/quiet stretches --
+        // can be faded instead of reading as equally "real" as a stretch
+        // where something actually happened.
+        const lineSegments = coords.slice(1).map((c, i) => {
+          const noChange = Math.abs((s.points[i].pct || 0) - (s.points[i + 1].pct || 0)) < 0.001;
+          return `<path d="M${coords[i].join(',')} L${c.join(',')}" class="trend-line"${noChange ? ' style="opacity:0.5"' : ''}></path>`;
+        }).join('');
+        pathSection = `<path d="${areaPath}" class="trend-area"></path>${lineSegments}`;
       } else {
         // One <path> per segment rather than a single continuous one, so a
         // segment leading out of a synthetic point (a project's assumed 0%
@@ -494,12 +503,14 @@ function renderTrendSvg(container, series, opts) {
       if (p.payApp) {
         return `<polygon points="${starPoints(starXs[i], cy, starRadius)}" class="trend-star">${titleTag}</polygon>`;
       }
-      // daysMode (the Manager Dashboard's multi-project chart) draws lines
-      // only -- visible dots at every report date were noise once several
-      // projects' lines were overlapping. The circle still exists, just
-      // invisible, so hovering the line's actual points still gets a tooltip.
-      const visible = daysMode ? 'fill:transparent;stroke:none' : `fill:${color}`;
-      return `<circle cx="${cx}" cy="${cy}" r="${daysMode ? 6 : singlePlainSeries ? 4 : 3}" class="trend-dot" style="${visible}">${titleTag}</circle>`;
+      // Lines (and, for a single project, the area under them) only -- a
+      // visible dot at every report date got noisy fast, both across
+      // several overlapping project lines (daysMode) and within just one
+      // project once report dates cluster close together (a busy stretch
+      // smears into a solid blob of circles). The circle still exists,
+      // just invisible, so hovering the line's actual points still gets a
+      // tooltip either way.
+      return `<circle cx="${cx}" cy="${cy}" r="${daysMode ? 6 : singlePlainSeries ? 4 : 3}" class="trend-dot">${titleTag}</circle>`;
     }).join('');
     return pathSection + dots;
   }).join('');

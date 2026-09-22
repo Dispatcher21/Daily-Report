@@ -2653,7 +2653,11 @@ input[type="date"] { min-width: 0; }
    and two markers' white rings overlapping cut visible crescent-shaped
    chunks out of each other instead of just... not overlapping. A plain
    filled shape has nothing to overlap with. */
-.trend-dot { fill: var(--brand); stroke: none; }
+/* Invisible -- exists only as a hover/tooltip target at each report date
+   (see dashboard-widgets.js's renderTrendSvg); a visible dot at every date
+   got noisy fast, both across several overlapping project lines and within
+   one project once report dates cluster close together. */
+.trend-dot { fill: transparent; stroke: none; }
 /* Same gold already used for a favorited project (.hc-favorite.is-fav) --
    a Pay App marker borrows that "starred/significant" meaning rather than
    inventing a new color for it. */
