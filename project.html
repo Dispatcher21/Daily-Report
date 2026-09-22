@@ -76,7 +76,7 @@
     </div>
 
     <div class="step-pair">
-    <div class="step">
+    <div class="step step-collapsible">
       <div class="step-header">
         <span class="step-num">PAY ITEMS</span>
         <h2>Pay Item Completion</h2>
@@ -99,7 +99,7 @@
       </div>
     </div>
 
-    <div class="step" id="dash-weather-step" hidden>
+    <div class="step step-collapsible" id="dash-weather-step" hidden>
       <div class="step-header">
         <span class="step-num">CONDITIONS</span>
         <h2>Weather &amp; Schedule</h2>
@@ -118,7 +118,7 @@
     </div>
     </div>
 
-    <div class="step" id="dash-trend-step" hidden>
+    <div class="step step-collapsible" id="dash-trend-step" hidden>
       <div class="step-header">
         <span class="step-num">TREND</span>
         <h2>Progress Over Time</h2>
@@ -144,7 +144,7 @@
       <div class="step-body" id="project-details-body"></div>
     </div>
 
-    <div class="step" id="project-appearance-step" hidden>
+    <div class="step step-collapsible" id="project-appearance-step" hidden>
       <div class="step-header">
         <span class="step-num">APPEARANCE</span>
         <h2>Icon &amp; Background</h2>
@@ -164,7 +164,7 @@
       </div>
     </div>
 
-    <div class="step" id="project-required-fields-step" hidden>
+    <div class="step step-collapsible" id="project-required-fields-step" hidden>
       <div class="step-header">
         <span class="step-num">FIELDS</span>
         <h2>Required Fields</h2>
@@ -176,7 +176,7 @@
     </div>
 
     <div class="step-pair">
-    <div class="step">
+    <div class="step step-collapsible">
       <div class="step-header">
         <span class="step-num">DATA FILE</span>
         <h2>Project Data File</h2>
@@ -194,7 +194,7 @@
       </div>
     </div>
 
-    <div class="step">
+    <div class="step step-collapsible">
       <div class="step-header">
         <span class="step-num">IMPORT</span>
         <h2>Import Reports</h2>
@@ -213,7 +213,7 @@
     </div>
     </div>
 
-    <div class="step">
+    <div class="step step-collapsible">
       <div class="step-header">
         <span class="step-num">BACKUP</span>
         <h2>Sync to Folder</h2>
@@ -327,6 +327,7 @@ async function init() {
     $('#pa-bg-remove').hidden = !project.backgroundImage;
     $('#pa-required-fields-link').href = `required-fields.html?project=${project.id}`;
   }
+  setupCollapsibleSteps($('#project-settings-panel'));
 
   const reports = await getReportsForProject(project.id);
   $('#report-count').textContent = reports.length;
@@ -504,6 +505,7 @@ function renderDashboard(reports, project) {
   renderPayItems(items);
   renderTrendChart(progressOverTime(dated, project.payItemCatalog, project.billingEstimates));
   renderWeatherSchedule(dated);
+  setupCollapsibleSteps($('#dash-content'));
   fitDashboardValues();
   animateDashboardFills();
   startDashFunFactRotation(funFacts);
