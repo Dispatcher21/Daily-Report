@@ -16,13 +16,6 @@
 <script src="theme.js"></script>
 <script src="lib/heic2any.min.js"></script>
 <style>
-  /* A plain `hidden` attribute doesn't work here: this link also needs
-     display:block while visible, and any author-stylesheet rule that sets
-     display on an element overrides the UA [hidden]{display:none} rule
-     regardless of specificity -- so visibility is a class, not `hidden`. */
-  #link-company-management { display: none; text-align: center; text-decoration: none; max-width: 400px; margin: 1.5rem auto 0; }
-  #link-company-management.show { display: block; }
-
   /* Company theme background/decal -- see theme.js's appCompanyTheme and
      applyCompanyThemeVisuals below. Fixed behind everything so it reads as
      "the home screen's atmosphere," not a box competing with real content;
@@ -206,7 +199,6 @@
 
   </div>
 
-  <a class="btn-secondary" id="link-company-management" href="company-management.html">&#9881;&#65039; Company Management</a>
 </main>
 
 <div class="modal-overlay" id="md-day-detail-overlay" hidden>
@@ -1678,7 +1670,6 @@ async function applyCompanyThemeVisuals() {
     return;
   }
   const room = await getCompanyRoom();
-  $('#link-company-management').classList.toggle('show', !!(room && room.isAdmin));
   applyCompanyThemeVisuals();
 
   // Logo/background pulls are fire-and-forget by design (see

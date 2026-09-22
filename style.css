@@ -2073,9 +2073,9 @@ input[type="date"] { min-width: 0; }
 .fab:disabled { background: var(--border-strong); box-shadow: none; cursor: not-allowed; }
 /* A plain `hidden` attribute doesn't work here -- .fab sets its own
    `display`, and an author-stylesheet rule that sets display overrides the
-   UA [hidden]{display:none} rule regardless of specificity (see the same
-   note on #link-company-management in index.html). reports.html hides this
-   while a bulk selection is active, so it needs to actually work. */
+   UA [hidden]{display:none} rule regardless of specificity. reports.html
+   hides this while a bulk selection is active, so it needs to actually
+   work. */
 .fab[hidden] { display: none; }
 
 .export-bar { margin-top: 1rem; display: flex; flex-direction: column; gap: 0.5rem; }
