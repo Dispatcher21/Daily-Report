@@ -85,7 +85,11 @@ function getUserName() {
   return getSetting(USER_NAME_SETTING_KEY);
 }
 async function saveUserName(name) {
+  const before = await getSetting(USER_NAME_SETTING_KEY);
   await saveSetting(USER_NAME_SETTING_KEY, name || '');
+  if (typeof logDeviceRenamed === 'function') {
+    logDeviceRenamed(before || '', name || '').catch((err) => console.error('audit log:', err));
+  }
 }
 
 // Favorite-starred projects and the folder layout below are kept per

@@ -120,17 +120,20 @@ async function init() {
 // tied to any one project -- unlike a report or project entry, there's no
 // sensible project to file it under, so it's left out of the Project
 // dropdown entirely and never hidden by picking one (see the entityType
-// check in filteredEntries below).
+// check in filteredEntries below). Same reasoning for 'company' (account-
+// level events -- passwords, permissions, custom setups, join/leave) and
+// 'device' (a device's own name changing) -- neither belongs to a project.
+const NON_PROJECT_ENTITY_TYPES = new Set(['theme', 'company', 'device']);
 function projectLabelFor(entry) {
   if (entry.entityType === 'project') return entry.entityLabel;
-  if (entry.entityType === 'theme') return null;
+  if (NON_PROJECT_ENTITY_TYPES.has(entry.entityType)) return null;
   const idx = entry.entityLabel.indexOf('—');
   return idx === -1 ? entry.entityLabel : entry.entityLabel.slice(idx + 1).trim();
 }
 
 function filteredEntries() {
   return allEntries.filter((e) => {
-    if (filterState.projectLabel && e.entityType !== 'theme' && projectLabelFor(e) !== filterState.projectLabel) return false;
+    if (filterState.projectLabel && !NON_PROJECT_ENTITY_TYPES.has(e.entityType) && projectLabelFor(e) !== filterState.projectLabel) return false;
     if (filterState.userName && e.userName !== filterState.userName) return false;
     const day = new Date(e.timestamp).toISOString().slice(0, 10);
     if (filterState.from && day < filterState.from) return false;

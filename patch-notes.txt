@@ -3,6 +3,14 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.029 -- 2026-09-22
+  - The Audit Log now covers a lot more ground: company password changes,
+    admin password changes, permission toggles, custom setup create/delete,
+    company name changes, joining/leaving a company, unlocking Admin, a
+    device's name changing, and Required Fields/hidden/reorder changes on
+    a project -- none of these showed up before. Report edits also now
+    call out a photo count changing.
+
 0.028 -- 2026-09-21
   - Fixed the real cause of the unsynced-reports banner on View Reports:
     a CSS bug meant it could never actually hide itself, on any project --

@@ -38,6 +38,8 @@ const REPORT_DIFF_SKIP = new Set([
 ]);
 const PROJECT_DIFF_SKIP = new Set([
   'id', 'updatedAt', 'createdAt', 'backgroundImage', 'backgroundImageFetched',
+  // requiredFields/hiddenFields/fieldOrder get their own diff (diffFieldConfig,
+  // called separately in diffProject) instead of the generic label-map path.
   'requiredFields', 'hiddenFields', 'fieldOrder',
 ]);
 
@@ -65,6 +67,13 @@ const PROJECT_FIELD_LABELS = {
   'meta.trafficControlSelect': 'Default Traffic Control Status', 'meta.workBegin': 'Default Work Begin',
   'meta.workEnd': 'Default Work End', 'meta.weatherDesc': 'Default Weather', 'meta.tempHigh': 'Default Temp High',
   'meta.tempLow': 'Default Temp Low',
+};
+const COMPANY_PERMISSION_LABELS = {
+  membersCanCreateProjects: 'Members Can Create Projects',
+  membersCanViewManagerDashboard: 'Members Can View Manager Dashboard',
+  membersCanEditProjects: 'Members Can Edit Projects',
+  membersCanEditAnyReport: 'Members Can Edit Any Report',
+  membersCanEditOwnReports: 'Members Can Edit Own Reports',
 };
 
 function fmtLeaf(v) {
@@ -233,10 +242,23 @@ function diffInspectors(before, after, out) {
   }
 }
 
+// Photos are skipped by REPORT_DIFF_SKIP (binary, meaningless in a text
+// diff) but a count is still worth showing -- "Photos: 2 → 4" says someone
+// added two without exposing the images themselves. Slots can be null
+// (a removed photo leaves a gap rather than shifting the rest down), so
+// this counts filled slots, not array length.
+function diffPhotos(before, after, out) {
+  const count = (arr) => (arr || []).filter(Boolean).length;
+  const b = count(before);
+  const a = count(after);
+  if (b !== a) out.push({ label: 'Photos', from: `${b} photo${b === 1 ? '' : 's'}`, to: `${a} photo${a === 1 ? '' : 's'}` });
+}
+
 function diffReport(before, after) {
   const out = [];
   diffPayItems(before.payItems, after.payItems, out);
   diffInspectors(before.inspectors, after.inspectors, out);
+  diffPhotos(before.photos, after.photos, out);
   const beforeRest = { ...before };
   const afterRest = { ...after };
   delete beforeRest.payItems;
@@ -247,9 +269,46 @@ function diffReport(before, after) {
   return out;
 }
 
+// Admin-configurable show/hide/require/order for report fields
+// (required-fields.html) -- used to be skipped entirely (see
+// PROJECT_DIFF_SKIP's history), which meant an admin could silently make a
+// field invisible or optional with nothing recording it. Order changes are
+// collapsed into one line each way rather than one per field: a drag
+// reorder touches every field's position, and reporting each individually
+// would bury the one field that was actually re-required or hidden in noise.
+function fieldLabel(key) {
+  const def = (typeof ORDERABLE_FIELD_DEFS !== 'undefined' ? ORDERABLE_FIELD_DEFS : []).find((d) => d.key === key);
+  return def ? def.label : key;
+}
+function diffFieldConfig(before, after, out) {
+  const bReq = new Set(before.requiredFields || []);
+  const aReq = new Set(after.requiredFields || []);
+  const bHid = new Set(before.hiddenFields || []);
+  const aHid = new Set(after.hiddenFields || []);
+  for (const key of new Set([...bReq, ...aReq, ...bHid, ...aHid])) {
+    const label = fieldLabel(key);
+    if (bReq.has(key) !== aReq.has(key)) {
+      out.push({ label: `${label} Required`, from: bReq.has(key) ? 'Yes' : 'No', to: aReq.has(key) ? 'Yes' : 'No' });
+    }
+    if (bHid.has(key) !== aHid.has(key)) {
+      out.push({ label: `${label} Hidden`, from: bHid.has(key) ? 'Yes' : 'No', to: aHid.has(key) ? 'Yes' : 'No' });
+    }
+  }
+  const bOrder = (before.fieldOrder || []).join(',');
+  const aOrder = (after.fieldOrder || []).join(',');
+  if (bOrder !== aOrder && bOrder && aOrder) {
+    out.push({
+      label: 'Field Order',
+      from: (before.fieldOrder || []).map(fieldLabel).join(', '),
+      to: (after.fieldOrder || []).map(fieldLabel).join(', '),
+    });
+  }
+}
+
 function diffProject(before, after) {
   const out = [];
   diffPayItemCatalog(before.payItemCatalog, after.payItemCatalog, out);
+  diffFieldConfig(before, after, out);
   const beforeRest = { ...before };
   const afterRest = { ...after };
   delete beforeRest.payItemCatalog;
@@ -407,6 +466,40 @@ async function writeAuditEntry(entityType, entityId, entityLabel, action, change
   }
 }
 
+// ---------- Company/account-level events ----------
+//
+// Everything below is called directly from firebase-sync.js's account-
+// management functions (permissions, passwords, custom setups, join/
+// create/leave) -- there's no before/after record the way a report or
+// project has one, so each call site hands over just what it knows changed.
+// A password's own value is never logged, only that it changed -- same
+// principle as never storing a password itself, just its hash.
+async function logCompanyEvent(action, companyName, changes) {
+  await writeAuditEntry('company', 'company', companyName || 'Company', action, changes || []);
+}
+
+// A device's own display name changing is worth flagging since it changes
+// who future entries (and reports) get attributed to -- but only an actual
+// rename, not the very first time a blank device gets a name, which is
+// just normal setup, not a change to anything.
+async function logDeviceRenamed(before, after) {
+  if (!before || !after || before === after) return;
+  // entityLabel is a fixed "This Device" rather than the new name -- the
+  // change line right below already shows old → new, so using the new
+  // name here too would just read as "X renamed X".
+  await writeAuditEntry('device', 'device', 'This Device', 'renamed', [{ label: 'Name', from: before, to: after }]);
+}
+
+function diffPermissions(before, after, out) {
+  const keys = new Set([...Object.keys(before || {}), ...Object.keys(after || {})]);
+  for (const key of keys) {
+    const label = COMPANY_PERMISSION_LABELS[key] || key;
+    const a = !!(before && before[key]);
+    const b = !!(after && after[key]);
+    if (a !== b) out.push({ label, from: a ? 'On' : 'Off', to: b ? 'On' : 'Off' });
+  }
+}
+
 async function finalizePendingEdit(entityId) {
   const p = pendingEdits.get(entityId);
   if (!p) return;
@@ -468,7 +561,18 @@ function fmtEntryTimestamp(ms) {
   const pad = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
-const AUDIT_ACTION_VERBS = { created: 'Created', edited: 'Edited', deleted: 'Deleted' };
+const AUDIT_ACTION_VERBS = {
+  created: 'Created', edited: 'Edited', deleted: 'Deleted',
+  joined: 'Joined', left: 'Left', renamed: 'Renamed',
+  'admin-unlocked': 'Unlocked Admin on',
+  'permissions-changed': 'Changed Permissions for',
+  'dashboard-changed': 'Changed Manager Dashboard Settings for',
+  'name-changed': 'Renamed',
+  'password-changed': 'Changed the Company Password for',
+  'admin-password-changed': 'Changed the Admin Password for',
+  'role-created': 'Created Custom Setup on',
+  'role-deleted': 'Deleted Custom Setup from',
+};
 
 function formatAuditLogAsText(entries) {
   if (entries.length === 0) return 'No activity recorded yet.\n';

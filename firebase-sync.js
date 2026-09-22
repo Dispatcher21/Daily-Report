@@ -280,6 +280,9 @@ async function createCompanyRoom({ name, password, adminPassword }, onProgress) 
   }
   await pushAllLocalData(code, onProgress);
 
+  if (typeof logCompanyEvent === 'function') {
+    logCompanyEvent('created', name || 'Company', []).catch((err) => console.error('audit log:', err));
+  }
   return { code, name: name || '' };
 }
 
@@ -348,6 +351,10 @@ async function joinCompanyRoom(password, onProgress) {
   // photo just to finish logging in. They land locally moments later; see
   // pullCompanyMediaInBackground.
   pullCompanyMediaInBackground(code);
+  if (typeof logCompanyEvent === 'function') {
+    const changes = roleId ? [{ label: 'Via Custom Setup', from: '', to: data.name || 'Custom Setup' }] : [];
+    logCompanyEvent('joined', companyDoc.name || 'Company', changes).catch((err) => console.error('audit log:', err));
+  }
   return { code, name: companyDoc.name || '', ...pulled };
 }
 
@@ -378,6 +385,9 @@ async function unlockCompanyAdmin(adminPassword) {
   // have joined under -- full access, not a narrower view layered on top.
   await saveSetting(COMPANY_PROJECT_SCOPE_SETTING, null);
   await saveSetting(COMPANY_ROLE_ID_SETTING, null);
+  if (typeof logCompanyEvent === 'function') {
+    logCompanyEvent('admin-unlocked', room.name, []).catch((err) => console.error('audit log:', err));
+  }
 }
 
 // Leaves the room on this device only -- the room and its data on the
@@ -390,6 +400,7 @@ async function unlockCompanyAdmin(adminPassword) {
 // on their phone.
 async function leaveCompanyRoom() {
   const userName = await getUserName();
+  const room = await getCompanyRoom();
 
   let reportIdsToDelete = [];
   let projectIdsToDelete = [];
@@ -402,6 +413,13 @@ async function leaveCompanyRoom() {
     }
     const projects = await getAllProjects();
     projectIdsToDelete = projects.filter((p) => !touchedProjectIds.has(p.id)).map((p) => p.id);
+  }
+
+  // Logged before the room's settings are cleared below -- writeAuditEntry
+  // reads getCompanyRoom() itself to know which company an entry belongs
+  // to, so this has to happen while this device still remembers being in one.
+  if (room && typeof logCompanyEvent === 'function') {
+    await logCompanyEvent('left', room.name, []).catch((err) => console.error('audit log:', err));
   }
 
   // Cleared before the pruning below runs, not after: deleteReport/
@@ -522,9 +540,15 @@ async function updateCompanyPermissions(patch) {
   const { doc, updateDoc } = await import(FIRESTORE_SDK);
   await ensureSignedIn();
 
-  const merged = { ...(await getCompanyPermissions()), ...patch };
+  const before = await getCompanyPermissions();
+  const merged = { ...before, ...patch };
   await updateDoc(doc(db, 'companies', room.code), { permissions: merged });
   await saveSetting(COMPANY_PERMISSIONS_SETTING, merged);
+  if (typeof logCompanyEvent === 'function' && typeof diffPermissions === 'function') {
+    const changes = [];
+    diffPermissions(before, merged, changes);
+    if (changes.length) logCompanyEvent('permissions-changed', room.name, changes).catch((err) => console.error('audit log:', err));
+  }
   return merged;
 }
 
@@ -560,8 +584,18 @@ async function updateManagerDashboardConfig(patch) {
   const { doc, updateDoc } = await import(FIRESTORE_SDK);
   await ensureSignedIn();
 
-  const merged = { ...(await getManagerDashboardConfig()), ...patch };
+  const before = await getManagerDashboardConfig();
+  const merged = { ...before, ...patch };
   await updateDoc(doc(db, 'companies', room.code), { managerDashboard: merged });
+  if (typeof logCompanyEvent === 'function') {
+    const b = (before.excludedProjectIds || []).length;
+    const a = (merged.excludedProjectIds || []).length;
+    if (b !== a) {
+      logCompanyEvent('dashboard-changed', room.name, [
+        { label: 'Projects Excluded From Manager Dashboard', from: String(b), to: String(a) },
+      ]).catch((err) => console.error('audit log:', err));
+    }
+  }
   return merged;
 }
 
@@ -576,6 +610,10 @@ async function updateCompanyName(name) {
 
   await updateDoc(doc(db, 'companies', room.code), { name: name || '' });
   await saveSetting(COMPANY_NAME_SETTING, name || '');
+  if (typeof logCompanyEvent === 'function' && room.name !== (name || '')) {
+    logCompanyEvent('name-changed', name || 'Company', [{ label: 'Company Name', from: room.name, to: name || '' }])
+      .catch((err) => console.error('audit log:', err));
+  }
 }
 
 // Rotates the *company* password -- unlike the admin password, this isn't
@@ -675,6 +713,9 @@ async function changeCompanyPassword(newPassword, adminPassword, onProgress) {
   }
   await pushAllLocalData(newCode, onProgress);
 
+  if (typeof logCompanyEvent === 'function') {
+    logCompanyEvent('password-changed', oldData.name || room.name, []).catch((err) => console.error('audit log:', err));
+  }
   return { oldCode: room.code, newCode };
 }
 
@@ -718,6 +759,10 @@ async function changeCompanyAdminPassword(currentAdminPassword, newAdminPassword
     await updateDoc(doc(db, 'companies', room.code, 'roles', roleDoc.id), {
       passwordEnc: await encryptWithAdminPassword(newAdminPassword, plainRolePassword),
     });
+  }
+
+  if (typeof logCompanyEvent === 'function') {
+    logCompanyEvent('admin-password-changed', room.name, []).catch((err) => console.error('audit log:', err));
   }
 }
 
@@ -793,6 +838,9 @@ async function createCustomRole({ name, password, permissions, projectIds, admin
     projectIds: finalProjectIds,
   });
 
+  if (typeof logCompanyEvent === 'function') {
+    logCompanyEvent('role-created', room.name, [{ label: 'Custom Setup', from: '', to: name }]).catch((err) => console.error('audit log:', err));
+  }
   return { id: roleId, password };
 }
 
@@ -806,10 +854,15 @@ async function deleteCustomRole(roleId) {
   await ensureSignedIn();
 
   const roleSnap = await getDoc(doc(db, 'companies', room.code, 'roles', roleId));
+  const roleName = roleSnap.exists() ? roleSnap.data().name : roleId;
   if (roleSnap.exists()) {
     await deleteDoc(doc(db, 'companies', roleSnap.data().pointerCode)).catch(() => {});
   }
   await deleteDoc(doc(db, 'companies', room.code, 'roles', roleId));
+
+  if (typeof logCompanyEvent === 'function') {
+    logCompanyEvent('role-deleted', room.name, [{ label: 'Custom Setup', from: roleName, to: '' }]).catch((err) => console.error('audit log:', err));
+  }
 }
 
 // Decrypts and returns the company password plus every custom setup's
