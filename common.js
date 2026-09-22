@@ -125,12 +125,7 @@ async function initHamburgerMenu() {
     // ?project= (every other project page) -- highlighting whichever
     // project that resolves to as "current" needs both.
     const currentId = (typeof queryParam === 'function' && (queryParam('id') || queryParam('project'))) || null;
-    projectsEl.innerHTML = visible.length
-      ? visible.map((p) => {
-          const current = p.id === currentId;
-          return `<a class="hb-row${current ? ' hb-current' : ''}" href="project.html?id=${encodeURIComponent(p.id)}"><span class="hb-row-icon" aria-hidden="true">&#128193;</span><span class="hb-row-label">${escapeHtml(p.name || 'Untitled Project')}</span></a>`;
-        }).join('')
-      : '<div class="hb-empty">No projects yet.</div>';
+    projectsEl.innerHTML = renderHbProjectsHtml(visible, currentId, await buildDisplayLayout(visible));
   } catch (err) {
     console.error('hamburger menu: loading projects', err);
     projectsEl.innerHTML = '<div class="hb-empty">Couldn\'t load projects.</div>';
@@ -141,6 +136,67 @@ async function initHamburgerMenu() {
     if (typeof saveUserName === 'function') await saveUserName('');
     location.href = 'login.html';
   });
+}
+
+// Read-only mirror of index.html's own buildHubLayout: same saved order and
+// folder grouping (getProjectLayout, index.html's only writer), same
+// favorites-first fallback when nothing's ever been customized, but never
+// persists a reconciled result -- index.html already self-heals that layout
+// (dropped/added projects, emptied folders) every time it's visited, so
+// there's no need for every other page's menu to also write to it, just to
+// display it consistently with whatever index.html currently has stored.
+async function buildDisplayLayout(visible) {
+  const saved = typeof getProjectLayout === 'function' ? await getProjectLayout() : null;
+  const existingIds = new Set(visible.map((p) => p.id));
+
+  if (!saved) {
+    const favoriteIds = typeof getFavoriteProjectIds === 'function' ? await getFavoriteProjectIds() : [];
+    const favoriteSet = new Set(favoriteIds);
+    const ordered = [...visible].sort((a, b) => (favoriteSet.has(b.id) ? 1 : 0) - (favoriteSet.has(a.id) ? 1 : 0));
+    return ordered.map((p) => ({ type: 'project', id: p.id }));
+  }
+
+  const placed = new Set();
+  const reconciled = [];
+  for (const entry of saved) {
+    if (entry.type === 'project') {
+      if (!existingIds.has(entry.id)) continue;
+      placed.add(entry.id);
+      reconciled.push(entry);
+    } else if (entry.type === 'folder') {
+      const kept = entry.projectIds.filter((id) => existingIds.has(id));
+      kept.forEach((id) => placed.add(id));
+      if (kept.length === 0) continue;
+      if (kept.length === 1) {
+        reconciled.push({ type: 'project', id: kept[0] });
+        continue;
+      }
+      reconciled.push({ ...entry, projectIds: kept });
+    }
+  }
+  for (const p of visible) {
+    if (!placed.has(p.id)) reconciled.push({ type: 'project', id: p.id });
+  }
+  return reconciled;
+}
+
+function renderHbProjectsHtml(visible, currentId, layout) {
+  if (!visible.length) return '<div class="hb-empty">No projects yet.</div>';
+  const projectsById = new Map(visible.map((p) => [p.id, p]));
+  const projectRow = (p, nested) => {
+    const current = p.id === currentId;
+    return `<a class="hb-row${nested ? ' hb-row-nested' : ''}${current ? ' hb-current' : ''}" href="project.html?id=${encodeURIComponent(p.id)}"><span class="hb-row-icon" aria-hidden="true">&#128193;</span><span class="hb-row-label">${escapeHtml(p.name || 'Untitled Project')}</span></a>`;
+  };
+  return layout.map((entry) => {
+    if (entry.type === 'folder') {
+      const members = entry.projectIds.map((id) => projectsById.get(id)).filter(Boolean);
+      if (!members.length) return '';
+      return `<div class="hb-folder-label"><span class="hb-row-icon" aria-hidden="true">&#128194;</span><span class="hb-row-label">${escapeHtml(entry.name || 'Folder')}</span></div>`
+        + members.map((p) => projectRow(p, true)).join('');
+    }
+    const p = projectsById.get(entry.id);
+    return p ? projectRow(p, false) : '';
+  }).join('');
 }
 
 // Nothing in this app uses a real <form>, so Enter does nothing by default
