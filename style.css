@@ -155,28 +155,41 @@ body {
   color: var(--on-brand);
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 0.75rem;
   padding: 0.8rem 1rem;
   box-shadow: var(--shadow);
 }
+/* Was justify-content: space-between, back when the header only ever had
+   two children (title, then one empty <span> theme.js's mountHeaderControls
+   fills in). The hamburger button sits between them as a third child (see
+   below), and space-between spreads 3 items apart instead of clustering the
+   last two on the right -- margin-right: auto on the title reproduces the
+   same "title left, everything else right" layout for any number of
+   right-side children. */
+.app-header > :first-child { margin-right: auto; }
 .app-header h1 { font-size: 1.1rem; margin: 0; font-weight: 700; letter-spacing: 0.01em; }
 .app-header .app-sub { font-size: 0.72rem; color: var(--on-brand-dim); margin-top: 2px; }
 .app-header a.home-link { color: var(--on-brand); text-decoration: none; display: flex; flex-direction: column; }
 
 /* ---------- Hamburger menu (see initHamburgerMenu in common.js) ---------- */
 
+/* Same circle treatment as .header-gear/.header-sync-btn/.header-search-btn
+   so it reads as one more icon in that cluster, not a mismatched control. */
 .hamburger-btn {
-  display: flex; flex-direction: column; justify-content: center; align-items: center;
+  flex: 0 0 auto;
+  display: inline-flex; flex-direction: column; justify-content: center; align-items: center;
   gap: 4px;
-  width: 40px; height: 40px;
-  padding: 0; border: none; border-radius: 8px;
-  background: transparent; cursor: pointer;
-  flex-shrink: 0;
+  width: var(--tap); height: var(--tap);
+  padding: 0;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.12);
+  cursor: pointer;
 }
-.hamburger-btn:hover { background: rgba(255, 255, 255, 0.12); }
+.hamburger-btn:hover { background: rgba(255, 255, 255, 0.22); }
 .hamburger-btn span {
-  display: block; width: 20px; height: 2px;
+  display: block; width: 18px; height: 2px;
   background: var(--on-brand); border-radius: 2px;
   transition: transform 0.2s ease, opacity 0.2s ease;
 }

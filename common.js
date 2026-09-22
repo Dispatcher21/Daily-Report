@@ -64,7 +64,22 @@ async function initHamburgerMenu() {
   document.body.append(backdrop, panel);
   btn.setAttribute('aria-controls', 'hamburger-menu');
 
+  // .app-header is its own stacking context (position: sticky + z-index),
+  // so no z-index on the button could ever put it above a fixed, higher-
+  // z-index panel that starts at the very top of the viewport -- the open
+  // panel would sit over the button with no way to tap it again to close.
+  // Starting the panel/backdrop below the header instead (same technique
+  // theme.js's own search dropdown uses) sidesteps that entirely: they
+  // never overlap the header, so the button stays reachable the whole time.
+  function positionBelowHeader() {
+    const header = document.querySelector('.app-header');
+    const top = header ? header.getBoundingClientRect().bottom : 0;
+    backdrop.style.top = `${top}px`;
+    panel.style.top = `${top}px`;
+  }
+
   function openMenu() {
+    positionBelowHeader();
     backdrop.hidden = false;
     panel.hidden = false;
     requestAnimationFrame(() => panel.classList.add('open'));
@@ -81,6 +96,7 @@ async function initHamburgerMenu() {
     if (btn.getAttribute('aria-expanded') === 'true') closeMenu(); else openMenu();
   });
   backdrop.addEventListener('click', closeMenu);
+  window.addEventListener('resize', () => { if (!panel.hidden) positionBelowHeader(); });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && btn.getAttribute('aria-expanded') === 'true') closeMenu();
   });
