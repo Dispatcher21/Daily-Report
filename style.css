@@ -194,6 +194,21 @@ body {
 }
 .app-header a.home-link { color: var(--on-brand); text-decoration: none; display: flex; flex-direction: column; min-width: 0; }
 
+/* Ellipsis truncation still reads as broken on a narrow phone header once a
+   company logo, the hamburger, and the search/sync/gear cluster are all
+   also fighting for room -- "Daily W..." isn't actually more legible than
+   nothing. Once there's a logo (applyHeaderLogo, storage.js, always
+   inserted right after the hamburger button), the logo alone carries the
+   branding, so just drop the title block below that width instead of
+   squeezing it. The logo's own <a href="index.html"> already goes Home, so
+   nothing reachable is lost. */
+@media (max-width: 560px) {
+  .app-header .header-logo-link ~ div:not(.header-controls),
+  .app-header .header-logo-link ~ a.home-link {
+    display: none;
+  }
+}
+
 /* ---------- Hamburger menu (see initHamburgerMenu in common.js) ---------- */
 
 /* Same circle treatment as .header-gear/.header-sync-btn/.header-search-btn
