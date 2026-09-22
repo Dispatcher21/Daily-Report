@@ -2861,3 +2861,17 @@ input[type="date"] { min-width: 0; }
   padding: 1rem;
 }
 #project-settings-panel > *:last-child { margin-bottom: 0; }
+
+/* Same idea as #project-settings-panel -- a section's cards held together
+   in one bordered box instead of floating loose under a bare label -- for
+   the Project/Manager Dashboard sections, which have no toggle button to
+   merge into their top edge (they're always visible), so it's just a
+   plain box on all four corners rather than one that continues from a
+   header above it. */
+.dash-box {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+}
+.dash-box > *:last-child { margin-bottom: 0; }
