@@ -128,10 +128,16 @@
 
         <div class="step-pair">
         <div class="step step-collapsible collapsed">
-          <div class="step-header"><span class="step-num">TEAM</span><h2>Hours per Employee</h2><button type="button" class="info-tip" data-tip="Last 30 days, by Representative on file." aria-label="What this does">i</button></div>
+          <div class="step-header"><span class="step-num">TEAM</span><h2>Hours per Employee</h2><button type="button" class="info-tip" data-tip="By Representative on file -- pick a range above to change the window this covers." aria-label="What this does">i</button></div>
           <div class="step-body">
+            <div class="segmented view-tabs" id="md-hours-range" style="margin-bottom:0.75rem;">
+              <button type="button" data-range="total" aria-pressed="false">Total</button>
+              <button type="button" data-range="30" aria-pressed="true">Last 30 Days</button>
+              <button type="button" data-range="7" aria-pressed="false">Last 7 Days</button>
+              <button type="button" data-range="week" aria-pressed="false">Current Week</button>
+            </div>
             <div class="md-bars" id="md-hours-bars"></div>
-            <p class="hint" id="md-hours-empty" hidden style="margin:0;">No hours logged in the last 30 days.</p>
+            <p class="hint" id="md-hours-empty" hidden style="margin:0;">No hours logged in this range.</p>
           </div>
         </div>
 
@@ -1385,14 +1391,33 @@ $('#md-day-detail-overlay').addEventListener('click', (e) => {
   if (e.target === $('#md-day-detail-overlay')) $('#md-day-detail-overlay').hidden = true;
 });
 
+let mdHoursReports = []; // last reports renderMdHoursBars saw -- so the range picker can re-render without a re-fetch
+let mdHoursRange = '30'; // 'total' | '30' | '7' | 'week'
+
+// null (Total) means no cutoff at all. 'week' is since the most recent
+// Sunday, not a rolling 7 days -- getDay() is 0 on Sunday, so subtracting
+// today's own getDay() always lands on that week's Sunday (today itself,
+// if today IS Sunday).
+function mdHoursCutoffIso(range) {
+  const now = new Date();
+  if (range === 'total') return null;
+  if (range === 'week') {
+    const sunday = new Date(now);
+    sunday.setDate(now.getDate() - now.getDay());
+    return sunday.toISOString().slice(0, 10);
+  }
+  const cutoff = new Date(now);
+  cutoff.setDate(cutoff.getDate() - (range === '7' ? 7 : 30));
+  return cutoff.toISOString().slice(0, 10);
+}
+
 function renderMdHoursBars(reports) {
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - 30);
-  const cutoffIso = cutoff.toISOString().slice(0, 10);
+  mdHoursReports = reports;
+  const cutoffIso = mdHoursCutoffIso(mdHoursRange);
 
   const totals = new Map();
   reports.forEach((r) => {
-    if (!r.date || r.date < cutoffIso) return;
+    if (!r.date || (cutoffIso && r.date < cutoffIso)) return;
     // Split by individual inspector, not report.representative (a display-
     // only "A, B" string joined for the printed report) -- each inspector
     // logs their own Hours (see defaults.js's report.inspectors), and this
@@ -1413,6 +1438,10 @@ function renderMdHoursBars(reports) {
 
   const sorted = [...totals.entries()].sort((a, b) => b[1] - a[1]);
   $('#md-hours-empty').hidden = sorted.length > 0;
+  const activeRangeBtn = $(`#md-hours-range button[data-range="${mdHoursRange}"]`);
+  $('#md-hours-empty').textContent = mdHoursRange === 'total'
+    ? 'No hours logged yet.'
+    : `No hours logged in the selected range (${activeRangeBtn.textContent}).`;
   const max = sorted.length ? sorted[0][1] : 1;
   // The value used to sit inside .md-bar-fill itself (right-aligned via
   // padding), which worked while every bar had room for its own label but
@@ -1429,6 +1458,19 @@ function renderMdHoursBars(reports) {
       <span class="md-bar-value" data-count-target="${hours}" data-count-fmt="hours">0.0h</span>
     </div>`).join('');
 }
+
+$('#md-hours-range').addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  mdHoursRange = btn.dataset.range;
+  $$('#md-hours-range button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.range === mdHoursRange)));
+  renderMdHoursBars(mdHoursReports);
+  // renderManagerDashboard's own animateDashboardFills call already covers
+  // a fresh full render -- this button only re-renders this one card, so
+  // it needs its own animation pass for the new bars' [data-target-width]/
+  // [data-count-target] to actually fill in rather than sit frozen at 0.
+  animateDashboardFills();
+});
 
 function renderMdProjectStatus(projectStats) {
   const rows = projectStats.filter((r) => r.status != null);
