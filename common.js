@@ -9,6 +9,17 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+// The icon a project shows on its home-screen card, hamburger-menu row,
+// and (project.html's own Project Settings > Appearance step) itself --
+// settings.html's Projects list and project.html both pick from this same
+// list, via their own local icon-picker modal each wires up.
+const PROJECT_ICON_OPTIONS = [
+  '\u{1F3D7}\u{FE0F}', '\u{1F6A7}', '\u{1F6E3}\u{FE0F}', '\u{1F309}', '\u{1F6A6}',
+  '\u{1F6B0}', '\u{1F3E2}', '\u{2699}\u{FE0F}', '\u{1F4D0}', '\u{1F9F1}',
+  '\u{1F687}', '\u{26A1}', '\u{1F527}', '\u{1F3ED}', '\u{1F4E1}',
+  '\u{1FAA7}', '\u{1F30A}', '\u{1F69B}', '\u{1F9BA}', '\u{1F4CD}', '\u{1F4C1}',
+];
+
 // The back-bar link on every page used to be a plain link to one hardcoded
 // parent page, which ignores how the user actually got there (e.g. a report
 // opened from Audit Log lands back on the project's report list instead of

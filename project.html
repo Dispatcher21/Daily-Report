@@ -15,6 +15,7 @@
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="print-sheet.css">
 <script src="theme.js"></script>
+<script src="lib/heic2any.min.js"></script>
 </head>
 <body>
 
@@ -143,6 +144,37 @@
       <div class="step-body" id="project-details-body"></div>
     </div>
 
+    <div class="step" id="project-appearance-step" hidden>
+      <div class="step-header">
+        <span class="step-num">APPEARANCE</span>
+        <h2>Icon &amp; Background</h2>
+      </div>
+      <div class="step-body">
+        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem;">
+          <span class="cm-project-icon" id="pa-icon-display" title="Change icon"></span>
+          <button type="button" class="btn-sm" id="pa-change-icon" style="margin-top:0;">Change Icon</button>
+        </div>
+        <div style="display:flex;gap:0.5rem 1rem;flex-wrap:wrap;">
+          <label class="btn-sm" style="margin-top:0;cursor:pointer;">
+            &#128444; <span id="pa-bg-label">Add Background</span>
+            <input type="file" accept="image/*" id="pa-bg-upload" style="display:none;">
+          </label>
+          <button type="button" class="btn-sm" id="pa-bg-remove" style="margin-top:0;" hidden>Remove Background</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="step" id="project-required-fields-step" hidden>
+      <div class="step-header">
+        <span class="step-num">FIELDS</span>
+        <h2>Required Fields</h2>
+        <button type="button" class="info-tip" data-tip="Which report fields this project requires to be filled in before a report can be saved -- set per project." aria-label="What this does">i</button>
+      </div>
+      <div class="step-body">
+        <a class="btn-secondary" id="pa-required-fields-link" style="display:block;text-align:center;text-decoration:none;">Open Visual Field Editor</a>
+      </div>
+    </div>
+
     <div class="step-pair">
     <div class="step">
       <div class="step-header">
@@ -197,6 +229,14 @@
   </div>
 </main>
 
+<div class="modal-overlay" id="pa-icon-picker-overlay" hidden>
+  <div class="modal-card" style="max-width:360px;">
+    <h2 style="margin:0 0 0.9rem;font-size:1.1rem;">Choose an Icon</h2>
+    <div class="icon-picker-grid" id="pa-icon-picker-grid"></div>
+    <button type="button" class="btn-secondary" id="pa-icon-picker-close" style="width:auto;margin-top:1rem;">Close</button>
+  </div>
+</div>
+
 <div class="modal-overlay" id="day-detail-overlay" hidden>
   <div class="modal-card ddm-card">
     <div class="ddm-header">
@@ -247,7 +287,8 @@ function showPageBackground(p) {
 async function init() {
   const id = queryParam('id');
   project = id ? await getProject(id) : null;
-  if (!project || !projectInScope(project, await getCompanyRoom())) {
+  const room = await getCompanyRoom();
+  if (!project || !projectInScope(project, room)) {
     location.href = 'index.html';
     return;
   }
@@ -269,6 +310,22 @@ async function init() {
   if (!canEditProject) {
     $('#uz-reupload').hidden = true;
     $('#btn-delete-project').hidden = true;
+  }
+
+  // Icon/background and Required Fields used to live only on Settings'
+  // Company tab (its Projects list and its Required Fields picker), both
+  // gated there to admins only (#company-admin-only) regardless of the
+  // broader "can edit projects" permission above -- same gate here, so
+  // moving them onto the project's own page doesn't quietly widen who can
+  // touch them.
+  const isAdmin = !!(room && room.isAdmin);
+  $('#project-appearance-step').hidden = !isAdmin;
+  $('#project-required-fields-step').hidden = !isAdmin;
+  if (isAdmin) {
+    $('#pa-icon-display').textContent = project.icon || '\u{1F4C1}';
+    $('#pa-bg-label').textContent = project.backgroundImage ? 'Replace Background' : 'Add Background';
+    $('#pa-bg-remove').hidden = !project.backgroundImage;
+    $('#pa-required-fields-link').href = `required-fields.html?project=${project.id}`;
   }
 
   const reports = await getReportsForProject(project.id);
@@ -975,6 +1032,64 @@ $('#f-reupload').addEventListener('change', async (e) => {
     console.error(err);
     alert(userError("Couldn't read that file: " + err.message, 'PARSE_EXCEL'));
   }
+});
+
+// ---------- Appearance (icon + background) ----------
+// Same fields, same save, as settings.html's Projects list -- this is just
+// a second place to reach them, for whoever's already looking at this one
+// project instead of hunting it down in Settings' company-wide list.
+
+$('#pa-icon-picker-grid').innerHTML = PROJECT_ICON_OPTIONS.map(
+  (icon) => `<button type="button" class="icon-picker-opt" data-icon="${icon}">${icon}</button>`
+).join('');
+
+$('#pa-change-icon').addEventListener('click', () => {
+  $('#pa-icon-picker-overlay').hidden = false;
+});
+$('#pa-icon-picker-close').addEventListener('click', () => {
+  $('#pa-icon-picker-overlay').hidden = true;
+});
+$('#pa-icon-picker-overlay').addEventListener('click', (e) => {
+  if (e.target.id === 'pa-icon-picker-overlay') $('#pa-icon-picker-overlay').hidden = true;
+});
+$('#pa-icon-picker-grid').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.icon-picker-opt');
+  if (!btn) return;
+  $('#pa-icon-picker-overlay').hidden = true;
+  project.icon = btn.dataset.icon;
+  await saveProject(project);
+  $('#pa-icon-display').textContent = project.icon;
+});
+
+$('#pa-bg-upload').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  if (!/^image\//.test(file.type)) {
+    alert('That file is not an image.');
+    return;
+  }
+  try {
+    project.backgroundImage = await compressImage(await convertHeicIfNeeded(file), { maxDim: 1600, quality: 0.75 });
+    project.backgroundImageFetched = true;
+    await saveProject(project);
+    $('#pa-bg-label').textContent = 'Replace Background';
+    $('#pa-bg-remove').hidden = false;
+    showPageBackground(project);
+  } catch (err) {
+    console.error(err);
+    alert(userError("Couldn't save the background image: " + err.message, 'PROJECT_BACKGROUND'));
+  }
+});
+
+$('#pa-bg-remove').addEventListener('click', async () => {
+  project.backgroundImage = null;
+  project.backgroundImageFetched = true;
+  await saveProject(project);
+  $('#pa-bg-label').textContent = 'Add Background';
+  $('#pa-bg-remove').hidden = true;
+  $('#page-bg-img').hidden = true;
+  $('#page-bg-fade').hidden = true;
 });
 
 // Merges .report bundles AND Daily Work Report Excel files into THIS

@@ -1434,6 +1434,26 @@ main { max-width: min(1400px, 94vw); margin: 0 auto; padding: 1rem; }
 .rf-warning-card p { margin: 0; color: var(--text-dim); font-size: 0.9rem; }
 .rf-warning-card ul { text-align: left; margin: 0.9rem 0 1.3rem; padding-left: 1.3rem; }
 .rf-warning-card li { font-weight: 700; margin-bottom: 0.3rem; }
+
+/* A project's icon (shown on its home-screen card, its hamburger-menu row,
+   and here) and the picker that changes it -- shared by settings.html's
+   Projects list and project.html's own Project Settings > Appearance step,
+   so both edit the exact same thing the exact same way. */
+.cm-project-icon {
+  flex: 0 0 auto; width: 2.2rem; height: 2.2rem; border-radius: var(--radius-sm);
+  background: var(--surface-2); border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.2rem; cursor: pointer;
+}
+.cm-project-icon:hover { border-color: var(--brand-light); }
+
+.icon-picker-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem; }
+.icon-picker-opt {
+  aspect-ratio: 1; border-radius: var(--radius-sm); border: 1.5px solid var(--border);
+  background: var(--surface-2); font-size: 1.3rem; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.icon-picker-opt:hover { border-color: var(--brand-light); background: var(--surface-3); }
 .rf-warning-card .btn-primary { width: 100%; }
 
 /* ---------- Forms ---------- */
