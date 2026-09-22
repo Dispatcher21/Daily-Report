@@ -193,7 +193,12 @@ async function applyHeaderLogo() {
       img.className = 'header-logo';
       img.alt = '';
       link.appendChild(img);
-      header.insertBefore(link, header.firstChild);
+      // After the hamburger button when one's present (it's meant to be the
+      // leftmost thing in the header), otherwise at the very front -- same
+      // as before this button existed.
+      const hamburgerBtn = header.querySelector('#hamburger-btn');
+      if (hamburgerBtn) hamburgerBtn.after(link);
+      else header.insertBefore(link, header.firstChild);
     }
     const url = URL.createObjectURL(logo);
     const prevUrl = img.dataset.url;

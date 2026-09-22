@@ -171,9 +171,28 @@ body {
    regardless of how many items sit on either side. */
 .app-header > span:empty,
 .app-header > .header-controls { margin-left: auto; }
-.app-header h1 { font-size: 1.1rem; margin: 0; font-weight: 700; letter-spacing: 0.01em; }
-.app-header .app-sub { font-size: 0.72rem; color: var(--on-brand-dim); margin-top: 2px; }
-.app-header a.home-link { color: var(--on-brand); text-decoration: none; display: flex; flex-direction: column; }
+/* The title block (plain <div> or <a class="home-link">) is the one header
+   child that should actually give up space when the hamburger button, the
+   optional company logo, and the search/sync/gear cluster are all fighting
+   for room on a phone-width header -- without this it was neither shrinking
+   nor truncating, just overflowing/wrapping and mangling "Daily Work
+   Reports" mid-word. flex:1 1 auto + min-width:0 lets it shrink below its
+   text's natural width; the h1/app-sub rules below then turn that into a
+   clean ellipsis instead of a wrap. */
+.app-header > div:not(.header-controls),
+.app-header > a.home-link {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.app-header h1 {
+  font-size: 1.1rem; margin: 0; font-weight: 700; letter-spacing: 0.01em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.app-header .app-sub {
+  font-size: 0.72rem; color: var(--on-brand-dim); margin-top: 2px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.app-header a.home-link { color: var(--on-brand); text-decoration: none; display: flex; flex-direction: column; min-width: 0; }
 
 /* ---------- Hamburger menu (see initHamburgerMenu in common.js) ---------- */
 
