@@ -144,6 +144,7 @@
       <div class="step-body" id="project-details-body"></div>
     </div>
 
+    <div class="step-pair">
     <div class="step step-collapsible" id="project-appearance-step" hidden>
       <div class="step-header">
         <span class="step-num">APPEARANCE</span>
@@ -173,6 +174,7 @@
       <div class="step-body">
         <a class="btn-secondary" id="pa-required-fields-link" style="display:block;text-align:center;text-decoration:none;">Open Visual Field Editor</a>
       </div>
+    </div>
     </div>
 
     <div class="step-pair">
@@ -225,7 +227,16 @@
       </div>
     </div>
 
-    <button type="button" class="btn-danger" id="btn-delete-project">Delete This Project</button>
+    <div class="step" id="project-delete-step">
+      <div class="step-header">
+        <span class="step-num">DANGER</span>
+        <h2>Delete Project</h2>
+      </div>
+      <div class="step-body">
+        <p class="hint" style="margin-top:0;">Permanently deletes this project and every report in it. This cannot be undone.</p>
+        <button type="button" class="btn-danger" id="btn-delete-project">Delete This Project</button>
+      </div>
+    </div>
   </div>
 </main>
 
@@ -309,7 +320,7 @@ async function init() {
   const canEditProject = await companyCan('editProjects');
   if (!canEditProject) {
     $('#uz-reupload').hidden = true;
-    $('#btn-delete-project').hidden = true;
+    $('#project-delete-step').hidden = true;
   }
 
   // Icon/background and Required Fields used to live only on Settings'

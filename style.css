@@ -2830,4 +2830,24 @@ input[type="date"] { min-width: 0; }
 .settings-toggle:hover { border-color: var(--brand-light); }
 .settings-toggle .st-chevron { transition: transform 0.2s ease; color: var(--text-dim); }
 .settings-toggle[aria-expanded="true"] .st-chevron { transform: rotate(180deg); }
-#project-settings-panel { margin-top: 0.75rem; }
+/* Open, the toggle becomes this box's own header instead of a separate
+   button floating above a loose stack of cards -- same background as the
+   panel below it, square bottom corners and no border between them, so
+   the two read as one continuous expanding box (like the home page's
+   Manager Dashboard column, one section holding several cards) rather
+   than "a button, then unrelated cards." */
+.settings-toggle[aria-expanded="true"] {
+  background: var(--surface-2);
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-bottom: none;
+}
+#project-settings-panel {
+  margin-top: 0;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 var(--radius) var(--radius);
+  padding: 1rem;
+}
+#project-settings-panel > *:last-child { margin-bottom: 0; }
