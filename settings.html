@@ -735,7 +735,7 @@
     <div class="err" id="company-error" hidden></div>
   </div>
 
-  <a class="app-version" href="patch-notes.txt" target="_blank" rel="noopener">v0.030</a>
+  <a class="app-version" href="patch-notes.txt" target="_blank" rel="noopener">v0.039</a>
 
 </main>
 
@@ -1920,7 +1920,7 @@ $('#cm-project-list').addEventListener('change', async (e) => {
   const project = (await getAllProjects()).filter((p) => projectInScope(p, room)).find((p) => p.id === id);
   if (!project) return;
   try {
-    project.backgroundImage = await compressImage(file, { maxDim: 1600, quality: 0.75 });
+    project.backgroundImage = await compressImage(await convertHeicIfNeeded(file), { maxDim: 1600, quality: 0.75 });
     project.backgroundImageFetched = true;
     await saveProject(project);
     await renderCmProjects();
@@ -2247,7 +2247,12 @@ async function renderCmActivity() {
 
   const byAuthor = new Map();
   for (const r of reports) {
-    const author = r.representative || r.createdBy || 'Unknown';
+    // The device/person who actually saved the report, not representative
+    // (a display string joining every inspector logged on it) -- keying by
+    // that would split "John Sonnier" and "John Sonnier, Alex Flores" into
+    // two different authors for the same person, and credit Alex with
+    // reports he was simply listed on but never touched himself.
+    const author = r.lastEditedBy || r.createdBy || 'Unknown';
     if (!byAuthor.has(author)) byAuthor.set(author, { count: 0, latest: 0, projects: new Set() });
     const entry = byAuthor.get(author);
     entry.count++;

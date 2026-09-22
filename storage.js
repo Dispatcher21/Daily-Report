@@ -244,7 +244,7 @@ async function deleteReportLocalOnly(id) {
 async function saveReport(report) {
   // Needed before the write for the audit hook to diff against -- a no-op
   // extra read when nothing's listening (logAuditableChange undefined).
-  const before = typeof logAuditableChange === 'function' ? await getReport(report.id) : null;
+  const before = typeof logAuditableChange === 'function' ? await getReport(report.id, { includeDeleted: true }) : null;
   const userName = await getUserName();
   if (userName) {
     if (!report.createdBy) report.createdBy = userName; // set once, never overwritten by a later editor
@@ -263,37 +263,82 @@ async function saveReport(report) {
   }
 }
 
-// Unlike saveReport's fire-and-forget mirror (deliberately non-blocking, so
-// typing/auto-save stays instant offline), a delete's sync call is awaited.
-// autoPullCompanyData fires on every regained tab focus, and a pull that
-// lands before a fire-and-forget delete has actually committed in Firestore
-// can't tell "genuinely still there" apart from "deleted, but not synced
-// yet" -- it just re-imports the report right back. Deleting is deliberate
-// and rare enough that the extra round-trip is worth it. The local delete
-// above still always happens first and stands regardless of whether the
-// sync succeeds; a sync failure (offline, etc.) is thrown here so the
-// caller can tell the user it may not have taken everywhere yet, rather
-// than the old behavior of failing silently to the console and letting it
-// quietly reappear later with no explanation.
+// Soft-deletes a report -- moves it to Trash rather than removing it. There
+// is deliberately no way to remove a report's data for good from anywhere
+// in this app -- see restoreReport below for undoing this, and the
+// PERMANENT DELETION header comment further down for why that
+// capability was removed outright rather than merely hidden behind a
+// button. The record stays right here locally and gets pushed to the
+// company as an ordinary field update (deleted/deletedAt/deletedBy
+// alongside everything else, via the normal onCompanySyncReportChanged
+// path) so every device that syncs ends up with the same trashed record in
+// its own Trash, not just whichever device clicked Delete.
+//
+// Fire-and-forget sync, like saveReport -- safe because the bumped
+// updatedAt is itself the protection: an autoPullCompanyData that lands
+// with the still-active, pre-delete copy is simply older by
+// mergeReportRecord's "newer wins" rule and gets skipped, deleted flag and
+// all, rather than resurrecting it.
 async function deleteReport(id) {
-  const needsExisting = typeof onCompanySyncReportChanged === 'function'
-    || typeof onLocalFolderSyncReportChanged === 'function'
-    || typeof logAuditableChange === 'function';
-  const report = needsExisting ? await getReport(id) : null;
-  await withStore(REPORTS_STORE, 'readwrite', (store) => store.delete(id));
+  const report = await getReport(id, { includeDeleted: true });
+  if (!report || report.deleted) return;
+  const userName = (await getUserName()) || 'Unknown User';
+  const deletedReport = { ...report, deleted: true, deletedAt: Date.now(), deletedBy: userName, updatedAt: Date.now() };
+  await putReportRaw(deletedReport);
   await deleteReportDraft(id);
-  if (report) {
-    if (typeof logAuditableChange === 'function') {
-      logAuditableChange('report', report, null, true).catch((err) => console.error('audit log:', err));
-    }
-    if (typeof onLocalFolderSyncReportChanged === 'function') {
-      onLocalFolderSyncReportChanged(report, true).catch((err) => console.error('local folder sync:', err));
-    }
-    if (typeof onCompanySyncReportChanged === 'function') {
-      await onCompanySyncReportChanged(report, true);
-    }
+  if (typeof onCompanySyncReportChanged === 'function') {
+    onCompanySyncReportChanged(deletedReport, false).catch((err) => console.error('company sync mirror:', err));
+  }
+  if (typeof onLocalFolderSyncReportChanged === 'function') {
+    onLocalFolderSyncReportChanged(deletedReport, true).catch((err) => console.error('local folder sync:', err));
+  }
+  if (typeof logAuditableChange === 'function') {
+    logAuditableChange('report', report, deletedReport, 'deleted').catch((err) => console.error('audit log:', err));
   }
 }
+
+// Undoes deleteReport -- clears the Trash flags and pushes the restored
+// record like any other save. Same fire-and-forget reasoning as
+// deleteReport: the freshly bumped updatedAt protects a restore from a
+// stale pull the same way it protects a fresh delete.
+async function restoreReport(id) {
+  const report = await getReport(id, { includeDeleted: true });
+  if (!report || !report.deleted) return;
+  const restored = { ...report, updatedAt: Date.now() };
+  delete restored.deleted;
+  delete restored.deletedAt;
+  delete restored.deletedBy;
+  await putReportRaw(restored);
+  if (typeof onCompanySyncReportChanged === 'function') {
+    onCompanySyncReportChanged(restored, false).catch((err) => console.error('company sync mirror:', err));
+  }
+  if (typeof onLocalFolderSyncReportChanged === 'function') {
+    onLocalFolderSyncReportChanged(restored, false).catch((err) => console.error('local folder sync:', err));
+  }
+  if (typeof logAuditableChange === 'function') {
+    logAuditableChange('report', report, restored, 'restored').catch((err) => console.error('audit log:', err));
+  }
+}
+
+// ---------- PERMANENT DELETION: REMOVED ON PURPOSE ----------
+//
+// This app used to have a permanentlyDeleteReport() -- a genuine hard
+// delete (Firestore doc + Storage photos removed, tombstoned so every
+// other device's pull wipes its own copy too) reachable from a "Delete
+// Forever" button in the Trash view. It was removed entirely, not just
+// unhooked from the UI, after it was used to permanently destroy two real
+// reports by mistake during testing: a test session that was still joined
+// to a real company called it against real data instead of the isolated
+// test environment. The tombstone meant there was no way to get the data
+// back afterward -- only a separate, unrelated local-folder-sync backup
+// (which never deletes anything, by a different and much luckier design
+// choice) made recovery possible at all.
+// If a genuine "permanently erase this data" capability is ever needed
+// again (a legal/retention requirement, say), it needs deliberate
+// safeguards a plain function call doesn't have on its own -- at minimum,
+// nothing should be able to reach it from a test/dev environment pointed
+// at real company data. Don't just re-add a function with this name and a
+// button; that's exactly how this happened the first time.
 
 // ---------- Report drafts ----------
 //
@@ -338,24 +383,37 @@ function getAllReportDrafts() {
   });
 }
 
-function getAllReports() {
+// includeDeleted defaults to false so every existing caller -- dashboards,
+// quantity math, exports, search, folder sync -- automatically only sees
+// active reports with no change on their part; a trashed report (see
+// deleteReport) is opt-in only, via the Deleted Reports view and the sync
+// bookkeeping that needs to see it too (merge comparisons, tombstone
+// checks, the "Sync Now" retry sweep) -- see firebase-sync.js's callers.
+function getAllReports({ includeDeleted = false } = {}) {
   return withStore(REPORTS_STORE, 'readonly', (store) => {
     return new Promise((resolve, reject) => {
       const req = store.getAll();
-      req.onsuccess = () => resolve(req.result.sort((a, b) => b.updatedAt - a.updatedAt));
+      req.onsuccess = () => {
+        const result = includeDeleted ? req.result : req.result.filter((r) => !r.deleted);
+        resolve(result.sort((a, b) => b.updatedAt - a.updatedAt));
+      };
       req.onerror = () => reject(req.error);
     });
   });
 }
 
-async function getReportsForProject(projectId) {
-  const all = await getAllReports();
+async function getReportsForProject(projectId, opts) {
+  const all = await getAllReports(opts);
   return all.filter((r) => r.projectId === projectId);
 }
 
-async function getReport(id) {
-  const all = await getAllReports();
+async function getReport(id, opts) {
+  const all = await getAllReports(opts);
   return all.find((r) => r.id === id) || null;
+}
+
+async function getDeletedReportsForProject(projectId) {
+  return (await getReportsForProject(projectId, { includeDeleted: true })).filter((r) => r.deleted);
 }
 
 async function getNextReportNo(projectId) {
@@ -402,27 +460,23 @@ async function getProject(id) {
   return all.find((p) => p.id === id) || null;
 }
 
-// Deletes a project and every report that belongs to it. Every local delete
-// below always happens, report or project, sync failures notwithstanding --
-// a report whose own sync fails doesn't stop the rest from deleting, or the
-// project itself from going too. Sync failures are collected instead and
-// thrown together at the end (see deleteReport's own comment for why a
-// delete's sync is awaited at all, unlike a save's), so the caller can warn
-// that some of this may not have taken everywhere yet, without leaving any
-// of it undeleted on this device.
+// Deletes a project (a real, permanent removal -- there is no project
+// Trash) and soft-deletes every report that belongs to it into Trash, same
+// as deleteReport does one at a time -- see the PERMANENT DELETION comment
+// above for why a report's own data is never actually destroyed by
+// anything in this app, including this. Those reports end up "orphaned"
+// (a projectId pointing at a project that no longer exists) rather than
+// restorable through this project's own Trash view once it's gone, but
+// their data still exists locally and in the company either way.
+// deleteReport is fire-and-forget on its own sync (see its own comment),
+// so there's nothing to catch per report here; only the project's own
+// removal below still awaits its sync and can throw.
 async function deleteProject(id) {
   const needsExisting = typeof onCompanySyncProjectChanged === 'function' || typeof logAuditableChange === 'function';
   const project = needsExisting ? await getProject(id) : null;
-  const reports = await getReportsForProject(id);
+  const reports = await getReportsForProject(id, { includeDeleted: true });
+  for (const r of reports) await deleteReport(r.id);
   const syncErrors = [];
-  for (const r of reports) {
-    try {
-      await deleteReport(r.id); // also mirrors and audit-logs each report's own deletion, see above
-    } catch (err) {
-      console.error('company sync mirror:', err);
-      syncErrors.push(err);
-    }
-  }
   await withStore(PROJECTS_STORE, 'readwrite', (store) => store.delete(id));
   if (project) {
     if (typeof logAuditableChange === 'function') {
@@ -547,7 +601,7 @@ function deserializeImportedProject(raw) {
 // (there's currently none, but the fallback exists for that case) can just
 // omit it and pay for the lookup itself.
 async function mergeReportRecord(report, existingReport) {
-  const existing = existingReport !== undefined ? existingReport : await getReport(report.id);
+  const existing = existingReport !== undefined ? existingReport : await getReport(report.id, { includeDeleted: true });
   if (!existing) {
     await putReportRaw(report);
     return 'added';

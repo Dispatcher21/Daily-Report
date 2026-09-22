@@ -121,7 +121,15 @@
           </div>
         </div>
 
-        <div class="step step-collapsible">
+        <div class="step step-collapsible" id="md-calendar-step" hidden>
+          <div class="step-header"><span class="step-num">CALENDAR</span><h2>Report Activity</h2><button type="button" class="info-tip" data-tip="Every dated report across included projects, one color-coded pill per project. Click a day for details and links into that day's report(s)." aria-label="What this does">i</button></div>
+          <div class="step-body">
+            <div class="mdcal-legend" id="md-cal-legend"></div>
+            <div class="weather-calendar" id="md-calendar"></div>
+          </div>
+        </div>
+
+        <div class="step step-collapsible collapsed">
           <div class="step-header"><span class="step-num">TEAM</span><h2>Hours per Employee</h2><button type="button" class="info-tip" data-tip="Last 30 days, by Representative on file." aria-label="What this does">i</button></div>
           <div class="step-body">
             <div class="md-bars" id="md-hours-bars"></div>
@@ -129,7 +137,7 @@
           </div>
         </div>
 
-        <div class="step step-collapsible">
+        <div class="step step-collapsible collapsed">
           <div class="step-header"><span class="step-num">STATUS</span><h2>Projects: Ahead / Behind</h2></div>
           <div class="step-body">
             <div class="md-projlist" id="md-proj-status"></div>
@@ -137,7 +145,7 @@
           </div>
         </div>
 
-        <div class="step step-collapsible">
+        <div class="step step-collapsible collapsed">
           <div class="step-header"><span class="step-num">ACTIVITY</span><h2>Recent Reports</h2></div>
           <div class="step-body">
             <div class="md-feed" id="md-feed"></div>
@@ -197,6 +205,16 @@
 
   <a class="btn-secondary" id="link-company-management" href="company-management.html">&#9881;&#65039; Company Management</a>
 </main>
+
+<div class="modal-overlay" id="md-day-detail-overlay" hidden>
+  <div class="modal-card ddm-card mddm-card">
+    <div class="ddm-header">
+      <h2 id="mddm-title">Day</h2>
+      <button type="button" class="ddm-close" id="mddm-close" aria-label="Close">&times;</button>
+    </div>
+    <div id="mddm-body"></div>
+  </div>
+</div>
 
 <div class="modal-overlay" id="folder-modal-overlay" hidden>
   <div class="modal-card folder-modal-card">
@@ -1041,6 +1059,7 @@ async function renderManagerDashboard() {
 
   renderMdStats(projectStats, reports);
   renderMdTrendChart(projectStats, included, reports, today);
+  renderMdCalendar(included, reports);
   renderMdHoursBars(reports);
   renderMdProjectStatus(projectStats);
   renderMdFeed(reports);
@@ -1138,6 +1157,18 @@ function renderMdStats(projectStats, reports) {
   $('#md-stats').innerHTML = ringsRow + contractRow + tilesRow;
 }
 
+// One color per project, shared by the Trend chart and the Calendar below
+// it, so the same project is always the same color on both -- indexed by
+// position in the *full* included list, not whatever filtered subset a
+// given widget happens to work from (the Trend chart only plots projects
+// with an NTP Date, so indexing off its own filtered array would shift
+// every color after the first project missing one, out of sync with the
+// Calendar's own colors for those same projects).
+function mdProjectColor(project, included) {
+  const i = included.findIndex((p) => p.id === project.id);
+  return TREND_LINE_COLORS[(i < 0 ? 0 : i) % TREND_LINE_COLORS.length];
+}
+
 // One line per included project, each its own color -- each project's
 // progressOverTime points are already its own quantity-weighted percent
 // complete (same math as project.html's own trend chart), so unlike a
@@ -1154,7 +1185,7 @@ function renderMdStats(projectStats, reports) {
 function renderMdTrendChart(projectStats, included, reports, today) {
   const step = $('#md-trend-step');
   const withNtp = included.filter((project) => /^\d{4}-\d{2}-\d{2}$/.test((project.meta || {}).ntpDate || ''));
-  const series = withNtp.map((project, i) => {
+  const series = withNtp.map((project) => {
     const ntpDate = project.meta.ntpDate;
     const points = progressOverTime(reports.filter((r) => r.projectId === project.id && r.date), project.payItemCatalog || [], project.billingEstimates)
       .map((p) => ({ ...p, day: Math.max(0, daysBetween(ntpDate, p.date)) }));
@@ -1165,7 +1196,7 @@ function renderMdTrendChart(projectStats, included, reports, today) {
     if (points.length && points[0].day > 0) {
       points.unshift({ date: ntpDate, day: 0, pct: 0, earned: 0, synthetic: true });
     }
-    return { label: project.name, color: TREND_LINE_COLORS[i % TREND_LINE_COLORS.length], points, maxDay: daysBetween(ntpDate, today) };
+    return { label: project.name, color: mdProjectColor(project, included), points, maxDay: daysBetween(ntpDate, today) };
   }).filter((s) => s.points.length > 0);
 
   step.hidden = series.length === 0;
@@ -1175,6 +1206,178 @@ function renderMdTrendChart(projectStats, included, reports, today) {
   renderTrendSvg($('#md-trend-chart'), series, { h: 150, xAxis: 'daysSinceStart' });
 }
 
+// ---------- Manager Dashboard calendar ----------
+//
+// Portfolio-wide version of project.html's own weather calendar: same grid
+// (reuses its .wcal-month/.wcal-weekdays/.wcal-grid/.wcal-day CSS directly),
+// same click-a-day-for-detail model, but one cell can hold a report from
+// more than one project, so each gets its own color pill instead of a
+// weather/activity icon. State is stashed on these module-level vars rather
+// than threaded through as click-handler arguments, since the delegated
+// listener (wired once, below) fires long after this function returns.
+const MDCAL_WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+const MDCAL_MAX_PILLS = 4; // beyond this a cell shows "+N more" rather than growing the cell indefinitely -- text chips take real room, unlike the plain dots this started as
+let mdCalendarByDate = new Map(); // date -> Map(projectId -> report)
+let mdCalendarProjectById = new Map();
+let mdCalendarColorByProjectId = new Map();
+
+function mdReportHasPhotos(r) {
+  return (r.photos || []).some((p, i) => p || (r.photosFetched && r.photosFetched[i] === false));
+}
+
+// Project names run long ("PR#214 - GNOEC - Safety Bay Incident Ahead
+// Signs") and a pill has maybe 90px to work with -- most of this app's real
+// project names put the short, recognizable part (a PO/contract number, or
+// a short site name) before the first " - ", so that's what shows on the
+// pill itself; the full name is still the pill's title tooltip and is
+// spelled out in full in the legend and the day-detail modal.
+function mdShortProjectLabel(name) {
+  const first = (name || '').split(' - ')[0].trim() || name || '';
+  return first.length > 20 ? first.slice(0, 19) + '…' : first;
+}
+
+function renderMdCalendar(included, reports) {
+  const step = $('#md-calendar-step');
+  const dated = reports.filter((r) => r.date);
+  step.hidden = dated.length === 0;
+  if (dated.length === 0) return;
+
+  // mdProjectColor is the same lookup the Trend chart above uses, so a
+  // project already plotted there keeps the exact same color here.
+  mdCalendarColorByProjectId = new Map(included.map((p) => [p.id, mdProjectColor(p, included)]));
+  mdCalendarProjectById = new Map(included.map((p) => [p.id, p]));
+
+  $('#md-cal-legend').innerHTML = included.map((p) => `
+    <span class="mdcal-legend-item"><span class="mdcal-legend-swatch" style="background:${mdCalendarColorByProjectId.get(p.id)}"></span>${escapeHtml(p.name)}</span>`).join('');
+
+  mdCalendarByDate = new Map();
+  dated.forEach((r) => {
+    if (!mdCalendarByDate.has(r.date)) mdCalendarByDate.set(r.date, new Map());
+    const dayMap = mdCalendarByDate.get(r.date);
+    if (!dayMap.has(r.projectId)) dayMap.set(r.projectId, r); // first report found wins -- same project shouldn't file twice in a day
+  });
+
+  const months = [...new Set(dated.map((r) => r.date.slice(0, 7)))].sort();
+  $('#md-calendar').innerHTML = months.map((mk) => {
+    const [y, m] = mk.split('-').map(Number);
+    const first = new Date(y, m - 1, 1);
+    const daysInMonth = new Date(y, m, 0).getDate();
+    const monthLabel = first.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+    const cells = [];
+    for (let i = 0; i < first.getDay(); i++) cells.push('<div class="wcal-day wcal-day-empty"></div>');
+    for (let d = 1; d <= daysInMonth; d++) {
+      const iso = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const dayMap = mdCalendarByDate.get(iso);
+      if (!dayMap || dayMap.size === 0) {
+        cells.push(`<div class="wcal-day" data-date="${iso}"><span class="wcal-day-num">${d}</span></div>`);
+        continue;
+      }
+      const projectIds = [...dayMap.keys()];
+      const shown = projectIds.slice(0, MDCAL_MAX_PILLS);
+      const extra = projectIds.length - shown.length;
+      const pills = shown
+        .map((pid) => {
+          const project = mdCalendarProjectById.get(pid);
+          return `<span class="mdcal-pill" style="background:${mdCalendarColorByProjectId.get(pid)}" title="${escapeHtml(project ? project.name : '')}">${escapeHtml(mdShortProjectLabel(project ? project.name : ''))}</span>`;
+        })
+        .join('') + (extra > 0 ? `<span class="mdcal-pill-more">+${extra} more</span>` : '');
+      cells.push(`
+        <div class="wcal-day wcal-clickable" tabindex="0" data-date="${iso}" data-cal-date="${iso}">
+          <span class="wcal-day-num">${d}</span>
+          <div class="mdcal-pills">${pills}</div>
+        </div>`);
+    }
+    return `
+      <div class="wcal-month">
+        <div class="wcal-month-label">${escapeHtml(monthLabel)}</div>
+        <div class="wcal-weekdays">${MDCAL_WEEKDAY_LABELS.map((l) => `<div>${l}</div>`).join('')}</div>
+        <div class="wcal-grid">${cells.join('')}</div>
+      </div>`;
+  }).join('');
+
+  // Default to showing today's date, not the earliest month on file -- the
+  // calendar spans a project's whole history, and someone opening this
+  // dashboard almost always cares about "what happened recently", not what
+  // happened on day one. Centers today's row in the scrollable area rather
+  // than just snapping it to the very top, so a few days of context above
+  // today are visible too.
+  requestAnimationFrame(() => {
+    const container = $('#md-calendar');
+    const todayCell = container.querySelector(`[data-date="${todayIso()}"]`);
+    if (!todayCell) { container.scrollTop = container.scrollHeight; return; } // no exact cell (e.g. today's month has no data yet) -- fall back to the most recent end
+    // offsetTop is relative to the nearest *positioned* ancestor, which
+    // isn't necessarily this scroll container (none of .wcal-month/.wcal-grid
+    // set position, so it can resolve all the way up to <body>) --
+    // getBoundingClientRect diffed against the container's own is the only
+    // reliable way to get "how far down this container's own content" a
+    // cell sits, however deep the wrapper markup between them goes.
+    const cellRect = todayCell.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    const offsetWithinContainer = cellRect.top - containerRect.top + container.scrollTop;
+    const target = offsetWithinContainer - container.clientHeight / 2 + todayCell.offsetHeight / 2;
+    container.scrollTop = Math.max(0, target);
+  });
+}
+
+function mdDayDetailRow(label, value) {
+  if (!value) return '';
+  return `<div class="ddm-row"><span class="ddm-label">${escapeHtml(label)}</span><span class="ddm-value">${escapeHtml(value)}</span></div>`;
+}
+
+function openMdDayDetailModal(date) {
+  const dayMap = mdCalendarByDate.get(date);
+  if (!dayMap) return;
+  $('#mddm-title').textContent = date;
+  $('#mddm-body').innerHTML = [...dayMap.entries()].map(([projectId, r]) => {
+    const project = mdCalendarProjectById.get(projectId);
+    const color = mdCalendarColorByProjectId.get(projectId);
+
+    let body;
+    if (isNoWorkDayReport(r) || isWeatherDayReport(r)) {
+      body = `<div class="ddm-badge">${isNoWorkDayReport(r) ? '&#128683; No Work Day' : '&#9925; Weather Day'}</div>`;
+    } else {
+      const isAttention = r.trafficControlSelect === 'ATTENTION_REQUIRED';
+      const temps = (r.tempHigh || r.tempLow) ? `${r.tempHigh || '—'}°/${r.tempLow || '—'}°F` : '';
+      const activity = (r.activity || '').trim();
+      const activityText = reportActivityText(r); // falls back to Work Summary's first line when Activity is blank
+      body = [
+        activity ? mdDayDetailRow('Activity', activity) : (activityText ? mdDayDetailRow('Work Summary', activityText) : ''),
+        mdDayDetailRow('Weather', [r.weatherDesc, temps].filter(Boolean).join(' · ')),
+        mdDayDetailRow('Traffic Control', r.trafficControlSelect ? (isAttention ? 'Attention Required' : 'In Place') : ''),
+        mdDayDetailRow('Hours', r.hours),
+      ].filter(Boolean).join('') || '<p class="hint" style="margin:0;">Nothing logged beyond the report itself.</p>';
+    }
+
+    return `
+      <div class="mddm-block">
+        <div class="mddm-block-header"><span class="mdcal-legend-swatch" style="background:${color}"></span>${escapeHtml(project ? project.name : 'Unknown project')}</div>
+        ${body}
+        <div class="ddm-links">
+          <a class="btn-secondary" href="report-viewer.html?project=${projectId}&report=${r.id}">View Report</a>
+          ${mdReportHasPhotos(r) ? `<a class="btn-secondary" href="report-photos.html?project=${projectId}&report=${r.id}">View Photos</a>` : ''}
+          <a class="btn-secondary" href="quick-quantity.html?project=${projectId}&date=${date}">Quantities for This Day</a>
+          <a class="btn-secondary" href="report-editor.html?project=${projectId}&report=${r.id}">Edit Report</a>
+        </div>
+      </div>`;
+  }).join('<hr class="mddm-sep">');
+  $('#md-day-detail-overlay').hidden = false;
+}
+$('#md-calendar').addEventListener('click', (e) => {
+  const cell = e.target.closest('.wcal-clickable[data-cal-date]');
+  if (cell) openMdDayDetailModal(cell.dataset.calDate);
+});
+$('#md-calendar').addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const cell = e.target.closest('.wcal-clickable[data-cal-date]');
+  if (!cell) return;
+  e.preventDefault();
+  openMdDayDetailModal(cell.dataset.calDate);
+});
+$('#mddm-close').addEventListener('click', () => { $('#md-day-detail-overlay').hidden = true; });
+$('#md-day-detail-overlay').addEventListener('click', (e) => {
+  if (e.target === $('#md-day-detail-overlay')) $('#md-day-detail-overlay').hidden = true;
+});
+
 function renderMdHoursBars(reports) {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - 30);
@@ -1183,10 +1386,22 @@ function renderMdHoursBars(reports) {
   const totals = new Map();
   reports.forEach((r) => {
     if (!r.date || r.date < cutoffIso) return;
-    const hours = Number(r.hours) || 0;
-    if (hours <= 0) return;
-    const name = (r.representative || '').trim() || 'Unassigned';
-    totals.set(name, (totals.get(name) || 0) + hours);
+    // Split by individual inspector, not report.representative (a display-
+    // only "A, B" string joined for the printed report) -- each inspector
+    // logs their own Hours (see defaults.js's report.inspectors), and this
+    // chart is specifically hours per person. A report saved before the
+    // multi-inspector feature shipped (or never reopened since) has no
+    // inspectors array at all; that falls back to the old single
+    // representative/hours pair as one entry.
+    const inspectors = Array.isArray(r.inspectors) && r.inspectors.length
+      ? r.inspectors
+      : [{ name: r.representative, hours: r.hours }];
+    inspectors.forEach((insp) => {
+      const hours = Number(insp.hours) || 0;
+      if (hours <= 0) return;
+      const name = (insp.name || '').trim() || 'Unassigned';
+      totals.set(name, (totals.get(name) || 0) + hours);
+    });
   });
 
   const sorted = [...totals.entries()].sort((a, b) => b[1] - a[1]);
@@ -1222,11 +1437,25 @@ function renderMdFeed(reports) {
   $('#md-feed').innerHTML = sorted.map((r) => {
     const project = projectById.get(r.projectId);
     const isAdverse = ADVERSE_WEATHER_RE.test(r.weatherDesc || '');
-    const who = r.representative || r.createdBy || 'Unknown';
+    // "Filed by" and "Inspectors" are two different things that used to get
+    // collapsed into one -- representative is a display string joining
+    // every inspector logged on the report (their own Hours, see
+    // defaults.js's report.inspectors), not who actually saved it. That
+    // showed "filed by John Sonnier, Alex Flores" for a report Alex was
+    // simply listed on, never touched himself. The device that actually
+    // saved it is lastEditedBy/createdBy.
+    const filer = r.lastEditedBy || r.createdBy || 'Unknown';
+    const inspectors = (r.representative || '').trim();
+    // Skip the second clause entirely when it's just the filer's own name
+    // again (the common case: one inspector on site who also files their
+    // own report) -- only worth calling out when it adds information.
+    const inspectorsHtml = inspectors && inspectors !== filer
+      ? ` &middot; Inspectors: ${escapeHtml(inspectors)}`
+      : '';
     return `
       <div class="md-feed-row">
         <span class="md-feed-date">${escapeHtml(r.date || '—')}</span>
-        <span class="md-feed-body"><strong>${escapeHtml(project ? project.name : 'Unknown project')}</strong> &middot; filed by ${escapeHtml(who)}${isAdverse ? '<span class="md-feed-flag">weather-flagged</span>' : ''}</span>
+        <span class="md-feed-body"><strong>${escapeHtml(project ? project.name : 'Unknown project')}</strong> &middot; filed by ${escapeHtml(filer)}${inspectorsHtml}${isAdverse ? '<span class="md-feed-flag">weather-flagged</span>' : ''}</span>
       </div>`;
   }).join('');
 }

@@ -194,6 +194,22 @@
   </div>
 </main>
 
+<div class="modal-overlay" id="day-detail-overlay" hidden>
+  <div class="modal-card ddm-card">
+    <div class="ddm-header">
+      <h2 id="ddm-title">Day</h2>
+      <button type="button" class="ddm-close" id="ddm-close" aria-label="Close">&times;</button>
+    </div>
+    <div id="ddm-body"></div>
+    <div class="ddm-links">
+      <a class="btn-secondary" id="ddm-link-report">View Report</a>
+      <a class="btn-secondary" id="ddm-link-photos">View Photos</a>
+      <a class="btn-secondary" id="ddm-link-quantity">Quantities for This Day</a>
+      <a class="btn-secondary" id="ddm-link-edit">Edit Report</a>
+    </div>
+  </div>
+</div>
+
 <script src="lib/xlsx.min.js"></script>
 <script src="lib/fflate.min.js"></script>
 <script src="lib/html2canvas.min.js"></script>
@@ -598,17 +614,28 @@ function renderTrendChart(points) {
 let weatherViewMode = 'list';
 let weatherLoggableCache = [];
 
+// True if any photo slot has a real Blob locally, OR is confirmed to exist
+// remotely but just hasn't been downloaded to this device yet
+// (photosFetched[i] === false still means "there's a photo there" -- see
+// firebase-sync.js's pull path). Only photosFetched[i] === true with a null
+// Blob means "confirmed empty".
+function reportHasPhotos(r) {
+  return (r.photos || []).some((p, i) => p || (r.photosFetched && r.photosFetched[i] === false));
+}
+
 function renderWeatherSchedule(dated) {
   const step = $('#dash-weather-step');
-  // A No Work Day/Weather Day report is blank apart from its Notes by design
-  // (see the report-editor.html buttons) -- included here too now so it can
-  // be annotated in the list/calendar, not just counted in the stat card.
-  const loggable = dated.filter((r) =>
-    r.weatherDesc || r.tempHigh || r.tempLow || r.trafficControlSelect || r.controllingItem || r.commentsOnTime || r.activity || isNoWorkDayReport(r) || isWeatherDayReport(r)
-  );
+  // Every dated report shows up here, full stop -- this used to filter down
+  // to only reports with a weather/activity/traffic-control/etc field
+  // filled in, which silently hid a perfectly normal report that, say, only
+  // had pay item quantities logged and nothing in this section's own
+  // fields. From the dashboard that looked like "some reports just aren't
+  // here", which is exactly what got reported -- the fix is to not filter
+  // at all, same as the Manager Dashboard's own report-activity calendar.
+  const loggable = dated;
   const noWorkDays = dated.filter(isNoWorkDayReport).length;
   const weatherDays = dated.filter(isWeatherDayReport).length;
-  step.hidden = loggable.length === 0 && noWorkDays === 0 && weatherDays === 0;
+  step.hidden = loggable.length === 0;
   if (step.hidden) return;
 
   const weatherFlagged = dated.filter((r) => ADVERSE_WEATHER_RE.test(r.weatherDesc || '')).length;
@@ -617,7 +644,7 @@ function renderWeatherSchedule(dated) {
   $('#dash-weather-stats').innerHTML =
     statCard(weatherFlagged, 'Weather-Flagged Days', '', 'Dated reports whose Weather Description mentions rain, snow, wind, or similar adverse conditions.', null, 'int') +
     statCard(attentionDays, 'Traffic Control Attention Days', '', 'Dated reports where Traffic Control Status was set to "Attention Required".', null, 'int') +
-    statCard(noWorkDays, 'No Work Days', '', 'Dated reports marked "NO WORK DAY" via the button at the top of the report editor.', null, 'int') +
+    statCard(noWorkDays, 'No Work Days', '', 'Dated reports whose Notes contains "no work" -- either from the button at the top of the report editor, or typed in by hand.', null, 'int') +
     statCard(weatherDays, 'Weather Days', '', 'Dated reports marked "WEATHER DAY" via the button at the top of the report editor.', null, 'int');
 
   weatherLoggableCache = loggable;
@@ -654,11 +681,12 @@ function renderWeatherLogList(loggable) {
       const temps = (r.tempHigh || r.tempLow) ? `${r.tempHigh || '—'}°/${r.tempLow || '—'}°F` : '';
       const weatherText = [r.weatherDesc, temps].filter(Boolean).join(' · ');
       const isAdverse = ADVERSE_WEATHER_RE.test(r.weatherDesc || '');
+      const activityText = reportActivityText(r); // falls back to Work Summary's first line when Activity is blank
       return `
         <div class="wlog-row">
           <div class="wlog-date">${escapeHtml(r.date)}</div>
           <div class="wlog-body">
-            ${r.activity ? `<div class="wlog-activity">${escapeHtml(r.activity)}</div>` : ''}
+            ${activityText ? `<div class="wlog-activity">${escapeHtml(activityText)}</div>` : ''}
             ${weatherText ? `<div class="wlog-weather">${isAdverse ? '<span title="Adverse weather">⛈️</span> ' : ''}${escapeHtml(weatherText)}</div>` : ''}
             ${r.trafficControlSelect ? `<div class="wlog-tc"><span class="status-dot ${isAttention ? 'status-over' : 'status-near'}"></span>Traffic Control: ${isAttention ? 'Attention Required' : 'In Place'}</div>` : ''}
             ${r.controllingItem ? `<div><strong>Controlling Item:</strong> ${escapeHtml(r.controllingItem)}</div>` : ''}
@@ -671,47 +699,76 @@ function renderWeatherLogList(loggable) {
 
 const WCAL_WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
-function weatherCalDayHtml(dayNum, r) {
-  if (!r) return `<div class="wcal-day"><span class="wcal-day-num">${dayNum}</span></div>`;
+function weatherCalDayHtml(dayNum, r, iso) {
+  if (!r) return `<div class="wcal-day" data-date="${iso}"><span class="wcal-day-num">${dayNum}</span></div>`;
+  const hasPhotos = reportHasPhotos(r);
+  const photoPill = hasPhotos ? '<span class="wcal-pill wcal-pill-photos">📷 Photos</span>' : '';
+  // Every branch below gets data-report-id + .wcal-clickable so the single
+  // delegated listener in renderWeatherCalendar can open the day-detail
+  // modal for any day that has a real report, regardless of its type; and
+  // data-date so the "scroll to today" logic below can find any day
+  // regardless of whether it has a report at all.
   if (isNoWorkDayReport(r)) {
     return `
-      <div class="wcal-day wcal-nwd" data-tip="No Work Day" tabindex="0">
+      <div class="wcal-day wcal-nwd wcal-clickable" data-tip="No Work Day" tabindex="0" data-report-id="${r.id}" data-date="${iso}">
         <span class="wcal-day-num">${dayNum}</span>
         <span class="wcal-badge">NWD</span>
+        ${photoPill ? `<div class="wcal-pills">${photoPill}</div>` : ''}
       </div>`;
   }
   if (isWeatherDayReport(r)) {
     return `
-      <div class="wcal-day wcal-nwd" data-tip="Weather Day" tabindex="0">
+      <div class="wcal-day wcal-nwd wcal-clickable" data-tip="Weather Day" tabindex="0" data-report-id="${r.id}" data-date="${iso}">
         <span class="wcal-day-num">${dayNum}</span>
         <span class="wcal-badge">WD</span>
+        ${photoPill ? `<div class="wcal-pills">${photoPill}</div>` : ''}
       </div>`;
   }
   const isAttention = r.trafficControlSelect === 'ATTENTION_REQUIRED';
   const isAdverse = ADVERSE_WEATHER_RE.test(r.weatherDesc || '');
-  const hasActivity = !!String(r.activity || '').trim();
+  const activity = (r.activity || '').trim();
+  const activityText = reportActivityText(r); // falls back to Work Summary's first line when Activity is blank
+  const hasActivity = !!activityText;
   const temps = (r.tempHigh || r.tempLow) ? `${r.tempHigh || '—'}°/${r.tempLow || '—'}°F` : '';
   const weatherText = [r.weatherDesc, temps].filter(Boolean).join(' · ');
   const tipParts = [
-    hasActivity ? `Activity: ${r.activity}` : '',
+    // Labeled by which field it actually came from -- showing Work Summary
+    // text under an "Activity:" label would misrepresent what's actually on
+    // the report.
+    activity ? `Activity: ${activity}` : (activityText ? `Work Summary: ${activityText}` : ''),
     weatherText,
     r.trafficControlSelect ? `Traffic Control: ${isAttention ? 'Attention Required' : 'In Place'}` : '',
     r.controllingItem ? `Controlling Item: ${r.controllingItem}` : '',
+    hasPhotos ? 'Photos attached' : '',
   ].filter(Boolean);
-  const cls = ['wcal-day'];
+  const cls = ['wcal-day', 'wcal-clickable'];
   if (isAdverse) cls.push('wcal-adverse');
   if (isAttention) cls.push('wcal-attention');
-  // Icons stay small and iconic rather than showing activity text inline --
-  // a day's Activity write-up can run to paragraphs, which would blow out a
-  // grid cell sized for a two-digit date. Full text lives in the tooltip.
+  // Labeled pills instead of bare icons/a plain dot -- same visual language
+  // as the Manager Dashboard's own calendar (see mdcal-pill), just colored
+  // by category instead of by project since there's only one project here.
+  // Only shown for something actually worth flagging: adverse weather, not
+  // every clear day; Attention Required, not routine In Place (still in the
+  // tooltip either way) -- a normal day stays uncluttered.
+  const categoryPills = [
+    isAdverse ? '<span class="wcal-pill wcal-pill-weather">⛈️ Weather</span>' : '',
+    hasActivity ? '<span class="wcal-pill wcal-pill-activity">📝 Activity</span>' : '',
+    photoPill,
+    isAttention ? '<span class="wcal-pill wcal-pill-traffic">⚠️ Traffic</span>' : '',
+  ].filter(Boolean);
+  // A report with nothing notable in any category above (no activity typed
+  // in, no adverse weather, no photos, traffic control routine or unset --
+  // e.g. one that only has pay item quantities logged) would otherwise
+  // render as a bare day number, indistinguishable from a day with no
+  // report at all. This neutral fallback pill only shows up when every
+  // other one is absent, so a real report is always visibly marked as
+  // "there's something here", without adding a second pill next to ones
+  // that already have one.
+  const pills = (categoryPills.length ? categoryPills : ['<span class="wcal-pill wcal-pill-filed">Report Filed</span>']).join('');
   return `
-    <div class="${cls.join(' ')}"${tipParts.length ? ` data-tip="${escapeHtml(tipParts.join(' — '))}" tabindex="0"` : ''}>
+    <div class="${cls.join(' ')}"${tipParts.length ? ` data-tip="${escapeHtml(tipParts.join(' — '))}"` : ''} tabindex="0" data-report-id="${r.id}" data-date="${iso}">
       <span class="wcal-day-num">${dayNum}</span>
-      <div class="wcal-day-icons">
-        ${isAdverse ? '<span class="wcal-icon" title="Adverse weather">⛈️</span>' : ''}
-        ${hasActivity ? '<span class="wcal-icon" title="Activity logged">📝</span>' : ''}
-        ${r.trafficControlSelect ? `<span class="wcal-dot ${isAttention ? 'wcal-dot-attention' : 'wcal-dot-ok'}"></span>` : ''}
-      </div>
+      <div class="wcal-pills">${pills}</div>
     </div>`;
 }
 
@@ -727,7 +784,7 @@ function renderWeatherCalendar(loggable) {
     for (let i = 0; i < first.getDay(); i++) cells.push('<div class="wcal-day wcal-day-empty"></div>');
     for (let d = 1; d <= daysInMonth; d++) {
       const iso = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      cells.push(weatherCalDayHtml(d, byDate.get(iso)));
+      cells.push(weatherCalDayHtml(d, byDate.get(iso), iso));
     }
     return `
       <div class="wcal-month">
@@ -736,6 +793,23 @@ function renderWeatherCalendar(loggable) {
         <div class="wcal-grid">${cells.join('')}</div>
       </div>`;
   }).join('');
+
+  // Default to today's row instead of the earliest month on file -- same
+  // reasoning and implementation as the Manager Dashboard's own calendar
+  // (see index.html's renderMdCalendar): offsetTop resolves against
+  // whatever positioned ancestor is nearest, not necessarily this scroll
+  // container, so getBoundingClientRect is the reliable way to find "how
+  // far down this container" a cell actually sits.
+  requestAnimationFrame(() => {
+    const container = $('#dash-weather-calendar');
+    const todayCell = container.querySelector(`[data-date="${todayIso()}"]`);
+    if (!todayCell) { container.scrollTop = container.scrollHeight; return; } // today's own month has nothing on file yet -- fall back to the most recent end
+    const cellRect = todayCell.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    const offsetWithinContainer = cellRect.top - containerRect.top + container.scrollTop;
+    const target = offsetWithinContainer - container.clientHeight / 2 + todayCell.offsetHeight / 2;
+    container.scrollTop = Math.max(0, target);
+  });
 }
 
 $$('#weather-view-toggle .view-toggle-btn').forEach((btn) => {
@@ -744,6 +818,67 @@ $$('#weather-view-toggle .view-toggle-btn').forEach((btn) => {
     $$('#weather-view-toggle .view-toggle-btn').forEach((b) => b.classList.toggle('active', b === btn));
     renderWeatherView();
   });
+});
+
+// ---------- Day detail modal ----------
+//
+// One delegated listener rather than one per cell, since the calendar
+// re-renders its innerHTML wholesale on every view switch/date change --
+// per-cell listeners would need re-wiring every time, a delegated one on
+// the never-replaced container just keeps working.
+$('#dash-weather-calendar').addEventListener('click', (e) => {
+  const cell = e.target.closest('.wcal-clickable[data-report-id]');
+  if (!cell) return;
+  const r = weatherLoggableCache.find((x) => x.id === cell.dataset.reportId);
+  if (r) openDayDetailModal(r);
+});
+$('#dash-weather-calendar').addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const cell = e.target.closest('.wcal-clickable[data-report-id]');
+  if (!cell) return;
+  e.preventDefault();
+  const r = weatherLoggableCache.find((x) => x.id === cell.dataset.reportId);
+  if (r) openDayDetailModal(r);
+});
+
+function dayDetailRow(label, value) {
+  if (!value) return '';
+  return `<div class="ddm-row"><span class="ddm-label">${escapeHtml(label)}</span><span class="ddm-value">${escapeHtml(value)}</span></div>`;
+}
+
+function openDayDetailModal(r) {
+  $('#ddm-title').textContent = r.date || `Report #${r.reportNo}`;
+
+  let bodyHtml;
+  if (isNoWorkDayReport(r) || isWeatherDayReport(r)) {
+    bodyHtml = `<div class="ddm-badge">${isNoWorkDayReport(r) ? '&#128683; No Work Day' : '&#9925; Weather Day'}</div>`;
+  } else {
+    const isAttention = r.trafficControlSelect === 'ATTENTION_REQUIRED';
+    const temps = (r.tempHigh || r.tempLow) ? `${r.tempHigh || '—'}°/${r.tempLow || '—'}°F` : '';
+    const activity = (r.activity || '').trim();
+    const activityText = reportActivityText(r); // falls back to Work Summary's first line when Activity is blank
+    bodyHtml = [
+      activity ? dayDetailRow('Activity', activity) : (activityText ? dayDetailRow('Work Summary', activityText) : ''),
+      dayDetailRow('Weather', [r.weatherDesc, temps].filter(Boolean).join(' · ')),
+      dayDetailRow('Traffic Control', r.trafficControlSelect ? (isAttention ? 'Attention Required' : 'In Place') : ''),
+      dayDetailRow('Controlling Item', r.controllingItem),
+      dayDetailRow('Comments on Time', r.commentsOnTime),
+      dayDetailRow('Hours', r.hours),
+    ].filter(Boolean).join('') || '<p class="hint" style="margin:0;">Nothing logged beyond the report itself.</p>';
+  }
+  $('#ddm-body').innerHTML = bodyHtml;
+
+  $('#ddm-link-report').href = `report-viewer.html?project=${project.id}&report=${r.id}`;
+  $('#ddm-link-edit').href = `report-editor.html?project=${project.id}&report=${r.id}`;
+  $('#ddm-link-quantity').href = `quick-quantity.html?project=${project.id}&date=${r.date}`;
+  $('#ddm-link-photos').hidden = !reportHasPhotos(r);
+  $('#ddm-link-photos').href = `report-photos.html?project=${project.id}&report=${r.id}`;
+
+  $('#day-detail-overlay').hidden = false;
+}
+$('#ddm-close').addEventListener('click', () => { $('#day-detail-overlay').hidden = true; });
+$('#day-detail-overlay').addEventListener('click', (e) => {
+  if (e.target === $('#day-detail-overlay')) $('#day-detail-overlay').hidden = true;
 });
 
 $('#btn-toggle-settings').addEventListener('click', () => {

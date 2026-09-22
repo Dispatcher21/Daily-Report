@@ -161,6 +161,14 @@ function renderSheetGrid(sheetData, coordValues, coordImages) {
         if (blob) {
           const img = document.createElement('img');
           img.src = rrObjectUrl(blob);
+          // Lets anyone viewing a rendered report open the full-size photo
+          // (or signature) in its own tab -- report-editor.html's live
+          // preview overlays its own click-target layer on top of every
+          // cell for "jump to that field" (see addPreviewClickTarget), so
+          // this never actually fires there; report-viewer.html has no such
+          // overlay, so there it's the only click handler and works as-is.
+          img.style.cursor = 'pointer';
+          img.addEventListener('click', () => window.open(img.src, '_blank'));
           cellEl.appendChild(img);
           cellEl.style.padding = '0';
         }

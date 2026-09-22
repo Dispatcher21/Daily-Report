@@ -50,6 +50,9 @@ const REPORT_DIFF_SKIP = new Set([
   'id', 'projectId', 'updatedAt', 'createdBy', 'lastEditedBy',
   'photos', 'photosFetched', 'repSignatureImage', 'signatureFetched', 'peSignatureImage',
   'thumbnail', 'thumbnailBack', 'thumbnailAt',
+  // Trash bookkeeping -- deleted/restored are their own dedicated audit
+  // actions (see logAuditableChange), never a generic field-level diff.
+  'deleted', 'deletedAt', 'deletedBy',
   // inspectors gets its own identity-matched diff instead (see
   // diffInspectors, called separately in diffReport the same way payItems
   // is) -- per-inspector added/removed/Hours changes, not raw per-segment
@@ -61,8 +64,6 @@ const REPORT_DIFF_SKIP = new Set([
 ]);
 const PROJECT_DIFF_SKIP = new Set([
   'id', 'updatedAt', 'createdAt', 'backgroundImage', 'backgroundImageFetched',
-  // requiredFields/hiddenFields/fieldOrder get their own diff (diffFieldConfig,
-  // called separately in diffProject) instead of the generic label-map path.
   'requiredFields', 'hiddenFields', 'fieldOrder',
 ]);
 
@@ -90,13 +91,6 @@ const PROJECT_FIELD_LABELS = {
   'meta.trafficControlSelect': 'Default Traffic Control Status', 'meta.workBegin': 'Default Work Begin',
   'meta.workEnd': 'Default Work End', 'meta.weatherDesc': 'Default Weather', 'meta.tempHigh': 'Default Temp High',
   'meta.tempLow': 'Default Temp Low',
-};
-const COMPANY_PERMISSION_LABELS = {
-  membersCanCreateProjects: 'Members Can Create Projects',
-  membersCanViewManagerDashboard: 'Members Can View Manager Dashboard',
-  membersCanEditProjects: 'Members Can Edit Projects',
-  membersCanEditAnyReport: 'Members Can Edit Any Report',
-  membersCanEditOwnReports: 'Members Can Edit Own Reports',
 };
 
 function fmtLeaf(v) {
@@ -328,46 +322,39 @@ function diffReport(before, after) {
   return out;
 }
 
-// Admin-configurable show/hide/require/order for report fields
-// (required-fields.html) -- used to be skipped entirely (see
-// PROJECT_DIFF_SKIP's history), which meant an admin could silently make a
-// field invisible or optional with nothing recording it. Order changes are
-// collapsed into one line each way rather than one per field: a drag
-// reorder touches every field's position, and reporting each individually
-// would bury the one field that was actually re-required or hidden in noise.
-function fieldLabel(key) {
-  const def = (typeof ORDERABLE_FIELD_DEFS !== 'undefined' ? ORDERABLE_FIELD_DEFS : []).find((d) => d.key === key);
-  return def ? def.label : key;
+// requiredFields/hiddenFields (see required-fields.html) are unordered
+// sets of report field keys, not lists where position means anything -- a
+// plain positional diff would misreport toggling one field partway through
+// the array as every field after it having changed. Diffed as what
+// actually got added to/removed from the set instead, one line per field,
+// labeled the same way required-fields.html itself shows them.
+function fieldKeyLabel(key) {
+  const def = (typeof REQUIRED_FIELD_DEFS !== 'undefined' && REQUIRED_FIELD_DEFS.find((d) => d.key === key))
+    || (typeof ORDERABLE_FIELD_DEFS !== 'undefined' && ORDERABLE_FIELD_DEFS.find((d) => d.key === key));
+  return (def && def.label) || key;
 }
-function diffFieldConfig(before, after, out) {
-  const bReq = new Set(before.requiredFields || []);
-  const aReq = new Set(after.requiredFields || []);
-  const bHid = new Set(before.hiddenFields || []);
-  const aHid = new Set(after.hiddenFields || []);
-  for (const key of new Set([...bReq, ...aReq, ...bHid, ...aHid])) {
-    const label = fieldLabel(key);
-    if (bReq.has(key) !== aReq.has(key)) {
-      out.push({ label: `${label} Required`, from: bReq.has(key) ? 'Yes' : 'No', to: aReq.has(key) ? 'Yes' : 'No' });
-    }
-    if (bHid.has(key) !== aHid.has(key)) {
-      out.push({ label: `${label} Hidden`, from: bHid.has(key) ? 'Yes' : 'No', to: aHid.has(key) ? 'Yes' : 'No' });
-    }
-  }
-  const bOrder = (before.fieldOrder || []).join(',');
-  const aOrder = (after.fieldOrder || []).join(',');
-  if (bOrder !== aOrder && bOrder && aOrder) {
-    out.push({
-      label: 'Field Order',
-      from: (before.fieldOrder || []).map(fieldLabel).join(', '),
-      to: (after.fieldOrder || []).map(fieldLabel).join(', '),
-    });
-  }
+function diffFieldKeySet(before, after, setLabel, out) {
+  const b = new Set(before || []);
+  const a = new Set(after || []);
+  for (const key of b) if (!a.has(key)) out.push({ label: `${setLabel}: ${fieldKeyLabel(key)}`, from: 'On', to: 'Off' });
+  for (const key of a) if (!b.has(key)) out.push({ label: `${setLabel}: ${fieldKeyLabel(key)}`, from: 'Off', to: 'On' });
+}
+// fieldOrder, unlike the two sets above, is ordering the admin actually
+// chose -- worth showing as one before/after line rather than trying to
+// describe individual moves, which for a full reshuffle would just be
+// noise.
+function diffFieldOrder(before, after, out) {
+  const b = (before || []).map(fieldKeyLabel).join(', ');
+  const a = (after || []).map(fieldKeyLabel).join(', ');
+  if (b !== a) out.push({ label: 'Report Field Order', from: b || '(default order)', to: a || '(default order)' });
 }
 
 function diffProject(before, after) {
   const out = [];
   diffPayItemCatalog(before.payItemCatalog, after.payItemCatalog, out);
-  diffFieldConfig(before, after, out);
+  diffFieldKeySet(before.requiredFields, after.requiredFields, 'Required Field', out);
+  diffFieldKeySet(before.hiddenFields, after.hiddenFields, 'Hidden Field', out);
+  diffFieldOrder(before.fieldOrder, after.fieldOrder, out);
   diffBillingEstimates(before.billingEstimates, after.billingEstimates, out);
   const beforeRest = { ...before };
   const afterRest = { ...after };
@@ -479,6 +466,30 @@ async function logThemeChanges(beforeThemes, afterThemes, imageChanges) {
   }
 }
 
+// Company-level admin actions (permission toggles, renaming the company,
+// password changes, custom setup create/delete) don't go through
+// storage.js's saveReport/saveProject at all, so they never reach
+// logAuditableChange above -- firebase-sync.js calls this directly instead,
+// guarded by the same optional-global check every other hook into this
+// file uses, right after each action actually succeeds. entityId is a
+// fixed constant for the one shared "Company Settings" entity; a custom
+// setup is its own entity (its own id/label) since there can be several.
+async function logCompanyAuditEvent(entityId, entityLabel, action, changes) {
+  await writeAuditEntry('company', entityId, entityLabel, action || 'edited', changes || []);
+}
+
+// A device's own display name changing is worth flagging since it changes
+// who future entries (and reports) get attributed to -- but only an actual
+// rename, not the very first time a blank device gets a name, which is
+// just normal setup, not a change to anything. entityLabel is a fixed
+// "This Device" rather than the new name -- the change line right below
+// already shows old → new, so using the new name here too would just read
+// as "X renamed X".
+async function logDeviceRenamed(before, after) {
+  if (!before || !after || before === after) return;
+  await writeAuditEntry('device', 'device', 'This Device', 'renamed', [{ label: 'Name', from: before, to: after }]);
+}
+
 async function reportEntityLabel(report) {
   const project = report.projectId ? await getProject(report.projectId) : null;
   const projectLabel = (project && project.name) || report.projectName || report.projectNo || 'Unassigned Project';
@@ -528,40 +539,6 @@ async function writeAuditEntry(entityType, entityId, entityLabel, action, change
   }
 }
 
-// ---------- Company/account-level events ----------
-//
-// Everything below is called directly from firebase-sync.js's account-
-// management functions (permissions, passwords, custom setups, join/
-// create/leave) -- there's no before/after record the way a report or
-// project has one, so each call site hands over just what it knows changed.
-// A password's own value is never logged, only that it changed -- same
-// principle as never storing a password itself, just its hash.
-async function logCompanyEvent(action, companyName, changes) {
-  await writeAuditEntry('company', 'company', companyName || 'Company', action, changes || []);
-}
-
-// A device's own display name changing is worth flagging since it changes
-// who future entries (and reports) get attributed to -- but only an actual
-// rename, not the very first time a blank device gets a name, which is
-// just normal setup, not a change to anything.
-async function logDeviceRenamed(before, after) {
-  if (!before || !after || before === after) return;
-  // entityLabel is a fixed "This Device" rather than the new name -- the
-  // change line right below already shows old → new, so using the new
-  // name here too would just read as "X renamed X".
-  await writeAuditEntry('device', 'device', 'This Device', 'renamed', [{ label: 'Name', from: before, to: after }]);
-}
-
-function diffPermissions(before, after, out) {
-  const keys = new Set([...Object.keys(before || {}), ...Object.keys(after || {})]);
-  for (const key of keys) {
-    const label = COMPANY_PERMISSION_LABELS[key] || key;
-    const a = !!(before && before[key]);
-    const b = !!(after && after[key]);
-    if (a !== b) out.push({ label, from: a ? 'On' : 'Off', to: b ? 'On' : 'Off' });
-  }
-}
-
 async function finalizePendingEdit(entityId) {
   const p = pendingEdits.get(entityId);
   if (!p) return;
@@ -572,17 +549,23 @@ async function finalizePendingEdit(entityId) {
   await writeAuditEntry(p.entityType, p.after.id, withBatchSuffix(label, p.batchLabel), 'edited', changes);
 }
 
-// Called from storage.js after every report/project save or delete --
-// see the file header for why edits are coalesced but create/delete aren't.
-async function logAuditableChange(entityType, before, after, deleted) {
+// Called from storage.js after every report/project save, delete, restore,
+// or permanent delete -- see the file header for why edits are coalesced
+// but these one-shot actions aren't. `action` is either falsy (a normal
+// save -- create if `before` is null, otherwise a coalesced edit), `true`
+// or 'deleted' (soft- or hard-deleted -- projects still pass the plain
+// boolean, reports pass the string explicitly), 'restored' (undone out of
+// Trash), or 'purged' (permanently removed after already being trashed).
+async function logAuditableChange(entityType, before, after, action) {
   const record = after || before;
   if (!record) return;
   const batchLabel = auditBatchLabel; // see its own comment for why this is captured now, not read later
 
-  if (deleted) {
-    await finalizePendingEdit(record.id); // flush whatever led up to the delete first
+  if (action === true || action === 'deleted' || action === 'restored' || action === 'purged') {
+    await finalizePendingEdit(record.id); // flush whatever led up to this first
     const label = entityType === 'report' ? await reportEntityLabel(record) : projectEntityLabel(record);
-    await writeAuditEntry(entityType, record.id, withBatchSuffix(label, batchLabel), 'deleted', []);
+    const verb = action === true ? 'deleted' : action;
+    await writeAuditEntry(entityType, record.id, withBatchSuffix(label, batchLabel), verb, []);
     return;
   }
   if (!before) {
@@ -626,16 +609,8 @@ function fmtEntryTimestamp(ms) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 const AUDIT_ACTION_VERBS = {
-  created: 'Created', edited: 'Edited', deleted: 'Deleted',
-  joined: 'Joined', left: 'Left', renamed: 'Renamed',
-  'admin-unlocked': 'Unlocked Admin on',
-  'permissions-changed': 'Changed Permissions for',
-  'dashboard-changed': 'Changed Manager Dashboard Settings for',
-  'name-changed': 'Renamed',
-  'password-changed': 'Changed the Company Password for',
-  'admin-password-changed': 'Changed the Admin Password for',
-  'role-created': 'Created Custom Setup on',
-  'role-deleted': 'Deleted Custom Setup from',
+  created: 'Created', edited: 'Edited', deleted: 'Deleted', restored: 'Restored', purged: 'Permanently Deleted',
+  renamed: 'Renamed', joined: 'Joined', left: 'Left', 'admin-unlocked': 'Unlocked Admin on',
 };
 
 function formatAuditLogAsText(entries) {

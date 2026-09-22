@@ -94,7 +94,11 @@ async function renderPreview(layout, report, logoBlob) {
   $('#project-name-sub').textContent = project.name;
   $('#bb-back-link').href = `reports.html?project=${project.id}`;
 
-  let report = await getReport(reportId);
+  // includeDeleted: this is the "View" link from the Trash section on
+  // reports.html, which only ever links here with a trashed report's own
+  // id -- read-only either way, same as any other report, so there's
+  // nothing extra to gate on beyond the usual scope check right below.
+  let report = await getReport(reportId, { includeDeleted: true });
   if (!report || report.projectId !== project.id || !reportInScope(report, room)) {
     location.href = `reports.html?project=${project.id}`;
     return;
@@ -109,10 +113,17 @@ async function renderPreview(layout, report, logoBlob) {
   }
 
   document.title = `Report #${report.reportNo} — ${project.name}`;
-  $('#viewer-title').textContent = `Report #${report.reportNo} - ${report.date || ''}`;
-  // Always shown, same as reports.html's own Edit link -- report-editor.html
-  // itself is what gates on permission (lockReportEditor), not this page.
-  $('#bb-edit-link').href = `report-editor.html?project=${project.id}&report=${report.id}`;
+  $('#viewer-title').textContent = `Report #${report.reportNo} - ${report.date || ''}${report.deleted ? ' (Deleted)' : ''}`;
+  if (report.deleted) {
+    // report-editor.html only ever looks up active reports, so linking
+    // there for a trashed one would just silently bounce back to the
+    // reports list -- restore it from Trash first, then edit.
+    $('#bb-edit-link').hidden = true;
+  } else {
+    // Always shown, same as reports.html's own Edit link -- report-editor.html
+    // itself is what gates on permission (lockReportEditor), not this page.
+    $('#bb-edit-link').href = `report-editor.html?project=${project.id}&report=${report.id}`;
+  }
 
   try {
     const [layout, logoBlob] = await Promise.all([loadPrintLayout(), getReportLogo()]);

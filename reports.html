@@ -19,6 +19,16 @@
      normally (not display:none) so html2canvas measures real layout, just
      never visible. Same technique as download.html's #render-sandbox. */
   #render-sandbox { position: fixed; top: 0; left: -20000px; z-index: -1; }
+
+  .trash-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+    padding: 0.6rem 0; border-bottom: 1px solid var(--border); flex-wrap: wrap;
+  }
+  .trash-row:last-child { border-bottom: none; }
+  .trash-row-info { min-width: 0; flex: 1 1 auto; }
+  .trash-row-title { font-weight: 600; overflow-wrap: break-word; }
+  .trash-row-sub { font-size: 0.8rem; color: var(--text-dim); }
+  .trash-row-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
 </style>
 </head>
 <body>
@@ -120,6 +130,18 @@
     </div>
   </div>
 
+  <div class="step step-collapsible collapsed" id="trash-step" hidden>
+    <div class="step-header">
+      <span class="step-num">TRASH</span>
+      <h2>Deleted Reports</h2>
+      <button type="button" class="info-tip" data-tip="Deleting a report moves it here instead of removing it outright -- restore it any time. There's no way to erase a report's data from this app for good. Admin only." aria-label="What this does">i</button>
+    </div>
+    <div class="step-body">
+      <div class="empty-state" id="trash-empty" hidden style="padding:1.25rem;">Nothing in Trash.</div>
+      <div id="trash-list"></div>
+    </div>
+  </div>
+
   <a class="fab" id="fab-new-report" href="#">+ New Report</a>
 </main>
 
@@ -129,6 +151,7 @@
 <script src="defaults.js"></script>
 <script src="storage.js"></script>
 <script src="audit-log.js"></script>
+<script src="dashboard-widgets.js"></script>
 <script src="local-sync.js"></script>
 <script type="module" src="firebase-init.js"></script>
 <script src="firebase-sync.js"></script>
@@ -325,6 +348,8 @@ async function init() {
 
   allReports = await getReportsForProject(project.id);
   await refreshFolderSyncBadgeState();
+  await renderDeletedReports();
+  setupCollapsibleSteps();
   render();
 }
 
@@ -562,7 +587,7 @@ function renderRow(r) {
       ${reportThumbsHtml(r)}
       <div class="report-row-main" data-open="${r.id}">
         <span class="report-row-date">${r.date || '(no date)'}${badges ? ' ' + badges : ''}</span>
-        <span class="report-row-sub">${escapeHtml(r.activity || 'No activity noted')}</span>
+        <span class="report-row-sub">${escapeHtml(reportActivityText(r) || 'No activity noted')}</span>
       </div>
       <div class="report-row-actions">
         ${reportCloudBadgeHtml(r)}
@@ -577,12 +602,12 @@ function renderCard(r) {
   // Activity leads the card -- it's the thing actually worth scanning for.
   // A true No Work Day/Weather Day report has nothing there by design (the
   // buttons that make one only touch Notes, never Activity), so its badge
-  // takes over that slot instead of every one just saying "No activity noted".
+  // takes over that slot instead of falling through to reportActivityText.
   const activityHtml = !r.activity && isNoWorkDayReport(r)
     ? '<span class="report-row-nwd">NO WORK DAY</span>'
     : !r.activity && isWeatherDayReport(r)
     ? '<span class="report-row-wd">WEATHER DAY</span>'
-    : escapeHtml(r.activity || 'No activity noted');
+    : escapeHtml(reportActivityText(r) || 'No activity noted');
   const authorBadges = reportAuthorBadgesHtml(r);
   const authorBadge = authorBadges ? ' ' + authorBadges : '';
   return `
@@ -704,8 +729,9 @@ $('#btn-delete-selected').addEventListener('click', async () => {
   const selected = allReports.filter((r) => selectedIds.has(r.id) && canEditReportWithContext(r, reportPermCtx));
   if (selected.length === 0) return;
 
-  // Name what's going, so a mis-tap on the wrong row is obvious before it's
-  // too late -- there's no undo and these are a day's work each.
+  // Name what's going, so a mis-tap on the wrong row is obvious -- moved to
+  // Trash either way (see deleteReport), restorable from Deleted Reports
+  // below, but still worth a real look before acting on a whole batch.
   const list = selected
     .slice(0, 5)
     .map((r) => `  #${r.reportNo}  ${r.date || '(no date)'}`)
@@ -713,8 +739,8 @@ $('#btn-delete-selected').addEventListener('click', async () => {
   const more = selected.length > 5 ? `\n  ...and ${selected.length - 5} more` : '';
   const msg =
     selected.length === 1
-      ? `Delete this report?\n\n${list}\n\nThis cannot be undone.`
-      : `Delete ${selected.length} reports?\n\n${list}${more}\n\nThis cannot be undone.`;
+      ? `Delete this report?\n\n${list}\n\nIt can be restored later from Deleted Reports.`
+      : `Delete ${selected.length} reports?\n\n${list}${more}\n\nThey can be restored later from Deleted Reports.`;
   if (!confirm(msg)) return;
 
   const btn = $('#btn-delete-selected');
@@ -722,28 +748,18 @@ $('#btn-delete-selected').addEventListener('click', async () => {
   btn.textContent = 'Deleting...';
   btn.disabled = true;
   try {
-    // Each iteration always deletes locally regardless of the others --
-    // deleteReport only throws over its own sync failure, after its own
-    // local delete already happened -- so one report's bad connection
-    // moment doesn't leave the rest of the batch untouched.
-    const syncErrors = [];
+    // deleteReport is fire-and-forget on its own sync push (same as
+    // saveReport) and never throws, so there's nothing to catch per report
+    // here -- a sync failure retries on its own via the usual pendingPush/
+    // Sync Now path, same as any other save's would.
     if (typeof beginAuditBatch === 'function') beginAuditBatch('via Mass Delete');
-    for (const r of selected) {
-      try {
-        await deleteReport(r.id);
-      } catch (err) {
-        console.error(err);
-        syncErrors.push(err);
-      }
-    }
+    for (const r of selected) await deleteReport(r.id);
     if (typeof endAuditBatch === 'function') endAuditBatch();
     selectedIds.clear();
     allReports = await getReportsForProject(project.id);
     await refreshFolderSyncBadgeState();
+    await renderDeletedReports();
     render();
-    if (syncErrors.length) {
-      alert(userError(`Deleted locally, but ${syncErrors.length} report(s) didn't sync -- they may come back on next sync: ${syncErrors[0].message}`, 'DELETE_REPORTS'));
-    }
   } catch (err) {
     console.error(err);
     alert(userError("Couldn't delete: " + err.message, 'DELETE_REPORTS'));
@@ -853,6 +869,51 @@ window.addEventListener('company-data-pulled', async () => {
 // folder write itself is actually done.
 window.addEventListener('folder-sync-completed', async () => {
   await refreshFolderSyncBadgeState();
+  render();
+});
+
+// ---------- Deleted Reports (Trash) ----------
+//
+// Admin-only, same reasoning as every other admin-gated view in this app --
+// deleting is available to whoever can already delete a report, but seeing
+// (and un-deleting) everyone else's trashed reports is an admin-level
+// concern. A local-only device (no company at all) counts as its own
+// admin -- reportPermCtx.isAdmin is already true in that case.
+async function renderDeletedReports() {
+  if (!reportPermCtx.isAdmin) return;
+  $('#trash-step').hidden = false;
+  const deleted = await getDeletedReportsForProject(project.id);
+  $('#trash-empty').hidden = deleted.length > 0;
+  $('#trash-list').innerHTML = deleted
+    .slice()
+    .sort((a, b) => (b.deletedAt || 0) - (a.deletedAt || 0))
+    .map((r) => {
+      const when = r.deletedAt ? new Date(r.deletedAt).toLocaleString() : '';
+      return `
+        <div class="trash-row" data-id="${r.id}">
+          <div class="trash-row-info">
+            <div class="trash-row-title">#${r.reportNo} &middot; ${escapeHtml(r.date || '(no date)')} &middot; ${escapeHtml(reportActivityText(r) || 'No activity noted')}</div>
+            <div class="trash-row-sub">Deleted by ${escapeHtml(r.deletedBy || 'Unknown')}${when ? ' &middot; ' + escapeHtml(when) : ''}</div>
+          </div>
+          <div class="trash-row-actions">
+            <a class="btn-sm" href="report-viewer.html?project=${project.id}&report=${r.id}">View</a>
+            <button type="button" class="btn-sm" data-restore="${r.id}">Restore</button>
+          </div>
+        </div>`;
+    })
+    .join('');
+}
+
+// Restore only -- there is deliberately no "Delete Forever" here. See
+// storage.js's PERMANENT DELETION comment for why that capability was
+// removed from the app entirely rather than merely left off this page.
+$('#trash-list').addEventListener('click', async (e) => {
+  const restoreBtn = e.target.closest('[data-restore]');
+  if (!restoreBtn) return;
+  restoreBtn.disabled = true;
+  await restoreReport(restoreBtn.dataset.restore);
+  allReports = await getReportsForProject(project.id);
+  await renderDeletedReports();
   render();
 });
 </script>

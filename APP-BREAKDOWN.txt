@@ -110,7 +110,9 @@ Six object stores:
     pull flags, see Company sync below), thumbnail/thumbnailBack/
     thumbnailAt (local-only preview images for reports.html, never
     synced), createdAt/updatedAt, createdBy/lastEditedBy (the logged-in
-    device name), pendingPush (local-only "still needs to sync" flag).
+    device name), pendingPush (local-only "still needs to sync" flag),
+    deleted/deletedAt/deletedBy (Trash -- see storage.js's deleteReport;
+    a deleted report is never actually removed by anything in this app).
 
   projects (keyPath: id)
     One record per project. Built by makeProjectFromParsedFile() in
@@ -185,8 +187,12 @@ index.html
   with the membersCanViewManagerDashboard permission or an admin) the
   Manager Dashboard -- a company-wide rollup across every visible project
   (renderManagerDashboard and its render* helpers: checklist, stats, trend
-  chart via dashboard-widgets.js's renderTrendSvg, hours bars, per-project
-  status, activity feed). Also handles receiving a shared setup via the
+  chart via dashboard-widgets.js's renderTrendSvg, a portfolio-wide report
+  calendar (renderMdCalendar -- one color pill per project on each day it
+  filed a report, reusing project.html's own weather-calendar CSS/click
+  model; openMdDayDetailModal stacks one detail block + link set per
+  project when a day has more than one), hours bars, per-project status,
+  activity feed). Also handles receiving a shared setup via the
   #setup= URL fragment (handleIncomingSetup -> setup-share.js's
   decodeSetupPayload/applySetupPayload) and applying the selected company
   theme's background/decal (applyCompanyThemeVisuals).
@@ -194,7 +200,11 @@ index.html
 project.html
   A single project's home page: its dashboard (renderDashboard -- rings/
   stat cards from dashboard-widgets.js, pay item completion list, trend
-  chart, weather calendar/log), report list entry points, and project-level
+  chart, weather calendar/log -- shows every dated report, each day's
+  calendar cell using labeled category pills (Activity/Weather/Photos/
+  Traffic) instead of bare icons, same visual language index.html's
+  Manager Dashboard calendar uses for its own per-project pills), report
+  list entry points, and project-level
   actions (Sync to Folder via local-sync.js's syncProjectToFolder, importing
   .report bundles or Daily Work Report Excel files via
   importReportFilesIntoProject -> report-bundle.js's tryParseReportBundle /
@@ -202,6 +212,19 @@ project.html
   (xlsx, fflate, html2canvas, jspdf, report-bundle, pdf-export, local-sync,
   render-report, quantity-calc, dashboard-widgets) because it's the hub for
   export/import/sync/PDF actions.
+  The weather calendar (renderWeatherCalendar/weatherCalDayHtml) shows a
+  camera icon on any day with photos (reportHasPhotos -- true for a real
+  local Blob, or a slot confirmed to exist remotely but not yet fetched,
+  since photosFetched[i]===false still means "there's a photo there"); the
+  loggable-days filter in renderWeatherSchedule also now treats
+  reportHasPhotos as its own reason for a day to appear, so a day with only
+  photos and nothing else logged still shows up. Every day cell with a real
+  report (.wcal-clickable, one delegated click/keydown listener on the
+  calendar container) opens a day-detail modal (openDayDetailModal, markup
+  in #day-detail-overlay) summarizing what was logged that day plus links
+  to View Report (report-viewer.html), View Photos (report-photos.html,
+  hidden if the report has none), Quantities for This Day
+  (quick-quantity.html?date=), and Edit Report (report-editor.html).
 
 project-setup.html
   Editing a project's own configuration: PROJECT INFO/PAY ITEMS/
@@ -218,7 +241,12 @@ reports.html
   per-report cloud/folder sync-status badges (reportCloudBadgeHtml,
   refreshFolderSyncBadgeState), filtering/sorting, bulk selection + mass
   edit, and the entry points into report-editor.html, report-viewer.html,
-  and download.html.
+  and download.html. Also renderDeletedReports -- an admin-only Trash
+  section (a local-only device counts as its own admin) listing every
+  report storage.js's deleteReport has soft-deleted for this project, each
+  with a View link and a Restore button. No permanent-delete action exists
+  anywhere on this page or in the app -- see APP-BREAKDOWN's DEAD CODE
+  item 7 and storage.js's PERMANENT DELETION comment.
 
 report-editor.html
   The actual report-filling form -- by far the largest inline script in the
@@ -238,7 +266,22 @@ report-viewer.html
   Read-only printed-page preview of one report (renderPreview, reusing
   render-report.js's renderReportPages + a scale-to-fit wrapper). No edit
   UI at all -- "Edit" is a real navigation to report-editor.html. Linked
-  only from reports.html.
+  only from reports.html and project.html's day-detail modal (see below).
+  Every photo/signature image rendered here opens full-size in a new tab
+  on click (render-report.js's own click handler, added directly to each
+  <img> it creates) -- report-editor.html's live preview reuses the same
+  render path but overlays its own "jump to field" click targets on top,
+  so there this handler exists but never actually fires.
+
+report-photos.html
+  Read-only grid of just one report's photos (no upload/remove/annotate --
+  that's report-editor.html's job), each clickable to open full-size in a
+  new tab, same as report-editor's own photo grid and report-viewer's
+  printed preview. Modeled directly on report-viewer.html's structure
+  (same scope checks, same lazy fetchReportMedia-then-putReportRaw if
+  photos haven't been downloaded yet). Linked only from project.html's
+  day-detail modal ("View Photos", shown only when the report actually
+  has a photo -- see reportHasPhotos below).
 
 download.html
   Builds and downloads a PDF of one or more selected reports via
@@ -289,7 +332,9 @@ quick-quantity.html
   A fast, report-independent way to log pay-item quantities without opening
   the full report editor -- prefills from the most recent report on that
   date if one exists (prefillFromReport), otherwise creates/attaches a
-  minimal one. Meant for logging quantities on the fly.
+  minimal one. Meant for logging quantities on the fly. Defaults its date
+  field to today, but an optional ?date= query param (used by project.html's
+  day-detail modal to deep-link a specific day) overrides that.
 
 required-fields.html
   Admin picker for which report fields are required/hidden and in what
@@ -309,8 +354,14 @@ storage.js
   getFavoriteProjectIds/toggleFavoriteProject, getProjectLayout/
   saveProjectLayout (index.html's hub layout), applyHeaderLogo (renders the
   header logo on every page, called from common.js's DOMContentLoaded
-  hook), saveReport/deleteReport/getReport/getAllReports/
-  getReportsForProject/getNextReportNo, saveReportDraft/getReportDraft/
+  hook), saveReport/deleteReport (soft-delete into Trash, see the
+  PERMANENT DELETION comment in this file for why there is deliberately no
+  hard-delete)/restoreReport/getReport/getAllReports/
+  getReportsForProject/getDeletedReportsForProject (each of the *Reports
+  getters takes an optional { includeDeleted } -- false by default, so
+  every existing display/business-logic caller automatically excludes
+  Trash with no change on their part; sync-bookkeeping callers in
+  firebase-sync.js opt in explicitly)/getNextReportNo, saveReportDraft/getReportDraft/
   deleteReportDraft/getAllReportDrafts, saveProject/deleteProject/
   getProject/getAllProjects, adoptOrphanReportsIfAny (one-time migration
   for pre-projects-feature data), blobToBase64/base64ToBlob/
@@ -355,8 +406,13 @@ defaults.js
   getMissingRequiredFields (the required/hidden/ordered-field system
   required-fields.html and report-editor.html both read), plus small pure
   helpers used across pages: isNoWorkDayReport/isWeatherDayReport,
-  payItemNeedsMultiple, computeOverrun/overrunLabel, parseStation,
-  computeAreaQty.
+  reportActivityText (Activity if filled in, else the first non-blank line
+  of Work Summary, else '' -- the "what happened" preview text in
+  reports.html's list/card rows, project.html's Weather & Schedule list/
+  calendar/day-detail modal, and index.html's Manager Dashboard day-detail
+  modal all share this one lookup rather than each reading report.activity
+  directly), payItemNeedsMultiple, computeOverrun/overrunLabel,
+  parseStation, computeAreaQty.
 
 theme.js
   Light/dark theming + accent color derivation (deriveAccentVars,
@@ -801,3 +857,25 @@ DEAD CODE / THINGS WORTH A LOOK
    zero inbound links/redirects from the rest of the app (checked by
    grepping each filename across every other .html/.js file). No stale/
    unlinked page was found.
+
+7. [DELIBERATE, 2026-09-21] This app has no way to permanently delete a
+   report's data, on purpose. It briefly did, during the same work that
+   added report deletion's Trash/restore behavior: a
+   permanentlyDeleteReport() function (real Firestore doc + Storage photo
+   removal, tombstoned so every device's next pull wiped its own copy too)
+   was reachable from a "Delete Forever" button in the Trash view. It was
+   used, by mistake, to permanently destroy two real reports during
+   testing -- a test session stayed joined to a real company instead of
+   the isolated test environment, and Firestore writes aren't blocked by
+   the browser CORS restrictions that make "pointed at localhost" feel
+   safe for Storage fetches. The data was only recoverable at all because
+   of an unrelated, luckier design choice (local-folder sync never deletes
+   files, only renames them). permanentlyDeleteReport, deleteReportFromCompany,
+   and the "Delete Forever" button were removed entirely afterward, not
+   merely disconnected -- see storage.js's PERMANENT DELETION comment
+   (right after restoreReport) for the full account and for what a future
+   "erase this for real" feature would need to not repeat this. The
+   companies/{code}/deletedReports Firestore collection still exists and
+   is still read by firebase-sync.js's pull logic, purely to honor any
+   tombstone written before this change on a device that hasn't processed
+   it yet -- nothing writes a new one anymore.

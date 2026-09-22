@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://www.gstatic.com https://*.googleapis.com https://api.open-meteo.com https://geocoding-api.open-meteo.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';">
+<title>Report Photos</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1c3d5a">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Daily Reports">
+<link rel="stylesheet" href="style.css">
+<script src="theme.js"></script>
+</head>
+<body>
+
+<header class="app-header">
+  <div>
+    <h1 id="rp-title">Photos</h1>
+    <div class="app-sub" id="project-name-sub"></div>
+  </div>
+  <span></span>
+</header>
+<div class="back-bar">
+  <a href="#" id="bb-back-link">&larr; Reports</a>
+  <span class="bb-sep">//</span>
+  <span class="bb-cur">Photos</span>
+  <a href="#" id="bb-report-link" class="btn-sm" style="margin-left:auto;">View Report</a>
+</div>
+
+<main>
+  <!-- Read-only: just the photos for one report, at full size on click --
+       no upload/remove/annotate, those stay report-editor.html's job. -->
+  <div class="photo-grid" id="rp-photo-grid"></div>
+  <div class="empty-state" id="rp-empty" hidden style="padding:1.25rem;">No photos on this report.</div>
+</main>
+
+<script src="common.js"></script>
+<script src="defaults.js"></script>
+<script src="storage.js"></script>
+<script type="module" src="firebase-init.js"></script>
+<script src="firebase-sync.js"></script>
+<script>
+const projectId = queryParam('project');
+const reportId = queryParam('report');
+
+(async () => {
+  const room = await getCompanyRoom();
+  const project = projectId ? await getProject(projectId) : null;
+  if (!project || !projectInScope(project, room)) {
+    location.href = 'index.html';
+    return;
+  }
+  $('#project-name-sub').textContent = project.name;
+  $('#bb-back-link').href = `reports.html?project=${project.id}`;
+
+  let report = await getReport(reportId);
+  if (!report || report.projectId !== project.id || !reportInScope(report, room)) {
+    location.href = `reports.html?project=${project.id}`;
+    return;
+  }
+
+  if ((report.photosFetched || []).some((f) => !f)) {
+    $('#rp-title').textContent = 'Loading photos…';
+    report = await fetchReportMedia(report);
+    // putReportRaw, not saveReport -- viewing shouldn't bump updatedAt or
+    // restamp lastEditedBy as if the report had been edited.
+    await putReportRaw(report);
+  }
+
+  document.title = `Photos — Report #${report.reportNo} — ${project.name}`;
+  $('#rp-title').textContent = `Report #${report.reportNo} - ${report.date || ''} Photos`;
+  $('#bb-report-link').href = `report-viewer.html?project=${project.id}&report=${report.id}`;
+
+  const photos = (report.photos || []).map((blob, i) => ({ blob, i })).filter((p) => p.blob);
+  $('#rp-empty').hidden = photos.length > 0;
+  $('#rp-photo-grid').innerHTML = photos
+    .map(({ blob, i }) => {
+      const url = URL.createObjectURL(blob);
+      return `
+        <div class="photo-slot">
+          <img src="${url}" alt="Photo ${i + 1}">
+          <span class="photo-num">Photo ${i + 1}</span>
+        </div>`;
+    })
+    .join('');
+  $$('.photo-slot img', $('#rp-photo-grid')).forEach((img) => {
+    img.addEventListener('click', () => window.open(img.src, '_blank'));
+  });
+})();
+</script>
+</body>
+</html>

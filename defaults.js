@@ -38,13 +38,18 @@ function todayIso() {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-// A "No Work Day" is just an otherwise-blank report whose Notes says so --
-// there's no separate flag, so a report only counts as one if this is the
-// entirety of its Notes (trimmed, case-insensitive), not merely mentioned
-// inside other notes text.
-const NO_WORK_DAY_NOTE = 'NO WORK DAY';
+// A "No Work Day" is just a report whose Notes says so -- there's no
+// separate flag. Originally this required Notes to be exactly "NO WORK DAY"
+// (what the report-editor.html button writes), but that missed a report
+// where someone typed their own version ("No work - rain", "No work today,
+// site closed") instead of using the button. Matches "no work" anywhere in
+// Notes now, case-insensitively, word-bounded so it doesn't fire on "no
+// workers showed up" or "no workforce available" -- \b after "work"
+// requires the next character to not be a letter/digit/underscore.
+const NO_WORK_DAY_NOTE = 'NO WORK DAY'; // still what the button itself writes
+const NO_WORK_DAY_RE = /\bno\s+work\b/i;
 function isNoWorkDayReport(report) {
-  return !!report && (report.notes || '').trim().toUpperCase() === NO_WORK_DAY_NOTE;
+  return !!report && NO_WORK_DAY_RE.test(report.notes || '');
 }
 
 // Same idea as a No Work Day, but for a day lost specifically to weather
@@ -53,6 +58,25 @@ function isNoWorkDayReport(report) {
 const WEATHER_DAY_NOTE = 'WEATHER DAY';
 function isWeatherDayReport(report) {
   return !!report && (report.notes || '').trim().toUpperCase() === WEATHER_DAY_NOTE;
+}
+
+// The short "what happened" text used wherever a report needs to be
+// scanned at a glance (reports.html's list/card rows, project.html's
+// Weather & Schedule list/calendar) -- Activity if it's filled in,
+// otherwise the first non-blank line of Work Summary (the big box, more
+// likely to actually have something written on a day someone forgot to
+// fill in the short Activity line). Returns '' rather than a placeholder
+// when neither has anything, so a caller can tell "nothing to show" apart
+// from real text and pick its own placeholder wording (or none at all).
+// Doesn't special-case No Work Day/Weather Day -- those reports have
+// neither field filled in by design, so a caller that wants a distinct
+// "NO WORK DAY" badge instead still needs to check
+// isNoWorkDayReport/isWeatherDayReport itself first.
+function reportActivityText(report) {
+  const activity = (report && report.activity || '').trim();
+  if (activity) return activity;
+  const workSummary = (report && report.workSummary || '');
+  return workSummary.split('\n').map((l) => l.trim()).find(Boolean) || '';
 }
 
 // True for a catalog item that tracks Start/Stop Station, Side, and/or has a

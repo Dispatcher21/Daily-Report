@@ -116,13 +116,14 @@ async function init() {
   render();
 }
 
-// A theme (see firebase-sync.js's saveCompanyThemes) is company-wide, not
-// tied to any one project -- unlike a report or project entry, there's no
-// sensible project to file it under, so it's left out of the Project
-// dropdown entirely and never hidden by picking one (see the entityType
-// check in filteredEntries below). Same reasoning for 'company' (account-
-// level events -- passwords, permissions, custom setups, join/leave) and
-// 'device' (a device's own name changing) -- neither belongs to a project.
+// A theme (see firebase-sync.js's saveCompanyThemes), a company-level
+// entity (permissions, name, passwords, custom setups, joining/leaving --
+// see logCompanyAuditEvent), or a device entity (its own display name
+// changing) is company-wide or device-wide, not tied to any one project --
+// unlike a report or project entry, there's no sensible project to file it
+// under, so all three are left out of the Project dropdown entirely and
+// never hidden by picking one (see the entityType check in filteredEntries
+// below).
 const NON_PROJECT_ENTITY_TYPES = new Set(['theme', 'company', 'device']);
 function projectLabelFor(entry) {
   if (entry.entityType === 'project') return entry.entityLabel;
