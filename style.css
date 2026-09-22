@@ -2647,11 +2647,17 @@ input[type="date"] { min-width: 0; }
 .trend-axis-label { font-size: 9px; fill: var(--text-dim); }
 .trend-area { fill: var(--brand-dim); stroke: none; }
 .trend-line { fill: none; stroke: var(--brand); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
-.trend-dot { fill: var(--brand); stroke: var(--surface); stroke-width: 2; }
+/* No stroke halo -- a white ring around each marker looked fine in
+   isolation, but report dates often cluster close together (several
+   reports in the same week, near "today" on the right edge especially),
+   and two markers' white rings overlapping cut visible crescent-shaped
+   chunks out of each other instead of just... not overlapping. A plain
+   filled shape has nothing to overlap with. */
+.trend-dot { fill: var(--brand); stroke: none; }
 /* Same gold already used for a favorited project (.hc-favorite.is-fav) --
    a Pay App marker borrows that "starred/significant" meaning rather than
    inventing a new color for it. */
-.trend-star { fill: #f5c518; stroke: var(--surface); stroke-width: 1.5; stroke-linejoin: round; }
+.trend-star { fill: #f5c518; stroke: none; }
 
 /* Shown under the chart only when it's drawing 2+ colored series (see
    renderTrendSvg) -- a single line already reads fine with no key. */
