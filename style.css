@@ -164,6 +164,63 @@ body {
 .app-header .app-sub { font-size: 0.72rem; color: var(--on-brand-dim); margin-top: 2px; }
 .app-header a.home-link { color: var(--on-brand); text-decoration: none; display: flex; flex-direction: column; }
 
+/* ---------- Hamburger menu (see initHamburgerMenu in common.js) ---------- */
+
+.hamburger-btn {
+  display: flex; flex-direction: column; justify-content: center; align-items: center;
+  gap: 4px;
+  width: 40px; height: 40px;
+  padding: 0; border: none; border-radius: 8px;
+  background: transparent; cursor: pointer;
+  flex-shrink: 0;
+}
+.hamburger-btn:hover { background: rgba(255, 255, 255, 0.12); }
+.hamburger-btn span {
+  display: block; width: 20px; height: 2px;
+  background: var(--on-brand); border-radius: 2px;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+.hamburger-btn[aria-expanded="true"] span:nth-child(1) { transform: translateY(6px) rotate(45deg); }
+.hamburger-btn[aria-expanded="true"] span:nth-child(2) { opacity: 0; }
+.hamburger-btn[aria-expanded="true"] span:nth-child(3) { transform: translateY(-6px) rotate(-45deg); }
+
+.hb-backdrop {
+  position: fixed; inset: 0; z-index: 800;
+  background: rgba(0, 0, 0, 0.35);
+}
+.hb-backdrop[hidden] { display: none; }
+
+.hb-panel {
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: 801;
+  width: min(300px, 84vw);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.25);
+  display: flex; flex-direction: column;
+  padding: 1rem 0;
+  overflow-y: auto;
+  transform: translateX(100%);
+  transition: transform 0.22s ease;
+}
+.hb-panel.open { transform: translateX(0); }
+.hb-panel[hidden] { display: none; }
+
+.hb-section-label {
+  font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--text-dim);
+  padding: 0.6rem 1rem 0.3rem;
+}
+.hb-panel a, .hb-panel button.hb-item {
+  display: block; width: 100%; text-align: left;
+  color: var(--text); text-decoration: none;
+  font: inherit; background: none; border: none; cursor: pointer;
+  padding: 0.6rem 1rem;
+}
+.hb-panel a:hover, .hb-panel button.hb-item:hover { background: var(--surface-2); }
+.hb-panel a.hb-current { color: var(--link); font-weight: 700; }
+.hb-panel hr { border: none; border-top: 1px solid var(--border); margin: 0.5rem 0; }
+.hb-empty { padding: 0.4rem 1rem 0.6rem; color: var(--text-dim); font-size: 0.85rem; }
+
 /* ---------- Shared progress banner (see common.js) ---------- */
 /* Fixed to the bottom of the viewport, not the top -- it's injected right
    after the sticky header in the DOM, but a plain sibling of a sticky

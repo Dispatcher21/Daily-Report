@@ -29,6 +29,85 @@ function goBackOrFallback(fallbackHref) {
   location.href = fallbackHref;
 }
 
+// ---------- Hamburger menu ----------
+//
+// Global nav: Home, every project the current company room can see, Settings,
+// and Log out. Self-initializes off a #hamburger-btn in the page's <header>
+// (see style.css's .hamburger-btn/.hb-panel) -- adding that button markup is
+// the only per-page change needed; the panel itself is built here so it
+// isn't duplicated in every page's HTML. login.html has no #hamburger-btn
+// (nothing to navigate to before a name is on file), so this is a no-op there.
+document.addEventListener('DOMContentLoaded', initHamburgerMenu);
+
+async function initHamburgerMenu() {
+  const btn = document.getElementById('hamburger-btn');
+  if (!btn) return;
+
+  const backdrop = document.createElement('div');
+  backdrop.className = 'hb-backdrop';
+  backdrop.hidden = true;
+
+  const panel = document.createElement('nav');
+  panel.className = 'hb-panel';
+  panel.id = 'hamburger-menu';
+  panel.hidden = true;
+  panel.setAttribute('aria-label', 'Main menu');
+  panel.innerHTML = `
+    <a href="index.html">Home</a>
+    <hr>
+    <div class="hb-section-label">Projects</div>
+    <div id="hb-projects"><div class="hb-empty">Loading&hellip;</div></div>
+    <hr>
+    <a href="settings.html">Settings</a>
+    <button type="button" class="hb-item" id="hb-logout">Log out</button>
+  `;
+  document.body.append(backdrop, panel);
+  btn.setAttribute('aria-controls', 'hamburger-menu');
+
+  function openMenu() {
+    backdrop.hidden = false;
+    panel.hidden = false;
+    requestAnimationFrame(() => panel.classList.add('open'));
+    btn.setAttribute('aria-expanded', 'true');
+  }
+  function closeMenu() {
+    panel.classList.remove('open');
+    btn.setAttribute('aria-expanded', 'false');
+    // Matches the .hb-panel transform transition in style.css -- hidden
+    // only once the slide-out animation has actually finished.
+    setTimeout(() => { backdrop.hidden = true; panel.hidden = true; }, 220);
+  }
+  btn.addEventListener('click', () => {
+    if (btn.getAttribute('aria-expanded') === 'true') closeMenu(); else openMenu();
+  });
+  backdrop.addEventListener('click', closeMenu);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && btn.getAttribute('aria-expanded') === 'true') closeMenu();
+  });
+
+  // Same company-room scoping every project page already uses to decide
+  // what it's allowed to open -- an admin/member sees every project on the
+  // device, a project-scoped guest login sees only theirs.
+  const projectsEl = panel.querySelector('#hb-projects');
+  try {
+    const room = typeof getCompanyRoom === 'function' ? await getCompanyRoom() : null;
+    const all = typeof getAllProjects === 'function' ? await getAllProjects() : [];
+    const visible = all.filter((p) => (typeof projectInScope === 'function' ? projectInScope(p, room) : true));
+    projectsEl.innerHTML = visible.length
+      ? visible.map((p) => `<a href="project.html?id=${encodeURIComponent(p.id)}">${escapeHtml(p.name || 'Untitled Project')}</a>`).join('')
+      : '<div class="hb-empty">No projects yet.</div>';
+  } catch (err) {
+    console.error('hamburger menu: loading projects', err);
+    projectsEl.innerHTML = '<div class="hb-empty">Couldn\'t load projects.</div>';
+  }
+
+  panel.querySelector('#hb-logout').addEventListener('click', async () => {
+    if (!confirm("Log out on this device? You'll need to enter your name again next time.")) return;
+    if (typeof saveUserName === 'function') await saveUserName('');
+    location.href = 'login.html';
+  });
+}
+
 // Nothing in this app uses a real <form>, so Enter does nothing by default
 // in any single-button input group (name/password entry, join/create company,
 // search-and-go, etc.) -- this wires Enter (pressed in a text/password/number/
