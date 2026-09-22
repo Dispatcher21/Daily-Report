@@ -2493,6 +2493,13 @@ input[type="date"] { min-width: 0; }
 .md-check-row { display: flex; align-items: center; gap: 0.6rem; padding: 0.4rem 0; font-size: 0.88rem; cursor: pointer; }
 .md-check-row input { width: 1.1rem; height: 1.1rem; flex-shrink: 0; }
 
+/* A small filter row inside an already-compact card -- .segmented/.view-tabs'
+   default sizing (44px tap targets, ~0.92rem type) is built for a page's
+   own primary tab bar (Quantity Sheet's Totals/By Day/...), way oversized
+   for four range options tucked inside one Manager Dashboard card. */
+#md-hours-range { margin-bottom: 0.6rem; }
+#md-hours-range button { min-height: 0; padding: 0.3rem 0.4rem; font-size: 0.72rem; }
+
 .md-bars { display: flex; flex-direction: column; gap: 0.55rem; max-height: 420px; overflow-y: auto; padding-right: 0.25rem; }
 .md-bar-row { display: flex; align-items: center; gap: 0.6rem; }
 .md-bar-name { flex: 0 0 108px; font-size: 0.8rem; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
