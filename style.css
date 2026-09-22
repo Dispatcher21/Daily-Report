@@ -162,12 +162,15 @@ body {
 }
 /* Was justify-content: space-between, back when the header only ever had
    two children (title, then one empty <span> theme.js's mountHeaderControls
-   fills in). The hamburger button sits between them as a third child (see
-   below), and space-between spreads 3 items apart instead of clustering the
-   last two on the right -- margin-right: auto on the title reproduces the
-   same "title left, everything else right" layout for any number of
-   right-side children. */
-.app-header > :first-child { margin-right: auto; }
+   fills in). The hamburger button now sits before the title as a left-side
+   third child, and space-between spreads all of them apart instead of
+   clustering hamburger+title on the left and the search/sync/gear cluster
+   on the right -- margin-left: auto on that trailing slot (the plain
+   <span> before it's replaced, or the .header-controls div it becomes)
+   reproduces "everything before it left, it and anything after it right"
+   regardless of how many items sit on either side. */
+.app-header > span:empty,
+.app-header > .header-controls { margin-left: auto; }
 .app-header h1 { font-size: 1.1rem; margin: 0; font-weight: 700; letter-spacing: 0.01em; }
 .app-header .app-sub { font-size: 0.72rem; color: var(--on-brand-dim); margin-top: 2px; }
 .app-header a.home-link { color: var(--on-brand); text-decoration: none; display: flex; flex-direction: column; }
@@ -203,36 +206,76 @@ body {
 }
 .hb-backdrop[hidden] { display: none; }
 
+/* Opens from the left, under the hamburger button that now lives on the
+   left of the header, rather than the right-side drawer that made sense
+   when the button itself was on the right. */
 .hb-panel {
-  position: fixed; top: 0; right: 0; bottom: 0; z-index: 801;
-  width: min(300px, 84vw);
+  position: fixed; top: 0; left: 0; bottom: 0; z-index: 801;
+  width: min(320px, 86vw);
   background: var(--surface);
   color: var(--text);
-  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.25);
+  box-shadow: 4px 0 16px rgba(0, 0, 0, 0.25);
   display: flex; flex-direction: column;
-  padding: 1rem 0;
   overflow-y: auto;
-  transform: translateX(100%);
+  transform: translateX(-100%);
   transition: transform 0.22s ease;
 }
 .hb-panel.open { transform: translateX(0); }
 .hb-panel[hidden] { display: none; }
 
+.hb-panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem 1.1rem 0.85rem;
+  border-bottom: 1px solid var(--border);
+}
+.hb-panel-user {
+  font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+.hb-panel-user strong { display: block; font-size: 0.95rem; font-weight: 700; text-transform: none; letter-spacing: normal; color: var(--text); margin-top: 2px; }
+.hb-panel-close {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px;
+  border-radius: 50%; border: none;
+  background: var(--surface-2); color: var(--text-dim);
+  font-size: 1.1rem; line-height: 1; cursor: pointer;
+}
+.hb-panel-close:hover { background: var(--surface-3); color: var(--text); }
+
+.hb-panel-body { padding: 0.5rem 0.6rem 1rem; }
+
 .hb-section-label {
   font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
   color: var(--text-dim);
-  padding: 0.6rem 1rem 0.3rem;
+  padding: 0.9rem 0.6rem 0.35rem;
 }
-.hb-panel a, .hb-panel button.hb-item {
-  display: block; width: 100%; text-align: left;
+/* Icon + label rows, inset from the panel edge with rounded hover so each
+   item reads as its own tappable chip instead of a bare line of text. */
+.hb-row {
+  display: flex; align-items: center; gap: 0.75rem;
+  width: 100%; text-align: left;
   color: var(--text); text-decoration: none;
-  font: inherit; background: none; border: none; cursor: pointer;
-  padding: 0.6rem 1rem;
+  font: inherit; font-weight: 600; font-size: 0.95rem;
+  background: none; border: none; border-radius: var(--radius-sm); cursor: pointer;
+  padding: 0.65rem 0.7rem;
 }
-.hb-panel a:hover, .hb-panel button.hb-item:hover { background: var(--surface-2); }
-.hb-panel a.hb-current { color: var(--link); font-weight: 700; }
-.hb-panel hr { border: none; border-top: 1px solid var(--border); margin: 0.5rem 0; }
-.hb-empty { padding: 0.4rem 1rem 0.6rem; color: var(--text-dim); font-size: 0.85rem; }
+.hb-row:hover { background: var(--surface-2); }
+.hb-row-icon {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  background: var(--surface-3);
+  font-size: 1.05rem;
+}
+.hb-row-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hb-row.hb-current { color: var(--link); }
+.hb-row.hb-danger { color: var(--danger); }
+
+.hb-panel hr { border: none; border-top: 1px solid var(--border); margin: 0.5rem 0.6rem; }
+.hb-empty { padding: 0.3rem 0.7rem 0.7rem; color: var(--text-dim); font-size: 0.85rem; }
 
 /* ---------- Shared progress banner (see common.js) ---------- */
 /* Fixed to the bottom of the viewport, not the top -- it's injected right

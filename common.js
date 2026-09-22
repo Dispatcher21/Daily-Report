@@ -53,15 +53,27 @@ async function initHamburgerMenu() {
   panel.hidden = true;
   panel.setAttribute('aria-label', 'Main menu');
   panel.innerHTML = `
-    <a href="index.html">Home</a>
-    <hr>
-    <div class="hb-section-label">Projects</div>
-    <div id="hb-projects"><div class="hb-empty">Loading&hellip;</div></div>
-    <hr>
-    <a href="settings.html">Settings</a>
-    <button type="button" class="hb-item" id="hb-logout">Log out</button>
+    <div class="hb-panel-header">
+      <div class="hb-panel-user">Signed in as<strong id="hb-user-name">&hellip;</strong></div>
+      <button type="button" class="hb-panel-close" id="hb-panel-close" aria-label="Close menu">&#10005;</button>
+    </div>
+    <div class="hb-panel-body">
+      <a class="hb-row" href="index.html"><span class="hb-row-icon" aria-hidden="true">&#127968;</span><span class="hb-row-label">Home</span></a>
+      <hr>
+      <div class="hb-section-label">Projects</div>
+      <div id="hb-projects"><div class="hb-empty">Loading&hellip;</div></div>
+      <hr>
+      <a class="hb-row" href="settings.html"><span class="hb-row-icon" aria-hidden="true">&#9881;&#65039;</span><span class="hb-row-label">Settings</span></a>
+      <button type="button" class="hb-row hb-danger" id="hb-logout"><span class="hb-row-icon" aria-hidden="true">&#128682;</span><span class="hb-row-label">Log out</span></button>
+    </div>
   `;
   document.body.append(backdrop, panel);
+  panel.querySelector('#hb-panel-close').addEventListener('click', closeMenu);
+  if (typeof getUserName === 'function') {
+    getUserName().then((name) => {
+      panel.querySelector('#hb-user-name').textContent = name || 'this device';
+    }).catch(() => {});
+  }
   btn.setAttribute('aria-controls', 'hamburger-menu');
 
   // .app-header is its own stacking context (position: sticky + z-index),
@@ -109,8 +121,15 @@ async function initHamburgerMenu() {
     const room = typeof getCompanyRoom === 'function' ? await getCompanyRoom() : null;
     const all = typeof getAllProjects === 'function' ? await getAllProjects() : [];
     const visible = all.filter((p) => (typeof projectInScope === 'function' ? projectInScope(p, room) : true));
+    // Every project-scoped page uses either ?id= (project.html itself) or
+    // ?project= (every other project page) -- highlighting whichever
+    // project that resolves to as "current" needs both.
+    const currentId = (typeof queryParam === 'function' && (queryParam('id') || queryParam('project'))) || null;
     projectsEl.innerHTML = visible.length
-      ? visible.map((p) => `<a href="project.html?id=${encodeURIComponent(p.id)}">${escapeHtml(p.name || 'Untitled Project')}</a>`).join('')
+      ? visible.map((p) => {
+          const current = p.id === currentId;
+          return `<a class="hb-row${current ? ' hb-current' : ''}" href="project.html?id=${encodeURIComponent(p.id)}"><span class="hb-row-icon" aria-hidden="true">&#128193;</span><span class="hb-row-label">${escapeHtml(p.name || 'Untitled Project')}</span></a>`;
+        }).join('')
       : '<div class="hb-empty">No projects yet.</div>';
   } catch (err) {
     console.error('hamburger menu: loading projects', err);
