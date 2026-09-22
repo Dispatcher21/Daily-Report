@@ -2499,9 +2499,12 @@ input[type="date"] { min-width: 0; }
 .md-bar-track { flex: 1; background: var(--surface-3); border-radius: 6px; height: 1.5rem; overflow: hidden; min-width: 0; }
 .md-bar-fill {
   height: 100%; background: linear-gradient(90deg, var(--brand), var(--brand-light)); border-radius: 6px;
-  display: flex; align-items: center; justify-content: flex-end; padding-right: 0.5rem;
-  font-size: 0.72rem; font-weight: 700; color: var(--on-brand); white-space: nowrap;
 }
+/* Outside the track, not inside the fill -- a short bar's fill can be just
+   a few percent wide, nowhere near enough room for its own label, and text
+   spilling out of a narrow fill onto the plain track behind it (in a color
+   meant to sit on the fill) read as nearly invisible. */
+.md-bar-value { flex: 0 0 auto; font-size: 0.8rem; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
 
 .md-projlist { display: flex; flex-direction: column; gap: 0.55rem; max-height: 420px; overflow-y: auto; padding-right: 0.25rem; }
 .md-proj-row { display: flex; align-items: center; gap: 0.6rem; font-size: 0.85rem; }

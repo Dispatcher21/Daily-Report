@@ -1414,10 +1414,19 @@ function renderMdHoursBars(reports) {
   const sorted = [...totals.entries()].sort((a, b) => b[1] - a[1]);
   $('#md-hours-empty').hidden = sorted.length > 0;
   const max = sorted.length ? sorted[0][1] : 1;
+  // The value used to sit inside .md-bar-fill itself (right-aligned via
+  // padding), which worked while every bar had room for its own label but
+  // fell apart for a small value against a large max -- the fill shrinks
+  // down to a few percent width, nowhere near enough to hold "3.0h", so the
+  // (light, meant-to-sit-on-the-dark-fill) text spilled out onto the light
+  // track behind it and read as nearly invisible. A plain label to the
+  // right of the whole track, like .md-proj-pct next door, always has room
+  // for it regardless of how short the bar is.
   $('#md-hours-bars').innerHTML = sorted.map(([name, hours]) => `
     <div class="md-bar-row">
       <span class="md-bar-name">${escapeHtml(name)}</span>
-      <div class="md-bar-track"><div class="md-bar-fill" style="width:0%" data-target-width="${Math.max(4, (hours / max) * 100)}" data-count-target="${hours}" data-count-fmt="hours">0.0h</div></div>
+      <div class="md-bar-track"><div class="md-bar-fill" style="width:0%" data-target-width="${Math.max(4, (hours / max) * 100)}"></div></div>
+      <span class="md-bar-value" data-count-target="${hours}" data-count-fmt="hours">0.0h</span>
     </div>`).join('');
 }
 

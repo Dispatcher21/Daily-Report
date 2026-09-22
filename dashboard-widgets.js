@@ -541,7 +541,17 @@ function setupCollapsibleSteps(container) {
     header.insertAdjacentHTML('beforeend', '<span class="step-chevron">&#9656;</span>');
     header.addEventListener('click', (e) => {
       if (e.target.closest('.info-tip')) return;
-      header.closest('.step-collapsible').classList.toggle('collapsed');
+      const step = header.closest('.step-collapsible');
+      const collapsed = step.classList.toggle('collapsed');
+      // A .step-pair with two collapsible cards side by side looks broken
+      // with one open and one folded -- mismatched heights in the same
+      // row. Keep them in sync: expanding/collapsing either one does both.
+      const pair = step.closest('.step-pair');
+      if (pair) {
+        $$('.step-collapsible', pair).forEach((sibling) => {
+          if (sibling !== step) sibling.classList.toggle('collapsed', collapsed);
+        });
+      }
     });
   });
 }
