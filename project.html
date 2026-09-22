@@ -677,7 +677,9 @@ function renderTrendChart(points) {
   step.hidden = points.length === 0;
   $('#dash-trend-hint').hidden = points.length !== 1;
   // No color/label -- draws as the original single filled-area line.
-  renderTrendSvg($('#dash-trend-chart'), [{ points }]);
+  // h: half the default 220 -- this card is a quick-glance summary here,
+  // not the point of the page.
+  renderTrendSvg($('#dash-trend-chart'), [{ points }], { h: 110 });
 }
 
 // ---------- Weather & schedule log ----------
