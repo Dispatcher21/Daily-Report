@@ -18,6 +18,14 @@ const PROJECT_ICON_OPTIONS = [
   '\u{1F6B0}', '\u{1F3E2}', '\u{2699}\u{FE0F}', '\u{1F4D0}', '\u{1F9F1}',
   '\u{1F687}', '\u{26A1}', '\u{1F527}', '\u{1F3ED}', '\u{1F4E1}',
   '\u{1FAA7}', '\u{1F30A}', '\u{1F69B}', '\u{1F9BA}', '\u{1F4CD}', '\u{1F4C1}',
+  // Added later, same theme (civil/construction/inspection) -- tractor,
+  // railway, fuel pump, parking, bus stop, tools, houses, school, hospital,
+  // fountain, deciduous/evergreen tree, station, ladder, toolbox, mountain,
+  // fire engine, stadium, map, electric plug.
+  '\u{1F69C}', '\u{1F6E4}\u{FE0F}', '\u{26FD}', '\u{1F17F}\u{FE0F}', '\u{1F68F}',
+  '\u{1F6E0}\u{FE0F}', '\u{1F3D8}\u{FE0F}', '\u{1F3EB}', '\u{1F3E5}', '\u{26F2}',
+  '\u{1F333}', '\u{1F332}', '\u{1F689}', '\u{1FA9C}', '\u{1F9F0}',
+  '\u{1F3D4}\u{FE0F}', '\u{1F692}', '\u{1F3DF}\u{FE0F}', '\u{1F5FA}\u{FE0F}', '\u{1F50C}',
 ];
 
 // The back-bar link on every page used to be a plain link to one hardcoded

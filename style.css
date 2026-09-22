@@ -1447,7 +1447,10 @@ main { max-width: min(1400px, 94vw); margin: 0 auto; padding: 1rem; }
 }
 .cm-project-icon:hover { border-color: var(--brand-light); }
 
-.icon-picker-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem; }
+/* Scrolls internally rather than growing the modal past the viewport --
+   PROJECT_ICON_OPTIONS (common.js) has grown past what fits in one screen's
+   worth of rows on a phone. */
+.icon-picker-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem; max-height: 50vh; overflow-y: auto; padding-right: 0.25rem; }
 .icon-picker-opt {
   aspect-ratio: 1; border-radius: var(--radius-sm); border: 1.5px solid var(--border);
   background: var(--surface-2); font-size: 1.3rem; cursor: pointer;
