@@ -98,6 +98,10 @@ async function init() {
   document.title = `Pay Apps — ${project.name}`;
   $('#project-name-sub').textContent = project.name;
   $('#bb-back-link').href = `quantity-sheet.html?project=${project.id}`;
+  $('#bb-back-link').addEventListener('click', (e) => {
+    e.preventDefault();
+    goBackOrFallback(e.currentTarget.href);
+  });
 
   allReports = (await getReportsForProject(project.id)).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 

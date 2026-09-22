@@ -93,6 +93,10 @@ async function renderPreview(layout, report, logoBlob) {
   }
   $('#project-name-sub').textContent = project.name;
   $('#bb-back-link').href = `reports.html?project=${project.id}`;
+  $('#bb-back-link').addEventListener('click', (e) => {
+    e.preventDefault();
+    goBackOrFallback(e.currentTarget.href);
+  });
 
   // includeDeleted: this is the "View" link from the Trash section on
   // reports.html, which only ever links here with a trashed report's own

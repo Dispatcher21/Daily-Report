@@ -1025,8 +1025,9 @@ function renderEditor() {
     e.returnValue = '';
   });
   $('#bb-back-link').addEventListener('click', (e) => {
-    if (!reportDirty) return;
-    if (!confirm('You have unsaved changes. Leave without saving?')) e.preventDefault();
+    e.preventDefault();
+    if (reportDirty && !confirm('You have unsaved changes. Leave without saving?')) return;
+    goBackOrFallback(e.currentTarget.href);
   });
 
   $('#btn-no-work-day').onclick = () => markBlankDay(NO_WORK_DAY_NOTE);

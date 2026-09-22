@@ -327,6 +327,10 @@ async function init() {
   document.title = `View Reports — ${project.name}`;
   $('#project-name-sub').textContent = project.name;
   $('#bb-back-link').href = `project.html?id=${project.id}`;
+  $('#bb-back-link').addEventListener('click', (e) => {
+    e.preventDefault();
+    goBackOrFallback(e.currentTarget.href);
+  });
   $('#fab-new-report').href = `report-editor.html?project=${project.id}&report=new`;
 
   // Company members may be restricted from editing/deleting reports once

@@ -56,6 +56,10 @@ const reportId = queryParam('report');
   }
   $('#project-name-sub').textContent = project.name;
   $('#bb-back-link').href = `reports.html?project=${project.id}`;
+  $('#bb-back-link').addEventListener('click', (e) => {
+    e.preventDefault();
+    goBackOrFallback(e.currentTarget.href);
+  });
 
   let report = await getReport(reportId);
   if (!report || report.projectId !== project.id || !reportInScope(report, room)) {

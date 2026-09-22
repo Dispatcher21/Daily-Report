@@ -121,6 +121,10 @@ function isMobileDevice() {
   document.title = `Download — ${project.name}`;
   $('#project-name-sub').textContent = project.name;
   $('#bb-back-link').href = `reports.html?project=${project.id}`;
+  $('#bb-back-link').addEventListener('click', (e) => {
+    e.preventDefault();
+    goBackOrFallback(e.currentTarget.href);
+  });
 
   const reports = [];
   for (const id of reportIds) {

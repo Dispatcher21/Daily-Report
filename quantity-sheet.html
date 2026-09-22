@@ -197,6 +197,10 @@ async function init() {
   document.title = `Quantity Sheet — ${project.name}`;
   $('#project-name-sub').textContent = project.name;
   $('#bb-back-link').href = `project.html?id=${project.id}`;
+  $('#bb-back-link').addEventListener('click', (e) => {
+    e.preventDefault();
+    goBackOrFallback(e.currentTarget.href);
+  });
   $('#link-pay-apps').href = `pay-apps.html?project=${project.id}`;
 
   allReports = (await getReportsForProject(project.id)).sort((a, b) => (a.date || '').localeCompare(b.date || ''));

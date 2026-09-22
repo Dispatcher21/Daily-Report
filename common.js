@@ -9,6 +9,26 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+// The back-bar link on every page used to be a plain link to one hardcoded
+// parent page, which ignores how the user actually got there (e.g. a report
+// opened from Audit Log lands back on the project's report list instead of
+// Audit Log). This makes it a genuine "back" button: if the page was reached
+// by navigating from elsewhere in the app, retrace that step with the real
+// browser history; only pages opened with no in-app history to unwind
+// (a fresh tab, a bookmark, a reload) fall back to the hardcoded parent URL
+// each page already computes for its back-bar link.
+function goBackOrFallback(fallbackHref) {
+  if (document.referrer) {
+    try {
+      if (new URL(document.referrer).origin === location.origin) {
+        history.back();
+        return;
+      }
+    } catch (err) { /* malformed referrer -- fall through to the fallback */ }
+  }
+  location.href = fallbackHref;
+}
+
 // Nothing in this app uses a real <form>, so Enter does nothing by default
 // in any single-button input group (name/password entry, join/create company,
 // search-and-go, etc.) -- this wires Enter (pressed in a text/password/number/

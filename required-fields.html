@@ -443,7 +443,9 @@ async function init() {
   });
 
   $('#bb-back-link').addEventListener('click', (e) => {
-    if (!confirmDiscardIfDirty()) e.preventDefault();
+    e.preventDefault();
+    if (!confirmDiscardIfDirty()) return;
+    goBackOrFallback(e.currentTarget.href);
   });
 
   window.addEventListener('beforeunload', (e) => {

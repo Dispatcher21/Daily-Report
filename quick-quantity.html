@@ -154,6 +154,10 @@ async function init() {
   document.title = `Quick Quantity Add — ${project.name}`;
   $('#project-name-sub').textContent = project.name;
   $('#bb-back-link').href = `project.html?id=${project.id}`;
+  $('#bb-back-link').addEventListener('click', (e) => {
+    e.preventDefault();
+    goBackOrFallback(e.currentTarget.href);
+  });
 
   allReports = await getReportsForProject(project.id);
   // ?date= lets another page (the project dashboard's calendar) deep-link

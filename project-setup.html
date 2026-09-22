@@ -173,7 +173,9 @@ async function saveNow() {
 $('#fsb-save').addEventListener('click', saveNow);
 
 $('#bb-back-link').addEventListener('click', (e) => {
-  if (dirty && !confirm('You have unsaved changes. Discard them?')) e.preventDefault();
+  e.preventDefault();
+  if (dirty && !confirm('You have unsaved changes. Discard them?')) return;
+  goBackOrFallback(e.currentTarget.href);
 });
 window.addEventListener('beforeunload', (e) => {
   if (dirty) { e.preventDefault(); e.returnValue = ''; }
