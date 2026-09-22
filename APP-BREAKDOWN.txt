@@ -110,7 +110,9 @@ Six object stores:
     pull flags, see Company sync below), thumbnail/thumbnailBack/
     thumbnailAt (local-only preview images for reports.html, never
     synced), createdAt/updatedAt, createdBy/lastEditedBy (the logged-in
-    device name), pendingPush (local-only "still needs to sync" flag).
+    device name), pendingPush (local-only "still needs to sync" flag),
+    deleted/deletedAt/deletedBy (Trash -- see storage.js's deleteReport;
+    a deleted report is never actually removed by anything in this app).
 
   projects (keyPath: id)
     One record per project. Built by makeProjectFromParsedFile() in
@@ -239,7 +241,12 @@ reports.html
   per-report cloud/folder sync-status badges (reportCloudBadgeHtml,
   refreshFolderSyncBadgeState), filtering/sorting, bulk selection + mass
   edit, and the entry points into report-editor.html, report-viewer.html,
-  and download.html.
+  and download.html. Also renderDeletedReports -- an admin-only Trash
+  section (a local-only device counts as its own admin) listing every
+  report storage.js's deleteReport has soft-deleted for this project, each
+  with a View link and a Restore button. No permanent-delete action exists
+  anywhere on this page or in the app -- see APP-BREAKDOWN's DEAD CODE
+  item 7 and storage.js's PERMANENT DELETION comment.
 
 report-editor.html
   The actual report-filling form -- by far the largest inline script in the
@@ -347,8 +354,14 @@ storage.js
   getFavoriteProjectIds/toggleFavoriteProject, getProjectLayout/
   saveProjectLayout (index.html's hub layout), applyHeaderLogo (renders the
   header logo on every page, called from common.js's DOMContentLoaded
-  hook), saveReport/deleteReport/getReport/getAllReports/
-  getReportsForProject/getNextReportNo, saveReportDraft/getReportDraft/
+  hook), saveReport/deleteReport (soft-delete into Trash, see the
+  PERMANENT DELETION comment in this file for why there is deliberately no
+  hard-delete)/restoreReport/getReport/getAllReports/
+  getReportsForProject/getDeletedReportsForProject (each of the *Reports
+  getters takes an optional { includeDeleted } -- false by default, so
+  every existing display/business-logic caller automatically excludes
+  Trash with no change on their part; sync-bookkeeping callers in
+  firebase-sync.js opt in explicitly)/getNextReportNo, saveReportDraft/getReportDraft/
   deleteReportDraft/getAllReportDrafts, saveProject/deleteProject/
   getProject/getAllProjects, adoptOrphanReportsIfAny (one-time migration
   for pre-projects-feature data), blobToBase64/base64ToBlob/
@@ -844,3 +857,25 @@ DEAD CODE / THINGS WORTH A LOOK
    zero inbound links/redirects from the rest of the app (checked by
    grepping each filename across every other .html/.js file). No stale/
    unlinked page was found.
+
+7. [DELIBERATE, 2026-09-21] This app has no way to permanently delete a
+   report's data, on purpose. It briefly did, during the same work that
+   added report deletion's Trash/restore behavior: a
+   permanentlyDeleteReport() function (real Firestore doc + Storage photo
+   removal, tombstoned so every device's next pull wiped its own copy too)
+   was reachable from a "Delete Forever" button in the Trash view. It was
+   used, by mistake, to permanently destroy two real reports during
+   testing -- a test session stayed joined to a real company instead of
+   the isolated test environment, and Firestore writes aren't blocked by
+   the browser CORS restrictions that make "pointed at localhost" feel
+   safe for Storage fetches. The data was only recoverable at all because
+   of an unrelated, luckier design choice (local-folder sync never deletes
+   files, only renames them). permanentlyDeleteReport, deleteReportFromCompany,
+   and the "Delete Forever" button were removed entirely afterward, not
+   merely disconnected -- see storage.js's PERMANENT DELETION comment
+   (right after restoreReport) for the full account and for what a future
+   "erase this for real" feature would need to not repeat this. The
+   companies/{code}/deletedReports Firestore collection still exists and
+   is still read by firebase-sync.js's pull logic, purely to honor any
+   tombstone written before this change on a device that hasn't processed
+   it yet -- nothing writes a new one anymore.

@@ -1009,15 +1009,11 @@ function renderEditor() {
   };
 
   $('#btn-delete-report').onclick = async () => {
-    if (!confirm('Delete this report? This cannot be undone.')) return;
-    try {
-      await deleteReport(report.id);
-    } catch (err) {
-      // Still deleted locally regardless -- deleteReport only throws over
-      // its own sync failure, after the local delete already happened.
-      console.error(err);
-      alert(userError(err.message, 'DELETE_REPORT'));
-    }
+    // deleteReport moves it to Trash now, not gone for good -- an admin can
+    // restore it from Deleted Reports on the reports list, or remove it
+    // permanently from there.
+    if (!confirm('Delete this report? It can be restored later from Deleted Reports.')) return;
+    await deleteReport(report.id);
     location.href = `reports.html?project=${project.id}`;
   };
 

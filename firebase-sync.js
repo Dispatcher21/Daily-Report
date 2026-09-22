@@ -394,7 +394,11 @@ async function leaveCompanyRoom() {
   let reportIdsToDelete = [];
   let projectIdsToDelete = [];
   if (userName) {
-    const reports = await getAllReports();
+    // includeDeleted: a device leaving the company should shed everything
+    // it didn't touch, trashed or not -- a report sitting in this device's
+    // own Trash that it never created/edited is exactly the kind of "only
+    // ever synced passively" data this whole cleanup exists to prune.
+    const reports = await getAllReports({ includeDeleted: true });
     const touchedProjectIds = new Set();
     for (const r of reports) {
       if (r.createdBy === userName || r.lastEditedBy === userName) touchedProjectIds.add(r.projectId);
@@ -417,8 +421,15 @@ async function leaveCompanyRoom() {
   await deleteSetting(COMPANY_ROLE_ID_SETTING);
   await deleteSetting(LOGO_SYNCED_AT_SETTING);
 
+  // deleteReport (soft-delete into local Trash), not a hard removal -- see
+  // storage.js's PERMANENT DELETION comment for why nothing in this app
+  // destroys a report's data outright anymore. This device no longer has a
+  // company connection to push to (cleared above), so this just leaves
+  // these reports sitting locally trashed rather than actually pruning
+  // this device's storage -- a real tradeoff (leaving no longer frees much
+  // space), accepted deliberately in favor of never losing data.
   for (const id of reportIdsToDelete) await deleteReport(id);
-  for (const id of projectIdsToDelete) await deleteProject(id); // also removes any of its remaining reports (none this device touched, by construction)
+  for (const id of projectIdsToDelete) await deleteProject(id); // also soft-deletes any of its remaining reports (none this device touched, by construction)
 }
 
 // Pulls in anything new from the room, then pushes every local project and
@@ -513,6 +524,13 @@ function canEditReportWithContext(report, ctx) {
   return false;
 }
 
+const COMPANY_PERMISSION_LABELS = {
+  membersCanEditOwnReports: 'Members can edit/delete their own reports',
+  membersCanEditAnyReport: 'Members can edit/delete any report',
+  membersCanEditProjects: 'Members can edit projects',
+  membersCanCreateProjects: 'Members can create projects',
+  membersCanViewManagerDashboard: 'Members can view the Manager Dashboard',
+};
 async function updateCompanyPermissions(patch) {
   const room = await getCompanyRoom();
   if (!room) throw new Error('Not connected to a company.');
@@ -522,9 +540,16 @@ async function updateCompanyPermissions(patch) {
   const { doc, updateDoc } = await import(FIRESTORE_SDK);
   await ensureSignedIn();
 
-  const merged = { ...(await getCompanyPermissions()), ...patch };
+  const before = await getCompanyPermissions();
+  const merged = { ...before, ...patch };
   await updateDoc(doc(db, 'companies', room.code), { permissions: merged });
   await saveSetting(COMPANY_PERMISSIONS_SETTING, merged);
+  if (typeof logCompanyAuditEvent === 'function') {
+    const changes = Object.keys(patch)
+      .filter((key) => !!before[key] !== !!merged[key])
+      .map((key) => ({ label: COMPANY_PERMISSION_LABELS[key] || key, from: before[key] ? 'On' : 'Off', to: merged[key] ? 'On' : 'Off' }));
+    if (changes.length) logCompanyAuditEvent('company', 'Company Settings', 'edited', changes).catch((err) => console.error('audit log:', err));
+  }
   return merged;
 }
 
@@ -574,8 +599,13 @@ async function updateCompanyName(name) {
   const { doc, updateDoc } = await import(FIRESTORE_SDK);
   await ensureSignedIn();
 
-  await updateDoc(doc(db, 'companies', room.code), { name: name || '' });
-  await saveSetting(COMPANY_NAME_SETTING, name || '');
+  const before = room.name || '';
+  const after = name || '';
+  await updateDoc(doc(db, 'companies', room.code), { name: after });
+  await saveSetting(COMPANY_NAME_SETTING, after);
+  if (typeof logCompanyAuditEvent === 'function' && before !== after) {
+    logCompanyAuditEvent('company', 'Company Settings', 'edited', [{ label: 'Company Name', from: before || '(blank)', to: after || '(blank)' }]).catch((err) => console.error('audit log:', err));
+  }
 }
 
 // Rotates the *company* password -- unlike the admin password, this isn't
@@ -675,6 +705,14 @@ async function changeCompanyPassword(newPassword, adminPassword, onProgress) {
   }
   await pushAllLocalData(newCode, onProgress);
 
+  // After the code switch, not before -- writeAuditEntry stamps whatever
+  // company getCompanyRoom() currently resolves to, and this event belongs
+  // to the new room's history, not the old one's. Never logs either
+  // password value, just that the change happened and who made it.
+  if (typeof logCompanyAuditEvent === 'function') {
+    logCompanyAuditEvent('company', 'Company Settings', 'edited', [{ label: 'Company Password', from: '(hidden)', to: 'Changed' }]).catch((err) => console.error('audit log:', err));
+  }
+
   return { oldCode: room.code, newCode };
 }
 
@@ -718,6 +756,10 @@ async function changeCompanyAdminPassword(currentAdminPassword, newAdminPassword
     await updateDoc(doc(db, 'companies', room.code, 'roles', roleDoc.id), {
       passwordEnc: await encryptWithAdminPassword(newAdminPassword, plainRolePassword),
     });
+  }
+
+  if (typeof logCompanyAuditEvent === 'function') {
+    logCompanyAuditEvent('company', 'Company Settings', 'edited', [{ label: 'Admin Password', from: '(hidden)', to: 'Changed' }]).catch((err) => console.error('audit log:', err));
   }
 }
 
@@ -793,6 +835,9 @@ async function createCustomRole({ name, password, permissions, projectIds, admin
     projectIds: finalProjectIds,
   });
 
+  if (typeof logCompanyAuditEvent === 'function') {
+    logCompanyAuditEvent(roleId, `Custom Setup: ${name}`, 'created', []).catch((err) => console.error('audit log:', err));
+  }
   return { id: roleId, password };
 }
 
@@ -806,10 +851,14 @@ async function deleteCustomRole(roleId) {
   await ensureSignedIn();
 
   const roleSnap = await getDoc(doc(db, 'companies', room.code, 'roles', roleId));
+  const roleName = roleSnap.exists() ? roleSnap.data().name : roleId;
   if (roleSnap.exists()) {
     await deleteDoc(doc(db, 'companies', roleSnap.data().pointerCode)).catch(() => {});
   }
   await deleteDoc(doc(db, 'companies', room.code, 'roles', roleId));
+  if (typeof logCompanyAuditEvent === 'function') {
+    logCompanyAuditEvent(roleId, `Custom Setup: ${roleName}`, 'deleted', []).catch((err) => console.error('audit log:', err));
+  }
 }
 
 // Decrypts and returns the company password plus every custom setup's
@@ -1186,8 +1235,13 @@ const AUTO_PULL_SETTING = 'companyAutoPullAt';
 // things a delta pull structurally can't do, which is why it's never the
 // only kind that runs:
 //   - See a deletion (a deleted doc just isn't there to query for --
-//     handled via the tombstone docs written by deleteProjectFromCompany/
-//     deleteReportFromCompany, which a delta pull DOES query by timestamp).
+//     handled via tombstone docs, which a delta pull DOES query by
+//     timestamp: deleteProjectFromCompany still writes one for every
+//     project removal; deletedReports tombstones are no longer written by
+//     anything -- report deletion is a soft-delete pushed as an ordinary
+//     field update now, see storage.js's PERMANENT DELETION comment -- but
+//     any that already exist from before that change still get honored
+//     here for any device that hasn't processed them yet).
 //   - Reconcile a stray untagged local record against the company's real,
 //     complete id set (pullAllCompanyData's FOREIGN_COMPANY_SENTINEL pass)
 //     -- that needs the full id set, which a delta pull never has.
@@ -1411,20 +1465,18 @@ async function pushReportToCompany(code, report) {
   await setDoc(doc(db, 'companies', code, 'reports', report.id), data);
 }
 
-async function deleteReportFromCompany(code, report) {
-  const { db, storage, ensureSignedIn } = await waitForFirebaseCore();
-  const { doc, deleteDoc, setDoc } = await import(FIRESTORE_SDK);
-  const { ref, deleteObject } = await import(STORAGE_SDK);
-  await ensureSignedIn();
-
-  for (let i = 0; i < REPORT_PHOTO_SLOTS; i++) {
-    await deleteObject(ref(storage, reportPhotoPath(code, report.id, i))).catch(() => {});
-  }
-  await deleteObject(ref(storage, reportSignaturePath(code, report.id))).catch(() => {});
-  await deleteDoc(doc(db, 'companies', code, 'reports', report.id));
-  // Same reasoning as deleteProjectFromCompany's tombstone -- see there.
-  await setDoc(doc(db, 'companies', code, 'deletedReports', report.id), { id: report.id, deletedAt: Date.now() });
-}
+// [REMOVED] deleteReportFromCompany used to live here -- a real Firestore
+// doc + Storage photo removal, tombstoned so every other device's pull
+// would wipe its own copy too. Removed along with storage.js's
+// permanentlyDeleteReport (see that file's PERMANENT DELETION comment for
+// why): nothing in this app pushes a report deletion as a real Firestore
+// delete anymore, only as an ordinary field update via pushReportToCompany
+// (deleted/deletedAt/deletedBy alongside everything else). The
+// companies/{code}/deletedReports tombstone collection this used to write
+// to is still read by pullAllCompanyData/pullDeltaCompanyData below, for
+// any tombstone that already exists from before this was removed -- that
+// read path is harmless to leave in place even though nothing will ever
+// write a new tombstone again.
 
 // ---------- Audit log sync ----------
 //
@@ -1515,7 +1567,10 @@ async function pullAllCompanyData(code, onProgress) {
   const reportsSnap = await getDocs(collection(db, 'companies', code, 'reports'));
   const reportDocs = reportsSnap.docs;
   // Same fix as the projects loop above, same reason -- see that comment.
-  const existingReportsById = new Map((await getAllReports()).map((r) => [r.id, r]));
+  // includeDeleted: a report this device already has trashed still needs
+  // its already-fetched photos/thumbnail carried forward below, not
+  // treated as brand new and re-marked "not yet downloaded".
+  const existingReportsById = new Map((await getAllReports({ includeDeleted: true })).map((r) => [r.id, r]));
   for (let i = 0; i < reportDocs.length; i++) {
     const d = reportDocs[i];
     if (onProgress) onProgress({ phase: 'reports', index: i + 1, total: reportDocs.length });
@@ -1593,7 +1648,7 @@ async function pullAllCompanyData(code, onProgress) {
       await putProjectRaw({ ...p, companyCode: authoritativeProjectIds.has(p.id) ? code : FOREIGN_COMPANY_SENTINEL });
     }
   }
-  for (const r of await getAllReports()) {
+  for (const r of await getAllReports({ includeDeleted: true })) {
     if (!r.companyCode) {
       await putReportRaw({ ...r, companyCode: authoritativeReportIds.has(r.id) ? code : FOREIGN_COMPANY_SENTINEL });
     }
@@ -1698,7 +1753,7 @@ async function pullDeltaCompanyData(code, onProgress, cursor) {
     delete report.photoSlots;
     delete report.hasSignature;
 
-    const existing = await getReport(d.id);
+    const existing = await getReport(d.id, { includeDeleted: true }); // see full pull's identical comment above
 
     report.photos = [];
     report.photosFetched = [];
@@ -1752,7 +1807,11 @@ async function pullDeltaCompanyData(code, onProgress, cursor) {
     query(collection(db, 'companies', code, 'deletedReports'), where('deletedAt', '>', queryCursor))
   );
   for (const d of deletedReportsSnap.docs) {
-    if (await getReport(d.id)) {
+    // includeDeleted: this tombstone means the report was PERMANENTLY
+    // removed elsewhere -- a copy sitting in this device's own Trash still
+    // needs to go, not just an active one, or it'd be stuck there forever
+    // with no company copy to ever re-confirm the purge.
+    if (await getReport(d.id, { includeDeleted: true })) {
       await deleteReportLocalOnly(d.id);
       summary.reportsDeleted++;
     }
@@ -1859,7 +1918,11 @@ async function pushAllLocalData(code, onProgress, { dirtyOnly = false } = {}) {
   );
   if (onProgress) onProgress({ phase: 'projects', count: projects.length });
 
-  const scopedReports = (await getAllReports()).filter((r) => reportInScope(r, { code }));
+  // includeDeleted: a trashed report can have pendingPush set the same as
+  // any other (deleteReport's push is fire-and-forget, same failure modes
+  // as a save) -- excluding it here would mean "Sync Now" can never retry
+  // a delete whose live push failed to land.
+  const scopedReports = (await getAllReports({ includeDeleted: true })).filter((r) => reportInScope(r, { code }));
   const reports = dirtyOnly ? scopedReports.filter((r) => r.pendingPush) : scopedReports;
   for (let i = 0; i < reports.length; i++) {
     await pushReportToCompany(code, reports[i]);
@@ -1931,13 +1994,14 @@ async function onCompanySyncProjectChanged(project, deleted) {
   }
 }
 
-async function onCompanySyncReportChanged(report, deleted) {
+// No deleted-report branch here -- unlike a project's own removal (see
+// onCompanySyncProjectChanged), a report never gets pushed as a real
+// Firestore delete anymore. deleteReport just pushes the trashed record
+// through this same plain path, deleted/deletedAt/deletedBy fields and
+// all. See storage.js's PERMANENT DELETION comment for why.
+async function onCompanySyncReportChanged(report) {
   const room = await getCompanyRoom();
   if (!room) return;
-  if (deleted) {
-    await withSyncRetry(() => deleteReportFromCompany(room.code, report));
-    return;
-  }
   try {
     await withSyncRetry(() => pushReportToCompany(room.code, report));
     if (report.pendingPush) await putReportRaw({ ...report, pendingPush: false });

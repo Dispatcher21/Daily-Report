@@ -3,6 +3,17 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.038 -- 2026-09-21
+  - Deleting a report now moves it to a Deleted Reports list on the View
+    Reports page (admin only) instead of removing it outright -- restore
+    it any time. There is no way to erase a report's data from this app
+    for good, including as a side effect of deleting its whole project.
+  - The Audit Log now tracks a project's Required Fields/Hidden Fields/
+    Field Order changes (previously invisible), and company-wide admin
+    actions -- permission changes, renaming the company, company/admin
+    password changes, and creating or deleting a custom setup -- none of
+    which were logged at all before.
+
 0.037 -- 2026-09-21
   - Fixed the Manager Dashboard's Recent Reports feed saying a report was
     "filed by John Sonnier, Alex Flores" when Alex was simply listed as an

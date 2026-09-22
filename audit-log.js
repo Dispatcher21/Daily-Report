@@ -27,6 +27,9 @@ const REPORT_DIFF_SKIP = new Set([
   'id', 'projectId', 'updatedAt', 'createdBy', 'lastEditedBy',
   'photos', 'photosFetched', 'repSignatureImage', 'signatureFetched', 'peSignatureImage',
   'thumbnail', 'thumbnailBack', 'thumbnailAt',
+  // Trash bookkeeping -- deleted/restored are their own dedicated audit
+  // actions (see logAuditableChange), never a generic field-level diff.
+  'deleted', 'deletedAt', 'deletedBy',
   // inspectors gets its own identity-matched diff instead (see
   // diffInspectors, called separately in diffReport the same way payItems
   // is) -- per-inspector added/removed/Hours changes, not raw per-segment
@@ -247,9 +250,39 @@ function diffReport(before, after) {
   return out;
 }
 
+// requiredFields/hiddenFields (see required-fields.html) are unordered
+// sets of report field keys, not lists where position means anything -- a
+// plain positional diff would misreport toggling one field partway through
+// the array as every field after it having changed. Diffed as what
+// actually got added to/removed from the set instead, one line per field,
+// labeled the same way required-fields.html itself shows them.
+function fieldKeyLabel(key) {
+  const def = (typeof REQUIRED_FIELD_DEFS !== 'undefined' && REQUIRED_FIELD_DEFS.find((d) => d.key === key))
+    || (typeof ORDERABLE_FIELD_DEFS !== 'undefined' && ORDERABLE_FIELD_DEFS.find((d) => d.key === key));
+  return (def && def.label) || key;
+}
+function diffFieldKeySet(before, after, setLabel, out) {
+  const b = new Set(before || []);
+  const a = new Set(after || []);
+  for (const key of b) if (!a.has(key)) out.push({ label: `${setLabel}: ${fieldKeyLabel(key)}`, from: 'On', to: 'Off' });
+  for (const key of a) if (!b.has(key)) out.push({ label: `${setLabel}: ${fieldKeyLabel(key)}`, from: 'Off', to: 'On' });
+}
+// fieldOrder, unlike the two sets above, is ordering the admin actually
+// chose -- worth showing as one before/after line rather than trying to
+// describe individual moves, which for a full reshuffle would just be
+// noise.
+function diffFieldOrder(before, after, out) {
+  const b = (before || []).map(fieldKeyLabel).join(', ');
+  const a = (after || []).map(fieldKeyLabel).join(', ');
+  if (b !== a) out.push({ label: 'Report Field Order', from: b || '(default order)', to: a || '(default order)' });
+}
+
 function diffProject(before, after) {
   const out = [];
   diffPayItemCatalog(before.payItemCatalog, after.payItemCatalog, out);
+  diffFieldKeySet(before.requiredFields, after.requiredFields, 'Required Field', out);
+  diffFieldKeySet(before.hiddenFields, after.hiddenFields, 'Hidden Field', out);
+  diffFieldOrder(before.fieldOrder, after.fieldOrder, out);
   const beforeRest = { ...before };
   const afterRest = { ...after };
   delete beforeRest.payItemCatalog;
@@ -358,6 +391,18 @@ async function logThemeChanges(beforeThemes, afterThemes, imageChanges) {
   }
 }
 
+// Company-level admin actions (permission toggles, renaming the company,
+// password changes, custom setup create/delete) don't go through
+// storage.js's saveReport/saveProject at all, so they never reach
+// logAuditableChange above -- firebase-sync.js calls this directly instead,
+// guarded by the same optional-global check every other hook into this
+// file uses, right after each action actually succeeds. entityId is a
+// fixed constant for the one shared "Company Settings" entity; a custom
+// setup is its own entity (its own id/label) since there can be several.
+async function logCompanyAuditEvent(entityId, entityLabel, action, changes) {
+  await writeAuditEntry('company', entityId, entityLabel, action || 'edited', changes || []);
+}
+
 async function reportEntityLabel(report) {
   const project = report.projectId ? await getProject(report.projectId) : null;
   const projectLabel = (project && project.name) || report.projectName || report.projectNo || 'Unassigned Project';
@@ -417,16 +462,22 @@ async function finalizePendingEdit(entityId) {
   await writeAuditEntry(p.entityType, p.after.id, label, 'edited', changes);
 }
 
-// Called from storage.js after every report/project save or delete --
-// see the file header for why edits are coalesced but create/delete aren't.
-async function logAuditableChange(entityType, before, after, deleted) {
+// Called from storage.js after every report/project save, delete, restore,
+// or permanent delete -- see the file header for why edits are coalesced
+// but these one-shot actions aren't. `action` is either falsy (a normal
+// save -- create if `before` is null, otherwise a coalesced edit), `true`
+// or 'deleted' (soft- or hard-deleted -- projects still pass the plain
+// boolean, reports pass the string explicitly), 'restored' (undone out of
+// Trash), or 'purged' (permanently removed after already being trashed).
+async function logAuditableChange(entityType, before, after, action) {
   const record = after || before;
   if (!record) return;
 
-  if (deleted) {
-    await finalizePendingEdit(record.id); // flush whatever led up to the delete first
+  if (action === true || action === 'deleted' || action === 'restored' || action === 'purged') {
+    await finalizePendingEdit(record.id); // flush whatever led up to this first
     const label = entityType === 'report' ? await reportEntityLabel(record) : projectEntityLabel(record);
-    await writeAuditEntry(entityType, record.id, label, 'deleted', []);
+    const verb = action === true ? 'deleted' : action;
+    await writeAuditEntry(entityType, record.id, label, verb, []);
     return;
   }
   if (!before) {
@@ -468,7 +519,7 @@ function fmtEntryTimestamp(ms) {
   const pad = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
-const AUDIT_ACTION_VERBS = { created: 'Created', edited: 'Edited', deleted: 'Deleted' };
+const AUDIT_ACTION_VERBS = { created: 'Created', edited: 'Edited', deleted: 'Deleted', restored: 'Restored', purged: 'Permanently Deleted' };
 
 function formatAuditLogAsText(entries) {
   if (entries.length === 0) return 'No activity recorded yet.\n';

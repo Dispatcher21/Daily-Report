@@ -116,21 +116,22 @@ async function init() {
   render();
 }
 
-// A theme (see firebase-sync.js's saveCompanyThemes) is company-wide, not
-// tied to any one project -- unlike a report or project entry, there's no
-// sensible project to file it under, so it's left out of the Project
-// dropdown entirely and never hidden by picking one (see the entityType
-// check in filteredEntries below).
+// A theme (see firebase-sync.js's saveCompanyThemes) or a company-level
+// entity (permissions, name, passwords, custom setups -- see
+// logCompanyAuditEvent) is company-wide, not tied to any one project --
+// unlike a report or project entry, there's no sensible project to file it
+// under, so both are left out of the Project dropdown entirely and never
+// hidden by picking one (see the entityType check in filteredEntries below).
 function projectLabelFor(entry) {
   if (entry.entityType === 'project') return entry.entityLabel;
-  if (entry.entityType === 'theme') return null;
+  if (entry.entityType === 'theme' || entry.entityType === 'company') return null;
   const idx = entry.entityLabel.indexOf('—');
   return idx === -1 ? entry.entityLabel : entry.entityLabel.slice(idx + 1).trim();
 }
 
 function filteredEntries() {
   return allEntries.filter((e) => {
-    if (filterState.projectLabel && e.entityType !== 'theme' && projectLabelFor(e) !== filterState.projectLabel) return false;
+    if (filterState.projectLabel && e.entityType !== 'theme' && e.entityType !== 'company' && projectLabelFor(e) !== filterState.projectLabel) return false;
     if (filterState.userName && e.userName !== filterState.userName) return false;
     const day = new Date(e.timestamp).toISOString().slice(0, 10);
     if (filterState.from && day < filterState.from) return false;
