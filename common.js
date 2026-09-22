@@ -185,7 +185,10 @@ function renderHbProjectsHtml(visible, currentId, layout) {
   const projectsById = new Map(visible.map((p) => [p.id, p]));
   const projectRow = (p, nested) => {
     const current = p.id === currentId;
-    return `<a class="hb-row${nested ? ' hb-row-nested' : ''}${current ? ' hb-current' : ''}" href="project.html?id=${encodeURIComponent(p.id)}"><span class="hb-row-icon" aria-hidden="true">&#128193;</span><span class="hb-row-label">${escapeHtml(p.name || 'Untitled Project')}</span></a>`;
+    // Same per-project icon (or the same folder-glyph fallback) as its
+    // hub-card on the home screen -- see index.html's own projectCardHtml.
+    const icon = escapeHtml(p.icon || '\u{1F4C1}');
+    return `<a class="hb-row${nested ? ' hb-row-nested' : ''}${current ? ' hb-current' : ''}" href="project.html?id=${encodeURIComponent(p.id)}"><span class="hb-row-icon" aria-hidden="true">${icon}</span><span class="hb-row-label">${escapeHtml(p.name || 'Untitled Project')}</span></a>`;
   };
   return layout.map((entry) => {
     if (entry.type === 'folder') {
