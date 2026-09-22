@@ -16,7 +16,30 @@
 // those are logged immediately.
 
 const AUDIT_COALESCE_MS = 4000;
-const pendingEdits = new Map(); // entityId -> { entityType, before, after, timer }
+const pendingEdits = new Map(); // entityId -> { entityType, before, after, timer, batchLabel }
+
+// ---------- Batch context ----------
+//
+// Excel import and Mass Edit/Delete Selected each fire many individual
+// saveReport/deleteReport calls in a tight loop -- without this, 50 reports
+// imported together would read exactly like 50 unrelated one-off edits,
+// with nothing tying them together. beginAuditBatch/endAuditBatch just tag
+// whatever entries get written (or start coalescing) while a batch is open
+// with a short suffix on the entity label, e.g. "Report #45 — Main St
+// (via Excel Import)".
+//
+// Captured into logAuditableChange's own local variable up front, not read
+// again later off this module-level one -- a coalesced edit's entry isn't
+// actually written until AUDIT_COALESCE_MS after the last save in it, well
+// after the batch itself has already closed, so reading the live value at
+// write time would silently lose the tag for exactly the multi-edit bursts
+// this exists to label.
+let auditBatchLabel = null;
+function beginAuditBatch(label) { auditBatchLabel = label; }
+function endAuditBatch() { auditBatchLabel = null; }
+function withBatchSuffix(label, batchLabel) {
+  return batchLabel ? `${label} (${batchLabel})` : label;
+}
 
 // Fields that are either bookkeeping (id, sync/local-only state) or binary
 // blobs -- meaningless or unreadable in a text diff, and in several cases
@@ -56,7 +79,7 @@ const REPORT_FIELD_LABELS = {
 };
 const PROJECT_FIELD_LABELS = {
   name: 'Project Display Name', payItemCatalog: 'Pay Item Catalog', defaultContractors: 'Default Contractors',
-  defaultEquipmentLabels: 'Default Equipment Labels', billingEstimates: 'Billing Estimates',
+  defaultEquipmentLabels: 'Default Equipment Labels',
   'meta.projectNo': 'Project No.', 'meta.projectName': 'Project Name', 'meta.ntpDate': 'NTP Date',
   'meta.contractLength': 'Contract Length', 'meta.representative': 'Representative', 'meta.peName': 'PE Name',
   'meta.activity': 'Default Activity', 'meta.notes': 'Default Notes',
@@ -202,6 +225,42 @@ function diffPayItemCatalog(before, after, out) {
   }
 }
 
+// Same identity-over-position reasoning again -- each Pay App has a stable
+// id (unlike a pay item row, there's nothing else to key on), so this used
+// to fall through to diffGeneric's plain positional array walk, which
+// produces unreadable nested-index lines like "Billing Estimates 2
+// itemTotals 4" instead of naming the actual Pay App and item. itemTotals
+// is a flat {itemNumber: dollar total} map -- whatever $/Qty/% entry mode
+// was used on pay-apps.html, it's already resolved to a total by the time
+// it's saved, so there's nothing left to label beyond the item number.
+function diffBillingEstimates(before, after, out) {
+  const byId = (list) => new Map((list || []).filter((e) => e && e.id).map((e) => [e.id, e]));
+  const b = byId(before);
+  const a = byId(after);
+  const estLabel = (e) => `Pay App #${e.estimateNo || '?'} (${e.date || 'no date'})`;
+  for (const [id, bEst] of b) {
+    const aEst = a.get(id);
+    if (!aEst) {
+      out.push({ label: `${estLabel(bEst)} removed`, from: 'on file', to: '' });
+      continue;
+    }
+    const label = estLabel(bEst);
+    if (fmtLeaf(bEst.estimateNo) !== fmtLeaf(aEst.estimateNo)) out.push({ label: `${label} No.`, from: fmtLeaf(bEst.estimateNo), to: fmtLeaf(aEst.estimateNo) });
+    if (fmtLeaf(bEst.date) !== fmtLeaf(aEst.date)) out.push({ label: `${label} Date`, from: fmtLeaf(bEst.date), to: fmtLeaf(aEst.date) });
+    if (fmtLeaf(bEst.note) !== fmtLeaf(aEst.note)) out.push({ label: `${label} Note`, from: fmtLeaf(bEst.note), to: fmtLeaf(aEst.note) });
+    const bTotals = bEst.itemTotals || {};
+    const aTotals = aEst.itemTotals || {};
+    for (const item of new Set([...Object.keys(bTotals), ...Object.keys(aTotals)])) {
+      if (fmtLeaf(bTotals[item]) !== fmtLeaf(aTotals[item])) {
+        out.push({ label: `${label} Item ${item} Total`, from: fmtLeaf(bTotals[item]), to: fmtLeaf(aTotals[item]) });
+      }
+    }
+  }
+  for (const [id, aEst] of a) {
+    if (!b.has(id)) out.push({ label: `${estLabel(aEst)} recorded`, from: '', to: 'on file' });
+  }
+}
+
 // Same identity-over-position reasoning as pay item rows -- matched by
 // name, since an inspector has no other stable identity. Two inspectors
 // can share a typed name; index among matches with that exact name breaks
@@ -309,10 +368,13 @@ function diffProject(before, after) {
   const out = [];
   diffPayItemCatalog(before.payItemCatalog, after.payItemCatalog, out);
   diffFieldConfig(before, after, out);
+  diffBillingEstimates(before.billingEstimates, after.billingEstimates, out);
   const beforeRest = { ...before };
   const afterRest = { ...after };
   delete beforeRest.payItemCatalog;
   delete afterRest.payItemCatalog;
+  delete beforeRest.billingEstimates;
+  delete afterRest.billingEstimates;
   diffByLabelMap(beforeRest, afterRest, PROJECT_FIELD_LABELS, PROJECT_DIFF_SKIP, '', out);
   return out;
 }
@@ -507,7 +569,7 @@ async function finalizePendingEdit(entityId) {
   const changes = p.entityType === 'report' ? diffReport(p.before, p.after) : diffProject(p.before, p.after);
   if (changes.length === 0) return;
   const label = p.entityType === 'report' ? await reportEntityLabel(p.after) : projectEntityLabel(p.after);
-  await writeAuditEntry(p.entityType, p.after.id, label, 'edited', changes);
+  await writeAuditEntry(p.entityType, p.after.id, withBatchSuffix(label, p.batchLabel), 'edited', changes);
 }
 
 // Called from storage.js after every report/project save or delete --
@@ -515,16 +577,17 @@ async function finalizePendingEdit(entityId) {
 async function logAuditableChange(entityType, before, after, deleted) {
   const record = after || before;
   if (!record) return;
+  const batchLabel = auditBatchLabel; // see its own comment for why this is captured now, not read later
 
   if (deleted) {
     await finalizePendingEdit(record.id); // flush whatever led up to the delete first
     const label = entityType === 'report' ? await reportEntityLabel(record) : projectEntityLabel(record);
-    await writeAuditEntry(entityType, record.id, label, 'deleted', []);
+    await writeAuditEntry(entityType, record.id, withBatchSuffix(label, batchLabel), 'deleted', []);
     return;
   }
   if (!before) {
     const label = entityType === 'report' ? await reportEntityLabel(record) : projectEntityLabel(record);
-    await writeAuditEntry(entityType, record.id, label, 'created', []);
+    await writeAuditEntry(entityType, record.id, withBatchSuffix(label, batchLabel), 'created', []);
     return;
   }
 
@@ -532,8 +595,9 @@ async function logAuditableChange(entityType, before, after, deleted) {
   if (existing) {
     clearTimeout(existing.timer);
     existing.after = after;
+    if (batchLabel) existing.batchLabel = batchLabel;
   } else {
-    pendingEdits.set(record.id, { entityType, before, after, timer: null });
+    pendingEdits.set(record.id, { entityType, before, after, timer: null, batchLabel });
   }
   const p = pendingEdits.get(record.id);
   p.timer = setTimeout(() => finalizePendingEdit(record.id), AUDIT_COALESCE_MS);

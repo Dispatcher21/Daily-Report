@@ -414,6 +414,7 @@ async function handleImportReportsChange(e) {
   // it's meant to replace. The per-file detail (which file, pass/fail,
   // duplicate or not) is what the log list below is for.
   startProgressBanner();
+  if (typeof beginAuditBatch === 'function') beginAuditBatch('via Excel Import');
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
     progressStep('import-reports', 'Importing reports', `${i + 1} of ${files.length}`);
@@ -454,6 +455,7 @@ async function handleImportReportsChange(e) {
     }
     log.scrollTop = log.scrollHeight;
   }
+  if (typeof endAuditBatch === 'function') endAuditBatch();
 
   const dupeCount = imported.filter((r) => r.dupe).length;
   const syncFailCount = imported.filter((r) => !r.synced).length;

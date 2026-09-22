@@ -727,6 +727,7 @@ $('#btn-delete-selected').addEventListener('click', async () => {
     // local delete already happened -- so one report's bad connection
     // moment doesn't leave the rest of the batch untouched.
     const syncErrors = [];
+    if (typeof beginAuditBatch === 'function') beginAuditBatch('via Mass Delete');
     for (const r of selected) {
       try {
         await deleteReport(r.id);
@@ -735,6 +736,7 @@ $('#btn-delete-selected').addEventListener('click', async () => {
         syncErrors.push(err);
       }
     }
+    if (typeof endAuditBatch === 'function') endAuditBatch();
     selectedIds.clear();
     allReports = await getReportsForProject(project.id);
     await refreshFolderSyncBadgeState();
@@ -816,10 +818,12 @@ $('#btn-apply-mass-edit').addEventListener('click', async () => {
   btn.disabled = true;
   try {
     const selected = allReports.filter((r) => selectedIds.has(r.id) && canEditReportWithContext(r, reportPermCtx));
+    if (typeof beginAuditBatch === 'function') beginAuditBatch('via Mass Edit');
     for (const r of selected) {
       r[field] = value;
       await saveReport(r);
     }
+    if (typeof endAuditBatch === 'function') endAuditBatch();
     $('#mass-edit-panel').hidden = true;
     allReports = await getReportsForProject(project.id);
     await refreshFolderSyncBadgeState();

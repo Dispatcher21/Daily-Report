@@ -3,6 +3,14 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.030 -- 2026-09-22
+  - Pay Apps recorded on a project now show up cleanly in the Audit Log
+    (which item's total changed, on which Pay App) instead of as an
+    unreadable jumble of raw numbers.
+  - Reports imported from Excel, and Mass Edit/Delete Selected, now tag
+    every entry they create in the Audit Log with which one did it (e.g.
+    "via Excel Import"), instead of looking like a pile of unrelated edits.
+
 0.029 -- 2026-09-22
   - The Audit Log now covers a lot more ground: company password changes,
     admin password changes, permission toggles, custom setup create/delete,

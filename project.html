@@ -873,6 +873,7 @@ async function importReportFilesIntoProject(files, confirmOverwrite = (msg) => c
   const errors = [];
 
   if (onFileDone) startProgressBanner();
+  if (typeof beginAuditBatch === 'function') beginAuditBatch('via Import');
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
     if (onFileDone) progressStep('import-reports', 'Importing reports', `${i + 1} of ${files.length}`);
@@ -937,6 +938,7 @@ async function importReportFilesIntoProject(files, confirmOverwrite = (msg) => c
       if (onFileDone) onFileDone(file, { status: 'error', error: err.message });
     }
   }
+  if (typeof endAuditBatch === 'function') endAuditBatch();
 
   if (onFileDone) {
     if (errors.length) {
