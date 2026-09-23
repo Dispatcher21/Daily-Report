@@ -1515,6 +1515,32 @@ async function onCompanySyncAuditEntry(entry) {
 
 // ---------- Bulk pull / push -- used by join and "Sync Now" ----------
 
+// A project-scoped device (a custom setup restricted to one or a few
+// projects) still pulls every report in the company -- local storage has
+// no separate cache per company/scope (see _inCompanyScope), so the full
+// set has to land locally even though most of it stays hidden by
+// projectInScope/reportInScope everywhere it'd actually be shown. Reporting
+// raw progress against that full set showed a scoped user something like
+// "Syncing your reports 42 of 217" for a company they can only ever see one
+// project's worth of -- correct in a literal sense, but reads as broken.
+// Counts progress against just the in-scope reports instead; everything
+// else still gets pulled in the background, just without its own visible
+// tick (an unrestricted admin/member sees no change at all, since their
+// scope is everything).
+function scopedReportProgressReporter(reportDocs, room, onProgress) {
+  const scopeIds = room && room.projectScope;
+  const visibleTotal = scopeIds
+    ? reportDocs.filter((d) => scopeIds.includes(d.data().projectId)).length
+    : reportDocs.length;
+  let visibleSeen = 0;
+  return (data) => {
+    if (!onProgress) return;
+    if (scopeIds && !scopeIds.includes(data.projectId)) return;
+    visibleSeen++;
+    onProgress({ phase: 'reports', index: visibleSeen, total: visibleTotal });
+  };
+}
+
 async function pullAllCompanyData(code, onProgress) {
   // Captured before any reading starts, not after -- a record saved by
   // someone else WHILE this pull is running must still be covered by the
@@ -1587,11 +1613,12 @@ async function pullAllCompanyData(code, onProgress) {
   // its already-fetched photos/thumbnail carried forward below, not
   // treated as brand new and re-marked "not yet downloaded".
   const existingReportsById = new Map((await getAllReports({ includeDeleted: true })).map((r) => [r.id, r]));
+  const reportProgress = scopedReportProgressReporter(reportDocs, await getCompanyRoom(), onProgress);
   for (let i = 0; i < reportDocs.length; i++) {
     const d = reportDocs[i];
-    if (onProgress) onProgress({ phase: 'reports', index: i + 1, total: reportDocs.length });
-
     const data = d.data();
+    reportProgress(data);
+
     const report = { ...data, id: d.id, companyCode: code };
     delete report.photoSlots;
     delete report.hasSignature;
@@ -1760,11 +1787,12 @@ async function pullDeltaCompanyData(code, onProgress, cursor) {
     query(collection(db, 'companies', code, 'reports'), where('updatedAt', '>', queryCursor))
   );
   const reportDocs = reportsSnap.docs;
+  const reportProgress = scopedReportProgressReporter(reportDocs, await getCompanyRoom(), onProgress);
   for (let i = 0; i < reportDocs.length; i++) {
     const d = reportDocs[i];
-    if (onProgress) onProgress({ phase: 'reports', index: i + 1, total: reportDocs.length });
-
     const data = d.data();
+    reportProgress(data);
+
     const report = { ...data, id: d.id, companyCode: code };
     delete report.photoSlots;
     delete report.hasSignature;
