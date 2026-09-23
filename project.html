@@ -366,7 +366,7 @@ async function init() {
       <label>Default Representative <input type="text" value="${escapeHtml(m.representative)}" disabled></label>
       <label>Default PE Name <input type="text" value="${escapeHtml(m.peName)}" disabled></label>
     </div>
-    <p class="hint">Pay item catalog: ${project.payItemCatalog.length} item(s).</p>
+    <p class="hint">Pay item catalog: ${(project.payItemCatalog || []).length} item(s).</p>
     <p class="hint">Default contractors: ${contractorCount || 'none set'}. Default equipment/personnel labels: ${equipmentLabelCount || 'using standard list'}. Other report field defaults set: ${extraDefaultsSet}.</p>
   `;
 }
