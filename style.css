@@ -749,6 +749,18 @@ body {
 }
 .global-sync-banner[hidden] { display: none; }
 
+/* Same visual treatment as the sync banner above, but it's a link (into
+   index.html's My Managed Projects card) rather than plain text, and uses
+   the ok/brand palette instead of warn -- this isn't something broken,
+   just new activity worth a look. */
+.managed-projects-alert-banner {
+  display: block;
+  background: var(--ok-bg);
+  border-bottom: 2px solid var(--ok);
+  color: var(--ok);
+  text-decoration: none;
+}
+
 .back-bar {
   background: var(--surface-2);
   border-bottom: 1px solid var(--border);

@@ -1835,6 +1835,11 @@ async function applyCompanyThemeVisuals() {
   await renderUnsavedDrafts();
   await renderManagerDashboard();
   await renderManagedProjects();
+  // Only on an actual page visit, not the background 'company-data-pulled'
+  // re-render below -- otherwise new activity would clear itself the
+  // instant it synced in, before anyone actually saw it.
+  await markManagedProjectsSeen();
+  if (typeof refreshManagedProjectsAlertBanner === 'function') refreshManagedProjectsAlertBanner();
   wireAutoPull();
 })();
 

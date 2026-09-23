@@ -719,6 +719,65 @@ document.addEventListener('DOMContentLoaded', refreshGlobalSyncBanner);
 window.addEventListener('company-data-pulled', refreshGlobalSyncBanner);
 window.addEventListener('folder-sync-completed', refreshGlobalSyncBanner);
 
+// ---------- Global "managed projects" alert banner ----------
+//
+// Same idea and same visual treatment as the out-of-sync banner above, but
+// for the Manager role: tells someone with the approveReports permission
+// that a project they manage has activity (a new report, an edit) they
+// haven't looked at yet. "Unseen" is measured by each report's own
+// updatedAt against getManagedProjectsLastSeenAt() -- there's no separate
+// createdAt on a report to distinguish a brand new one from an edited one,
+// so this reads as "something changed", which is the same signal the rest
+// of the app already treats updatedAt as carrying.
+async function refreshManagedProjectsAlertBanner() {
+  if (typeof getManagedProjectIds !== 'function' || typeof companyCan !== 'function') return;
+  const header = document.querySelector('.app-header');
+  if (!header) return;
+
+  try {
+    let banner = document.getElementById('managed-projects-alert-banner');
+    if (!(await companyCan('approveReports'))) {
+      if (banner) banner.hidden = true;
+      return;
+    }
+
+    const managedIds = new Set(await getManagedProjectIds());
+    if (!managedIds.size) {
+      if (banner) banner.hidden = true;
+      return;
+    }
+
+    const lastSeenAt = await getManagedProjectsLastSeenAt();
+    const allReports = await getAllReports();
+    const newCount = allReports.reduce((n, r) => (
+      n + (managedIds.has(r.projectId) && !r.deleted && (r.updatedAt || 0) > lastSeenAt ? 1 : 0)
+    ), 0);
+
+    if (!newCount) {
+      if (banner) banner.hidden = true;
+      return;
+    }
+
+    if (!banner) {
+      banner = document.createElement('a');
+      banner.id = 'managed-projects-alert-banner';
+      banner.className = 'global-sync-banner managed-projects-alert-banner';
+      banner.href = 'index.html';
+      // After the out-of-sync banner when both are present, so the stack
+      // reads in a stable order no matter which refresh fired last.
+      const anchor = document.getElementById('global-sync-banner') || header;
+      anchor.insertAdjacentElement('afterend', banner);
+    }
+    const reportWord = newCount === 1 ? 'report has' : 'reports have';
+    banner.textContent = `\u{1F514} ${newCount} ${reportWord} new activity in projects you manage.`;
+    banner.hidden = false;
+  } catch (err) {
+    console.error('managed projects alert banner:', err);
+  }
+}
+document.addEventListener('DOMContentLoaded', refreshManagedProjectsAlertBanner);
+window.addEventListener('company-data-pulled', refreshManagedProjectsAlertBanner);
+
 // ---------- Install-to-home-screen ----------
 //
 // The browser fires beforeinstallprompt early and only once per page load, so

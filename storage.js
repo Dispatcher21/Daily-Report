@@ -210,6 +210,26 @@ function userLayoutUpdatedAtSettingKey(userName) {
   return `userLayoutUpdatedAt:${userName || '_anon'}`;
 }
 
+// When this person last looked at "My Managed Projects" on THIS device --
+// drives common.js's new-activity alert banner (anything updated in a
+// managed project after this point counts as unseen). Deliberately
+// device-local, not synced through pushUserLayout: whether you've already
+// looked isn't something that should follow you to a different phone/tablet,
+// same reasoning as the Manager Dashboard's own mobile-expanded flag.
+function managedProjectsLastSeenSettingKey(userName) {
+  return `managedProjectsLastSeen:${userName || '_anon'}`;
+}
+
+async function getManagedProjectsLastSeenAt() {
+  const userName = await getUserName();
+  return (await getSetting(managedProjectsLastSeenSettingKey(userName))) || 0;
+}
+
+async function markManagedProjectsSeen() {
+  const userName = await getUserName();
+  await saveSetting(managedProjectsLastSeenSettingKey(userName), Date.now());
+}
+
 // onCompanySyncUserLayoutChanged is an optional hook into firebase-sync.js,
 // same pattern as onCompanySyncReportChanged -- a no-op if that file isn't
 // loaded or no company is joined. Fired without awaiting: nobody should
