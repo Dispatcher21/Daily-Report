@@ -292,6 +292,55 @@ async function saveReport(report) {
   }
 }
 
+// Sets a report's approval status and/or appends a comment -- the Manager
+// role's own action, distinct from saveReport (a content edit) in three
+// ways: it doesn't touch createdBy/lastEditedBy (those track who authored
+// the report's actual content, not who reviewed it), it never triggers a
+// local folder resync (approval status/comments never appear on the
+// printed report, so there's nothing there worth rewriting to disk for),
+// and it gets its own audit verb (approved/changes-requested/commented)
+// instead of a generic "edited" diff. It still bumps updatedAt and still
+// pushes to the company the same as any other report change, though --
+// skipping that would mean the usual delta-pull Sync Now never picks it up
+// (see pullDeltaCompanyData's own updatedAt-based query) until the next
+// full reconcile.
+async function saveReportApproval(reportId, { status, comment } = {}) {
+  const report = await getReport(reportId, { includeDeleted: true });
+  if (!report) throw new Error('Report not found.');
+
+  const fromStatus = report.approvalStatus || 'pending';
+  if (status) report.approvalStatus = status;
+
+  const userName = await getUserName();
+  let addedComment = null;
+  if (comment && comment.trim()) {
+    addedComment = { id: crypto.randomUUID(), author: userName || '', text: comment.trim(), createdAt: Date.now() };
+    report.comments = [...(report.comments || []), addedComment];
+  }
+
+  report.updatedAt = Date.now();
+  await putReportRaw(report);
+
+  if (typeof onCompanySyncReportChanged === 'function') {
+    onCompanySyncReportChanged(report, false).catch((err) => console.error('company sync mirror:', err));
+  }
+
+  if (typeof writeAuditEntry === 'function' && typeof reportEntityLabel === 'function') {
+    const label = await reportEntityLabel(report);
+    if (status && status !== fromStatus) {
+      const verb = status === 'approved' ? 'approved' : status === 'changes_requested' ? 'changes-requested' : 'edited';
+      writeAuditEntry('report', report.id, label, verb, [{ label: 'Approval Status', from: fromStatus, to: status }])
+        .catch((err) => console.error('audit log:', err));
+    }
+    if (addedComment) {
+      writeAuditEntry('report', report.id, label, 'commented', [{ label: 'Comment', from: '', to: addedComment.text }])
+        .catch((err) => console.error('audit log:', err));
+    }
+  }
+
+  return report;
+}
+
 // Soft-deletes a report -- moves it to Trash rather than removing it. There
 // is deliberately no way to remove a report's data for good from anywhere
 // in this app -- see restoreReport below for undoing this, and the

@@ -38,16 +38,45 @@
 </div>
 
 <main>
-  <!-- Solely the printed page, nothing else -- no form, no click-to-edit,
-       no Save/Generate/Delete. Editing and downloading are each their own
-       separate, explicit actions reachable from reports.html, not
-       something this page leads into. -->
+  <!-- Solely the printed page, no click-to-edit, no Save/Generate/Delete --
+       editing and downloading are each their own separate, explicit
+       actions reachable from reports.html, not something this page leads
+       into. The one addition is the review panel below: this IS the
+       review page (report-editor.html is for content), so approving/
+       commenting belongs here, not a new kind of edit form. -->
   <div class="rb-preview-frame" id="rv-preview"></div>
+
+  <div class="step" id="rv-review-step" hidden>
+    <div class="step-header">
+      <span class="step-num">REVIEW</span>
+      <h2>Approval</h2>
+    </div>
+    <div class="step-body">
+      <div class="rv-approval-row">
+        <span class="rv-approval-badge" id="rv-approval-badge">Pending</span>
+        <div class="rv-approval-actions" id="rv-approval-actions" hidden>
+          <button type="button" class="btn-sm" id="rv-btn-approve">&#10003; Approve</button>
+          <button type="button" class="btn-sm" id="rv-btn-request-changes">&#8635; Request Changes</button>
+        </div>
+      </div>
+
+      <div id="rv-comments"></div>
+      <p class="hint" id="rv-comments-empty" hidden style="margin:0.5rem 0 0;">No comments yet.</p>
+
+      <div id="rv-comment-form" hidden style="margin-top:0.75rem;">
+        <label>Add a comment
+          <textarea id="rv-comment-text" rows="2" placeholder="Visible to everyone who can see this report"></textarea>
+        </label>
+        <button type="button" class="btn-sm" id="rv-btn-add-comment" style="margin-top:0.4rem;">Post Comment</button>
+      </div>
+    </div>
+  </div>
 </main>
 
 <script src="common.js"></script>
 <script src="defaults.js"></script>
 <script src="storage.js"></script>
+<script src="audit-log.js"></script>
 <script src="render-report.js"></script>
 <script src="local-sync.js"></script>
 <script type="module" src="firebase-init.js"></script>
@@ -139,7 +168,79 @@ async function renderPreview(layout, report, logoBlob) {
     console.error(err);
     $('#rv-preview').innerHTML = '<p class="hint">Preview unavailable.</p>';
   }
+
+  if (!report.deleted) {
+    await initReviewPanel(report);
+  }
 })();
+
+const APPROVAL_LABELS = {
+  approved: 'Approved',
+  changes_requested: 'Changes Requested',
+};
+
+function formatCommentTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  return d.toLocaleString();
+}
+
+function renderReviewPanel(report) {
+  const status = report.approvalStatus || 'pending';
+  const badge = $('#rv-approval-badge');
+  badge.textContent = APPROVAL_LABELS[status] || 'Pending';
+  badge.className = `rv-approval-badge rv-${status}`;
+
+  const comments = report.comments || [];
+  const list = $('#rv-comments');
+  list.innerHTML = '';
+  comments.forEach((c) => {
+    const item = document.createElement('div');
+    item.className = 'rv-comment';
+    const head = document.createElement('div');
+    head.className = 'rv-comment-head';
+    const author = document.createElement('span');
+    author.className = 'rv-comment-author';
+    author.textContent = c.author || 'Unknown';
+    const time = document.createElement('span');
+    time.textContent = formatCommentTime(c.createdAt);
+    head.appendChild(author);
+    head.appendChild(time);
+    const text = document.createElement('div');
+    text.className = 'rv-comment-text';
+    text.textContent = c.text || '';
+    item.appendChild(head);
+    item.appendChild(text);
+    list.appendChild(item);
+  });
+  $('#rv-comments-empty').hidden = comments.length > 0;
+}
+
+async function initReviewPanel(report) {
+  $('#rv-review-step').hidden = false;
+  renderReviewPanel(report);
+
+  const canApprove = await companyCan('approveReports');
+  $('#rv-approval-actions').hidden = !canApprove;
+  $('#rv-comment-form').hidden = !canApprove;
+  if (!canApprove) return;
+
+  async function applyApproval(patch) {
+    report = await saveReportApproval(report.id, patch);
+    renderReviewPanel(report);
+  }
+
+  $('#rv-btn-approve').addEventListener('click', () => applyApproval({ status: 'approved' }));
+  $('#rv-btn-request-changes').addEventListener('click', () => applyApproval({ status: 'changes_requested' }));
+  $('#rv-btn-add-comment').addEventListener('click', async () => {
+    const textEl = $('#rv-comment-text');
+    const text = textEl.value.trim();
+    if (!text) return;
+    await applyApproval({ comment: text });
+    textEl.value = '';
+  });
+}
 </script>
 </body>
 </html>

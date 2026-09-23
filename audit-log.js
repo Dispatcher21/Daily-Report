@@ -611,6 +611,7 @@ function fmtEntryTimestamp(ms) {
 const AUDIT_ACTION_VERBS = {
   created: 'Created', edited: 'Edited', deleted: 'Deleted', restored: 'Restored', purged: 'Permanently Deleted',
   renamed: 'Renamed', joined: 'Joined', left: 'Left', 'admin-unlocked': 'Unlocked Admin on',
+  approved: 'Approved', 'changes-requested': 'Requested Changes on', commented: 'Commented on',
 };
 
 function formatAuditLogAsText(entries) {

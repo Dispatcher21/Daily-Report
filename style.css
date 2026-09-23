@@ -1452,6 +1452,29 @@ main { max-width: min(1400px, 94vw); margin: 0 auto; padding: 1rem; }
 .rf-warning-card ul { text-align: left; margin: 0.9rem 0 1.3rem; padding-left: 1.3rem; }
 .rf-warning-card li { font-weight: 700; margin-bottom: 0.3rem; }
 
+/* ---------- Report approval/comments (report-viewer.html, Manager role) ---------- */
+
+.rv-approval-row { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
+.rv-approval-badge {
+  font-size: 0.75rem; font-weight: 700; letter-spacing: 0.02em;
+  padding: 0.3rem 0.7rem; border-radius: 999px; white-space: nowrap;
+}
+.rv-approval-badge.rv-pending { color: var(--warn); background: var(--warn-bg); }
+.rv-approval-badge.rv-approved { color: var(--ok); background: var(--ok-bg); }
+.rv-approval-badge.rv-changes_requested { color: var(--danger); background: var(--danger-bg); }
+.rv-approval-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.rv-approval-actions .btn-sm { margin-top: 0; }
+
+.rv-comment {
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 0.6rem 0.75rem; background: var(--surface-2);
+  margin-bottom: 0.5rem;
+}
+.rv-comment:last-child { margin-bottom: 0; }
+.rv-comment-head { display: flex; justify-content: space-between; gap: 0.75rem; font-size: 0.76rem; color: var(--text-dim); margin-bottom: 0.25rem; }
+.rv-comment-author { font-weight: 700; color: var(--text); }
+.rv-comment-text { font-size: 0.88rem; white-space: pre-wrap; }
+
 /* A project's icon (shown on its home-screen card, its hamburger-menu row,
    and here) and the picker that changes it -- shared by settings.html's
    Projects list and project.html's own Project Settings > Appearance step,
