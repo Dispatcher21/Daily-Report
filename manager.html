@@ -23,7 +23,7 @@
   </button>
   <div>
     <h1>Manager</h1>
-    <div class="app-sub">Reports needing review, and the projects you manage</div>
+    <div class="app-sub">Reports and Pay Apps needing review, and the projects you manage</div>
   </div>
   <span></span>
 </header>
@@ -34,14 +34,15 @@
 <main>
   <div class="empty-state" id="mgr-no-access" hidden style="padding:1.5rem;">
     You don't have manager access on this device. Ask an admin to grant the
-    "Members can approve/comment on reports" permission in Company Management.
+    "Members can approve/comment on reports" and/or "Members can
+    approve/comment on Pay Apps" permission in Company Management.
   </div>
 
   <div id="mgr-content" hidden>
-    <div class="step" id="mgr-review-step">
+    <div class="step" id="mgr-review-step" hidden>
       <div class="step-header">
         <span class="step-num">REVIEW</span>
-        <h2>Needs Your Review</h2>
+        <h2>Needs Your Review &mdash; Reports</h2>
       </div>
       <div class="step-body">
         <div id="mgr-review-list"></div>
@@ -49,11 +50,22 @@
       </div>
     </div>
 
+    <div class="step" id="mgr-payapp-review-step" hidden style="margin-top:1.5rem;">
+      <div class="step-header">
+        <span class="step-num">REVIEW</span>
+        <h2>Needs Your Review &mdash; Pay Apps</h2>
+      </div>
+      <div class="step-body">
+        <div id="mgr-payapp-review-list"></div>
+        <p class="hint" id="mgr-payapp-review-empty" hidden style="margin:0;">Nothing waiting on you -- every Pay App in your managed projects has been approved.</p>
+      </div>
+    </div>
+
     <div class="step" id="mgr-projects-step" style="margin-top:1.5rem;">
       <div class="step-header">
         <span class="step-num">MANAGER</span>
         <h2>Managed Projects</h2>
-        <button type="button" class="info-tip" data-tip="Pick which projects you manage -- reports on them show up above when they need review, and you'll get an alert elsewhere in the app when there's new activity." aria-label="What this does">i</button>
+        <button type="button" class="info-tip" data-tip="Pick which projects you manage -- reports and Pay Apps on them show up above when they need review, and you'll get an alert elsewhere in the app when there's new activity." aria-label="What this does">i</button>
       </div>
       <div class="step-body">
         <div id="mgr-project-checks"></div>
@@ -83,15 +95,20 @@ function mgrFormatBadge(status) {
 
 let mgrScopedProjects = [];
 let mgrManaged = new Set();
+let mgrCanReports = false;
+let mgrCanPayApps = false;
 
 async function renderManagerPage() {
-  if (!(await companyCan('approveReports'))) {
+  [mgrCanReports, mgrCanPayApps] = await Promise.all([companyCan('approveReports'), companyCan('approvePayApps')]);
+  if (!mgrCanReports && !mgrCanPayApps) {
     $('#mgr-no-access').hidden = false;
     $('#mgr-content').hidden = true;
     return;
   }
   $('#mgr-no-access').hidden = true;
   $('#mgr-content').hidden = false;
+  $('#mgr-review-step').hidden = !mgrCanReports;
+  $('#mgr-payapp-review-step').hidden = !mgrCanPayApps;
 
   const room = await getCompanyRoom();
   const [allProjects, managedIds] = await Promise.all([getAllProjects(), getManagedProjectIds()]);
@@ -99,7 +116,8 @@ async function renderManagerPage() {
   mgrManaged = new Set(managedIds);
 
   renderMgrChecklist();
-  await renderMgrReviewList();
+  if (mgrCanReports) await renderMgrReviewList();
+  if (mgrCanPayApps) await renderMgrPayAppReviewList();
   await renderMgrProjectList();
 
   // A real page visit to the one place that shows this -- clears the
@@ -163,6 +181,32 @@ async function renderMgrReviewList() {
   }).join('');
 }
 
+async function renderMgrPayAppReviewList() {
+  const managed = mgrScopedProjects.filter((p) => mgrManaged.has(p.id));
+  if (!managed.length) {
+    $('#mgr-payapp-review-list').innerHTML = '';
+    $('#mgr-payapp-review-empty').hidden = false;
+    $('#mgr-payapp-review-empty').textContent = "You're not managing any projects yet -- pick some below.";
+    return;
+  }
+
+  const pending = [];
+  managed.forEach((p) => {
+    (p.billingEstimates || []).forEach((e) => {
+      if (!e.approvalStatus || e.approvalStatus !== 'approved') pending.push({ project: p, estimate: e });
+    });
+  });
+  pending.sort((a, b) => (b.estimate.date || '').localeCompare(a.estimate.date || ''));
+
+  $('#mgr-payapp-review-empty').hidden = pending.length > 0;
+  $('#mgr-payapp-review-empty').textContent = 'Nothing waiting on you -- every Pay App in your managed projects has been approved.';
+  $('#mgr-payapp-review-list').innerHTML = pending.map(({ project, estimate }) => `
+      <a class="mp-row" href="pay-apps.html?project=${project.id}&estimate=${estimate.id}">
+        <span class="mp-row-name">${escapeHtml(project.name)} &mdash; Pay App #${escapeHtml(estimate.estimateNo || '?')}</span>
+        <span class="mp-row-meta">${escapeHtml(estimate.date || '')} &middot; ${mgrFormatBadge(estimate.approvalStatus)}</span>
+      </a>`).join('');
+}
+
 async function renderMgrProjectList() {
   const managed = mgrScopedProjects.filter((p) => mgrManaged.has(p.id));
   $('#mgr-projects-empty').hidden = managed.length > 0;
@@ -172,10 +216,16 @@ async function renderMgrProjectList() {
   $('#mgr-project-list').innerHTML = managed.map((p) => {
     const projReports = allReports.filter((r) => r.projectId === p.id);
     const latest = projReports.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0];
-    const pendingCount = projReports.filter((r) => !r.approvalStatus || r.approvalStatus !== 'approved').length;
     const metaParts = [`${projReports.length} report${projReports.length === 1 ? '' : 's'}`];
     if (latest) metaParts.push(`latest ${escapeHtml(latest.date || '')}`);
-    if (pendingCount) metaParts.push(`<span class="mp-row-pending">${pendingCount} pending review</span>`);
+    if (mgrCanReports) {
+      const pendingCount = projReports.filter((r) => !r.approvalStatus || r.approvalStatus !== 'approved').length;
+      if (pendingCount) metaParts.push(`<span class="mp-row-pending">${pendingCount} report${pendingCount === 1 ? '' : 's'} pending</span>`);
+    }
+    if (mgrCanPayApps) {
+      const pendingPayApps = (p.billingEstimates || []).filter((e) => !e.approvalStatus || e.approvalStatus !== 'approved').length;
+      if (pendingPayApps) metaParts.push(`<span class="mp-row-pending">${pendingPayApps} Pay App${pendingPayApps === 1 ? '' : 's'} pending</span>`);
+    }
     return `
       <a class="mp-row" href="reports.html?project=${p.id}">
         <span class="mp-row-name">${escapeHtml(p.name)}</span>

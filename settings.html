@@ -611,9 +611,13 @@
               <input type="checkbox" id="cm-perm-view-manager-dashboard">
               <span>Members can view the Manager Dashboard</span>
             </label>
-            <label class="toggle-row" for="cm-perm-approve-reports" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;">
+            <label class="toggle-row" for="cm-perm-approve-reports" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-bottom:0.75rem;">
               <input type="checkbox" id="cm-perm-approve-reports">
               <span>Members can approve/comment on reports (Manager)</span>
+            </label>
+            <label class="toggle-row" for="cm-perm-approve-payapps" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;">
+              <input type="checkbox" id="cm-perm-approve-payapps">
+              <span>Members can approve/comment on Pay Apps (Manager)</span>
             </label>
 
             <p class="settings-subhead">Custom Setups</p>
@@ -650,9 +654,13 @@
                 <input type="checkbox" id="cs-perm-view-manager-dashboard">
                 <span>Can view the Manager Dashboard (scoped to this setup's projects)</span>
               </label>
-              <label class="toggle-row" for="cs-perm-approve-reports" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;">
+              <label class="toggle-row" for="cs-perm-approve-reports" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-bottom:0.6rem;">
                 <input type="checkbox" id="cs-perm-approve-reports">
                 <span>Can approve/comment on reports (Manager, scoped to this setup's projects)</span>
+              </label>
+              <label class="toggle-row" for="cs-perm-approve-payapps" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;">
+                <input type="checkbox" id="cs-perm-approve-payapps">
+                <span>Can approve/comment on Pay Apps (Manager, scoped to this setup's projects)</span>
               </label>
 
               <p class="hint" style="margin:0.75rem 0 0.3rem;">Projects this setup can see</p>
@@ -1090,6 +1098,7 @@ async function refreshCompanySection() {
     $('#cm-perm-create-projects').checked = !!perms.membersCanCreateProjects;
     $('#cm-perm-view-manager-dashboard').checked = !!perms.membersCanViewManagerDashboard;
     $('#cm-perm-approve-reports').checked = !!perms.membersCanApproveReports;
+    $('#cm-perm-approve-payapps').checked = !!perms.membersCanApprovePayApps;
 
     await renderCmProjects();
     await renderCmActivity();
@@ -2031,6 +2040,17 @@ $('#cm-perm-approve-reports').addEventListener('change', async (e) => {
     cmError(userError("Couldn't save that permission: " + err.message, 'PERMISSION_TOGGLE'));
   }
 });
+$('#cm-perm-approve-payapps').addEventListener('change', async (e) => {
+  cmError('');
+  try {
+    await updateCompanyPermissions({ membersCanApprovePayApps: e.target.checked });
+    cmStatus('Permissions saved.');
+  } catch (err) {
+    console.error(err);
+    e.target.checked = !e.target.checked;
+    cmError(userError("Couldn't save that permission: " + err.message, 'PERMISSION_TOGGLE'));
+  }
+});
 
 // ---------- Custom Setups ----------
 
@@ -2057,6 +2077,7 @@ function csPermissionSummary(perms) {
   if (perms.membersCanEditProjects) bits.push('edit projects');
   if (perms.membersCanCreateProjects) bits.push('create projects');
   if (perms.membersCanApproveReports) bits.push('approve/comment on reports');
+  if (perms.membersCanApprovePayApps) bits.push('approve/comment on Pay Apps');
   return bits.length ? bits.join(', ') : 'view only';
 }
 
@@ -2119,6 +2140,7 @@ $('#btn-create-setup').addEventListener('click', async () => {
     membersCanCreateProjects: $('#cs-perm-create-projects').checked,
     membersCanViewManagerDashboard: $('#cs-perm-view-manager-dashboard').checked,
     membersCanApproveReports: $('#cs-perm-approve-reports').checked,
+    membersCanApprovePayApps: $('#cs-perm-approve-payapps').checked,
   };
 
   btn.disabled = true;

@@ -91,6 +91,8 @@ const projectId = queryParam('project');
 let project = null;
 let allReports = [];
 let editingEstimateId = null; // the Pay App the form below is currently editing, if any -- see startEditEstimate
+let expandedReviewId = null; // the Pay App whose approval/comment panel is open, if any -- see renderEstimateHistory
+let canApprovePayApps = false; // same companyCan gate as report-viewer.html's review panel, checked once at load
 
 async function init() {
   project = projectId ? await getProject(projectId) : null;
@@ -107,14 +109,76 @@ async function init() {
   });
 
   allReports = (await getReportsForProject(project.id)).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  canApprovePayApps = await companyCan('approvePayApps');
+
+  // manager.html's Needs Your Review list links straight in with ?estimate=
+  // so a manager lands with that Pay App's review panel already open,
+  // instead of having to find and click "Review" on it themselves.
+  const focusEstimateId = queryParam('estimate');
+  if (focusEstimateId) expandedReviewId = focusEstimateId;
 
   renderEstimateHistory();
   renderPayAppItemsTable();
   $('#f-est-no').value = nextEstimateNo(project.billingEstimates);
   $('#f-est-date').value = todayIso();
+
+  if (focusEstimateId) {
+    const row = $('.est-review-row');
+    if (row) row.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 }
 
 // ---------- Billing estimates ----------
+
+const PAYAPP_APPROVAL_LABELS = {
+  approved: 'Approved',
+  changes_requested: 'Changes Requested',
+};
+
+function payAppCommentTime(ms) {
+  if (!ms) return '';
+  const d = new Date(ms);
+  if (isNaN(d)) return '';
+  return d.toLocaleString();
+}
+
+// Same shape and same classes (.rv-approval-badge/.rv-comment*) as
+// report-viewer.html's review panel -- status + comment thread, visible to
+// everyone who can see this project; only the Approve/Request Changes/Post
+// Comment controls are gated on canApprovePayApps (the Manager role).
+function payAppReviewPanelHtml(estimate) {
+  const status = estimate.approvalStatus || 'pending';
+  const badge = `<span class="rv-approval-badge rv-${status}">${PAYAPP_APPROVAL_LABELS[status] || 'Pending'}</span>`;
+  const comments = estimate.comments || [];
+  const commentsHtml = comments.length
+    ? comments.map((c) => `
+      <div class="rv-comment">
+        <div class="rv-comment-head"><span class="rv-comment-author">${escapeHtml(c.author || 'Unknown')}</span><span>${payAppCommentTime(c.createdAt)}</span></div>
+        <div class="rv-comment-text">${escapeHtml(c.text || '')}</div>
+      </div>`).join('')
+    : '<p class="hint" style="margin:0;">No comments yet.</p>';
+
+  return `
+    <div class="rv-approval-row">${badge}</div>
+    ${canApprovePayApps ? `
+    <div class="rv-approval-actions">
+      <button type="button" class="btn-sm est-review-approve" data-id="${estimate.id}">&#10003; Approve</button>
+      <button type="button" class="btn-sm est-review-request-changes" data-id="${estimate.id}">&#8635; Request Changes</button>
+    </div>` : ''}
+    <div style="margin-top:0.75rem;">${commentsHtml}</div>
+    ${canApprovePayApps ? `
+    <div style="margin-top:0.75rem;">
+      <label>Add a comment
+        <textarea class="est-review-comment-text" data-id="${estimate.id}" rows="2" placeholder="Visible to everyone who can see this project"></textarea>
+      </label>
+      <button type="button" class="btn-sm est-review-add-comment" data-id="${estimate.id}" style="margin-top:0.4rem;">Post Comment</button>
+    </div>` : ''}`;
+}
+
+async function applyPayAppApproval(estimateId, patch) {
+  project = await saveBillingEstimateApproval(project.id, estimateId, patch);
+  renderEstimateHistory();
+}
 
 function renderEstimateHistory() {
   const sorted = sortedEstimates(project.billingEstimates).slice().reverse(); // newest first
@@ -133,18 +197,26 @@ function renderEstimateHistory() {
   (project.billingEstimates || []).forEach((e) => dateCounts.set(e.date, (dateCounts.get(e.date) || 0) + 1));
   container.innerHTML = `
     <table class="estimate-table">
-      <thead><tr><th>Estimate</th><th>Date</th><th>Note</th><th></th><th></th></tr></thead>
+      <thead><tr><th>Estimate</th><th>Date</th><th>Note</th><th>Status</th><th></th><th></th><th></th></tr></thead>
       <tbody>
         ${sorted.map((e) => {
           const dupeDate = dateCounts.get(e.date) > 1;
-          return `
+          const status = e.approvalStatus || 'pending';
+          const badge = `<span class="rv-approval-badge rv-${status}">${PAYAPP_APPROVAL_LABELS[status] || 'Pending'}</span>`;
+          const rowHtml = `
           <tr${e.id === editingEstimateId ? ' class="est-editing"' : ''}>
             <td>${escapeHtml(e.estimateNo)}</td>
             <td>${e.date}${dupeDate ? ` <span class="pill payapp-diff-over" data-tip="Another Pay App also uses this date -- only one of them actually counts toward the progress chart. Give one a different date to fix it." title="Shared with another Pay App">Shared date</span>` : ''}</td>
             <td>${escapeHtml(e.note || '')}</td>
+            <td>${badge}</td>
+            <td><button type="button" class="text-btn est-review-toggle" data-id="${e.id}">${e.id === expandedReviewId ? 'Hide' : 'Review'}</button></td>
             <td><button type="button" class="text-btn est-edit" data-id="${e.id}">Edit</button></td>
             <td><button type="button" class="text-btn est-remove" data-id="${e.id}" style="color:var(--danger);">&times;</button></td>
           </tr>`;
+          const reviewRowHtml = e.id === expandedReviewId
+            ? `<tr class="est-review-row"><td colspan="7">${payAppReviewPanelHtml(e)}</td></tr>`
+            : '';
+          return rowHtml + reviewRowHtml;
         }).join('')}
       </tbody>
     </table>`;
@@ -159,8 +231,30 @@ function renderEstimateHistory() {
       project.billingEstimates = (project.billingEstimates || []).filter((e) => e.id !== btn.dataset.id);
       await saveProject(project);
       if (editingEstimateId === btn.dataset.id) cancelEditEstimate();
+      if (expandedReviewId === btn.dataset.id) expandedReviewId = null;
       renderEstimateHistory();
       renderPayAppItemsTable();
+    });
+  });
+  $$('.est-review-toggle', container).forEach((btn) => {
+    btn.addEventListener('click', () => {
+      expandedReviewId = expandedReviewId === btn.dataset.id ? null : btn.dataset.id;
+      renderEstimateHistory();
+    });
+  });
+  $$('.est-review-approve', container).forEach((btn) => {
+    btn.addEventListener('click', () => applyPayAppApproval(btn.dataset.id, { status: 'approved' }));
+  });
+  $$('.est-review-request-changes', container).forEach((btn) => {
+    btn.addEventListener('click', () => applyPayAppApproval(btn.dataset.id, { status: 'changes_requested' }));
+  });
+  $$('.est-review-add-comment', container).forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.id;
+      const textEl = $(`.est-review-comment-text[data-id="${id}"]`, container);
+      const text = textEl.value.trim();
+      if (!text) return;
+      await applyPayAppApproval(id, { comment: text });
     });
   });
 }
@@ -450,11 +544,22 @@ $('#btn-record-estimate').addEventListener('click', async () => {
   let savedEstimate;
   if (editingEstimateId) {
     savedEstimate = project.billingEstimates.find((e) => e.id === editingEstimateId);
+    // An approval that already happened shouldn't silently keep applying to
+    // figures that have since changed underneath it -- back to Pending so a
+    // manager notices and re-reviews, same reasoning as any other approval
+    // workflow. A no-op edit (re-saving with identical values) doesn't reset it.
+    const contentChanged = savedEstimate.estimateNo !== estimateNo || savedEstimate.date !== date
+      || savedEstimate.note !== note || JSON.stringify(savedEstimate.itemTotals) !== JSON.stringify(itemTotals);
     Object.assign(savedEstimate, { estimateNo, date, note, itemTotals });
+    if (contentChanged && savedEstimate.approvalStatus) savedEstimate.approvalStatus = 'pending';
   } else {
     savedEstimate = { id: crypto.randomUUID(), estimateNo, date, note, itemTotals };
     project.billingEstimates.push(savedEstimate);
   }
+  // Its own activity marker -- project.updatedAt gets bumped by every field
+  // on the project, not just this Pay App, so it can't tell the Manager
+  // alert banner (common.js) which Pay App actually changed.
+  savedEstimate.updatedAt = Date.now();
   await saveProject(project);
   const wasEditing = !!editingEstimateId;
   editingEstimateId = null;

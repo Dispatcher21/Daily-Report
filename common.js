@@ -133,12 +133,14 @@ async function initHamburgerMenu() {
     if (e.key === 'Escape' && btn.getAttribute('aria-expanded') === 'true') closeMenu();
   });
 
-  // Same permission that gates the review panel on report-viewer.html and
-  // the Manager page itself -- no point showing a link to a page that would
-  // just tell you you don't have access.
+  // Same two permissions that gate the review panels on report-viewer.html
+  // and pay-apps.html, and the Manager page itself -- no point showing a
+  // link to a page that would just tell you you don't have access. Either
+  // one alone is enough (a company might grant just report review, just
+  // Pay App review, or both).
   if (typeof companyCan === 'function') {
-    companyCan('approveReports').then((can) => {
-      panel.querySelector('#hb-manager-row').hidden = !can;
+    Promise.all([companyCan('approveReports'), companyCan('approvePayApps')]).then(([canReports, canPayApps]) => {
+      panel.querySelector('#hb-manager-row').hidden = !(canReports || canPayApps);
     }).catch(() => {});
   }
 
@@ -732,15 +734,16 @@ window.addEventListener('folder-sync-completed', refreshGlobalSyncBanner);
 // ---------- Global "managed projects" alert banner ----------
 //
 // Same idea and same visual treatment as the out-of-sync banner above, but
-// for the Manager role: tells someone with the approveReports permission
-// that a project they manage has activity (a new report, an edit) they
-// haven't looked at yet. "Unseen" is measured by each report's own
-// updatedAt against getManagedProjectsLastSeenAt() -- there's no separate
-// createdAt on a report to distinguish a brand new one from an edited one,
-// so this reads as "something changed", which is the same signal the rest
-// of the app already treats updatedAt as carrying. Links to manager.html,
-// the one place that clears it (see that page's own markManagedProjectsSeen
-// call) -- shown on every OTHER page, manager.html itself never creates it.
+// for the Manager role: tells someone with the approveReports and/or
+// approvePayApps permission that a project they manage has activity (a new
+// report, a recorded/edited Pay App, a comment) they haven't looked at yet.
+// "Unseen" is measured by each item's own updatedAt against
+// getManagedProjectsLastSeenAt() -- there's no separate createdAt to
+// distinguish a brand new item from an edited one, so this reads as
+// "something changed", the same signal the rest of the app already treats
+// updatedAt as carrying. Links to manager.html, the one place that clears
+// it (see that page's own markManagedProjectsSeen call) -- shown on every
+// OTHER page, manager.html itself never creates it.
 async function refreshManagedProjectsAlertBanner() {
   if (typeof getManagedProjectIds !== 'function' || typeof companyCan !== 'function') return;
   const header = document.querySelector('.app-header');
@@ -748,7 +751,8 @@ async function refreshManagedProjectsAlertBanner() {
 
   try {
     let banner = document.getElementById('managed-projects-alert-banner');
-    if (!(await companyCan('approveReports'))) {
+    const [canReports, canPayApps] = await Promise.all([companyCan('approveReports'), companyCan('approvePayApps')]);
+    if (!canReports && !canPayApps) {
       if (banner) banner.hidden = true;
       return;
     }
@@ -760,10 +764,19 @@ async function refreshManagedProjectsAlertBanner() {
     }
 
     const lastSeenAt = await getManagedProjectsLastSeenAt();
-    const allReports = await getAllReports();
-    const newCount = allReports.reduce((n, r) => (
-      n + (managedIds.has(r.projectId) && !r.deleted && (r.updatedAt || 0) > lastSeenAt ? 1 : 0)
-    ), 0);
+    let newCount = 0;
+    if (canReports) {
+      const allReports = await getAllReports();
+      newCount += allReports.reduce((n, r) => (
+        n + (managedIds.has(r.projectId) && !r.deleted && (r.updatedAt || 0) > lastSeenAt ? 1 : 0)
+      ), 0);
+    }
+    if (canPayApps) {
+      const allProjects = await getAllProjects();
+      newCount += allProjects.reduce((n, p) => (
+        n + (managedIds.has(p.id) ? (p.billingEstimates || []).filter((e) => (e.updatedAt || 0) > lastSeenAt).length : 0)
+      ), 0);
+    }
 
     if (!newCount) {
       if (banner) banner.hidden = true;
@@ -780,8 +793,8 @@ async function refreshManagedProjectsAlertBanner() {
       const anchor = document.getElementById('global-sync-banner') || header;
       anchor.insertAdjacentElement('afterend', banner);
     }
-    const reportWord = newCount === 1 ? 'report has' : 'reports have';
-    banner.textContent = `\u{1F514} ${newCount} ${reportWord} new activity in projects you manage.`;
+    const itemWord = newCount === 1 ? 'item has' : 'items have';
+    banner.textContent = `\u{1F514} ${newCount} ${itemWord} new activity in projects you manage.`;
     banner.hidden = false;
   } catch (err) {
     console.error('managed projects alert banner:', err);

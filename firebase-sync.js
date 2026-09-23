@@ -85,6 +85,7 @@ const DEFAULT_PERMISSIONS = {
   membersCanCreateProjects: false,
   membersCanViewManagerDashboard: false,
   membersCanApproveReports: false,
+  membersCanApprovePayApps: false,
 };
 
 async function hashText(text) {
@@ -519,6 +520,7 @@ async function companyCan(action) {
   if (action === 'createProjects') return !!perms.membersCanCreateProjects;
   if (action === 'viewManagerDashboard') return !!perms.membersCanViewManagerDashboard;
   if (action === 'approveReports') return !!perms.membersCanApproveReports;
+  if (action === 'approvePayApps') return !!perms.membersCanApprovePayApps;
   return !!perms.membersCanEditProjects; // 'editProjects'
 }
 
@@ -553,6 +555,7 @@ const COMPANY_PERMISSION_LABELS = {
   membersCanCreateProjects: 'Members can create projects',
   membersCanViewManagerDashboard: 'Members can view the Manager Dashboard',
   membersCanApproveReports: 'Members can approve/comment on reports (Manager)',
+  membersCanApprovePayApps: 'Members can approve/comment on Pay Apps (Manager)',
 };
 async function updateCompanyPermissions(patch) {
   const room = await getCompanyRoom();

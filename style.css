@@ -1594,6 +1594,7 @@ input[type="date"] { min-width: 0; }
 .estimate-table th { color: var(--text-dim); font-weight: 600; font-size: 0.8rem; }
 .estimate-table td:last-child { text-align: right; }
 .estimate-table .est-editing td { background: var(--brand-dim); }
+.estimate-table .est-review-row td { text-align: left; padding: 0.85rem 1rem; background: var(--surface); }
 
 .table-scroll { overflow-x: auto; }
 .data-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; white-space: nowrap; }

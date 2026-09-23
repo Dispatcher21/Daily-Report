@@ -577,6 +577,54 @@ async function saveProject(project) {
   }
 }
 
+// Sets a Pay App's approval status and/or appends a comment -- the Manager
+// role's own action on a billing estimate, same idea as saveReportApproval
+// above and deliberately parallel to it (status + comment thread only, no
+// locking). A Pay App has no top-level record of its own -- it's an entry
+// in project.billingEstimates -- so this reads the project, finds that one
+// entry by id, and writes it back with its own audit verb rather than going
+// through saveProject's generic per-field diff (which would just log it as
+// an unremarkable "edited" project change, same as any other pay item edit).
+async function saveBillingEstimateApproval(projectId, estimateId, { status, comment } = {}) {
+  const project = await getProject(projectId);
+  if (!project) throw new Error('Project not found.');
+  const estimate = (project.billingEstimates || []).find((e) => e.id === estimateId);
+  if (!estimate) throw new Error('Pay App not found.');
+
+  const fromStatus = estimate.approvalStatus || 'pending';
+  if (status) estimate.approvalStatus = status;
+
+  const userName = await getUserName();
+  let addedComment = null;
+  if (comment && comment.trim()) {
+    addedComment = { id: crypto.randomUUID(), author: userName || '', text: comment.trim(), createdAt: Date.now() };
+    estimate.comments = [...(estimate.comments || []), addedComment];
+  }
+
+  estimate.updatedAt = Date.now();
+  project.updatedAt = estimate.updatedAt;
+  await putProjectRaw(project);
+
+  if (typeof onCompanySyncProjectChanged === 'function') {
+    onCompanySyncProjectChanged(project, false).catch((err) => console.error('company sync mirror:', err));
+  }
+
+  if (typeof writeAuditEntry === 'function' && typeof projectEntityLabel === 'function') {
+    const estLabel = `${projectEntityLabel(project)} — Pay App #${estimate.estimateNo || '?'} (${estimate.date || 'no date'})`;
+    if (status && status !== fromStatus) {
+      const verb = status === 'approved' ? 'approved' : status === 'changes_requested' ? 'changes-requested' : 'edited';
+      writeAuditEntry('payApp', estimate.id, estLabel, verb, [{ label: 'Approval Status', from: fromStatus, to: status }])
+        .catch((err) => console.error('audit log:', err));
+    }
+    if (addedComment) {
+      writeAuditEntry('payApp', estimate.id, estLabel, 'commented', [{ label: 'Comment', from: '', to: addedComment.text }])
+        .catch((err) => console.error('audit log:', err));
+    }
+  }
+
+  return project;
+}
+
 function getAllProjects() {
   return withStore(PROJECTS_STORE, 'readonly', (store) => {
     return new Promise((resolve, reject) => {
