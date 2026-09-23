@@ -2587,7 +2587,7 @@ input[type="date"] { min-width: 0; }
   background: var(--warn-bg); padding: 0.1rem 0.4rem; border-radius: 999px;
 }
 
-/* My Managed Projects (index.html, Manager role) */
+/* Manager page (manager.html) -- review list and managed project rows */
 .mp-row {
   display: flex; flex-direction: column; gap: 0.15rem; padding: 0.6rem 0.75rem; border-radius: var(--radius);
   border: 1px solid var(--border); margin-bottom: 0.5rem; text-decoration: none; color: inherit;

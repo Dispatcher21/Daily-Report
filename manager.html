@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://www.gstatic.com https://*.googleapis.com https://api.open-meteo.com https://geocoding-api.open-meteo.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';">
+<title>Manager</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1c3d5a">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Daily Reports">
+<link rel="stylesheet" href="style.css">
+<script src="theme.js"></script>
+</head>
+<body>
+
+<header class="app-header">
+  <button type="button" class="hamburger-btn" id="hamburger-btn" aria-label="Menu" aria-expanded="false">
+    <span></span><span></span><span></span>
+  </button>
+  <div>
+    <h1>Manager</h1>
+    <div class="app-sub">Reports needing review, and the projects you manage</div>
+  </div>
+  <span></span>
+</header>
+<div class="back-bar">
+  <a href="index.html" id="bb-back-link">&larr; Home</a>
+</div>
+
+<main>
+  <div class="empty-state" id="mgr-no-access" hidden style="padding:1.5rem;">
+    You don't have manager access on this device. Ask an admin to grant the
+    "Members can approve/comment on reports" permission in Company Management.
+  </div>
+
+  <div id="mgr-content" hidden>
+    <div class="step" id="mgr-review-step">
+      <div class="step-header">
+        <span class="step-num">REVIEW</span>
+        <h2>Needs Your Review</h2>
+      </div>
+      <div class="step-body">
+        <div id="mgr-review-list"></div>
+        <p class="hint" id="mgr-review-empty" hidden style="margin:0;">Nothing waiting on you -- every report in your managed projects has been approved.</p>
+      </div>
+    </div>
+
+    <div class="step" id="mgr-projects-step" style="margin-top:1.5rem;">
+      <div class="step-header">
+        <span class="step-num">MANAGER</span>
+        <h2>Managed Projects</h2>
+        <button type="button" class="info-tip" data-tip="Pick which projects you manage -- reports on them show up above when they need review, and you'll get an alert elsewhere in the app when there's new activity." aria-label="What this does">i</button>
+      </div>
+      <div class="step-body">
+        <div id="mgr-project-checks"></div>
+        <div id="mgr-project-list" style="margin-top:1rem;"></div>
+        <p class="hint" id="mgr-projects-empty" hidden style="margin:0;">No projects to manage yet.</p>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script src="common.js"></script>
+<script src="defaults.js"></script>
+<script src="storage.js"></script>
+<script src="audit-log.js"></script>
+<script type="module" src="firebase-init.js"></script>
+<script src="firebase-sync.js"></script>
+<script>
+const APPROVAL_LABELS = {
+  approved: 'Approved',
+  changes_requested: 'Changes Requested',
+};
+
+function mgrFormatBadge(status) {
+  const s = status || 'pending';
+  return `<span class="rv-approval-badge rv-${s}">${APPROVAL_LABELS[s] || 'Pending'}</span>`;
+}
+
+let mgrScopedProjects = [];
+let mgrManaged = new Set();
+
+async function renderManagerPage() {
+  if (!(await companyCan('approveReports'))) {
+    $('#mgr-no-access').hidden = false;
+    $('#mgr-content').hidden = true;
+    return;
+  }
+  $('#mgr-no-access').hidden = true;
+  $('#mgr-content').hidden = false;
+
+  const room = await getCompanyRoom();
+  const [allProjects, managedIds] = await Promise.all([getAllProjects(), getManagedProjectIds()]);
+  mgrScopedProjects = allProjects.filter((p) => projectInScope(p, room));
+  mgrManaged = new Set(managedIds);
+
+  renderMgrChecklist();
+  await renderMgrReviewList();
+  await renderMgrProjectList();
+
+  // A real page visit to the one place that shows this -- clears the
+  // new-activity banner everywhere else, same reasoning as index.html's
+  // own markManagedProjectsSeen call.
+  await markManagedProjectsSeen();
+  if (typeof refreshManagedProjectsAlertBanner === 'function') refreshManagedProjectsAlertBanner();
+}
+
+function renderMgrChecklist() {
+  $('#mgr-project-checks').innerHTML = mgrScopedProjects.map((p) => `
+    <label class="md-check-row">
+      <input type="checkbox" data-mgr-project="${p.id}"${mgrManaged.has(p.id) ? ' checked' : ''}>
+      <span>${escapeHtml(p.name)}</span>
+    </label>`).join('');
+
+  $$('[data-mgr-project]', $('#mgr-project-checks')).forEach((cb) => {
+    cb.addEventListener('change', async () => {
+      const id = cb.dataset.mgrProject;
+      const nextManaged = new Set(mgrManaged);
+      if (cb.checked) nextManaged.add(id); else nextManaged.delete(id);
+      cb.disabled = true;
+      try {
+        await saveManagedProjectIds([...nextManaged]);
+        await renderManagerPage();
+      } catch (err) {
+        console.error(err);
+        cb.checked = !cb.checked; // revert
+        alert(userError("Couldn't save that: " + err.message, 'MANAGED_PROJECTS'));
+        cb.disabled = false;
+      }
+    });
+  });
+}
+
+async function renderMgrReviewList() {
+  const managed = mgrScopedProjects.filter((p) => mgrManaged.has(p.id));
+  if (!managed.length) {
+    $('#mgr-review-list').innerHTML = '';
+    $('#mgr-review-empty').hidden = false;
+    $('#mgr-review-empty').textContent = "You're not managing any projects yet -- pick some below.";
+    return;
+  }
+
+  const managedIds = new Set(managed.map((p) => p.id));
+  const projectsById = new Map(managed.map((p) => [p.id, p]));
+  const allReports = await getAllReports();
+  const pending = allReports
+    .filter((r) => managedIds.has(r.projectId) && !r.deleted && (!r.approvalStatus || r.approvalStatus !== 'approved'))
+    .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+  $('#mgr-review-empty').hidden = pending.length > 0;
+  $('#mgr-review-empty').textContent = 'Nothing waiting on you -- every report in your managed projects has been approved.';
+  $('#mgr-review-list').innerHTML = pending.map((r) => {
+    const project = projectsById.get(r.projectId);
+    return `
+      <a class="mp-row" href="report-viewer.html?project=${r.projectId}&report=${r.id}">
+        <span class="mp-row-name">${escapeHtml(project ? project.name : 'Unknown project')} &mdash; Report #${r.reportNo}</span>
+        <span class="mp-row-meta">${escapeHtml(r.date || '')} &middot; ${mgrFormatBadge(r.approvalStatus)}</span>
+      </a>`;
+  }).join('');
+}
+
+async function renderMgrProjectList() {
+  const managed = mgrScopedProjects.filter((p) => mgrManaged.has(p.id));
+  $('#mgr-projects-empty').hidden = managed.length > 0;
+  if (!managed.length) { $('#mgr-project-list').innerHTML = ''; return; }
+
+  const allReports = (await getAllReports()).filter((r) => !r.deleted);
+  $('#mgr-project-list').innerHTML = managed.map((p) => {
+    const projReports = allReports.filter((r) => r.projectId === p.id);
+    const latest = projReports.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0];
+    const pendingCount = projReports.filter((r) => !r.approvalStatus || r.approvalStatus !== 'approved').length;
+    const metaParts = [`${projReports.length} report${projReports.length === 1 ? '' : 's'}`];
+    if (latest) metaParts.push(`latest ${escapeHtml(latest.date || '')}`);
+    if (pendingCount) metaParts.push(`<span class="mp-row-pending">${pendingCount} pending review</span>`);
+    return `
+      <a class="mp-row" href="reports.html?project=${p.id}">
+        <span class="mp-row-name">${escapeHtml(p.name)}</span>
+        <span class="mp-row-meta">${metaParts.join(' &middot; ')}</span>
+      </a>`;
+  }).join('');
+}
+
+(async () => {
+  await renderManagerPage();
+})();
+
+window.addEventListener('company-data-pulled', () => { renderManagerPage(); });
+</script>
+</body>
+</html>

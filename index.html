@@ -168,25 +168,6 @@
         <div id="unsaved-drafts-list"></div>
       </div>
 
-      <div class="step" id="managed-projects-step" hidden style="margin-bottom:1.5rem;">
-        <div class="step-header">
-          <span class="step-num">MANAGER</span>
-          <h2>My Managed Projects</h2>
-          <button type="button" class="info-tip" data-tip="Pick which projects you manage -- they're listed here, and you'll get an alert when a new report comes in on any of them." aria-label="What this does">i</button>
-        </div>
-        <div class="step-body">
-          <div class="eyebrow-row" style="margin-bottom:0.5rem;">
-            <span></span>
-            <button type="button" class="btn-secondary" id="mp-manage-btn">&#9881;&#65039; Choose Projects</button>
-          </div>
-          <div class="md-manage-panel" id="mp-manage-panel" hidden>
-            <div id="mp-project-checks"></div>
-          </div>
-          <div id="mp-list"></div>
-          <p class="hint" id="mp-empty" hidden style="margin:0;">You're not managing any projects yet -- use "Choose Projects" above to pick some.</p>
-        </div>
-      </div>
-
       <div class="eyebrow eyebrow-row">
         <span>Your Projects</span>
         <button type="button" class="text-btn" id="btn-reorder-toggle" aria-pressed="false">Reorder</button>
@@ -1127,77 +1108,6 @@ function renderMdChecklist() {
   });
 }
 
-// ---------- My Managed Projects ----------
-
-let mpScopedProjects = []; // every project this device can see, for the checklist
-let mpManaged = new Set();
-
-async function renderManagedProjects() {
-  // Same permission that gates the review panel on report-viewer.html --
-  // choosing which projects to manage is only meaningful for someone who
-  // can actually act on their reports.
-  if (!(await companyCan('approveReports'))) { $('#managed-projects-step').hidden = true; return; }
-  $('#managed-projects-step').hidden = false;
-
-  const room = await getCompanyRoom();
-  const [allProjects, managedIds] = await Promise.all([getAllProjects(), getManagedProjectIds()]);
-  mpScopedProjects = allProjects.filter((p) => projectInScope(p, room));
-  mpManaged = new Set(managedIds);
-  renderMpChecklist();
-  await renderMpList();
-}
-
-function renderMpChecklist() {
-  $('#mp-project-checks').innerHTML = mpScopedProjects.map((p) => `
-    <label class="md-check-row">
-      <input type="checkbox" data-mp-project="${p.id}"${mpManaged.has(p.id) ? ' checked' : ''}>
-      <span>${escapeHtml(p.name)}</span>
-    </label>`).join('');
-
-  $$('[data-mp-project]', $('#mp-project-checks')).forEach((cb) => {
-    cb.addEventListener('change', async () => {
-      const id = cb.dataset.mpProject;
-      const nextManaged = new Set(mpManaged);
-      if (cb.checked) nextManaged.add(id); else nextManaged.delete(id);
-      cb.disabled = true;
-      try {
-        await saveManagedProjectIds([...nextManaged]);
-        await renderManagedProjects();
-      } catch (err) {
-        console.error(err);
-        cb.checked = !cb.checked; // revert
-        alert(userError("Couldn't save that: " + err.message, 'MANAGED_PROJECTS'));
-        cb.disabled = false;
-      }
-    });
-  });
-}
-
-async function renderMpList() {
-  const managed = mpScopedProjects.filter((p) => mpManaged.has(p.id));
-  $('#mp-empty').hidden = managed.length > 0;
-  if (managed.length === 0) { $('#mp-list').innerHTML = ''; return; }
-
-  const allReports = (await getAllReports()).filter((r) => !r.deleted);
-  $('#mp-list').innerHTML = managed.map((p) => {
-    const projReports = allReports.filter((r) => r.projectId === p.id);
-    const latest = projReports.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0];
-    const pendingCount = projReports.filter((r) => !r.approvalStatus || r.approvalStatus === 'pending').length;
-    const metaParts = [`${projReports.length} report${projReports.length === 1 ? '' : 's'}`];
-    if (latest) metaParts.push(`latest ${escapeHtml(latest.date || '')}`);
-    if (pendingCount) metaParts.push(`<span class="mp-row-pending">${pendingCount} pending review</span>`);
-    return `
-      <a class="mp-row" href="reports.html?project=${p.id}">
-        <span class="mp-row-name">${escapeHtml(p.name)}</span>
-        <span class="mp-row-meta">${metaParts.join(' &middot; ')}</span>
-      </a>`;
-  }).join('');
-}
-
-$('#mp-manage-btn').addEventListener('click', () => {
-  $('#mp-manage-panel').hidden = !$('#mp-manage-panel').hidden;
-});
-
 function mdWeekAgoIso() {
   const d = new Date();
   d.setDate(d.getDate() - 6);
@@ -1834,12 +1744,6 @@ async function applyCompanyThemeVisuals() {
   await renderProjectCards();
   await renderUnsavedDrafts();
   await renderManagerDashboard();
-  await renderManagedProjects();
-  // Only on an actual page visit, not the background 'company-data-pulled'
-  // re-render below -- otherwise new activity would clear itself the
-  // instant it synced in, before anyone actually saw it.
-  await markManagedProjectsSeen();
-  if (typeof refreshManagedProjectsAlertBanner === 'function') refreshManagedProjectsAlertBanner();
   wireAutoPull();
 })();
 
@@ -1849,7 +1753,6 @@ async function applyCompanyThemeVisuals() {
 window.addEventListener('company-data-pulled', () => {
   renderProjectCards();
   renderManagerDashboard();
-  renderManagedProjects();
   applyCompanyThemeVisuals();
 });
 

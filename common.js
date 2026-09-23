@@ -78,6 +78,7 @@ async function initHamburgerMenu() {
     </div>
     <div class="hb-panel-body">
       <a class="hb-row" href="index.html"><span class="hb-row-icon" aria-hidden="true">&#127968;</span><span class="hb-row-label">Home</span></a>
+      <a class="hb-row" href="manager.html" id="hb-manager-row" hidden><span class="hb-row-icon" aria-hidden="true">&#128276;</span><span class="hb-row-label">Manager</span></a>
       <hr>
       <div class="hb-section-label">Projects</div>
       <div id="hb-projects"><div class="hb-empty">Loading&hellip;</div></div>
@@ -131,6 +132,15 @@ async function initHamburgerMenu() {
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && btn.getAttribute('aria-expanded') === 'true') closeMenu();
   });
+
+  // Same permission that gates the review panel on report-viewer.html and
+  // the Manager page itself -- no point showing a link to a page that would
+  // just tell you you don't have access.
+  if (typeof companyCan === 'function') {
+    companyCan('approveReports').then((can) => {
+      panel.querySelector('#hb-manager-row').hidden = !can;
+    }).catch(() => {});
+  }
 
   // Same company-room scoping every project page already uses to decide
   // what it's allowed to open -- an admin/member sees every project on the
@@ -728,7 +738,9 @@ window.addEventListener('folder-sync-completed', refreshGlobalSyncBanner);
 // updatedAt against getManagedProjectsLastSeenAt() -- there's no separate
 // createdAt on a report to distinguish a brand new one from an edited one,
 // so this reads as "something changed", which is the same signal the rest
-// of the app already treats updatedAt as carrying.
+// of the app already treats updatedAt as carrying. Links to manager.html,
+// the one place that clears it (see that page's own markManagedProjectsSeen
+// call) -- shown on every OTHER page, manager.html itself never creates it.
 async function refreshManagedProjectsAlertBanner() {
   if (typeof getManagedProjectIds !== 'function' || typeof companyCan !== 'function') return;
   const header = document.querySelector('.app-header');
@@ -762,7 +774,7 @@ async function refreshManagedProjectsAlertBanner() {
       banner = document.createElement('a');
       banner.id = 'managed-projects-alert-banner';
       banner.className = 'global-sync-banner managed-projects-alert-banner';
-      banner.href = 'index.html';
+      banner.href = 'manager.html';
       // After the out-of-sync banner when both are present, so the stack
       // reads in a stable order no matter which refresh fired last.
       const anchor = document.getElementById('global-sync-banner') || header;
