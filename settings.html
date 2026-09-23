@@ -305,6 +305,21 @@
       </div>
     </details>
 
+    <details class="settings-section" id="sync-section">
+      <summary>Sync to Folder<span class="settings-section-chevron">&#9656;</span><span class="settings-section-sub">Catch up every linked project from one place</span></summary>
+      <div class="settings-section-body">
+        <p class="hint" style="margin-top:0;">Projects on this device already linked to a local folder (from that project's own "Sync to Folder" button). Pick which ones to catch up, then sync them all in one go -- no need to open each project separately.</p>
+        <div class="empty-state" id="sync-projects-empty" hidden style="padding:1.25rem;">No projects on this device are linked to a local folder yet. Open a project and use "Sync to Folder" there to link one.</div>
+        <div id="sync-project-checks"></div>
+        <div style="display:flex; gap:0.6rem; align-items:center; margin-top:1rem; flex-wrap:wrap;" id="sync-actions" hidden>
+          <button type="button" class="btn-primary" id="btn-sync-selected">Sync Selected</button>
+          <button type="button" class="text-btn" id="btn-sync-select-all">Select All</button>
+          <button type="button" class="text-btn" id="btn-sync-select-none">Select None</button>
+        </div>
+        <p class="hint" id="sync-status" style="margin-top:0.6rem;"></p>
+      </div>
+    </details>
+
   </div>
 
   <!-- =================== COMPANY =================== -->
@@ -760,6 +775,7 @@
 <script src="storage.js"></script>
 <script src="audit-log.js"></script>
 <script src="project-file.js"></script>
+<script src="local-sync.js"></script>
 <script type="module" src="firebase-init.js"></script>
 <script src="firebase-sync.js"></script>
 <script>
@@ -978,6 +994,89 @@ $('#btn-force-update').addEventListener('click', async () => {
     console.error('force update:', err);
   }
   location.reload();
+});
+
+// ---------- Sync to Folder (bulk, across every linked project) ----------
+//
+// Per-project folder linking/syncing (project.html's own "Sync to Folder"
+// button) still owns picking a folder in the first place -- this only
+// catches up projects that are already linked, so it can never prompt for
+// a folder and never surprises someone with a picker dialog for a project
+// they haven't set up yet.
+
+let syncScopedRows = []; // [{ project, folderName }], projects on THIS device with a linked folder
+
+async function renderSyncSection() {
+  const allProjects = await getAllProjects();
+  const rows = [];
+  for (const p of allProjects) {
+    const folderName = await getLinkedSyncFolderName(p.id);
+    if (folderName) rows.push({ project: p, folderName });
+  }
+  syncScopedRows = rows;
+
+  $('#sync-projects-empty').hidden = rows.length > 0;
+  $('#sync-actions').hidden = rows.length === 0;
+  if (!rows.length) { $('#sync-project-checks').innerHTML = ''; return; }
+
+  const parts = await Promise.all(rows.map(async ({ project, folderName }) => {
+    const reports = await getReportsForProject(project.id);
+    const state = await getFolderSyncState(project.id);
+    const pending = reports.filter((r) => !isReportFolderSynced(r, state)).length;
+    return { project, folderName, pending };
+  }));
+
+  $('#sync-project-checks').innerHTML = parts.map(({ project, folderName, pending }) => `
+    <label class="md-check-row">
+      <input type="checkbox" class="sync-project-check" value="${project.id}" checked>
+      <span>${escapeHtml(project.name)} <span class="hint" style="margin:0;">&mdash; "${escapeHtml(folderName)}"${pending ? `, ${pending} pending` : ', up to date'}</span></span>
+    </label>`).join('');
+}
+
+$('#btn-sync-select-all').addEventListener('click', () => {
+  $$('.sync-project-check').forEach((cb) => { cb.checked = true; });
+});
+$('#btn-sync-select-none').addEventListener('click', () => {
+  $$('.sync-project-check').forEach((cb) => { cb.checked = false; });
+});
+
+$('#btn-sync-selected').addEventListener('click', async () => {
+  const ids = $$('.sync-project-check:checked').map((cb) => cb.value);
+  const btn = $('#btn-sync-selected');
+  const status = $('#sync-status');
+  if (!ids.length) { status.textContent = 'Nothing selected.'; return; }
+
+  btn.disabled = true;
+  status.textContent = `Syncing 0 of ${ids.length} project(s)…`;
+  const lapsed = [];
+  try {
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i];
+      const dirHandle = await getSyncDirectoryIfPermitted(id);
+      if (!dirHandle) { lapsed.push(id); continue; }
+      await syncCurrentProjectToFolderIfLinked(id);
+      status.textContent = `Syncing ${i + 1} of ${ids.length} project(s)…`;
+    }
+    // Nothing else tells the global out-of-sync banner (common.js) that
+    // these just caught up -- without this it keeps showing the pre-sync
+    // count on every page until the next full reload.
+    window.dispatchEvent(new CustomEvent('folder-sync-completed'));
+    await renderSyncSection();
+
+    const syncedCount = ids.length - lapsed.length;
+    if (lapsed.length) {
+      const names = lapsed.map((id) => syncScopedRows.find((r) => r.project.id === id)?.project.name || id).join(', ');
+      status.textContent = `Synced ${syncedCount} of ${ids.length} project(s). Folder access needs renewing for: ${names} -- open that project and click "Sync to Folder" once to restore it.`;
+    } else {
+      status.textContent = `Synced ${syncedCount} project(s).`;
+    }
+  } catch (err) {
+    console.error(err);
+    status.textContent = '';
+    alert(userError("Couldn't sync: " + err.message, 'SYNC_ALL'));
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 // ---------- Company: identity/connection ----------
@@ -2333,11 +2432,24 @@ $('#btn-save-user-name').addEventListener('click', async () => {
 // company-management.html's redirect) opens straight to Company; being
 // connected to a company is no longer enough on its own -- Settings always
 // defaults to You otherwise, same as someone with no company at all.
+// Captured before setSettingsTab below -- it replaces the URL with a bare
+// 'settings.html' (no query string at all) whenever it lands on the "you"
+// tab, which would otherwise wipe this out before the code that needs it
+// ever gets a chance to read it back from location.search.
+const openSyncOnLoad = !!queryParam('openSync');
 setSettingsTab(queryParam('tab') === 'company' ? 'company' : 'you');
 
 (async () => {
   $('#f-user-name').value = (await getUserName()) || '';
   renderInstallSection();
+  await renderSyncSection();
+  // The out-of-sync banner (common.js) links here with this so landing on
+  // Settings actually shows what it was complaining about, instead of just
+  // dropping someone on the You tab with a collapsed section to go find.
+  if (openSyncOnLoad) {
+    $('#sync-section').open = true;
+    $('#sync-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
   await refreshCompanySection();
 })();
 </script>

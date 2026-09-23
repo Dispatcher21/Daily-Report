@@ -709,16 +709,21 @@ async function refreshGlobalSyncBanner() {
     }
 
     if (!banner) {
-      banner = document.createElement('div');
+      banner = document.createElement('a');
       banner.id = 'global-sync-banner';
       banner.className = 'global-sync-banner';
+      // Settings' own Sync to Folder section (settings.html) can catch up
+      // every linked project in one go -- openSync tells it to open that
+      // section and scroll to it, rather than landing someone on the You
+      // tab with no idea where to look.
+      banner.href = 'settings.html?tab=you&openSync=1';
       header.insertAdjacentElement('afterend', banner);
     }
     const reportWord = totalPending === 1 ? 'report hasn’t' : 'reports haven’t';
     const where = projectsAffected === 1
       ? 'its linked folder'
       : `their linked folders across ${projectsAffected} projects`;
-    banner.textContent = `⚠ ${totalPending} ${reportWord} synced to ${where} yet.`;
+    banner.textContent = `⚠ ${totalPending} ${reportWord} synced to ${where} yet. Tap to sync all →`;
     banner.hidden = false;
   } catch (err) {
     console.error('global sync banner:', err);
@@ -741,9 +746,16 @@ window.addEventListener('folder-sync-completed', refreshGlobalSyncBanner);
 // getManagedProjectsLastSeenAt() -- there's no separate createdAt to
 // distinguish a brand new item from an edited one, so this reads as
 // "something changed", the same signal the rest of the app already treats
-// updatedAt as carrying. Links to manager.html, the one place that clears
-// it (see that page's own markManagedProjectsSeen call) -- shown on every
-// OTHER page, manager.html itself never creates it.
+// updatedAt as carrying.
+//
+// Unlike the out-of-sync banner (a plain link), this is a button: clicking
+// it opens a dropdown listing the actual items, right there, using the
+// exact same .global-search-panel/.gsp-* component theme.js's header search
+// already built (see buildManagedActivityPanel below) -- rather than
+// forcing a trip to manager.html just to see what changed. That page is
+// still the one place that actually clears this (its own
+// markManagedProjectsSeen call, see the dropdown's own "Open Manager page"
+// row for a way there without leaving this page first).
 async function refreshManagedProjectsAlertBanner() {
   if (typeof getManagedProjectIds !== 'function' || typeof companyCan !== 'function') return;
   const header = document.querySelector('.app-header');
@@ -784,24 +796,167 @@ async function refreshManagedProjectsAlertBanner() {
     }
 
     if (!banner) {
-      banner = document.createElement('a');
+      banner = document.createElement('button');
+      banner.type = 'button';
       banner.id = 'managed-projects-alert-banner';
       banner.className = 'global-sync-banner managed-projects-alert-banner';
-      banner.href = 'manager.html';
+      banner.addEventListener('click', () => {
+        if (managedActivityPanelOpen) closeManagedActivityPanel();
+        else openManagedActivityPanel();
+      });
       // After the out-of-sync banner when both are present, so the stack
       // reads in a stable order no matter which refresh fired last.
       const anchor = document.getElementById('global-sync-banner') || header;
       anchor.insertAdjacentElement('afterend', banner);
     }
     const itemWord = newCount === 1 ? 'item has' : 'items have';
-    banner.textContent = `\u{1F514} ${newCount} ${itemWord} new activity in projects you manage.`;
+    banner.textContent = `\u{1F514} ${newCount} ${itemWord} new activity in projects you manage. Tap to view →`;
     banner.hidden = false;
   } catch (err) {
     console.error('managed projects alert banner:', err);
   }
 }
+
+// ---------- Managed activity dropdown ----------
+//
+// The list behind the button above -- same component as theme.js's header
+// search (.global-search-panel/.gsp-*), same fixed-under-header positioning
+// and outside-click/Escape close, just populated with report/Pay App rows
+// grouped by project instead of search matches.
+let managedActivityPanelEl = null;
+let managedActivityPanelOpen = false;
+
+function onManagedActivityKeydown(e) {
+  if (e.key === 'Escape') closeManagedActivityPanel();
+}
+function onManagedActivityDocClick(e) {
+  const banner = document.getElementById('managed-projects-alert-banner');
+  if ((managedActivityPanelEl && managedActivityPanelEl.contains(e.target)) || (banner && banner.contains(e.target))) return;
+  closeManagedActivityPanel();
+}
+function closeManagedActivityPanel() {
+  if (managedActivityPanelEl) {
+    managedActivityPanelEl.hidden = true;
+    managedActivityPanelEl.innerHTML = '';
+  }
+  managedActivityPanelOpen = false;
+  document.removeEventListener('keydown', onManagedActivityKeydown);
+  document.removeEventListener('click', onManagedActivityDocClick, true);
+}
+
+async function openManagedActivityPanel() {
+  const header = document.querySelector('.app-header');
+  if (!header) return;
+  if (!managedActivityPanelEl) {
+    managedActivityPanelEl = document.createElement('div');
+    managedActivityPanelEl.className = 'global-search-panel';
+    managedActivityPanelEl.id = 'managed-activity-panel';
+    managedActivityPanelEl.hidden = true;
+    document.body.appendChild(managedActivityPanelEl);
+  }
+  managedActivityPanelEl.style.top = `${header.getBoundingClientRect().bottom}px`;
+  managedActivityPanelEl.innerHTML = '<div class="gsp-empty">Loading…</div>';
+  managedActivityPanelEl.hidden = false;
+  managedActivityPanelOpen = true;
+  document.addEventListener('keydown', onManagedActivityKeydown);
+  document.addEventListener('click', onManagedActivityDocClick, true);
+
+  try {
+    const [managedIds, lastSeenAt, canReports, canPayApps, allProjects] = await Promise.all([
+      getManagedProjectIds().then((ids) => new Set(ids)),
+      getManagedProjectsLastSeenAt(),
+      companyCan('approveReports'),
+      companyCan('approvePayApps'),
+      getAllProjects(),
+    ]);
+    const projectsById = new Map(allProjects.map((p) => [p.id, p]));
+
+    const rows = []; // { projectId, date, html }
+    if (canReports) {
+      const allReports = await getAllReports();
+      allReports
+        .filter((r) => managedIds.has(r.projectId) && !r.deleted && (r.updatedAt || 0) > lastSeenAt)
+        .forEach((r) => {
+          rows.push({
+            projectId: r.projectId,
+            date: r.date || '',
+            html: `
+              <a class="gsp-row" href="report-viewer.html?project=${r.projectId}&report=${r.id}">
+                <span class="gsp-row-date">${escapeHtml(r.date || '(no date)')}</span>
+                <span class="gsp-row-main"><span class="gsp-row-no">Report #${escapeHtml(String(r.reportNo ?? ''))}</span></span>
+              </a>`,
+          });
+        });
+    }
+    if (canPayApps) {
+      allProjects
+        .filter((p) => managedIds.has(p.id))
+        .forEach((p) => {
+          (p.billingEstimates || [])
+            .filter((e) => (e.updatedAt || 0) > lastSeenAt)
+            .forEach((e) => {
+              rows.push({
+                projectId: p.id,
+                date: e.date || '',
+                html: `
+                  <a class="gsp-row" href="pay-apps.html?project=${p.id}&estimate=${e.id}">
+                    <span class="gsp-row-date">${escapeHtml(e.date || '(no date)')}</span>
+                    <span class="gsp-row-main"><span class="gsp-row-no">Pay App #${escapeHtml(e.estimateNo || '?')}</span></span>
+                  </a>`,
+              });
+            });
+        });
+    }
+
+    if (!rows.length) {
+      // Can genuinely happen: the banner's own count and this list are both
+      // read fresh, but something else (another tab, a background pull)
+      // could clear the activity in between the click and this resolving.
+      managedActivityPanelEl.innerHTML = '<div class="gsp-empty">Nothing new right now.</div>';
+      return;
+    }
+
+    const byProject = new Map();
+    rows.forEach((row) => {
+      if (!byProject.has(row.projectId)) byProject.set(row.projectId, []);
+      byProject.get(row.projectId).push(row);
+    });
+    const projectIds = Array.from(byProject.keys()).sort((a, b) => {
+      const pa = projectsById.get(a), pb = projectsById.get(b);
+      return (pa ? pa.name : '').localeCompare(pb ? pb.name : '');
+    });
+
+    let html = '';
+    projectIds.forEach((pid) => {
+      const project = projectsById.get(pid);
+      const projRows = byProject.get(pid).slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+      html += `<div class="gsp-group"><div class="gsp-group-title">${escapeHtml(project ? project.name : 'Unknown project')}</div>`;
+      projRows.forEach((row) => { html += row.html; });
+      html += `</div>`;
+    });
+    html += `<div class="gsp-more"><a href="manager.html">Open Manager page &rarr;</a></div>`;
+    managedActivityPanelEl.innerHTML = html;
+  } catch (err) {
+    console.error('managed activity panel:', err);
+    managedActivityPanelEl.innerHTML = '<div class="gsp-empty">Couldn\'t load activity.</div>';
+  }
+}
+
 document.addEventListener('DOMContentLoaded', refreshManagedProjectsAlertBanner);
 window.addEventListener('company-data-pulled', refreshManagedProjectsAlertBanner);
+
+// Back/forward into a page restored from bfcache runs no scripts and fires
+// no DOMContentLoaded -- both banners above would otherwise keep showing
+// whatever they last rendered before the snapshot, even after the thing
+// that would clear them (a sync, a visit to manager.html) happened on a
+// different tab or a different in-app navigation since. Only worth
+// re-checking on the actual bfcache-restore case (event.persisted); an
+// ordinary fresh navigation already got both banners from DOMContentLoaded.
+window.addEventListener('pageshow', (e) => {
+  if (!e.persisted) return;
+  refreshGlobalSyncBanner();
+  refreshManagedProjectsAlertBanner();
+});
 
 // ---------- Install-to-home-screen ----------
 //

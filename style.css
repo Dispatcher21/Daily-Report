@@ -596,6 +596,8 @@ body {
 }
 .gsp-row-person { flex: 0 0 auto; font-size: 0.78rem; color: var(--text-dim); }
 .gsp-empty, .gsp-more { padding: 0.9rem 1rem; font-size: 0.85rem; color: var(--text-dim); }
+.gsp-more a { color: var(--brand); font-weight: 600; text-decoration: none; }
+.gsp-more a:hover { text-decoration: underline; }
 
 /* Segmented control (theme picker) */
 .segmented {
@@ -748,6 +750,13 @@ body {
   text-align: center;
 }
 .global-sync-banner[hidden] { display: none; }
+/* Both banners are now interactive elements (a link, a button) rather than
+   plain text -- reset the parts of that default look that would otherwise
+   fight the shared banner styling above. */
+a.global-sync-banner, button.global-sync-banner {
+  display: block; width: 100%; text-decoration: none; cursor: pointer;
+}
+button.global-sync-banner { border-left: none; border-right: none; border-top: none; font: inherit; }
 
 /* Same visual treatment as the sync banner above, but it's a link (into
    index.html's My Managed Projects card) rather than plain text, and uses

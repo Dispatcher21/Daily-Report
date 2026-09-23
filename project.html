@@ -999,6 +999,10 @@ $('#btn-sync-folder').addEventListener('click', async () => {
         btn.textContent = `Syncing ${done}/${total}…`;
       });
       status.textContent = `Synced ${result.reportCount} report(s) to folder "${result.folderName}" just now.`;
+      // Nothing else updates the global out-of-sync banner (common.js) on
+      // its own -- without this, a manual sync from here leaves it showing
+      // the pre-sync count until the next full page load.
+      window.dispatchEvent(new CustomEvent('folder-sync-completed'));
     } else {
       const { blob, reportCount } = await buildProjectSyncZip(project, (done, total) => {
         btn.textContent = `Building ${done}/${total}…`;

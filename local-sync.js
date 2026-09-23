@@ -668,6 +668,12 @@ async function onLocalFolderSyncReportChanged(report, deleted) {
     await runFolderSyncWithBanner('Saving to folder', 'Synced to folder', () =>
       syncSingleReportToFolder(project, report, dirHandle));
   }
+  // By far the most common path that changes folder sync state -- every
+  // ordinary report save/delete on a linked project runs through here.
+  // Without this, common.js's global out-of-sync banner never learns this
+  // report just caught up, and keeps showing the pre-save pending count
+  // until the next full page load.
+  window.dispatchEvent(new CustomEvent('folder-sync-completed'));
 }
 
 // Used by the header refresh button (theme.js) -- when the page currently
