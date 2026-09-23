@@ -2177,6 +2177,43 @@ input[type="date"] { min-width: 0; }
 .save-status { font-size: 0.85rem; color: var(--text-dim); flex: 1 1 auto; min-width: 0; }
 .save-status-err { color: var(--danger); font-weight: 600; }
 
+/* Generate/Duplicate share one row, each half width -- stacked full-width
+   like every other export-bar button below 1050px (same as always), paired
+   up once the desktop footer below has room for it. */
+.export-bar-row { display: flex; flex-direction: column; gap: 0.5rem; }
+.export-bar-row .btn-primary, .export-bar-row .btn-secondary { width: 100%; margin-top: 0; }
+
+/* A bit smaller everywhere -- these four run every report, every visit;
+   full-size buttons here were more visual weight than that frequency needs. */
+.export-bar .btn-primary, .export-bar .btn-secondary, .export-bar .btn-danger {
+  padding: 0.65rem 0.9rem; font-size: 0.94rem;
+}
+.export-bar .btn-primary { font-weight: 700; }
+
+@media (min-width: 1050px) {
+  .export-bar-row { flex-direction: row; }
+
+  /* Save / Generate+Duplicate / Delete, always visible while scrolling a
+     long report -- sticky (not fixed) so it naturally takes on .rb-form's
+     own column width instead of stretching edge to edge across the live
+     preview too, the same technique .rb-preview-col already uses (sticky
+     top) on the other side of this same layout. Room reserved below the
+     last field group (rb-form's own bottom padding) so it never ends up
+     covering one on a short report. Mobile keeps its own separate scheme
+     (page tabs up top, only Save pinned at the bottom) -- untouched here.
+     Sticky (unlike mobile's fixed bar) stays in normal document flow, so
+     .rb-form doesn't need any extra bottom padding reserved for it. */
+  .export-bar {
+    position: sticky; bottom: 0; z-index: 5; margin: 1rem 0 0;
+    background: var(--bg); border-top: 1px solid var(--border);
+    box-shadow: 0 -4px 10px rgba(0, 0, 0, 0.12);
+    padding: 0.75rem; border-radius: var(--radius) var(--radius) 0 0;
+  }
+  .save-row #btn-save-report { width: 100%; min-width: 0; }
+  .save-row { flex-direction: column; align-items: stretch; gap: 0.3rem; }
+  .save-status { text-align: center; }
+}
+
 .success {
   background: var(--ok-bg); border: 1.5px solid var(--ok); border-radius: var(--radius-sm);
   padding: 0.75rem 1rem; font-weight: 700; color: var(--ok); text-align: center;
