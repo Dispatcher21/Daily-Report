@@ -418,9 +418,30 @@ function readAccent() {
       if (syncBtn.classList.contains('spinning')) return; // already running
       syncBtn.classList.add('spinning');
       syncBtn.disabled = true;
+      // common.js's shared progress banner -- the same one join/create
+      // company, PDF building, and bulk imports already use. Every page
+      // with a header loads common.js, so this is never actually missing;
+      // the typeof check is just the established defensive habit for
+      // anything cross-file here, not a real fallback path.
+      const showProgress = typeof startProgressBanner === 'function';
+      if (showProgress) startProgressBanner();
       try {
+        // Checked first and on its own: this only compares the cached app
+        // code (JS/HTML/CSS) against what's on the server and installs a
+        // newer version if found -- it has nothing to do with the company
+        // data below and doesn't do any of it for you. Worth doing before
+        // the slower company sync anyway: it's a single cheap fetch, and if
+        // a newer version really is waiting, better to surface that (via
+        // common.js's own controllerchange reload prompt) before sinking
+        // time into a sync than after.
+        if (showProgress) progressStep('update-check', 'Checking for app updates');
+        if ('serviceWorker' in navigator) {
+          const registration = await navigator.serviceWorker.getRegistration();
+          if (registration) await registration.update();
+        }
+
         if (room) {
-          await syncCompanyRoomNow();
+          await syncCompanyRoomNow(showProgress ? reportCompanyProgress : undefined);
           // Pages that care already listen for this (see index.html/
           // project.html/reports.html) and re-render themselves; a page
           // that doesn't just shows the fresh data next time it loads,
@@ -438,34 +459,32 @@ function readAccent() {
           // surfacing a folder problem beyond the cloud icon.
           if (typeof syncCurrentProjectToFolderIfLinked === 'function' && typeof queryParam === 'function') {
             const projectId = queryParam('id') || queryParam('project');
-            await syncCurrentProjectToFolderIfLinked(projectId).catch((err) => console.error('header folder sync:', err));
-            // Fires after the folder resync above actually finishes writing,
-            // unlike company-data-pulled (already dispatched by now) which
-            // reports.html/project.html would otherwise use to refresh their
-            // synced/pending counts too early -- reading the old state and
-            // leaving a stale "N reports haven't synced" banner up.
-            window.dispatchEvent(new CustomEvent('folder-sync-completed'));
+            if (projectId) {
+              // local-sync.js's own runFolderSyncWithBanner politely defers
+              // to whichever step is already showing on this banner (see
+              // its folderSyncBannerAvailable comment) rather than stealing
+              // it mid-sequence -- this is that step, driven from out here
+              // instead, so the folder resync still gets its own line.
+              if (showProgress) progressStep('folder-sync', 'Syncing to your linked folder');
+              await syncCurrentProjectToFolderIfLinked(projectId).catch((err) => console.error('header folder sync:', err));
+              // Fires after the folder resync above actually finishes writing,
+              // unlike company-data-pulled (already dispatched by now) which
+              // reports.html/project.html would otherwise use to refresh their
+              // synced/pending counts too early -- reading the old state and
+              // leaving a stale "N reports haven't synced" banner up.
+              window.dispatchEvent(new CustomEvent('folder-sync-completed'));
+            }
           }
         }
 
-        // Forces the browser to re-fetch service-worker.js right now instead
-        // of waiting on its own periodic check (which can sit for hours on a
-        // tab/installed app that's rarely fully closed and reopened). The
-        // service worker calls skipWaiting()/clients.claim() on activate
-        // (see service-worker.js), so a real update installs and takes over
-        // immediately -- common.js's own controllerchange listener is what
-        // actually prompts to reload once that happens, not this handler.
-        if ('serviceWorker' in navigator) {
-          const registration = await navigator.serviceWorker.getRegistration();
-          if (registration) await registration.update();
-        }
+        if (showProgress) finishProgressBanner("You're all caught up!");
       } catch (err) {
         console.error('header sync:', err);
-        alert(
-          typeof userError === 'function'
-            ? userError("Couldn't sync: " + err.message, 'HEADER_SYNC')
-            : "Couldn't sync: " + err.message
-        );
+        const message = typeof userError === 'function'
+          ? userError("Couldn't sync: " + err.message, 'HEADER_SYNC')
+          : "Couldn't sync: " + err.message;
+        if (showProgress && typeof progressBannerError === 'function') progressBannerError(message);
+        else alert(message);
       } finally {
         syncBtn.classList.remove('spinning');
         syncBtn.disabled = false;

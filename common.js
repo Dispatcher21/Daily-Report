@@ -408,6 +408,10 @@ function reportCompanyProgress(progress) {
     case 'reports':
       progressStep('reports', 'Syncing your reports', p.total ? `${p.index} of ${p.total}` : null);
       break;
+    case 'deletions': progressStep('deletions', 'Checking for anything removed elsewhere'); break;
+    case 'audit':
+      progressStep('audit', p.count != null ? 'Sending your activity log' : 'Getting the activity log', p.count != null ? `${p.count} sent` : null);
+      break;
     default:
       progressStep('working', 'Working on it');
   }
