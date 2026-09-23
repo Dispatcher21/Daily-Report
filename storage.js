@@ -168,6 +168,40 @@ async function saveManagerDashboardExcludedProjectIds(excludedProjectIds) {
   syncUserLayout(userName);
 }
 
+// Which projects a person has chosen to manage -- drives "My Managed
+// Projects" and the new-report alert banner (index.html/common.js). Per
+// person, same as favorites/layout above: two managers each pick their own
+// set, and it follows them to another device the same way. `[]` (never
+// customized) means "managing nothing", not "managing everything" -- unlike
+// the dashboard exclusion list above, there's no sensible company-wide
+// fallback for who manages what.
+function managedProjectsSettingKey(userName) {
+  return `managedProjects:${userName || '_anon'}`;
+}
+
+async function getManagedProjectIds() {
+  const userName = await getUserName();
+  return (await getSetting(managedProjectsSettingKey(userName))) || [];
+}
+
+async function saveManagedProjectIds(projectIds) {
+  const userName = await getUserName();
+  await saveSetting(managedProjectsSettingKey(userName), projectIds);
+  syncUserLayout(userName);
+}
+
+async function toggleManagedProject(projectId) {
+  const userName = await getUserName();
+  const key = managedProjectsSettingKey(userName);
+  const ids = (await getSetting(key)) || [];
+  const idx = ids.indexOf(projectId);
+  if (idx === -1) ids.push(projectId);
+  else ids.splice(idx, 1);
+  await saveSetting(key, ids);
+  syncUserLayout(userName);
+  return ids;
+}
+
 // Local marker of when this person's favorites/layout last changed on
 // THIS device -- compared against the company's copy on pull (see
 // pullUserLayout in firebase-sync.js) so an older copy synced from

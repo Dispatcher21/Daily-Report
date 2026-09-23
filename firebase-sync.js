@@ -1106,15 +1106,17 @@ async function pushUserLayout(code, userName) {
   const { doc, setDoc, serverTimestamp } = await import(FIRESTORE_SDK);
   await ensureSignedIn();
 
-  const [projectLayout, favoriteProjectIds, managerDashboardExcludedProjectIds] = await Promise.all([
+  const [projectLayout, favoriteProjectIds, managerDashboardExcludedProjectIds, managedProjectIds] = await Promise.all([
     getProjectLayout(),
     getFavoriteProjectIds(),
     getManagerDashboardExcludedProjectIds(),
+    getManagedProjectIds(),
   ]);
   await setDoc(doc(db, 'companies', code, 'userLayouts', userLayoutDocId(userName)), {
     projectLayout: JSON.parse(JSON.stringify(stripLayoutForSync(projectLayout))),
     favoriteProjectIds,
     managerDashboardExcludedProjectIds,
+    managedProjectIds,
     updatedAt: serverTimestamp(),
   });
 }
@@ -1159,6 +1161,12 @@ async function pullUserLayout(code, userName) {
   // undefined here, same as never-customized, not an empty list.
   if (data.managerDashboardExcludedProjectIds !== undefined) {
     await saveSetting(managerDashboardExcludedSettingKey(userName), data.managerDashboardExcludedProjectIds);
+  }
+  // Older synced copies won't have this field either -- undefined means
+  // never customized (or synced from before this feature existed), not
+  // "managing nothing" pushed deliberately.
+  if (data.managedProjectIds !== undefined) {
+    await saveSetting(managedProjectsSettingKey(userName), data.managedProjectIds);
   }
   await saveSetting(userLayoutUpdatedAtSettingKey(userName), remoteUpdatedAt);
   return true;

@@ -2575,6 +2575,17 @@ input[type="date"] { min-width: 0; }
   background: var(--warn-bg); padding: 0.1rem 0.4rem; border-radius: 999px;
 }
 
+/* My Managed Projects (index.html, Manager role) */
+.mp-row {
+  display: flex; flex-direction: column; gap: 0.15rem; padding: 0.6rem 0.75rem; border-radius: var(--radius);
+  border: 1px solid var(--border); margin-bottom: 0.5rem; text-decoration: none; color: inherit;
+}
+.mp-row:last-child { margin-bottom: 0; }
+.mp-row:hover { border-color: var(--brand); }
+.mp-row-name { font-weight: 700; }
+.mp-row-meta { font-size: 0.8rem; color: var(--text-dim); }
+.mp-row-pending { color: var(--warn); font-weight: 700; }
+
 .bar-list { display: flex; flex-direction: column; gap: 0.9rem; max-height: 560px; overflow-y: auto; padding-right: 0.25rem; }
 /* Project Dashboard's own Pay Item Completion card only -- quantity-sheet.html's
    own #qty-bars is the main content of that page, not a dashboard summary,
