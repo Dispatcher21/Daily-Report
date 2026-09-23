@@ -799,3 +799,43 @@ async function saveThemeImageBlob(themeId, kind, blob) {
   }
   await putCompanyThemeRaw(theme);
 }
+
+// ---------- Local folder sync state ----------
+//
+// Moved here from local-sync.js (which still owns the actual writing) so
+// every page can check whether anything's out of sync -- not just the ones
+// that load local-sync.js's whole File System Access API machinery -- for
+// the global header banner (see common.js's refreshGlobalSyncBanner).
+
+function syncDirHandleSettingKey(projectId) {
+  return `syncDirHandle:${projectId}`;
+}
+
+// Lets the UI show which folder a project is already linked to (name only
+// -- there's no way to get a full path back out of the API) without forcing
+// a picker prompt just to check.
+async function getLinkedSyncFolderName(projectId) {
+  const stored = await getSetting(syncDirHandleSettingKey(projectId));
+  return stored ? stored.name : null;
+}
+
+// { [reportId]: { baseName, syncedAt } } per project -- doubles as: (a) how
+// isReportFolderSynced (below) tells reports.html which reports still need
+// a folder update, and (b) how a rename (Report No./date edit) knows the
+// OLD filename to delete so a folder sync never leaves a stale duplicate
+// behind under the report's previous name.
+function folderSyncStateSettingKey(projectId) {
+  return `folderSyncState:${projectId}`;
+}
+
+async function getFolderSyncState(projectId) {
+  return (await getSetting(folderSyncStateSettingKey(projectId))) || {};
+}
+
+// A report counts as synced once its folder copy was written at or after
+// its last edit -- an entry from before the report's most recent updatedAt
+// means it changed since, so the folder copy is stale, not synced.
+function isReportFolderSynced(report, state) {
+  const entry = state && state[report.id];
+  return !!entry && entry.syncedAt >= (report.updatedAt || 0);
+}

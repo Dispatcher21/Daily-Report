@@ -732,6 +732,23 @@ body {
 }
 .theme-card[aria-pressed="true"] .theme-card-name { color: var(--link); }
 
+/* One alert, on every page, for whether ANY project's reports have fallen
+   behind on their linked local folder -- see common.js's
+   refreshGlobalSyncBanner. Inserted right after .app-header in the DOM
+   (not inside it -- the header itself is sticky and shouldn't grow), so it
+   sits directly under it, above a page's own back-bar/content, impossible
+   to miss on load without needing to be sticky itself. */
+.global-sync-banner {
+  background: var(--warn-bg);
+  border-bottom: 2px solid var(--warn-border);
+  color: var(--warn);
+  padding: 0.7rem 1rem;
+  font-size: 0.88rem;
+  font-weight: 700;
+  text-align: center;
+}
+.global-sync-banner[hidden] { display: none; }
+
 .back-bar {
   background: var(--surface-2);
   border-bottom: 1px solid var(--border);

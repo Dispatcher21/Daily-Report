@@ -50,11 +50,6 @@
 </div>
 
 <main>
-  <div class="warn warn-row" id="folder-sync-banner" hidden>
-    <span id="folder-sync-banner-text"></span>
-    <button type="button" class="btn-sm" id="btn-folder-sync-banner">Sync Now</button>
-  </div>
-
   <div class="filter-row">
     <div class="filter-box">
       <label>From</label>
@@ -408,52 +403,7 @@ let folderSyncState = {};
 async function refreshFolderSyncBadgeState() {
   folderLinked = !!(await getLinkedSyncFolderName(project.id));
   folderSyncState = folderLinked ? await getFolderSyncState(project.id) : {};
-  updateFolderSyncBanner();
 }
-
-// A per-report cloud icon (see reportCloudBadgeHtml) is easy to miss when
-// you're scanning a long list for something else -- this is the same
-// "linked but X report(s) still pending" fact project.html's own Sync
-// section already shows, just surfaced somewhere it can't be scrolled
-// past, right where reports are actually being reviewed.
-function updateFolderSyncBanner() {
-  const banner = $('#folder-sync-banner');
-  if (!banner) return;
-  const pending = folderLinked ? allReports.filter((r) => !isReportFolderSynced(r, folderSyncState)).length : 0;
-  banner.hidden = pending === 0;
-  if (pending > 0) {
-    $('#folder-sync-banner-text').textContent =
-      `${pending} report${pending === 1 ? '' : 's'} ${pending === 1 ? "hasn't" : "haven't"} synced to your linked folder yet.`;
-  }
-}
-
-$('#btn-folder-sync-banner').addEventListener('click', async () => {
-  const btn = $('#btn-folder-sync-banner');
-  btn.disabled = true;
-  const original = btn.textContent;
-  try {
-    // Never prompts (see getSyncDirectoryIfPermitted's own comment) -- if
-    // permission on this device has lapsed, say so plainly instead of just
-    // silently doing nothing and leaving the banner up with no explanation.
-    const dirHandle = await getSyncDirectoryIfPermitted(project.id);
-    if (!dirHandle) {
-      alert('This device’s permission for that folder has lapsed. Open the project page and click "Sync Project to Folder" once to renew it.');
-      return;
-    }
-    await writeProjectToFolder(project, dirHandle, (done, total) => {
-      if (total) btn.textContent = `Syncing ${done}/${total}…`;
-    });
-    allReports = await getReportsForProject(project.id);
-    await refreshFolderSyncBadgeState();
-    render();
-  } catch (err) {
-    console.error(err);
-    alert(userError("Couldn't sync to the folder: " + err.message, 'FOLDER_SYNC'));
-  } finally {
-    btn.disabled = false;
-    btn.textContent = original;
-  }
-});
 
 // A plain inline SVG rather than a Unicode/emoji cloud character -- the
 // latter renders as a full-color glossy emoji on some platforms (iOS,

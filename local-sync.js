@@ -34,9 +34,9 @@ function folderSyncSupported() {
   return typeof window !== 'undefined' && typeof window.showDirectoryPicker === 'function';
 }
 
-function syncDirHandleSettingKey(projectId) {
-  return `syncDirHandle:${projectId}`;
-}
+// syncDirHandleSettingKey/getLinkedSyncFolderName live in storage.js now --
+// the global out-of-sync banner (common.js) needs them on every page, not
+// just the ones that load this whole file.
 
 // A handle stored in IndexedDB from an earlier sync loses live write
 // permission across sessions (the browser re-asks rather than trusting a
@@ -61,14 +61,6 @@ async function getOrPickSyncDirectory(projectId) {
   const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
   await saveSetting(key, handle);
   return handle;
-}
-
-// Lets the UI show which folder a project is already linked to (name only
-// -- there's no way to get a full path back out of the API) without forcing
-// a picker prompt just to check.
-async function getLinkedSyncFolderName(projectId) {
-  const stored = await getSetting(syncDirHandleSettingKey(projectId));
-  return stored ? stored.name : null;
 }
 
 async function forgetSyncFolder(projectId) {
@@ -381,29 +373,15 @@ function projectSyncZipFilename(project) {
 // loaded on the page (see the `typeof` guard there), same pattern as the
 // firebase-sync.js hook.
 //
-// { [reportId]: { baseName, syncedAt } } per project -- doubles as: (a) how
-// isReportFolderSynced (below) tells reports.html which reports still need
+// folderSyncStateSettingKey/getFolderSyncState/isReportFolderSynced live in
+// storage.js now (the global out-of-sync banner in common.js needs them
+// everywhere, not just the pages that load this whole file) -- doubles as:
+// (a) how isReportFolderSynced tells reports.html which reports still need
 // a folder update, and (b) how a rename (Report No./date edit) knows the
 // OLD filename to delete so a folder sync never leaves a stale duplicate
 // behind under the report's previous name.
-function folderSyncStateSettingKey(projectId) {
-  return `folderSyncState:${projectId}`;
-}
-
-async function getFolderSyncState(projectId) {
-  return (await getSetting(folderSyncStateSettingKey(projectId))) || {};
-}
-
 async function saveFolderSyncState(projectId, state) {
   await saveSetting(folderSyncStateSettingKey(projectId), state);
-}
-
-// A report counts as synced once its folder copy was written at or after
-// its last edit -- an entry from before the report's most recent updatedAt
-// means it changed since, so the folder copy is stale, not synced.
-function isReportFolderSynced(report, state) {
-  const entry = state && state[report.id];
-  return !!entry && entry.syncedAt >= (report.updatedAt || 0);
 }
 
 async function removeEntryIfExists(dirHandle, name, opts) {

@@ -649,6 +649,76 @@ function applyBranding() {
 }
 document.addEventListener('DOMContentLoaded', applyBranding);
 
+// ---------- Global "out of sync" banner ----------
+//
+// Used to be reports.html's own #folder-sync-banner, scoped to whichever
+// one project you happened to be looking at -- a device could sit on
+// index.html for days with a project's reports piling up unsynced to its
+// linked folder and never see anything about it. This checks every
+// project's own local-folder sync state (storage.js) and shows one banner,
+// right under the header, on every page, the moment anything's behind.
+//
+// login.html has no header for this to sit under and nothing meaningful to
+// report before a name's even on file, so it's skipped there the same way
+// the hamburger menu already is (no #global-sync-banner-slot in its markup).
+async function refreshGlobalSyncBanner() {
+  if (typeof getAllProjects !== 'function' || typeof getLinkedSyncFolderName !== 'function') return;
+  const header = document.querySelector('.app-header');
+  if (!header) return;
+
+  try {
+    const projects = await getAllProjects();
+    const linked = [];
+    for (const p of projects) {
+      const folderName = await getLinkedSyncFolderName(p.id);
+      if (folderName) linked.push(p);
+    }
+
+    let banner = document.getElementById('global-sync-banner');
+    if (!linked.length) {
+      if (banner) banner.hidden = true;
+      return;
+    }
+
+    // One getAllReports() call, not one per linked project -- same reasoning
+    // as index.html's renderProjectCards.
+    const allReports = await getAllReports();
+    let totalPending = 0;
+    let projectsAffected = 0;
+    for (const p of linked) {
+      const state = await getFolderSyncState(p.id);
+      const pending = allReports.reduce((n, r) => n + (r.projectId === p.id && !isReportFolderSynced(r, state) ? 1 : 0), 0);
+      if (pending > 0) { totalPending += pending; projectsAffected++; }
+    }
+
+    if (!totalPending) {
+      if (banner) banner.hidden = true;
+      return;
+    }
+
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id = 'global-sync-banner';
+      banner.className = 'global-sync-banner';
+      header.insertAdjacentElement('afterend', banner);
+    }
+    const reportWord = totalPending === 1 ? 'report hasn’t' : 'reports haven’t';
+    const where = projectsAffected === 1
+      ? 'its linked folder'
+      : `their linked folders across ${projectsAffected} projects`;
+    banner.textContent = `⚠ ${totalPending} ${reportWord} synced to ${where} yet.`;
+    banner.hidden = false;
+  } catch (err) {
+    console.error('global sync banner:', err);
+  }
+}
+document.addEventListener('DOMContentLoaded', refreshGlobalSyncBanner);
+// Both already fire globally (theme.js's header sync button after a
+// company pull / folder resync) -- same signal that used to just refresh
+// reports.html's own per-project banner now refreshes this one everywhere.
+window.addEventListener('company-data-pulled', refreshGlobalSyncBanner);
+window.addEventListener('folder-sync-completed', refreshGlobalSyncBanner);
+
 // ---------- Install-to-home-screen ----------
 //
 // The browser fires beforeinstallprompt early and only once per page load, so
