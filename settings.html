@@ -2443,9 +2443,11 @@ setSettingsTab(queryParam('tab') === 'company' ? 'company' : 'you');
   $('#f-user-name').value = (await getUserName()) || '';
   renderInstallSection();
   await renderSyncSection();
-  // The out-of-sync banner (common.js) links here with this so landing on
-  // Settings actually shows what it was complaining about, instead of just
-  // dropping someone on the You tab with a collapsed section to go find.
+  // ?openSync=1 opens and scrolls to this section directly -- the
+  // out-of-sync banner used to link here this way; it now syncs everything
+  // itself with one tap instead (see common.js's syncAllPendingFolders),
+  // but this still works as a deep link for picking specific projects to
+  // sync rather than everything pending.
   if (openSyncOnLoad) {
     $('#sync-section').open = true;
     $('#sync-section').scrollIntoView({ behavior: 'smooth', block: 'start' });

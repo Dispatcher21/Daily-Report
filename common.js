@@ -677,50 +677,54 @@ document.addEventListener('DOMContentLoaded', applyBranding);
 // login.html has no header for this to sit under and nothing meaningful to
 // report before a name's even on file, so it's skipped there the same way
 // the hamburger menu already is (no #global-sync-banner-slot in its markup).
+//
+// Every project on this device linked to a local folder, with how many of
+// its reports still haven't made it there -- the shared read behind both
+// the banner's own count and the "Sync All" button's own worklist, so the
+// two can never disagree about what's actually pending.
+async function getProjectsPendingFolderSync() {
+  const projects = await getAllProjects();
+  const linked = [];
+  for (const p of projects) {
+    const folderName = await getLinkedSyncFolderName(p.id);
+    if (folderName) linked.push(p);
+  }
+  if (!linked.length) return [];
+
+  // One getAllReports() call, not one per linked project -- same reasoning
+  // as index.html's renderProjectCards.
+  const allReports = await getAllReports();
+  const rows = [];
+  for (const p of linked) {
+    const state = await getFolderSyncState(p.id);
+    const pending = allReports.reduce((n, r) => n + (r.projectId === p.id && !isReportFolderSynced(r, state) ? 1 : 0), 0);
+    if (pending > 0) rows.push({ project: p, pending });
+  }
+  return rows;
+}
+
 async function refreshGlobalSyncBanner() {
   if (typeof getAllProjects !== 'function' || typeof getLinkedSyncFolderName !== 'function') return;
   const header = document.querySelector('.app-header');
   if (!header) return;
 
   try {
-    const projects = await getAllProjects();
-    const linked = [];
-    for (const p of projects) {
-      const folderName = await getLinkedSyncFolderName(p.id);
-      if (folderName) linked.push(p);
-    }
-
+    const rows = await getProjectsPendingFolderSync();
     let banner = document.getElementById('global-sync-banner');
-    if (!linked.length) {
+    if (!rows.length) {
       if (banner) banner.hidden = true;
       return;
     }
 
-    // One getAllReports() call, not one per linked project -- same reasoning
-    // as index.html's renderProjectCards.
-    const allReports = await getAllReports();
-    let totalPending = 0;
-    let projectsAffected = 0;
-    for (const p of linked) {
-      const state = await getFolderSyncState(p.id);
-      const pending = allReports.reduce((n, r) => n + (r.projectId === p.id && !isReportFolderSynced(r, state) ? 1 : 0), 0);
-      if (pending > 0) { totalPending += pending; projectsAffected++; }
-    }
-
-    if (!totalPending) {
-      if (banner) banner.hidden = true;
-      return;
-    }
+    const totalPending = rows.reduce((n, r) => n + r.pending, 0);
+    const projectsAffected = rows.length;
 
     if (!banner) {
-      banner = document.createElement('a');
+      banner = document.createElement('button');
+      banner.type = 'button';
       banner.id = 'global-sync-banner';
       banner.className = 'global-sync-banner';
-      // Settings' own Sync to Folder section (settings.html) can catch up
-      // every linked project in one go -- openSync tells it to open that
-      // section and scroll to it, rather than landing someone on the You
-      // tab with no idea where to look.
-      banner.href = 'settings.html?tab=you&openSync=1';
+      banner.addEventListener('click', () => syncAllPendingFolders(banner));
       header.insertAdjacentElement('afterend', banner);
     }
     const reportWord = totalPending === 1 ? 'report hasn’t' : 'reports haven’t';
@@ -739,6 +743,82 @@ document.addEventListener('DOMContentLoaded', refreshGlobalSyncBanner);
 // reports.html's own per-project banner now refreshes this one everywhere.
 window.addEventListener('company-data-pulled', refreshGlobalSyncBanner);
 window.addEventListener('folder-sync-completed', refreshGlobalSyncBanner);
+
+// Most pages that can show this banner never loaded local-sync.js (see its
+// own file header -- only the project-scoped pages that actually write
+// files do) -- fetched here on demand, the moment someone actually taps
+// "Sync All", the same on-demand technique local-sync.js already uses
+// internally for its own PDF libs. A no-op once loaded, on this page or a
+// previous click.
+let localSyncLoadPromise = null;
+function ensureLocalSyncLoaded() {
+  if (typeof syncCurrentProjectToFolderIfLinked === 'function') return Promise.resolve();
+  if (!localSyncLoadPromise) {
+    localSyncLoadPromise = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'local-sync.js';
+      s.onload = resolve;
+      s.onerror = () => reject(new Error('Failed to load local-sync.js'));
+      document.head.appendChild(s);
+    });
+  }
+  return localSyncLoadPromise;
+}
+
+// The banner's own click handler: catches up every linked project with
+// something pending, right here, rather than sending someone to Settings'
+// own Sync to Folder section just to click one more button -- that section
+// still exists for picking specific projects, this is the "just sync
+// everything" fast path. Narrated on the same shared progress banner the
+// header sync button uses, so it looks and feels like every other
+// multi-step job in the app instead of a silent wait behind a disabled
+// button.
+let syncAllRunning = false;
+async function syncAllPendingFolders(banner) {
+  if (syncAllRunning) return;
+  syncAllRunning = true;
+  banner.disabled = true;
+  const showProgress = typeof startProgressBanner === 'function';
+  if (showProgress) startProgressBanner();
+  try {
+    await ensureLocalSyncLoaded();
+    const rows = await getProjectsPendingFolderSync();
+    const lapsed = [];
+    for (let i = 0; i < rows.length; i++) {
+      const { project } = rows[i];
+      if (showProgress) progressStep('sync-all', `Syncing "${project.name}"`, `${i + 1} of ${rows.length}`);
+      // Never prompts for a folder -- same silent-if-not-permitted contract
+      // as the header sync button's own ridealong and Settings' bulk sync,
+      // see getSyncDirectoryIfPermitted's own comment.
+      const dirHandle = await getSyncDirectoryIfPermitted(project.id);
+      if (!dirHandle) { lapsed.push(project.name); continue; }
+      await syncCurrentProjectToFolderIfLinked(project.id);
+    }
+    // The listener above picks this up and re-checks -- hides the banner if
+    // that was everything, or updates its count if some were skipped
+    // (lapsed folder permission).
+    window.dispatchEvent(new CustomEvent('folder-sync-completed'));
+
+    if (showProgress) {
+      if (lapsed.length) {
+        finishProgressBanner(
+          `Synced ${rows.length - lapsed.length} of ${rows.length} project(s). Folder access needs renewing for: ${lapsed.join(', ')} -- open that project and click "Sync to Folder" once to restore it.`
+        );
+      } else {
+        finishProgressBanner("You're all caught up!");
+      }
+    }
+  } catch (err) {
+    console.error('sync all:', err);
+    const message = typeof userError === 'function'
+      ? userError("Couldn't sync: " + err.message, 'SYNC_ALL')
+      : "Couldn't sync: " + err.message;
+    if (showProgress && typeof progressBannerError === 'function') progressBannerError(message);
+  } finally {
+    syncAllRunning = false;
+    banner.disabled = false;
+  }
+}
 
 // ---------- Global "managed projects" alert banner ----------
 //
