@@ -607,9 +607,13 @@
               <input type="checkbox" id="cm-perm-create-projects">
               <span>Members can create new projects</span>
             </label>
-            <label class="toggle-row" for="cm-perm-view-manager-dashboard" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;">
+            <label class="toggle-row" for="cm-perm-view-manager-dashboard" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-bottom:0.75rem;">
               <input type="checkbox" id="cm-perm-view-manager-dashboard">
               <span>Members can view the Manager Dashboard</span>
+            </label>
+            <label class="toggle-row" for="cm-perm-approve-reports" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;">
+              <input type="checkbox" id="cm-perm-approve-reports">
+              <span>Members can approve/comment on reports (Manager)</span>
             </label>
 
             <p class="settings-subhead">Custom Setups</p>
@@ -642,9 +646,13 @@
                 <input type="checkbox" id="cs-perm-create-projects">
                 <span>Can create new projects</span>
               </label>
-              <label class="toggle-row" for="cs-perm-view-manager-dashboard" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;">
+              <label class="toggle-row" for="cs-perm-view-manager-dashboard" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-bottom:0.6rem;">
                 <input type="checkbox" id="cs-perm-view-manager-dashboard">
                 <span>Can view the Manager Dashboard (scoped to this setup's projects)</span>
+              </label>
+              <label class="toggle-row" for="cs-perm-approve-reports" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;">
+                <input type="checkbox" id="cs-perm-approve-reports">
+                <span>Can approve/comment on reports (Manager, scoped to this setup's projects)</span>
               </label>
 
               <p class="hint" style="margin:0.75rem 0 0.3rem;">Projects this setup can see</p>
@@ -1081,6 +1089,7 @@ async function refreshCompanySection() {
     $('#cm-perm-projects').checked = !!perms.membersCanEditProjects;
     $('#cm-perm-create-projects').checked = !!perms.membersCanCreateProjects;
     $('#cm-perm-view-manager-dashboard').checked = !!perms.membersCanViewManagerDashboard;
+    $('#cm-perm-approve-reports').checked = !!perms.membersCanApproveReports;
 
     await renderCmProjects();
     await renderCmActivity();
@@ -2011,6 +2020,17 @@ $('#cm-perm-view-manager-dashboard').addEventListener('change', async (e) => {
     cmError(userError("Couldn't save that permission: " + err.message, 'PERMISSION_TOGGLE'));
   }
 });
+$('#cm-perm-approve-reports').addEventListener('change', async (e) => {
+  cmError('');
+  try {
+    await updateCompanyPermissions({ membersCanApproveReports: e.target.checked });
+    cmStatus('Permissions saved.');
+  } catch (err) {
+    console.error(err);
+    e.target.checked = !e.target.checked;
+    cmError(userError("Couldn't save that permission: " + err.message, 'PERMISSION_TOGGLE'));
+  }
+});
 
 // ---------- Custom Setups ----------
 
@@ -2036,6 +2056,7 @@ function csPermissionSummary(perms) {
   if (perms.membersCanEditAnyReport) bits.push('edit ANY reports');
   if (perms.membersCanEditProjects) bits.push('edit projects');
   if (perms.membersCanCreateProjects) bits.push('create projects');
+  if (perms.membersCanApproveReports) bits.push('approve/comment on reports');
   return bits.length ? bits.join(', ') : 'view only';
 }
 
@@ -2097,6 +2118,7 @@ $('#btn-create-setup').addEventListener('click', async () => {
     membersCanEditProjects: $('#cs-perm-projects').checked,
     membersCanCreateProjects: $('#cs-perm-create-projects').checked,
     membersCanViewManagerDashboard: $('#cs-perm-view-manager-dashboard').checked,
+    membersCanApproveReports: $('#cs-perm-approve-reports').checked,
   };
 
   btn.disabled = true;
