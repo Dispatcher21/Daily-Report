@@ -289,33 +289,38 @@ async function makeBlankReport(nextReportNo, project, previous) {
   return report;
 }
 
-// Seeds a brand-new report from an existing one -- unlike makeBlankReport's
-// narrow previous-report carry-forward (just hours/names/contractor and
-// equipment labels), this copies every descriptive/structural field:
-// activity, notes, work summary, weather, contractors, equipment labels,
-// and pay item rows (item number/description/station/side/unit). What it
-// deliberately does NOT copy is anything that's a measurement or record of
-// that specific day rather than a description of the work: pay item and
-// equipment quantities, time entries, photos, and both signature images --
-// those always start blank/empty, same as a normal new report, since
-// copying yesterday's actual measured numbers or someone else's signature
-// into today would be actively wrong, not just unnecessary.
+// Seeds a brand-new report from an existing one -- a true "same as
+// yesterday, just tweak what changed" starting point. Copies everything:
+// activity, notes, work summary, weather, contractors, equipment labels and
+// quantities, pay item rows and quantities, inspector names/hours/time
+// segments. The only things that deliberately stay blank are photos and
+// both signature images -- carrying yesterday's photos or someone's actual
+// signature onto today's report would be wrong regardless of how much else
+// is meant to carry over.
 async function duplicateReport(source, nextReportNo, project) {
-  const loggedInName = typeof getUserName === 'function' ? await getUserName() : null;
   const room = typeof getCompanyRoom === 'function' ? await getCompanyRoom() : null;
   const companyCode = (project && project.companyCode) || (room && room.code) || null;
-  // Inspector names are descriptive ("who's assigned") and carry over like
-  // contractors/equipment labels below; their logged time is a measurement
-  // of that specific day and always starts blank, same reasoning as
-  // resetting equipment/pay item quantities further down. A device logged
-  // in with a name still overrides for the single-inspector case, matching
-  // `representative` itself -- with more than one inspector on the source
-  // report there's no one slot that login identity clearly replaces, so
-  // the carried-forward names are left as they were.
-  const inspectorNames = source.inspectors && source.inspectors.length > 1
-    ? source.inspectors.map((insp) => insp.name || '')
-    : [loggedInName || source.representative || ''];
-  const representative = inspectorNames.filter((n) => n.trim()).join(', ');
+
+  // A pre-multi-inspector report has no `inspectors` array of its own --
+  // same fold-in makeBlankReport/renderEditor already do, so there's always
+  // at least one real entry to copy forward instead of ending up empty.
+  const sourceInspectors = Array.isArray(source.inspectors) && source.inspectors.length
+    ? source.inspectors
+    : [{ name: source.representative || '', hours: source.hours, timeEntries: source.timeEntries || [{ start: '', end: '' }] }];
+  const inspectors = sourceInspectors.map((insp) => ({
+    name: insp.name || '',
+    hours: insp.hours,
+    timeEntries: (insp.timeEntries && insp.timeEntries.length ? insp.timeEntries : [{ start: '', end: '' }]).map((e) => ({ ...e })),
+  }));
+  const representative = inspectors.map((i) => i.name).filter((n) => n.trim()).join(', ');
+
+  // Always exactly CONTRACTOR_COUNT entries -- the print template and
+  // computeVisibleCounts (report-editor.html) both assume that invariant
+  // holds for every report, the same one makeBlankReport itself guarantees;
+  // a source predating the contractors feature entirely (no array at all)
+  // otherwise silently breaks the new report's own editor page.
+  const sourceContractors = Array.isArray(source.contractors) ? source.contractors : [];
+  const contractors = Array.from({ length: CONTRACTOR_COUNT }, (_, i) => ({ name: (sourceContractors[i] && sourceContractors[i].name) || '' }));
 
   const report = {
     ...source,
@@ -327,17 +332,14 @@ async function duplicateReport(source, nextReportNo, project) {
     representative,
     repSignatureName: representative,
     peSignatureName: source.peName || '',
-    timeEntries: [{ start: '', end: '' }],
-    inspectors: inspectorNames.map((name) => ({ name, timeEntries: [{ start: '', end: '' }] })),
+    timeEntries: inspectors[0].timeEntries.map((e) => ({ ...e })),
+    inspectors,
+    contractors,
     equipmentRows: (source.equipmentRows || []).map((row) => ({
       label: row.label || '',
-      qty: Array.from({ length: CONTRACTOR_COUNT }, () => ''),
+      qty: Array.isArray(row.qty) ? [...row.qty] : Array.from({ length: CONTRACTOR_COUNT }, () => ''),
     })),
-    payItems: (source.payItems || []).map((it) => ({
-      ...it,
-      qty: '',
-      theoreticalQty: '',
-    })),
+    payItems: (source.payItems || []).map((it) => ({ ...it })),
     repSignatureImage: null,
     peSignatureImage: null,
     photos: [null, null, null, null, null, null],
@@ -414,6 +416,13 @@ function normalizeReport(report) {
     report.equipmentRows.push({ label: '', qty: ['', '', '', '', '', ''] });
   }
   report.equipmentRows.length = EQUIPMENT_ROW_COUNT;
+  // Same invariant as equipmentRows above -- computeVisibleCounts
+  // (report-editor.html) and the print template both assume exactly
+  // CONTRACTOR_COUNT entries; a report old enough to predate the
+  // contractors feature entirely otherwise has none at all.
+  if (!Array.isArray(report.contractors)) report.contractors = [];
+  while (report.contractors.length < CONTRACTOR_COUNT) report.contractors.push({ name: '' });
+  report.contractors.length = CONTRACTOR_COUNT;
   report.equipmentRows.forEach((row) => {
     if (!Array.isArray(row.qty)) row.qty = ['', '', '', '', '', ''];
     while (row.qty.length < CONTRACTOR_COUNT) row.qty.push('');

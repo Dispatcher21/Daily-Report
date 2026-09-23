@@ -64,7 +64,6 @@
           <div id="rb-dupe-warn" class="rb-dupe-warn" hidden></div>
 
           <div class="time-worked-block">
-            <label class="hours-override">Hours <input type="number" inputmode="decimal" step="0.25" id="f-hours"></label>
             <div class="rb-subtoggle-hd" id="inspectors-toggle">
               <span class="sig-label" style="margin:0;">Inspectors</span>
               <span class="rb-chev">&#9656;</span>
@@ -878,7 +877,6 @@ function bindDynamicFields() {
 function renderEditor() {
   bindText('#f-reportNo', 'reportNo');
   bindText('#f-date', 'date');
-  bindText('#f-hours', 'hours');
 
   // Reports saved before multiple inspectors existed only have a flat
   // Representative name plus one shared time-entries array -- fold those
@@ -905,11 +903,11 @@ function renderEditor() {
       insp.hours = total > 0 ? Number(total.toFixed(2)) : (report.inspectors.length === 1 ? report.hours : '');
     });
   }
-  // Hours is the one box everyone needs; the Inspectors section (names,
-  // per-inspector time segments) is opt-in -- collapsed by default unless
-  // there's already real content in it (a name typed, or any time logged),
-  // so opening a report that already has inspector detail doesn't hide it.
-  inspectorsSectionOpen = reportHasInspectorContent(report);
+  // Always open by default -- this is the only place Hours gets entered
+  // now that the plain top-level box is gone, so there's nothing to gain by
+  // making someone click to reveal it. The toggle still exists purely for
+  // collapsing it back out of the way once it's filled in.
+  inspectorsSectionOpen = true;
   $('#step-reportInfo').querySelector('.time-worked-block').classList.toggle('open', inspectorsSectionOpen);
   renderInspectors();
 
@@ -1060,10 +1058,17 @@ function markBlankDay(noteText) {
   if (notesEl) notesEl.value = noteText;
   // Hours otherwise carries forward from whatever the previous report had
   // (see makeBlankReport) -- harmless for a normal day, but nobody worked
-  // hours on a day nobody worked, so a blank-day marker shouldn't inherit them.
+  // hours on a day nobody worked, so a blank-day marker shouldn't inherit
+  // them. Every inspector's own Hours/Time Segments too, not just the
+  // report-level total -- syncHoursFromInspectors only lowers that total
+  // when there's nothing left to sum, so leaving their boxes alone would
+  // just have the next edit anywhere quietly bring the old total right back.
+  report.inspectors.forEach((insp) => {
+    insp.hours = 0;
+    insp.timeEntries = [{ start: '', end: '' }];
+  });
   report.hours = 0;
-  const hoursEl = $('#f-hours');
-  if (hoursEl) hoursEl.value = 0;
+  renderInspectors();
   scheduleSave();
 }
 
@@ -1146,22 +1151,10 @@ function syncRepresentativeFromInspectors() {
   if (repEl) repEl.value = report.representative;
 }
 
-// Whether the whole Inspectors section (as opposed to just the plain Hours
-// box) is expanded -- same purely-local-UI-state treatment as
-// openInspectorCards just below, set once on load (see renderEditor) and
-// flipped by the #inspectors-toggle click handler.
+// Whether the whole Inspectors section is expanded -- same purely-local-
+// UI-state treatment as openInspectorCards just below, defaulted to open in
+// renderEditor and flipped by the #inspectors-toggle click handler.
 let inspectorsSectionOpen = false;
-// A lone inspector's name alone doesn't count -- makeBlankReport pre-fills
-// it from whoever's logged into this device, which isn't the same as
-// someone actually having engaged with this section yet. Only real logged
-// time, or more than one inspector, counts as content worth opening for.
-function reportHasInspectorContent(r) {
-  const inspectors = Array.isArray(r.inspectors) ? r.inspectors : [];
-  if (inspectors.length > 1) return true;
-  const insp = inspectors[0];
-  if (!insp) return false;
-  return (insp.timeEntries || []).some((e) => e.start && e.end);
-}
 
 // Which inspector cards' Time Segments are expanded -- purely a UI
 // convenience, tracked here rather than on the inspector objects themselves
@@ -1262,16 +1255,14 @@ function renderInspectors() {
   updateTotalHoursDisplay();
 }
 
-// The top-level Hours box, kept in sync from every inspector's own Hours --
-// same "auto-filled, editable" rule the top-level box itself already
-// follows (see bindText('#f-hours', ...)): only overwritten when there's
-// an actual total to show, never zeroed out just because every inspector's
-// own box happens to be blank.
+// report.hours no longer has its own box -- it's derived from every
+// inspector's own Hours, but kept as a real field since render-report.js
+// still falls back to it for an old report with no named inspectors. Only
+// overwritten when there's an actual total to show, never zeroed out just
+// because every inspector's own box happens to be blank.
 function syncHoursFromInspectors() {
   const total = totalHoursAllInspectors();
   report.hours = total > 0 ? Number(total.toFixed(2)) : report.hours;
-  const hoursEl = $('#f-hours');
-  if (hoursEl) hoursEl.value = report.hours;
 }
 
 function onInspectorsChanged() {

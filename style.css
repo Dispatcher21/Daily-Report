@@ -1831,8 +1831,6 @@ input[type="date"] { min-width: 0; }
   padding: 0.6rem 0.85rem; margin: 0.5rem 0 0.5rem; font-weight: 700; color: var(--text);
 }
 .total-hours-value { font-size: 1.5rem; color: var(--link); }
-.hours-override { margin-bottom: 0.75rem !important; }
-.hours-override input { max-width: 8rem; }
 
 /* One card per inspector -- name and hours subtotal always visible, that
    inspector's own start/end Time Segments collapsed behind their own
