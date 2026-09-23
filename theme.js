@@ -378,13 +378,12 @@ function readAccent() {
   }
 
   // Every page gets the same header-right cluster: a search button, a
-  // sync button (only when actually connected to a company -- a
-  // local-only device has nothing to pull/push), and a settings gear
-  // (every page except Settings itself, which is where the gear would
-  // just link to). Replaces what used to be four separate,
-  // differently-behaved refresh/sync buttons scattered across Home,
-  // Reports, Settings, and Company Management -- one control, same
-  // place, on every page.
+  // sync button (shown everywhere now, not just when connected to a
+  // company -- see below), and a settings gear (every page except
+  // Settings itself, which is where the gear would just link to).
+  // Replaces what used to be four separate, differently-behaved
+  // refresh/sync buttons scattered across Home, Reports, Settings, and
+  // Company Management -- one control, same place, on every page.
   //
   // Run from DOMContentLoaded (same as before), which is late enough that
   // firebase-sync.js and common.js -- both plain synchronous scripts
@@ -401,61 +400,78 @@ function readAccent() {
 
     buildSearchControl(header, controls);
 
-    if (typeof getCompanyRoom === 'function') {
-      const room = await getCompanyRoom().catch(() => null);
-      if (room) {
-        const syncBtn = document.createElement('button');
-        syncBtn.type = 'button';
-        syncBtn.className = 'header-sync-btn';
-        syncBtn.title = 'Sync with company';
-        syncBtn.setAttribute('aria-label', 'Sync with company');
-        syncBtn.innerHTML = '&#8635;';
-        syncBtn.addEventListener('click', async () => {
-          if (syncBtn.classList.contains('spinning')) return; // already running
-          syncBtn.classList.add('spinning');
-          syncBtn.disabled = true;
-          try {
-            await syncCompanyRoomNow();
-            // Pages that care already listen for this (see index.html/
-            // project.html/reports.html) and re-render themselves; a page
-            // that doesn't just shows the fresh data next time it loads,
-            // same as it would have before this button existed.
-            window.dispatchEvent(new CustomEvent('company-data-pulled'));
+    // Company sync AND checking for a newer version of the app itself --
+    // one button, since both are "make sure I have the latest of
+    // everything" in the user's head, and neither one is worth its own
+    // separate icon competing for the same corner of the header. Shown on
+    // every device, company or not: a local-only device has nothing to
+    // pull/push, but still benefits from a way to force an update check
+    // rather than wait on the browser's own periodic one.
+    const room = typeof getCompanyRoom === 'function' ? await getCompanyRoom().catch(() => null) : null;
+    const syncBtn = document.createElement('button');
+    syncBtn.type = 'button';
+    syncBtn.className = 'header-sync-btn';
+    syncBtn.title = room ? 'Sync with company & check for updates' : 'Check for app updates';
+    syncBtn.setAttribute('aria-label', syncBtn.title);
+    syncBtn.innerHTML = '&#8635;';
+    syncBtn.addEventListener('click', async () => {
+      if (syncBtn.classList.contains('spinning')) return; // already running
+      syncBtn.classList.add('spinning');
+      syncBtn.disabled = true;
+      try {
+        if (room) {
+          await syncCompanyRoomNow();
+          // Pages that care already listen for this (see index.html/
+          // project.html/reports.html) and re-render themselves; a page
+          // that doesn't just shows the fresh data next time it loads,
+          // same as it would have before this button existed.
+          window.dispatchEvent(new CustomEvent('company-data-pulled'));
 
-            // If the page currently open is scoped to a project (project.html's
-            // ?id=, everywhere else's ?project=) and that project is linked to
-            // a local folder, ride a full folder resync along with the
-            // company pull -- local-sync.js isn't loaded on every page, and
-            // syncCurrentProjectToFolderIfLinked itself no-ops when nothing's
-            // linked, so this is a harmless no-op almost everywhere it runs.
-            // Its own failure doesn't turn a successful company sync into an
-            // error -- same reasoning as the per-report auto-sync never
-            // surfacing a folder problem beyond the cloud icon.
-            if (typeof syncCurrentProjectToFolderIfLinked === 'function' && typeof queryParam === 'function') {
-              const projectId = queryParam('id') || queryParam('project');
-              await syncCurrentProjectToFolderIfLinked(projectId).catch((err) => console.error('header folder sync:', err));
-              // Fires after the folder resync above actually finishes writing,
-              // unlike company-data-pulled (already dispatched by now) which
-              // reports.html/project.html would otherwise use to refresh their
-              // synced/pending counts too early -- reading the old state and
-              // leaving a stale "N reports haven't synced" banner up.
-              window.dispatchEvent(new CustomEvent('folder-sync-completed'));
-            }
-          } catch (err) {
-            console.error('header sync:', err);
-            alert(
-              typeof userError === 'function'
-                ? userError("Couldn't sync: " + err.message, 'HEADER_SYNC')
-                : "Couldn't sync: " + err.message
-            );
-          } finally {
-            syncBtn.classList.remove('spinning');
-            syncBtn.disabled = false;
+          // If the page currently open is scoped to a project (project.html's
+          // ?id=, everywhere else's ?project=) and that project is linked to
+          // a local folder, ride a full folder resync along with the
+          // company pull -- local-sync.js isn't loaded on every page, and
+          // syncCurrentProjectToFolderIfLinked itself no-ops when nothing's
+          // linked, so this is a harmless no-op almost everywhere it runs.
+          // Its own failure doesn't turn a successful company sync into an
+          // error -- same reasoning as the per-report auto-sync never
+          // surfacing a folder problem beyond the cloud icon.
+          if (typeof syncCurrentProjectToFolderIfLinked === 'function' && typeof queryParam === 'function') {
+            const projectId = queryParam('id') || queryParam('project');
+            await syncCurrentProjectToFolderIfLinked(projectId).catch((err) => console.error('header folder sync:', err));
+            // Fires after the folder resync above actually finishes writing,
+            // unlike company-data-pulled (already dispatched by now) which
+            // reports.html/project.html would otherwise use to refresh their
+            // synced/pending counts too early -- reading the old state and
+            // leaving a stale "N reports haven't synced" banner up.
+            window.dispatchEvent(new CustomEvent('folder-sync-completed'));
           }
-        });
-        controls.appendChild(syncBtn);
+        }
+
+        // Forces the browser to re-fetch service-worker.js right now instead
+        // of waiting on its own periodic check (which can sit for hours on a
+        // tab/installed app that's rarely fully closed and reopened). The
+        // service worker calls skipWaiting()/clients.claim() on activate
+        // (see service-worker.js), so a real update installs and takes over
+        // immediately -- common.js's own controllerchange listener is what
+        // actually prompts to reload once that happens, not this handler.
+        if ('serviceWorker' in navigator) {
+          const registration = await navigator.serviceWorker.getRegistration();
+          if (registration) await registration.update();
+        }
+      } catch (err) {
+        console.error('header sync:', err);
+        alert(
+          typeof userError === 'function'
+            ? userError("Couldn't sync: " + err.message, 'HEADER_SYNC')
+            : "Couldn't sync: " + err.message
+        );
+      } finally {
+        syncBtn.classList.remove('spinning');
+        syncBtn.disabled = false;
       }
-    }
+    });
+    controls.appendChild(syncBtn);
 
     if (!isSettingsPage) {
       const a = document.createElement('a');
@@ -470,7 +486,7 @@ function readAccent() {
       controls.appendChild(a);
     }
 
-    if (!controls.children.length) return; // nothing to show (local-only device, on Settings)
+    if (!controls.children.length) return; // buildSearchControl always adds one, so this shouldn't happen, but skip cleanly if it ever does
     if (slot) slot.replaceWith(controls);
     else header.appendChild(controls);
   }
