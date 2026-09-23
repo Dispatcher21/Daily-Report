@@ -137,11 +137,18 @@ async function initHamburgerMenu() {
   // and pay-apps.html, and the Manager page itself -- no point showing a
   // link to a page that would just tell you you don't have access. Either
   // one alone is enough (a company might grant just report review, just
-  // Pay App review, or both).
-  if (typeof companyCan === 'function') {
-    Promise.all([companyCan('approveReports'), companyCan('approvePayApps')]).then(([canReports, canPayApps]) => {
-      panel.querySelector('#hb-manager-row').hidden = !(canReports || canPayApps);
-    }).catch(() => {});
+  // Pay App review, or both). Also hidden with zero managed projects --
+  // permission alone doesn't mean there's anything there yet to look at
+  // (and defaults to granted on a solo device with no company at all,
+  // where "Manager" doesn't mean anything in the first place). Someone
+  // newly granted the permission reaches manager.html the first time by a
+  // direct link from whoever granted it, not through this menu -- once
+  // they've picked their first project there, this row appears from then on.
+  if (typeof companyCan === 'function' && typeof getManagedProjectIds === 'function') {
+    Promise.all([companyCan('approveReports'), companyCan('approvePayApps'), getManagedProjectIds()])
+      .then(([canReports, canPayApps, managedIds]) => {
+        panel.querySelector('#hb-manager-row').hidden = !((canReports || canPayApps) && managedIds.length > 0);
+      }).catch(() => {});
   }
 
   // Same company-room scoping every project page already uses to decide
