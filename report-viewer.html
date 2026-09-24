@@ -394,6 +394,8 @@ function formatCommentTime(iso) {
   return d.toLocaleString();
 }
 
+let rvCanApprove = false;
+
 function renderReviewPanel(report) {
   const status = report.approvalStatus || 'pending';
   const badge = $('#rv-approval-badge');
@@ -428,6 +430,21 @@ function renderReviewPanel(report) {
     text.textContent = c.text || '';
     item.appendChild(head);
     item.appendChild(text);
+    if (rvCanApprove) {
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'rv-comment-delete';
+      del.title = 'Delete comment';
+      del.setAttribute('aria-label', 'Delete comment');
+      del.textContent = '×';
+      del.onclick = async () => {
+        if (!confirm('Delete this comment?')) return;
+        const updated = await deleteReportComment(report.id, c.id);
+        report = updated;
+        renderReviewPanel(report);
+      };
+      item.appendChild(del);
+    }
     list.appendChild(item);
   });
   $('#rv-comments-empty').hidden = comments.length > 0;
@@ -461,9 +478,12 @@ $('#rv-review-toggle').onclick = () => {
 
 async function initReviewPanel(report) {
   $('#rv-review-step').hidden = false;
+  // Needs to be known before the first renderReviewPanel call -- it decides
+  // whether each comment gets a delete button.
+  rvCanApprove = await companyCan('approveReports');
   renderReviewPanel(report);
 
-  const canApprove = await companyCan('approveReports');
+  const canApprove = rvCanApprove;
   $('#rv-approval-actions').hidden = !canApprove;
   $('#rv-comment-form').hidden = !canApprove;
   if (!canApprove) return;

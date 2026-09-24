@@ -395,6 +395,37 @@ async function saveReportApproval(reportId, { status, comment } = {}) {
   return report;
 }
 
+// Removes one comment from a report -- a real (hard) delete, unlike
+// deleteReport's soft-delete/Trash treatment below: a comment isn't a
+// record anyone needs to recover, just a correction to a conversation (a
+// stray note, something posted to the wrong report). Gated the same as
+// adding one -- see report-viewer.html's initReviewPanel, which only wires
+// up the button at all when companyCan('approveReports') is true -- since
+// comments live alongside approval status as the Manager role's own
+// reviewing activity, not the report's authored content.
+async function deleteReportComment(reportId, commentId) {
+  const report = await getReport(reportId, { includeDeleted: true });
+  if (!report) throw new Error('Report not found.');
+
+  const comments = report.comments || [];
+  const removed = comments.find((c) => c.id === commentId);
+  if (!removed) return report;
+  report.comments = comments.filter((c) => c.id !== commentId);
+  report.updatedAt = Date.now();
+  await putReportRaw(report);
+
+  if (typeof onCompanySyncReportChanged === 'function') {
+    onCompanySyncReportChanged(report, false).catch((err) => console.error('company sync mirror:', err));
+  }
+  if (typeof writeAuditEntry === 'function' && typeof reportEntityLabel === 'function') {
+    const label = await reportEntityLabel(report);
+    writeAuditEntry('report', report.id, label, 'edited', [{ label: 'Comment', from: removed.text, to: '(deleted)' }])
+      .catch((err) => console.error('audit log:', err));
+  }
+
+  return report;
+}
+
 // Soft-deletes a report -- moves it to Trash rather than removing it. There
 // is deliberately no way to remove a report's data for good from anywhere
 // in this app -- see restoreReport below for undoing this, and the
