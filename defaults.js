@@ -508,37 +508,51 @@ function findSimilarProject(pool, candidate) {
   );
 }
 
-// Merges an ESTIMATES sheet's rows (see parseEstimatesSheet in
-// project-file.js -- estimateNo/date/note/itemTotals, no id) into the
-// project's existing billing history by estimateNo, rather than replacing
-// the array wholesale the way every other field on this file does. A real
-// billing estimate carries approval status and reviewer comments (see
-// saveBillingEstimateApproval in storage.js) that the spreadsheet has no
+// Merges an ESTIMATES-shaped sheet's rows (see parseEstimatesSheet and
+// parsePayAppQuantitiesSheet in project-file.js -- estimateNo/date/note,
+// optionally itemTotals, never an id) into the project's existing billing
+// history by estimateNo, rather than replacing the array wholesale the way
+// every other field on the Project Data file does. A real billing estimate
+// carries approval status and reviewer comments (see
+// saveBillingEstimateApproval in storage.js) that neither spreadsheet has a
 // column for at all -- a wholesale replace would silently erase those on
-// every single re-upload, which is exactly backwards for a file meant to
-// make Pay Apps EASIER to keep up to date. An estimateNo already on file
-// is updated in place (keeping its id/approvalStatus/comments); its
+// every single re-upload, which is exactly backwards for files meant to
+// make Pay Apps EASIER to keep up to date. An estimateNo already on file is
+// updated in place (keeping its id/approvalStatus/comments); its
 // approvalStatus resets to 'pending' if the actual content changed, same
 // as hand-editing a Pay App in pay-apps.html already does. An estimateNo
 // the file doesn't mention at all is left untouched -- this only ever adds
 // to or updates billing history, never removes it just because a row got
 // deleted from the sheet (deleting a Pay App is its own explicit action
 // elsewhere, not a side effect of a re-upload).
+//
+// row.itemTotals is only ever touched when the row actually carries that
+// key -- Project Data's own ESTIMATES sheet never sets it at all (see its
+// own comment), so a re-upload from there can't wipe out figures that were
+// only ever entered through the dedicated Pay App Quantities file.
 function mergeBillingEstimates(existingList, fileRows) {
   const merged = (existingList || []).slice();
   const byNo = new Map(merged.map((e) => [String(e.estimateNo || '').trim(), e]));
   (fileRows || []).forEach((row) => {
     const key = String(row.estimateNo || '').trim();
     const match = key ? byNo.get(key) : null;
+    const hasItemTotals = Object.prototype.hasOwnProperty.call(row, 'itemTotals');
     if (match) {
       const contentChanged = match.date !== row.date || match.note !== row.note
-        || JSON.stringify(match.itemTotals || {}) !== JSON.stringify(row.itemTotals || {});
-      const updated = { ...match, date: row.date, note: row.note, itemTotals: row.itemTotals };
-      if (contentChanged && updated.approvalStatus) updated.approvalStatus = 'pending';
+        || (hasItemTotals && JSON.stringify(match.itemTotals || {}) !== JSON.stringify(row.itemTotals || {}));
+      if (!contentChanged) return; // nothing this row actually changes -- leave updatedAt alone too
+      const updated = { ...match, date: row.date, note: row.note };
+      if (hasItemTotals) updated.itemTotals = row.itemTotals;
+      if (updated.approvalStatus) updated.approvalStatus = 'pending';
+      // Its own activity marker, same as pay-apps.html's manual save sets on
+      // the estimate object itself -- the Manager alert banner (common.js)
+      // reads this to know which Pay App changed, not just that the project
+      // as a whole did.
+      updated.updatedAt = Date.now();
       merged[merged.indexOf(match)] = updated;
       byNo.set(key, updated);
     } else {
-      const created = { id: crypto.randomUUID(), estimateNo: row.estimateNo, date: row.date, note: row.note, itemTotals: row.itemTotals };
+      const created = { id: crypto.randomUUID(), estimateNo: row.estimateNo, date: row.date, note: row.note, itemTotals: row.itemTotals, updatedAt: Date.now() };
       merged.push(created);
       if (key) byNo.set(key, created);
     }

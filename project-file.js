@@ -244,14 +244,13 @@ function parseSingleColumnList(ws, headerLabel, maxCount) {
   return values;
 }
 
-// Reads an ESTIMATE NO. / DATE / NOTE (+ one column per pay item) table --
-// the record of billing checkpoints a project accumulates over time, either
-// via the Quantity Sheet's "Record New Estimate" button or by hand-typing a
-// Pay App's figures into this sheet instead of pay-apps.html's one-input-
-// at-a-time form. Returns null (not []) when the sheet is missing entirely,
-// so a re-upload of an older file (from before this feature, or just edited
-// without that sheet) doesn't wipe out real billing history -- see
-// applyProjectUpdate/mergeBillingEstimates in defaults.js, which only
+// Reads an ESTIMATE NO. / DATE / NOTE table -- the record of billing
+// checkpoints a project accumulates over time via the Quantity Sheet's
+// "Record New Estimate" button, not something typically hand-authored like
+// the Pay Items sheet. Returns null (not []) when the sheet is missing
+// entirely, so a re-upload of an older file (from before this feature, or
+// just edited without that sheet) doesn't wipe out real billing history --
+// see applyProjectUpdate/mergeBillingEstimates in defaults.js, which only
 // touches billingEstimates on a real [] or non-null result, never on null.
 //
 // Deliberately doesn't assign an id here (unlike the other list parsers in
@@ -260,6 +259,14 @@ function parseSingleColumnList(ws, headerLabel, maxCount) {
 // approvalStatus/comments) or a genuinely new one, and it can only make
 // that call with the project's existing billingEstimates in hand, which
 // this function never sees.
+//
+// Deliberately doesn't touch itemTotals (a Pay App's actual figures) at
+// all -- that lives in its own dedicated file, reachable from the
+// Quantity Sheet page (see buildPayAppQuantitiesWorkbook/
+// parsePayAppQuantitiesFile below), specifically so this file -- which
+// also replaces the project's meta/pay item catalog/contractors/equipment
+// wholesale on upload -- is never the thing someone reaches for to update
+// Pay App numbers day to day.
 function parseEstimatesSheet(ws) {
   if (!ws) return null;
   const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
@@ -278,13 +285,83 @@ function parseEstimatesSheet(ws) {
   const cNo = findCol(['ESTIMATE NO.', 'ESTIMATE NO', 'ESTIMATE #', 'ESTIMATE']);
   const cDate = findCol(['DATE']);
   const cNote = findCol(['NOTE', 'NOTES']);
-  // Every other header cell is a pay item's quantity (or, for a Lump Sum
-  // item, a dollar figure -- see pay-apps.html's own itemTotals comment)
-  // for that Pay App. The header text itself IS the item number -- the
-  // exact same key itemTotals already uses internally -- so there's no
-  // separate lookup against the PAY ITEMS sheet needed to know which item
-  // a column belongs to; whatever's typed in the header just becomes that
-  // column's key.
+
+  const estimates = [];
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row) continue;
+    const estimateNo = cNo !== -1 && row[cNo] != null ? String(row[cNo]).trim() : '';
+    const date = cDate !== -1 && row[cDate] != null ? normalizeDateValue(row[cDate]) : '';
+    const note = cNote !== -1 && row[cNote] != null ? String(row[cNote]).trim() : '';
+    if (!estimateNo && !date) continue;
+    estimates.push({ estimateNo, date, note });
+  }
+  return estimates;
+}
+
+// ---------- Pay App Quantities file (quantity-sheet.html) ----------
+//
+// A second, much narrower import/export than the Project Data file above --
+// one sheet, one purpose: a grid of Pay App figures, one row per Pay App
+// and one column per pay item (header = item number, the same key
+// itemTotals already uses internally, same convention as the sheet above
+// used to use before this was split out). Kept as its own file rather than
+// folded into Project Data specifically so filling in Pay App numbers
+// day-to-day never risks also overwriting the project's meta/pay item
+// catalog/contractors/equipment the way re-uploading that file would --
+// this one only ever touches billingEstimates, merged by estimateNo via
+// mergeBillingEstimates in defaults.js, the same safe merge Project Data's
+// own ESTIMATES sheet uses.
+const PAY_APP_QUANTITIES_SHEET = 'PAY APPS';
+
+function buildPayAppQuantitiesWorkbook(payItemCatalog, billingEstimates) {
+  const wb = XLSX.utils.book_new();
+  const itemNumbers = (payItemCatalog || []).map((it) => it.itemNumber || '').filter(Boolean);
+  const rows = [['ESTIMATE NO.', 'DATE', 'NOTE', ...itemNumbers]];
+  (billingEstimates || []).forEach((e) => {
+    const itemVals = itemNumbers.map((num) => (e.itemTotals && e.itemTotals[num] != null ? e.itemTotals[num] : ''));
+    rows.push([e.estimateNo || '', e.date || '', e.note || '', ...itemVals]);
+  });
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{ wch: 14 }, { wch: 14 }, { wch: 30 }, ...itemNumbers.map(() => ({ wch: 12 }))];
+  XLSX.utils.book_append_sheet(wb, ws, PAY_APP_QUANTITIES_SHEET);
+  return wb;
+}
+
+function downloadPayAppQuantitiesFile(project) {
+  const wb = buildPayAppQuantitiesWorkbook(project.payItemCatalog, project.billingEstimates);
+  const slug = String(project.name || (project.meta && project.meta.projectNo) || 'project')
+    .replace(/[^A-Za-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 60);
+  writeProjectWorkbook(wb, `PayApps_${slug || 'project'}.xlsx`);
+}
+
+// Same header-detection approach as parseEstimatesSheet, plus the item
+// columns that sheet deliberately no longer carries -- every header cell
+// that isn't ESTIMATE NO./DATE/NOTE is a pay item's quantity (or, for a
+// Lump Sum item, a dollar figure -- see pay-apps.html's own itemTotals
+// comment) for that row's Pay App. The header text IS the item number, so
+// there's no separate lookup against a PAY ITEMS sheet needed to know
+// which item a column belongs to.
+function parsePayAppQuantitiesSheet(ws) {
+  if (!ws) return null;
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+  let headerIdx = rows.findIndex(
+    (row) => Array.isArray(row) && row.some((c) => c && String(c).trim().toUpperCase().startsWith('ESTIMATE'))
+  );
+  if (headerIdx === -1) headerIdx = 0;
+  const header = rows[headerIdx] || [];
+  const findCol = (labels) => {
+    for (let i = 0; i < header.length; i++) {
+      const h = header[i] ? String(header[i]).trim().toUpperCase() : '';
+      if (labels.includes(h)) return i;
+    }
+    return -1;
+  };
+  const cNo = findCol(['ESTIMATE NO.', 'ESTIMATE NO', 'ESTIMATE #', 'ESTIMATE']);
+  const cDate = findCol(['DATE']);
+  const cNote = findCol(['NOTE', 'NOTES']);
   const itemCols = [];
   header.forEach((cell, i) => {
     if (i === cNo || i === cDate || i === cNote) return;
@@ -310,6 +387,11 @@ function parseEstimatesSheet(ws) {
     estimates.push({ estimateNo, date, note, itemTotals });
   }
   return estimates;
+}
+
+async function parsePayAppQuantitiesFile(file) {
+  const wb = await readWorkbookFromFile(file);
+  return parsePayAppQuantitiesSheet(findSheet(wb, PAY_APP_QUANTITIES_SHEET));
 }
 
 async function parseProjectDataFile(file) {
@@ -365,19 +447,12 @@ function buildProjectDataWorkbook({ meta, payItemCatalog, contractors, equipment
   equipWs['!cols'] = [{ wch: 26 }];
   XLSX.utils.book_append_sheet(wb, equipWs, EQUIPMENT_ROWS_SHEET);
 
-  // One column per pay item (header = item number, matching PAY ITEMS'
-  // own ITEM NUMBER column and itemTotals' own key) so a Pay App's figures
-  // can be typed straight into this grid -- one row per Pay App, one
-  // column per item -- instead of pay-apps.html's one-input-at-a-time
-  // form. See parseEstimatesSheet for the read side of this.
-  const itemNumbers = (payItemCatalog || []).map((it) => it.itemNumber || '').filter(Boolean);
-  const estimateRows = [['ESTIMATE NO.', 'DATE', 'NOTE', ...itemNumbers]];
+  const estimateRows = [['ESTIMATE NO.', 'DATE', 'NOTE']];
   (billingEstimates || []).forEach((e) => {
-    const itemVals = itemNumbers.map((num) => (e.itemTotals && e.itemTotals[num] != null ? e.itemTotals[num] : ''));
-    estimateRows.push([e.estimateNo || '', e.date || '', e.note || '', ...itemVals]);
+    estimateRows.push([e.estimateNo || '', e.date || '', e.note || '']);
   });
   const estimatesWs = XLSX.utils.aoa_to_sheet(estimateRows);
-  estimatesWs['!cols'] = [{ wch: 14 }, { wch: 14 }, { wch: 40 }, ...itemNumbers.map(() => ({ wch: 12 }))];
+  estimatesWs['!cols'] = [{ wch: 14 }, { wch: 14 }, { wch: 40 }];
   XLSX.utils.book_append_sheet(wb, estimatesWs, ESTIMATES_SHEET);
 
   return wb;
@@ -413,10 +488,7 @@ function downloadProjectDataTemplate() {
     contractors: ['ABC Trucking', 'XYZ Barricades'],
     equipmentLabels: DEFAULT_EQUIPMENT_LABELS,
     billingEstimates: [
-      {
-        id: crypto.randomUUID(), estimateNo: '001', date: '2026-07-15', note: 'First pay estimate',
-        itemTotals: { '618-01': 4200, '619-01': 180 },
-      },
+      { id: crypto.randomUUID(), estimateNo: '001', date: '2026-07-15', note: 'First pay estimate' },
     ],
   });
   writeProjectWorkbook(wb, 'ProjectData_Template.xlsx');

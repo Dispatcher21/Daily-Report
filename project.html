@@ -182,7 +182,7 @@
       <div class="step-header">
         <span class="step-num">DATA FILE</span>
         <h2>Project Data File</h2>
-        <button type="button" class="info-tip" data-tip="Fallback option: download this project's current data as an Excel file -- edit it, keep it as a backup, or carry it to another device. The ESTIMATES sheet has one column per pay item, so Pay App figures can be typed straight into that grid instead of one at a time on the Pay Apps page -- re-upload to bring them in (existing approval status/comments on a Pay App already on file are kept, only reset to Pending if its figures actually changed). Uploading also replaces this project's info and pay item catalog. Existing reports are not affected. Project Setup (above) is the easier way to make most changes." aria-label="What this does">i</button>
+        <button type="button" class="info-tip" data-tip="Fallback option: download this project's current data as an Excel file -- edit it, keep it as a backup, or carry it to another device. Uploading a file replaces this project's info and pay item catalog; a Pay App already on file keeps its approval status/comments (reset to Pending only if its own date/note changed). Existing reports are not affected. Project Setup (above) is the easier way to make most changes, and the Quantity Sheet page has its own dedicated file just for Pay App figures." aria-label="What this does">i</button>
       </div>
       <div class="step-body">
         <button type="button" class="btn-secondary" id="btn-download-project-file" style="margin-bottom:0.75rem;">&#8681; Download Project File</button>
@@ -190,7 +190,7 @@
           <input type="file" id="f-reupload" accept=".xlsx,.xls">
           <span class="uz-icon">&#128202;</span>
           <span class="uz-lbl">Upload Replacement Project Data</span>
-          <span class="uz-hint">PROJECT INFO + PAY ITEMS + ESTIMATES (Pay Apps) sheets</span>
+          <span class="uz-hint">PROJECT INFO + PAY ITEMS sheets</span>
           <span class="uz-fname" id="fn-reupload"></span>
         </div>
       </div>

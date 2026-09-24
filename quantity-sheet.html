@@ -62,6 +62,24 @@
     </div>
   </div>
 
+  <div class="step" id="payapp-file-step">
+    <div class="step-header">
+      <span class="step-num">PAY APPS</span>
+      <h2>Pay App Quantities (Excel)</h2>
+      <button type="button" class="info-tip" data-tip="Download a spreadsheet with one row per Pay App and one column per pay item, fill in figures there instead of one at a time on the Pay Apps page, then upload it back. Only ever touches Pay App quantities/dates/notes -- never your project settings or pay item catalog. A Pay App already on file keeps its approval status/comments, reset to Pending only if its figures actually changed." aria-label="What this does">i</button>
+    </div>
+    <div class="step-body">
+      <button type="button" class="btn-secondary" id="btn-download-payapp-file" style="margin-bottom:0.75rem;">&#8681; Download Pay App Quantities</button>
+      <div class="uz" id="uz-payapp-reupload">
+        <input type="file" id="f-payapp-reupload" accept=".xlsx,.xls">
+        <span class="uz-icon">&#128202;</span>
+        <span class="uz-lbl">Upload Filled-In Pay App Quantities</span>
+        <span class="uz-hint">Matched by Pay App No. -- approval status/comments are kept</span>
+        <span class="uz-fname" id="fn-payapp-reupload"></span>
+      </div>
+    </div>
+  </div>
+
   <div class="step" id="period-step" hidden>
     <div class="step-header">
       <span class="step-num">PERIOD</span>
@@ -151,12 +169,14 @@
 </main>
 
 <script src="lib/exceljs.min.js"></script>
+<script src="lib/xlsx.min.js"></script>
 <script src="common.js"></script>
 <script src="defaults.js"></script>
 <script src="storage.js"></script>
 <script src="audit-log.js"></script>
 <script src="quantity-calc.js"></script>
 <script src="quantity-sheet-export.js"></script>
+<script src="project-file.js"></script>
 <script src="local-sync.js"></script>
 <script type="module" src="firebase-init.js"></script>
 <script src="firebase-sync.js"></script>
@@ -751,6 +771,42 @@ $('#btn-generate').addEventListener('click', async () => {
   } finally {
     btn.textContent = original;
     btn.disabled = false;
+  }
+});
+
+$('#btn-download-payapp-file').addEventListener('click', () => {
+  if (!project) return;
+  try {
+    downloadPayAppQuantitiesFile(project);
+  } catch (err) {
+    console.error(err);
+    alert(userError("Couldn't build the Pay App file: " + err.message, 'DOWNLOAD_PAYAPP_FILE'));
+  }
+});
+
+$('#f-payapp-reupload').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const rows = await parsePayAppQuantitiesFile(file);
+    if (rows == null) {
+      alert(`Couldn't find a "${PAY_APP_QUANTITIES_SHEET}" sheet in that file -- make sure you're uploading the file downloaded from this same button.`);
+      return;
+    }
+    // Only ever touches billingEstimates -- unlike the Project Data file's
+    // own re-upload, there's no meta/payItemCatalog/contractors to merge
+    // here, so this goes straight to mergeBillingEstimates rather than
+    // through applyProjectUpdate.
+    project.billingEstimates = mergeBillingEstimates(project.billingEstimates, rows);
+    await saveProject(project);
+    $('#uz-payapp-reupload').classList.add('has');
+    $('#fn-payapp-reupload').textContent = file.name;
+    renderEstimateSelect();
+    updateControls();
+    alert('Pay App quantities updated.');
+  } catch (err) {
+    console.error(err);
+    alert(userError("Couldn't read that file: " + err.message, 'PARSE_PAYAPP_EXCEL'));
   }
 });
 
