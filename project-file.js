@@ -265,7 +265,26 @@ const PAY_APP_QUANTITIES_SHEET = 'PAY APPS';
 
 function buildPayAppQuantitiesWorkbook(payItemCatalog, billingEstimates) {
   const wb = XLSX.utils.book_new();
+  // Current catalog items first, in their usual order -- then any item
+  // number that shows up in a real billingEstimate but ISN'T in the
+  // catalog anymore (renumbered or removed after it was already billed
+  // against). Skipping those would mean this export has no column for a
+  // real, already-recorded figure -- and since mergeBillingEstimates
+  // treats "this file's itemTotals" as the complete picture for whatever
+  // it does cover, re-uploading that same file unmodified would read back
+  // as the user having deleted that figure, silently wiping it (and
+  // resetting the Pay App's approval status as a side effect) even though
+  // nothing was actually changed.
   const itemNumbers = (payItemCatalog || []).map((it) => it.itemNumber || '').filter(Boolean);
+  const knownItems = new Set(itemNumbers);
+  (billingEstimates || []).forEach((e) => {
+    Object.keys(e.itemTotals || {}).forEach((num) => {
+      if (!knownItems.has(num)) {
+        knownItems.add(num);
+        itemNumbers.push(num);
+      }
+    });
+  });
   const rows = [['ESTIMATE NO.', 'DATE', 'NOTE', ...itemNumbers]];
   (billingEstimates || []).forEach((e) => {
     const itemVals = itemNumbers.map((num) => (e.itemTotals && e.itemTotals[num] != null ? e.itemTotals[num] : ''));
