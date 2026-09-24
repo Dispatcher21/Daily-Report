@@ -465,6 +465,8 @@ const ERROR_CODES = {
   THEME_SAVE: 'WHIRL',
   HEADER_SYNC: 'BRAWN',
   FOLDER_SYNC: 'HOTROD',
+  DOWNLOAD_PAYAPP_FILE: 'PERCEPTOR',
+  PARSE_PAYAPP_EXCEL: 'WARPATH',
 };
 
 // Appends a reference code to a user-facing error message -- use for every
