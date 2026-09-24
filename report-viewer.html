@@ -58,6 +58,15 @@
     <button type="button" class="rv-side-panel rv-side-left" id="rv-side-left" hidden aria-label="Next day's report"></button>
     <div class="rb-preview-frame" id="rv-preview"></div>
     <button type="button" class="rv-side-panel rv-side-right" id="rv-side-right" hidden aria-label="Previous day's report"></button>
+    <!-- Mobile stand-in for the side peeks above, which need real room on
+         either side of the report that a phone screen doesn't have (see the
+         max-width: 900px rule in style.css). Plain previous/next arrows,
+         ordinary reading-order convention (left = previous, right = next) --
+         unlike the side peeks, there's no thumbnail here to carry the
+         concept's own reversed ordering, so this just does what a nav
+         arrow is expected to do. -->
+    <button type="button" class="rv-mobile-nav rv-mobile-nav-prev" id="rv-mobile-nav-prev" hidden aria-label="Previous report">&#8592;</button>
+    <button type="button" class="rv-mobile-nav rv-mobile-nav-next" id="rv-mobile-nav-next" hidden aria-label="Next report">&#8594;</button>
   </div>
 
   <!-- A floating footer, not a normal in-flow card (see style.css) --
@@ -249,6 +258,21 @@ async function renderSidePanels(project, current, layout, logoBlob, room, onPick
     renderSidePanel($('#rv-side-left'), nextReport, layout, logoBlob, onPick, 'left', thumbWidth, leftSliver),
     renderSidePanel($('#rv-side-right'), prevReport, layout, logoBlob, onPick, 'right', thumbWidth, rightSliver),
   ]);
+  renderMobileNav(prevReport, nextReport, onPick);
+}
+
+// The mobile arrows' own wiring -- separate from renderSidePanel above
+// since these have no thumbnail to render, just a show/hide and a click
+// target. Kept in sync with the exact same prevReport/nextReport the side
+// peeks use so the two navigation methods can never disagree about what's
+// actually adjacent.
+function renderMobileNav(prevReport, nextReport, onPick) {
+  const prevBtn = $('#rv-mobile-nav-prev');
+  const nextBtn = $('#rv-mobile-nav-next');
+  prevBtn.hidden = !prevReport;
+  prevBtn.onclick = prevReport ? () => onPick(prevReport) : null;
+  nextBtn.hidden = !nextReport;
+  nextBtn.onclick = nextReport ? () => onPick(nextReport) : null;
 }
 
 let activeProject = null;
@@ -309,6 +333,8 @@ async function loadAndShowReport(id, { includeDeleted = false } = {}) {
     } else {
       $('#rv-side-left').hidden = true;
       $('#rv-side-right').hidden = true;
+      $('#rv-mobile-nav-prev').hidden = true;
+      $('#rv-mobile-nav-next').hidden = true;
     }
   } catch (err) {
     console.error(err);

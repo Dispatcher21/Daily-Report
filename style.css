@@ -1444,6 +1444,35 @@ html:has(.rv-carousel), body:has(.rv-carousel) { overflow-x: hidden; }
 @media (max-width: 900px) {
   .rv-side-panel { display: none; }
 }
+/* No side peeks to reserve desktop-width breathing room for on a phone
+   screen (see above) -- let the report itself use the space instead of
+   sitting in a letterboxed column. Scoped to this page (:has(.rv-carousel))
+   the same way the overflow-x fix above is, rather than touching every
+   page's <main>. */
+@media (max-width: 900px) {
+  body:has(.rv-carousel) main { max-width: 100vw; padding: 0.5rem 0.4rem; }
+  .rv-carousel .rb-preview-frame { padding: 0.5rem; }
+}
+/* Plain previous/next arrows standing in for the side peeks on a phone
+   screen -- fixed to the viewport (not the report, which scrolls) so
+   they're reachable no matter how far down a long report the user has
+   scrolled. Semi-transparent until touched/focused so they don't sit as
+   two solid disks over the report the whole time it's being read. */
+.rv-mobile-nav {
+  display: none;
+  position: fixed; top: 50%; transform: translateY(-50%); z-index: 20;
+  width: 2.6rem; height: 2.6rem; border-radius: 50%;
+  background: var(--surface); border: 1.5px solid var(--border); box-shadow: var(--shadow);
+  color: var(--text); font-size: 1.3rem; font-weight: 700; line-height: 1;
+  align-items: center; justify-content: center;
+  opacity: 0.55; transition: opacity 0.15s ease;
+}
+.rv-mobile-nav:hover, .rv-mobile-nav:focus-visible, .rv-mobile-nav:active { opacity: 1; }
+.rv-mobile-nav-prev { left: 0.5rem; }
+.rv-mobile-nav-next { right: 0.5rem; }
+@media (max-width: 900px) {
+  .rv-mobile-nav:not([hidden]) { display: flex; }
+}
 
 .rb-group {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
