@@ -2163,6 +2163,7 @@ input[type="date"] { min-width: 0; }
   .report-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(480px, 1fr)); gap: 0.6rem 1rem; align-content: start; align-items: start; }
 }
 .report-row {
+  position: relative;
   background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius);
   padding: 0.85rem 1rem; display: flex; justify-content: space-between; align-items: center;
   gap: 0.7rem; box-shadow: var(--shadow);
@@ -2204,9 +2205,19 @@ input[type="date"] { min-width: 0; }
 .report-row-cloud {
   display: inline-flex; color: var(--text-dim); opacity: 0.7; vertical-align: middle; cursor: default;
 }
-/* Same quiet marker treatment as .report-row-cloud, see reportCommentBadgeHtml. */
-.report-row-comment {
-  display: inline-flex; color: var(--text-dim); opacity: 0.7; vertical-align: middle; cursor: default;
+/* Notification-style corner badge (like an app icon badge on Windows/
+   Android) -- floats over the top-right corner of the row/card rather than
+   sitting inline with the other icons, see reportCommentBadgeHtml. The
+   .report-row/.report-card ring (box-shadow using --surface) is what keeps
+   it looking "attached to the corner" instead of just overlapping the
+   border, since it separates the badge from the row's own background. */
+.report-corner-badge {
+  position: absolute; top: -6px; right: -6px; z-index: 1;
+  width: 18px; height: 18px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--brand); color: #fff;
+  box-shadow: 0 0 0 2px var(--surface);
+  cursor: default;
 }
 .report-row .report-row-sub { font-size: 0.83rem; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .report-row .report-row-actions { display: flex; align-items: center; gap: 0.5rem; }
@@ -2233,6 +2244,7 @@ input[type="date"] { min-width: 0; }
   gap: 0.75rem; margin-bottom: 5rem;
 }
 .report-card {
+  position: relative;
   background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius);
   padding: 0.6rem; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 0.4rem;
 }
