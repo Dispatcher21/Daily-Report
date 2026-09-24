@@ -244,14 +244,22 @@ function parseSingleColumnList(ws, headerLabel, maxCount) {
   return values;
 }
 
-// Reads an ESTIMATE NO. / DATE / NOTE table -- the record of billing
-// checkpoints a project accumulates over time via the Quantity Sheet's
-// "Record New Estimate" button, not something typically hand-authored like
-// the Pay Items sheet. Returns null (not []) when the sheet is missing
-// entirely, so a re-upload of an older file (from before this feature, or
-// just edited without that sheet) doesn't wipe out real billing history --
-// see applyProjectUpdate in defaults.js, which only overwrites on a real []
-// or non-null result, never on null.
+// Reads an ESTIMATE NO. / DATE / NOTE (+ one column per pay item) table --
+// the record of billing checkpoints a project accumulates over time, either
+// via the Quantity Sheet's "Record New Estimate" button or by hand-typing a
+// Pay App's figures into this sheet instead of pay-apps.html's one-input-
+// at-a-time form. Returns null (not []) when the sheet is missing entirely,
+// so a re-upload of an older file (from before this feature, or just edited
+// without that sheet) doesn't wipe out real billing history -- see
+// applyProjectUpdate/mergeBillingEstimates in defaults.js, which only
+// touches billingEstimates on a real [] or non-null result, never on null.
+//
+// Deliberately doesn't assign an id here (unlike the other list parsers in
+// this file) -- mergeBillingEstimates is what decides whether a row is an
+// update to an estimateNo already on file (keeping its existing id/
+// approvalStatus/comments) or a genuinely new one, and it can only make
+// that call with the project's existing billingEstimates in hand, which
+// this function never sees.
 function parseEstimatesSheet(ws) {
   if (!ws) return null;
   const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
@@ -270,6 +278,19 @@ function parseEstimatesSheet(ws) {
   const cNo = findCol(['ESTIMATE NO.', 'ESTIMATE NO', 'ESTIMATE #', 'ESTIMATE']);
   const cDate = findCol(['DATE']);
   const cNote = findCol(['NOTE', 'NOTES']);
+  // Every other header cell is a pay item's quantity (or, for a Lump Sum
+  // item, a dollar figure -- see pay-apps.html's own itemTotals comment)
+  // for that Pay App. The header text itself IS the item number -- the
+  // exact same key itemTotals already uses internally -- so there's no
+  // separate lookup against the PAY ITEMS sheet needed to know which item
+  // a column belongs to; whatever's typed in the header just becomes that
+  // column's key.
+  const itemCols = [];
+  header.forEach((cell, i) => {
+    if (i === cNo || i === cDate || i === cNote) return;
+    const itemNumber = cell != null ? String(cell).trim() : '';
+    if (itemNumber) itemCols.push({ index: i, itemNumber });
+  });
 
   const estimates = [];
   for (let i = headerIdx + 1; i < rows.length; i++) {
@@ -279,7 +300,14 @@ function parseEstimatesSheet(ws) {
     const date = cDate !== -1 && row[cDate] != null ? normalizeDateValue(row[cDate]) : '';
     const note = cNote !== -1 && row[cNote] != null ? String(row[cNote]).trim() : '';
     if (!estimateNo && !date) continue;
-    estimates.push({ id: crypto.randomUUID(), estimateNo, date, note });
+    const itemTotals = {};
+    itemCols.forEach((col) => {
+      const raw = row[col.index];
+      if (raw == null || String(raw).trim() === '') return;
+      const num = Number(raw);
+      if (isFinite(num)) itemTotals[col.itemNumber] = num;
+    });
+    estimates.push({ estimateNo, date, note, itemTotals });
   }
   return estimates;
 }
@@ -337,12 +365,19 @@ function buildProjectDataWorkbook({ meta, payItemCatalog, contractors, equipment
   equipWs['!cols'] = [{ wch: 26 }];
   XLSX.utils.book_append_sheet(wb, equipWs, EQUIPMENT_ROWS_SHEET);
 
-  const estimateRows = [['ESTIMATE NO.', 'DATE', 'NOTE']];
+  // One column per pay item (header = item number, matching PAY ITEMS'
+  // own ITEM NUMBER column and itemTotals' own key) so a Pay App's figures
+  // can be typed straight into this grid -- one row per Pay App, one
+  // column per item -- instead of pay-apps.html's one-input-at-a-time
+  // form. See parseEstimatesSheet for the read side of this.
+  const itemNumbers = (payItemCatalog || []).map((it) => it.itemNumber || '').filter(Boolean);
+  const estimateRows = [['ESTIMATE NO.', 'DATE', 'NOTE', ...itemNumbers]];
   (billingEstimates || []).forEach((e) => {
-    estimateRows.push([e.estimateNo || '', e.date || '', e.note || '']);
+    const itemVals = itemNumbers.map((num) => (e.itemTotals && e.itemTotals[num] != null ? e.itemTotals[num] : ''));
+    estimateRows.push([e.estimateNo || '', e.date || '', e.note || '', ...itemVals]);
   });
   const estimatesWs = XLSX.utils.aoa_to_sheet(estimateRows);
-  estimatesWs['!cols'] = [{ wch: 14 }, { wch: 14 }, { wch: 40 }];
+  estimatesWs['!cols'] = [{ wch: 14 }, { wch: 14 }, { wch: 40 }, ...itemNumbers.map(() => ({ wch: 12 }))];
   XLSX.utils.book_append_sheet(wb, estimatesWs, ESTIMATES_SHEET);
 
   return wb;
@@ -378,7 +413,10 @@ function downloadProjectDataTemplate() {
     contractors: ['ABC Trucking', 'XYZ Barricades'],
     equipmentLabels: DEFAULT_EQUIPMENT_LABELS,
     billingEstimates: [
-      { id: crypto.randomUUID(), estimateNo: '001', date: '2026-07-15', note: 'First pay estimate' },
+      {
+        id: crypto.randomUUID(), estimateNo: '001', date: '2026-07-15', note: 'First pay estimate',
+        itemTotals: { '618-01': 4200, '619-01': 180 },
+      },
     ],
   });
   writeProjectWorkbook(wb, 'ProjectData_Template.xlsx');

@@ -476,7 +476,11 @@ async function makeProjectFromParsedFile(parsed) {
     defaultContractors: parsed.contractors || [],
     defaultEquipmentLabels: parsed.equipmentLabels || [],
     payItemCatalog: parsed.payItemCatalog || [],
-    billingEstimates: parsed.billingEstimates || [],
+    // A brand new project, so there's no existing billing history to merge
+    // against -- unlike applyProjectUpdate's mergeBillingEstimates, every
+    // row from the file is genuinely new here and needs its own id
+    // (parseEstimatesSheet itself doesn't assign one, see its own comment).
+    billingEstimates: (parsed.billingEstimates || []).map((e) => ({ id: crypto.randomUUID(), ...e })),
     requiredFields: [],
     hiddenFields: [],
     fieldOrder: [],
@@ -504,6 +508,44 @@ function findSimilarProject(pool, candidate) {
   );
 }
 
+// Merges an ESTIMATES sheet's rows (see parseEstimatesSheet in
+// project-file.js -- estimateNo/date/note/itemTotals, no id) into the
+// project's existing billing history by estimateNo, rather than replacing
+// the array wholesale the way every other field on this file does. A real
+// billing estimate carries approval status and reviewer comments (see
+// saveBillingEstimateApproval in storage.js) that the spreadsheet has no
+// column for at all -- a wholesale replace would silently erase those on
+// every single re-upload, which is exactly backwards for a file meant to
+// make Pay Apps EASIER to keep up to date. An estimateNo already on file
+// is updated in place (keeping its id/approvalStatus/comments); its
+// approvalStatus resets to 'pending' if the actual content changed, same
+// as hand-editing a Pay App in pay-apps.html already does. An estimateNo
+// the file doesn't mention at all is left untouched -- this only ever adds
+// to or updates billing history, never removes it just because a row got
+// deleted from the sheet (deleting a Pay App is its own explicit action
+// elsewhere, not a side effect of a re-upload).
+function mergeBillingEstimates(existingList, fileRows) {
+  const merged = (existingList || []).slice();
+  const byNo = new Map(merged.map((e) => [String(e.estimateNo || '').trim(), e]));
+  (fileRows || []).forEach((row) => {
+    const key = String(row.estimateNo || '').trim();
+    const match = key ? byNo.get(key) : null;
+    if (match) {
+      const contentChanged = match.date !== row.date || match.note !== row.note
+        || JSON.stringify(match.itemTotals || {}) !== JSON.stringify(row.itemTotals || {});
+      const updated = { ...match, date: row.date, note: row.note, itemTotals: row.itemTotals };
+      if (contentChanged && updated.approvalStatus) updated.approvalStatus = 'pending';
+      merged[merged.indexOf(match)] = updated;
+      byNo.set(key, updated);
+    } else {
+      const created = { id: crypto.randomUUID(), estimateNo: row.estimateNo, date: row.date, note: row.note, itemTotals: row.itemTotals };
+      merged.push(created);
+      if (key) byNo.set(key, created);
+    }
+  });
+  return merged;
+}
+
 // Keeps the matched project's identity (id/createdAt) but adopts everything
 // the new file carries -- this is what makes it an update rather than a
 // second, separate project with the same content.
@@ -516,12 +558,16 @@ function applyProjectUpdate(existing, candidate) {
     defaultContractors: candidate.defaultContractors,
     defaultEquipmentLabels: candidate.defaultEquipmentLabels,
     // Billing estimates are accumulated over time from the Quantity Sheet's
-    // "Record New Estimate" button, not authored up front like the rest of
-    // this file -- a re-upload only overwrites them when the file actually
-    // has an ESTIMATES sheet (candidate.billingEstimates non-null), so
-    // re-importing an older export never silently erases real billing
-    // history (see parseEstimatesSheet in project-file.js).
-    billingEstimates: candidate.billingEstimates != null ? candidate.billingEstimates : existing.billingEstimates,
+    // "Record New Estimate" button (or now, hand-typed into the ESTIMATES
+    // sheet) rather than authored up front like the rest of this file -- a
+    // re-upload only touches them when the file actually has an ESTIMATES
+    // sheet (candidate.billingEstimates non-null), so re-importing an older
+    // export never silently erases real billing history (see
+    // parseEstimatesSheet in project-file.js). Merged by estimateNo, not
+    // replaced wholesale -- see mergeBillingEstimates above.
+    billingEstimates: candidate.billingEstimates != null
+      ? mergeBillingEstimates(existing.billingEstimates, candidate.billingEstimates)
+      : existing.billingEstimates,
   };
 }
 
