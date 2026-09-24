@@ -128,6 +128,7 @@ async function renderPreview(layout, report, logoBlob) {
   sandbox.remove();
   previewEl.innerHTML = '';
   wraps.forEach((wrap) => previewEl.appendChild(wrap));
+  return targetWidth;
 }
 
 // ---------- Concept: adjacent-report carousel ----------
@@ -139,7 +140,27 @@ async function renderPreview(layout, report, logoBlob) {
 // reasoning); a lazily-pulled company report shows blank photo slots in
 // the small blurred thumbnail, which is fine there and gets resolved the
 // normal way the moment it actually becomes the current report.
-const SIDE_THUMB_WIDTH = 150;
+//
+// Sized as a fraction of the main report's own current width, not a fixed
+// pixel value -- 70% "the main report, just a bit smaller", matching how
+// it should feel next to whatever size the main preview happens to be
+// rendering at (screen width, zoom, etc.) rather than looking randomly
+// larger/smaller than it in some viewports.
+const SIDE_THUMB_SCALE = 0.7;
+// How much of each side panel should actually peek out past the main
+// report's edge, in real pixels -- NOT a fixed fraction of the panel's own
+// (now much larger, 70%-of-main) width. <main> itself caps out at
+// min(1400px, 94vw) (see style.css), so at plenty of common desktop widths
+// there's only 40-60px of page margin outside it on each side -- a
+// percentage-based sliver sized off the panel's own width would routinely
+// try to peek out further than that margin actually allows, pushing the
+// arrow badge (and part of the thumbnail) off past the edge of the
+// viewport entirely rather than just looking cropped. Sized in
+// renderSidePanels, per side, off however much room that side of the
+// screen genuinely has.
+const SIDE_SLIVER_TARGET = 140;
+const SIDE_SLIVER_MIN = 50; // below this, not a usable click target -- hide the panel instead of showing a sliver too thin to matter
+const SIDE_SLIVER_MARGIN_BUFFER = 16; // breathing room between the sliver's outer edge and the actual viewport edge
 
 async function findAdjacentReports(project, current, room) {
   const all = (await getReportsForProject(project.id)).filter((r) => reportInScope(r, room));
@@ -153,9 +174,9 @@ async function findAdjacentReports(project, current, room) {
   };
 }
 
-async function renderSidePanel(btn, sideReport, layout, logoBlob, onPick, arrowDir) {
+async function renderSidePanel(btn, sideReport, layout, logoBlob, onPick, arrowDir, thumbWidth, sliverWidth) {
   btn.onclick = null;
-  if (!sideReport) {
+  if (!sideReport || sliverWidth < SIDE_SLIVER_MIN) {
     btn.hidden = true;
     btn.innerHTML = '';
     return;
@@ -164,10 +185,20 @@ async function renderSidePanel(btn, sideReport, layout, logoBlob, onPick, arrowD
   sandbox.style.cssText = 'position:fixed; top:0; left:-20000px; z-index:-1;';
   document.body.appendChild(sandbox);
   const pages = renderReportPages(sandbox, layout, sideReport, logoBlob);
-  const wrap = scalePreviewPage(pages[0].el, SIDE_THUMB_WIDTH);
+  const wrap = scalePreviewPage(pages[0].el, thumbWidth);
   sandbox.remove();
   btn.innerHTML = '';
   btn.appendChild(wrap);
+  // How far to shift this panel so only `sliverWidth` real px still peek
+  // out past the main report's edge -- and where the arrow badge/label
+  // need to sit (the middle of that same sliver) to actually land on the
+  // visible part of the panel instead of the ~80% of it tucked behind the
+  // main report on purpose (the "looking through a stack" effect). Set as
+  // custom properties (style.css reads them) rather than fixed CSS values
+  // because both depend on the actual on-screen margin, which varies by
+  // viewport width -- see the SIDE_SLIVER_TARGET comment above.
+  btn.style.setProperty('--rv-hide-px', `${thumbWidth - sliverWidth}px`);
+  btn.style.setProperty('--rv-sliver-px', `${sliverWidth}px`);
   // A round arrow badge over the thumbnail -- the fade/blur/shrink alone
   // read as "a preview of something", not obviously "click to go here",
   // so this is the more literal "this is a nav control" cue on top of it.
@@ -188,11 +219,23 @@ async function renderSidePanel(btn, sideReport, layout, logoBlob, onPick, arrowD
 // previous day's on the RIGHT -- not the more usual reading-order
 // left-to-right-through-time. Kept exactly as asked rather than
 // "corrected" to the usual convention.
-async function renderSidePanels(project, current, layout, logoBlob, room, onPick) {
+async function renderSidePanels(project, current, layout, logoBlob, room, onPick, mainWidth) {
   const { prevReport, nextReport } = await findAdjacentReports(project, current, room);
+  const thumbWidth = Math.round(mainWidth * SIDE_THUMB_SCALE);
+
+  // Real page margin on each side of the main report, right now -- not
+  // assumed from CSS, measured, so this stays correct through browser
+  // resizes, zoom, or a narrower/wider window than whatever this was last
+  // tuned against.
+  const mainRect = $('#rv-preview').getBoundingClientRect();
+  const leftMargin = mainRect.left;
+  const rightMargin = window.innerWidth - mainRect.right;
+  const leftSliver = Math.min(SIDE_SLIVER_TARGET, Math.max(0, leftMargin - SIDE_SLIVER_MARGIN_BUFFER));
+  const rightSliver = Math.min(SIDE_SLIVER_TARGET, Math.max(0, rightMargin - SIDE_SLIVER_MARGIN_BUFFER));
+
   await Promise.all([
-    renderSidePanel($('#rv-side-left'), nextReport, layout, logoBlob, onPick, 'left'),
-    renderSidePanel($('#rv-side-right'), prevReport, layout, logoBlob, onPick, 'right'),
+    renderSidePanel($('#rv-side-left'), nextReport, layout, logoBlob, onPick, 'left', thumbWidth, leftSliver),
+    renderSidePanel($('#rv-side-right'), prevReport, layout, logoBlob, onPick, 'right', thumbWidth, rightSliver),
   ]);
 }
 
@@ -246,11 +289,11 @@ async function loadAndShowReport(id, { includeDeleted = false } = {}) {
   try {
     if (!printLayoutCache) printLayoutCache = await loadPrintLayout();
     if (reportLogoCache === null) reportLogoCache = (await getReportLogo()) || undefined;
-    await renderPreview(printLayoutCache, report, reportLogoCache);
+    const mainWidth = await renderPreview(printLayoutCache, report, reportLogoCache);
     if (!report.deleted) {
       await renderSidePanels(activeProject, report, printLayoutCache, reportLogoCache, room, (sideReport) => {
         transitionToReport(sideReport);
-      });
+      }, mainWidth);
     } else {
       $('#rv-side-left').hidden = true;
       $('#rv-side-right').hidden = true;

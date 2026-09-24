@@ -1353,14 +1353,34 @@ main { max-width: min(1400px, 94vw); margin: 0 auto; padding: 1rem; }
    itself, which then visually and pointer-event-wise sits on top of it,
    silently eating clicks meant for the button underneath. */
 .rv-carousel { position: relative; z-index: 0; }
+/* Guards against the sliver below (deliberately peeking past the main
+   report's edge) turning into a page-wide horizontal scrollbar on a
+   narrower desktop window -- :has() scopes it to just this page's layout
+   rather than clipping every page's <main>. Both html and body need it:
+   body alone still left documentElement's own scrollWidth (and the
+   resulting scrollbar) reflecting the unclipped overflow. Belt-and-braces
+   alongside report-viewer.html's own JS margin measurement (SIDE_SLIVER_*),
+   which is what actually keeps the sliver from wanting more room than the
+   viewport has in the first place. */
+html:has(.rv-carousel), body:has(.rv-carousel) { overflow-x: hidden; }
 .rv-side-panel {
+  /* --rv-hide-px/--rv-sliver-px are set inline by report-viewer.html's
+     renderSidePanel, in real pixels measured off the actual page margin at
+     render time -- not a fixed fraction of this panel's own width. This
+     panel is 70% of the (possibly quite wide) main report, but the margin
+     outside <main> at plenty of common desktop widths is much narrower
+     than that -- a percentage-based peek routinely wanted to show more
+     than there was room for, pushing the arrow badge (and part of the
+     thumbnail) off past the actual edge of the viewport. The defaults
+     below only matter before that JS has run once. */
+  --rv-hide-px: 82%;
+  --rv-sliver-px: 18%;
   /* A negative z-index paints before (behind) .rb-preview-frame -- a
      plain static in-flow block with no positioning of its own -- despite
      coming first in the HTML. A positive z-index here would do the
      opposite: positioned descendants with z-index > 0 paint AFTER
      ordinary in-flow content in the same stacking context, on top of it. */
   position: absolute; top: 50%; z-index: -1;
-  transform: translateY(-50%) scale(0.78);
   border: none; background: none; padding: 0 0 1.4rem; cursor: pointer;
 }
 /* Fade/blur/grayscale live on the thumbnail itself, not the button --
@@ -1376,14 +1396,19 @@ main { max-width: min(1400px, 94vw); margin: 0 auto; padding: 1rem; }
 .rv-side-panel:hover .rb-preview-page-wrap, .rv-side-panel:focus-visible .rb-preview-page-wrap {
   opacity: 0.65; filter: blur(0px) grayscale(0%);
 }
+/* Both the label and the arrow badge center themselves on the MIDDLE OF
+   THE VISIBLE SLIVER, not the middle of the whole (mostly hidden-behind-
+   the-main-report) panel -- half of the visible fraction in from this
+   panel's own outer edge. Centering on the panel's full width instead
+   (the original version of this) put both of them mostly behind the main
+   report too, off-center from the sliver of thumbnail actually on screen. */
 .rv-side-label {
-  position: absolute; bottom: 0; left: 0; right: 0; text-align: center;
+  position: absolute; bottom: 0;
   font-size: 0.72rem; font-weight: 700; color: var(--text-dim); white-space: nowrap;
+  transform: translateX(-50%);
 }
-/* The round arrow badge -- always fully visible/crisp (see the comment
-   above), centered over the faded thumbnail underneath it. */
 .rv-side-arrow {
-  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  position: absolute; top: 50%;
   width: 2.4rem; height: 2.4rem; border-radius: 50%;
   background: var(--surface); border: 2px solid #000; box-shadow: var(--shadow);
   display: flex; align-items: center; justify-content: center;
@@ -1396,8 +1421,22 @@ main { max-width: min(1400px, 94vw); margin: 0 auto; padding: 1rem; }
 /* Peeking out from behind the main page's left/right edge, not shoved
    further out into the surrounding whitespace -- the main frame's own
    box-shadow/border is what visually reads as "in front of" these. */
-.rv-side-left { right: 100%; transform: translateY(-50%) translateX(40%) scale(0.78); }
-.rv-side-right { left: 100%; transform: translateY(-50%) translateX(-40%) scale(0.78); }
+.rv-side-left {
+  right: 100%;
+  transform: translateY(-50%) translateX(var(--rv-hide-px));
+}
+.rv-side-left .rv-side-label, .rv-side-left .rv-side-arrow {
+  left: calc(var(--rv-sliver-px) / 2);
+}
+.rv-side-left .rv-side-arrow { transform: translate(-50%, -50%); }
+.rv-side-right {
+  left: 100%;
+  transform: translateY(-50%) translateX(calc(-1 * var(--rv-hide-px)));
+}
+.rv-side-right .rv-side-label, .rv-side-right .rv-side-arrow {
+  left: calc(100% - var(--rv-sliver-px) / 2);
+}
+.rv-side-right .rv-side-arrow { transform: translate(-50%, -50%); }
 /* Concept targets desktop first -- side peeks need real width either side
    of the main page, which a phone screen doesn't have without redesigning
    this page's whole mobile layout (out of scope for evaluating the idea
