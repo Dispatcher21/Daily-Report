@@ -1033,6 +1033,23 @@ async function openManagedActivityPanel() {
   }
 }
 
+// Clicking through to one of the flagged items counts as having seen the
+// activity -- without this the banner only ever cleared via a dedicated
+// trip to manager.html, so it looked stuck "on" to anyone who instead
+// worked straight from this dropdown. There's no per-item seen state (see
+// getManagedProjectsLastSeenAt's own comment), so this clears the whole
+// batch, same as manager.html does; that's the right call here too, since
+// clicking a row means the user has now looked at this list of what's new.
+// The click is intercepted so the seen-write (an IndexedDB transaction)
+// actually finishes before the navigation it's racing against unloads it.
+document.addEventListener('click', (e) => {
+  const row = e.target.closest && e.target.closest('#managed-activity-panel .gsp-row');
+  if (!row) return;
+  e.preventDefault();
+  const href = row.getAttribute('href');
+  markManagedProjectsSeen().finally(() => { window.location.href = href; });
+});
+
 document.addEventListener('DOMContentLoaded', refreshManagedProjectsAlertBanner);
 window.addEventListener('company-data-pulled', refreshManagedProjectsAlertBanner);
 
