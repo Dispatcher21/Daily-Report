@@ -60,34 +60,41 @@
     <button type="button" class="rv-side-panel rv-side-right" id="rv-side-right" hidden aria-label="Previous day's report"></button>
   </div>
 
-  <!-- A floating footer, not a normal in-flow card (see style.css) -- the
-       header/approval row and the comment composer stay put while just
-       the comment list in between scrolls, so both "what's the status"
-       and "add a comment" are always reachable without hunting for them
-       at the bottom of a long report + long comment thread. -->
-  <div class="step" id="rv-review-step" hidden>
-    <div class="step-header">
+  <!-- A floating footer, not a normal in-flow card (see style.css) --
+       collapsed to just its header by default (see #rv-review-toggle
+       below): the full panel took up a lot of screen just sitting there,
+       and most visits don't need it open. Tap/click the header to expand;
+       once open, the approval row and composer stay put while just the
+       comment list in between scrolls, so both "what's the status" and
+       "add a comment" are always reachable without hunting for them at
+       the bottom of a long report + long comment thread. -->
+  <div class="step rv-collapsed" id="rv-review-step" hidden>
+    <div class="step-header" id="rv-review-toggle">
       <span class="step-num">REVIEW</span>
-      <h2>Approval</h2>
+      <h2>Approvals / Comments</h2>
+      <span class="rv-approval-badge rv-header-badge" id="rv-header-badge" hidden></span>
+      <span class="step-chevron">&#9656;</span>
     </div>
-    <div class="rv-approval-row">
-      <span class="rv-approval-badge" id="rv-approval-badge">Pending</span>
-      <div class="rv-approval-actions" id="rv-approval-actions" hidden>
-        <button type="button" class="btn-sm" id="rv-btn-approve">&#10003; Approve</button>
-        <button type="button" class="btn-sm" id="rv-btn-request-changes">&#8635; Request Changes</button>
+    <div class="step-body" id="rv-review-body">
+      <div class="rv-approval-row">
+        <span class="rv-approval-badge" id="rv-approval-badge">Pending</span>
+        <div class="rv-approval-actions" id="rv-approval-actions" hidden>
+          <button type="button" class="btn-sm" id="rv-btn-approve">&#10003; Approve</button>
+          <button type="button" class="btn-sm" id="rv-btn-request-changes">&#8635; Request Changes</button>
+        </div>
       </div>
-    </div>
 
-    <div class="rv-comments-scroll" id="rv-comments-scroll">
-      <div id="rv-comments"></div>
-      <p class="hint" id="rv-comments-empty" hidden style="margin:0.5rem 0 0;">No comments yet.</p>
-    </div>
+      <div class="rv-comments-scroll" id="rv-comments-scroll">
+        <div id="rv-comments"></div>
+        <p class="hint" id="rv-comments-empty" hidden style="margin:0.5rem 0 0;">No comments yet.</p>
+      </div>
 
-    <div id="rv-comment-form" hidden>
-      <label>Add a comment
-        <textarea id="rv-comment-text" rows="2" placeholder="Visible to everyone who can see this report"></textarea>
-      </label>
-      <button type="button" class="btn-sm" id="rv-btn-add-comment" style="margin-top:0.4rem;">Post Comment</button>
+      <div id="rv-comment-form" hidden>
+        <label>Add a comment
+          <textarea id="rv-comment-text" rows="2" placeholder="Visible to everyone who can see this report"></textarea>
+        </label>
+        <button type="button" class="btn-sm" id="rv-btn-add-comment" style="margin-top:0.4rem;">Post Comment</button>
+      </div>
     </div>
   </div>
 </main>
@@ -392,6 +399,14 @@ function renderReviewPanel(report) {
   const badge = $('#rv-approval-badge');
   badge.textContent = APPROVAL_LABELS[status] || 'Pending';
   badge.className = `rv-approval-badge rv-${status}`;
+  // Same status, shown in the collapsed header itself -- see style.css's
+  // .rv-header-badge comment for why this exists alongside the one above
+  // rather than just reusing it directly (that one lives inside .step-body,
+  // which is display:none while collapsed).
+  const headerBadge = $('#rv-header-badge');
+  headerBadge.textContent = badge.textContent;
+  headerBadge.className = `rv-approval-badge rv-header-badge rv-${status}`;
+  headerBadge.hidden = false;
 
   const comments = report.comments || [];
   const list = $('#rv-comments');
@@ -432,6 +447,17 @@ function syncMainBottomPadding() {
   main.style.paddingBottom = step.hidden ? '' : `${step.getBoundingClientRect().height + 16}px`;
 }
 window.addEventListener('resize', syncMainBottomPadding);
+
+// Collapsed to just the header by default (see the .rv-collapsed class
+// already on #rv-review-step in the markup) -- .onclick, not
+// addEventListener, since #rv-review-toggle is a static element that
+// persists across every carousel navigation (loadAndShowReport runs
+// initReviewPanel again each time), same reasoning as the approve/comment
+// buttons below.
+$('#rv-review-toggle').onclick = () => {
+  $('#rv-review-step').classList.toggle('rv-collapsed');
+  syncMainBottomPadding();
+};
 
 async function initReviewPanel(report) {
   $('#rv-review-step').hidden = false;

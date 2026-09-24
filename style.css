@@ -1604,7 +1604,36 @@ html:has(.rv-carousel), body:has(.rv-carousel) { overflow-x: hidden; }
   border-radius: var(--radius) var(--radius) 0 0;
   box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.18);
 }
-#rv-review-step .step-header { flex: 0 0 auto; border-radius: var(--radius) var(--radius) 0 0; }
+#rv-review-step .step-header {
+  flex: 0 0 auto; border-radius: var(--radius) var(--radius) 0 0;
+  cursor: pointer; user-select: none;
+}
+/* Collapsed to just the header by default -- the full panel took up a lot
+   of the screen sitting open on every visit, most of which don't need it.
+   #rv-review-toggle's click handler (report-viewer.html) toggles this
+   class; syncMainBottomPadding re-measures afterward since the footer's
+   real height just changed a lot. */
+#rv-review-step.rv-collapsed .step-body { display: none; }
+/* Scoped to this page's own #rv-review-step, not the bare .step-chevron
+   class dashboard-widgets.js's setupCollapsibleSteps already uses
+   elsewhere -- this page doesn't load that file and wires its own click
+   handler (see report-viewer.html), but reuses the same visual language. */
+#rv-review-step .step-chevron { margin-left: auto; flex-shrink: 0; transition: transform 0.15s; transform: rotate(90deg); }
+#rv-review-step.rv-collapsed .step-chevron { transform: rotate(0deg); }
+/* A compact status pill in the header itself, visible only while
+   collapsed -- so "is this approved yet" is answerable at a glance
+   without expanding the panel just to check. The full badge inside
+   .rv-approval-row (already always accurate) is the one source of truth;
+   this one's class list is kept in sync with it by renderReviewPanel. Sits
+   right after the title at the row's normal gap -- the chevron's own
+   margin-left:auto (not this) is what pushes things to the header's right
+   edge, so this doesn't also need one (two auto margins in the same row
+   would split the free space between both gaps instead of pushing
+   everything after the first one flush right). */
+.rv-header-badge { flex-shrink: 0; }
+#rv-review-step:not(.rv-collapsed) .rv-header-badge { display: none; }
+
+#rv-review-step .step-body { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; padding: 0; }
 
 .rv-approval-row {
   flex: 0 0 auto; display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
