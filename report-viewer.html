@@ -43,8 +43,22 @@
        actions reachable from reports.html, not something this page leads
        into. The one addition is the review panel below: this IS the
        review page (report-editor.html is for content), so approving/
-       commenting belongs here, not a new kind of edit form. -->
-  <div class="rb-preview-frame" id="rv-preview"></div>
+       commenting belongs here, not a new kind of edit form.
+
+       CONCEPT/PROTOTYPE: adjacent-report carousel. Left = the next day
+       with a report, right = the previous day with one (see
+       renderSidePanels below for why that ordering, not the more usual
+       previous-on-left) -- shown small/faded/blurred, click either to
+       transition there without a full page reload. Desktop-only for now
+       (see the max-width: 900px rule in style.css) -- there's no room for
+       side peeks on a phone-width screen without redesigning this page's
+       whole mobile layout, which is out of scope for evaluating the idea
+       itself. -->
+  <div class="rv-carousel" id="rv-carousel">
+    <button type="button" class="rv-side-panel rv-side-left" id="rv-side-left" hidden aria-label="Next day's report"></button>
+    <div class="rb-preview-frame" id="rv-preview"></div>
+    <button type="button" class="rv-side-panel rv-side-right" id="rv-side-right" hidden aria-label="Previous day's report"></button>
+  </div>
 
   <div class="step" id="rv-review-step" hidden>
     <div class="step-header">
@@ -116,6 +130,172 @@ async function renderPreview(layout, report, logoBlob) {
   wraps.forEach((wrap) => previewEl.appendChild(wrap));
 }
 
+// ---------- Concept: adjacent-report carousel ----------
+//
+// Only the first page of a side report renders (never the multi-page full
+// set the main preview shows) -- it's just there to say "this is the one
+// next to it", not to be read, and skipping the rest keeps each side
+// render cheap. Doesn't fetch that report's photos/signature either (same
+// reasoning); a lazily-pulled company report shows blank photo slots in
+// the small blurred thumbnail, which is fine there and gets resolved the
+// normal way the moment it actually becomes the current report.
+const SIDE_THUMB_WIDTH = 150;
+
+async function findAdjacentReports(project, current, room) {
+  const all = (await getReportsForProject(project.id)).filter((r) => reportInScope(r, room));
+  const sorted = all.slice().sort((a, b) => (
+    (a.date || '').localeCompare(b.date || '') || (Number(a.reportNo) || 0) - (Number(b.reportNo) || 0)
+  ));
+  const idx = sorted.findIndex((r) => r.id === current.id);
+  return {
+    prevReport: idx > 0 ? sorted[idx - 1] : null,
+    nextReport: idx >= 0 && idx < sorted.length - 1 ? sorted[idx + 1] : null,
+  };
+}
+
+async function renderSidePanel(btn, sideReport, layout, logoBlob, onPick) {
+  btn.onclick = null;
+  if (!sideReport) {
+    btn.hidden = true;
+    btn.innerHTML = '';
+    return;
+  }
+  const sandbox = document.createElement('div');
+  sandbox.style.cssText = 'position:fixed; top:0; left:-20000px; z-index:-1;';
+  document.body.appendChild(sandbox);
+  const pages = renderReportPages(sandbox, layout, sideReport, logoBlob);
+  const wrap = scalePreviewPage(pages[0].el, SIDE_THUMB_WIDTH);
+  sandbox.remove();
+  btn.innerHTML = '';
+  btn.appendChild(wrap);
+  const label = document.createElement('span');
+  label.className = 'rv-side-label';
+  label.textContent = `#${sideReport.reportNo} · ${sideReport.date || 'no date'}`;
+  btn.appendChild(label);
+  btn.hidden = false;
+  btn.onclick = () => onPick(sideReport);
+}
+
+// User's own spec for this concept: next day's report on the LEFT,
+// previous day's on the RIGHT -- not the more usual reading-order
+// left-to-right-through-time. Kept exactly as asked rather than
+// "corrected" to the usual convention.
+async function renderSidePanels(project, current, layout, logoBlob, room, onPick) {
+  const { prevReport, nextReport } = await findAdjacentReports(project, current, room);
+  await Promise.all([
+    renderSidePanel($('#rv-side-left'), nextReport, layout, logoBlob, onPick),
+    renderSidePanel($('#rv-side-right'), prevReport, layout, logoBlob, onPick),
+  ]);
+}
+
+let activeProject = null;
+let printLayoutCache = null;
+let reportLogoCache = null;
+
+// Everything that has to happen to actually show a report on this page --
+// pulled out of the old top-level IIFE so both the first load and every
+// later carousel click (loadAndShowReport, below) run the exact same path
+// instead of two copies drifting apart.
+async function loadAndShowReport(id, { includeDeleted = false } = {}) {
+  const room = await getCompanyRoom();
+  let report = await getReport(id, { includeDeleted: true });
+  if (!report || report.projectId !== activeProject.id || !reportInScope(report, room)) {
+    location.href = `reports.html?project=${activeProject.id}`;
+    return null;
+  }
+  if (report.deleted && !includeDeleted) {
+    // Only the very first load (reportId from the URL) is allowed to be a
+    // trashed report -- see the original includeDeleted comment below. A
+    // carousel click can never land on one: findAdjacentReports already
+    // filters getReportsForProject down to active reports only, so this
+    // is just a defensive backstop, not a real path.
+    location.href = `reports.html?project=${activeProject.id}`;
+    return null;
+  }
+
+  if ((report.photosFetched || []).some((f) => !f) || report.signatureFetched === false) {
+    $('#viewer-title').textContent = 'Loading photos…';
+    report = await fetchReportMedia(report);
+    // putReportRaw, not saveReport -- viewing a report shouldn't bump
+    // updatedAt or restamp lastEditedBy as if it had been edited.
+    await putReportRaw(report);
+  }
+
+  document.title = `Report #${report.reportNo} — ${activeProject.name}`;
+  $('#viewer-title').textContent = `Report #${report.reportNo} - ${report.date || ''}${report.deleted ? ' (Deleted)' : ''}`;
+  if (report.deleted) {
+    // report-editor.html only ever looks up active reports, so linking
+    // there for a trashed one would just silently bounce back to the
+    // reports list -- restore it from Trash first, then edit.
+    $('#bb-edit-link').hidden = true;
+  } else {
+    $('#bb-edit-link').hidden = false;
+    // Always shown, same as reports.html's own Edit link -- report-editor.html
+    // itself is what gates on permission (lockReportEditor), not this page.
+    $('#bb-edit-link').href = `report-editor.html?project=${activeProject.id}&report=${report.id}`;
+  }
+
+  try {
+    if (!printLayoutCache) printLayoutCache = await loadPrintLayout();
+    if (reportLogoCache === null) reportLogoCache = (await getReportLogo()) || undefined;
+    await renderPreview(printLayoutCache, report, reportLogoCache);
+    if (!report.deleted) {
+      await renderSidePanels(activeProject, report, printLayoutCache, reportLogoCache, room, (sideReport) => {
+        transitionToReport(sideReport);
+      });
+    } else {
+      $('#rv-side-left').hidden = true;
+      $('#rv-side-right').hidden = true;
+    }
+  } catch (err) {
+    console.error(err);
+    $('#rv-preview').innerHTML = '<p class="hint">Preview unavailable.</p>';
+  }
+
+  if (!report.deleted) {
+    await initReviewPanel(report);
+  } else {
+    $('#rv-review-step').hidden = true;
+  }
+  return report;
+}
+
+// The click animation: shrink/fade the current main preview out, swap in
+// the picked report (no full page navigation -- fetching + re-rendering
+// happens while the frame is invisible, mid-transition), then scale/fade
+// it back in from very slightly enlarged. history.pushState so the URL
+// (and Back button) reflect the report actually being viewed, matching
+// what a hard navigation would have left behind -- popstate just does a
+// plain reload rather than reversing the animation, a deliberate
+// concept-stage simplification, not a finished Back experience.
+let transitioning = false;
+async function transitionToReport(sideReport) {
+  if (transitioning) return;
+  transitioning = true;
+  const frame = $('#rv-preview');
+  frame.style.transition = 'opacity 0.22s ease, transform 0.22s ease';
+  frame.style.opacity = '0';
+  frame.style.transform = 'scale(0.94)';
+  await new Promise((resolve) => setTimeout(resolve, 220));
+
+  history.pushState(null, '', `report-viewer.html?project=${activeProject.id}&report=${sideReport.id}`);
+  await loadAndShowReport(sideReport.id);
+
+  frame.style.transition = 'none';
+  frame.style.transform = 'scale(1.05)';
+  frame.style.opacity = '0';
+  // Force the browser to paint the pre-transition state above before
+  // switching the transition back on -- without this, the browser can
+  // coalesce both style changes into one paint and skip the enter
+  // animation entirely.
+  void frame.offsetWidth;
+  frame.style.transition = 'opacity 0.24s ease, transform 0.24s ease';
+  frame.style.opacity = '1';
+  frame.style.transform = 'scale(1)';
+  transitioning = false;
+}
+window.addEventListener('popstate', () => location.reload());
+
 (async () => {
   const room = await getCompanyRoom();
   const project = projectId ? await getProject(projectId) : null;
@@ -123,6 +303,7 @@ async function renderPreview(layout, report, logoBlob) {
     location.href = 'index.html';
     return;
   }
+  activeProject = project;
   $('#project-name-sub').textContent = project.name;
   $('#bb-back-link').href = `reports.html?project=${project.id}`;
   $('#bb-back-link').addEventListener('click', (e) => {
@@ -134,44 +315,7 @@ async function renderPreview(layout, report, logoBlob) {
   // reports.html, which only ever links here with a trashed report's own
   // id -- read-only either way, same as any other report, so there's
   // nothing extra to gate on beyond the usual scope check right below.
-  let report = await getReport(reportId, { includeDeleted: true });
-  if (!report || report.projectId !== project.id || !reportInScope(report, room)) {
-    location.href = `reports.html?project=${project.id}`;
-    return;
-  }
-
-  if ((report.photosFetched || []).some((f) => !f) || report.signatureFetched === false) {
-    $('#viewer-title').textContent = 'Loading photos…';
-    report = await fetchReportMedia(report);
-    // putReportRaw, not saveReport -- viewing a report shouldn't bump
-    // updatedAt or restamp lastEditedBy as if it had been edited.
-    await putReportRaw(report);
-  }
-
-  document.title = `Report #${report.reportNo} — ${project.name}`;
-  $('#viewer-title').textContent = `Report #${report.reportNo} - ${report.date || ''}${report.deleted ? ' (Deleted)' : ''}`;
-  if (report.deleted) {
-    // report-editor.html only ever looks up active reports, so linking
-    // there for a trashed one would just silently bounce back to the
-    // reports list -- restore it from Trash first, then edit.
-    $('#bb-edit-link').hidden = true;
-  } else {
-    // Always shown, same as reports.html's own Edit link -- report-editor.html
-    // itself is what gates on permission (lockReportEditor), not this page.
-    $('#bb-edit-link').href = `report-editor.html?project=${project.id}&report=${report.id}`;
-  }
-
-  try {
-    const [layout, logoBlob] = await Promise.all([loadPrintLayout(), getReportLogo()]);
-    await renderPreview(layout, report, logoBlob);
-  } catch (err) {
-    console.error(err);
-    $('#rv-preview').innerHTML = '<p class="hint">Preview unavailable.</p>';
-  }
-
-  if (!report.deleted) {
-    await initReviewPanel(report);
-  }
+  await loadAndShowReport(reportId, { includeDeleted: true });
 })();
 
 const APPROVAL_LABELS = {
@@ -231,15 +375,20 @@ async function initReviewPanel(report) {
     renderReviewPanel(report);
   }
 
-  $('#rv-btn-approve').addEventListener('click', () => applyApproval({ status: 'approved' }));
-  $('#rv-btn-request-changes').addEventListener('click', () => applyApproval({ status: 'changes_requested' }));
-  $('#rv-btn-add-comment').addEventListener('click', async () => {
+  // .onclick, not addEventListener -- this now runs again on every
+  // carousel navigation (loadAndShowReport), and these three buttons are
+  // static elements that persist across it; addEventListener would stack
+  // a new listener (closed over the now-superseded `report`) on top of
+  // every previous one instead of replacing it.
+  $('#rv-btn-approve').onclick = () => applyApproval({ status: 'approved' });
+  $('#rv-btn-request-changes').onclick = () => applyApproval({ status: 'changes_requested' });
+  $('#rv-btn-add-comment').onclick = async () => {
     const textEl = $('#rv-comment-text');
     const text = textEl.value.trim();
     if (!text) return;
     await applyApproval({ comment: text });
     textEl.value = '';
-  });
+  };
 }
 </script>
 </body>

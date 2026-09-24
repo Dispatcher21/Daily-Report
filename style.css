@@ -1332,6 +1332,36 @@ main { max-width: min(1400px, 94vw); margin: 0 auto; padding: 1rem; }
   box-shadow: var(--shadow); padding: 0.85rem; max-height: calc(100vh - 3rem); overflow-y: auto;
 }
 
+/* ---------- report-viewer.html: adjacent-report carousel (concept) ----------
+   Left = the next day with a report, right = the previous day's -- see
+   report-viewer.html's own renderSidePanels comment for why that ordering.
+   Faded/blurred/shrunk so the eye reads them as "nearby, not the point"
+   without needing a label to explain it; the label under each is a small
+   assist, not the primary cue. */
+.rv-carousel { position: relative; display: flex; align-items: flex-start; justify-content: center; gap: 0; }
+.rv-carousel .rb-preview-frame { flex: 0 0 auto; max-width: 640px; }
+.rv-side-panel {
+  flex: 0 0 auto; align-self: center; position: relative; margin: 0 -2.75rem;
+  border: none; background: none; padding: 0 0 1.4rem; cursor: pointer;
+  opacity: 0.32; filter: blur(1.5px) grayscale(35%); transform: scale(0.78);
+  transition: opacity 0.2s ease, filter 0.2s ease, transform 0.2s ease;
+}
+.rv-side-panel:hover, .rv-side-panel:focus-visible { opacity: 0.65; filter: blur(0px) grayscale(0%); }
+.rv-side-panel .rb-preview-page-wrap { pointer-events: none; box-shadow: var(--shadow); border-radius: var(--radius-sm); overflow: hidden; }
+.rv-side-label {
+  position: absolute; bottom: 0; left: 0; right: 0; text-align: center;
+  font-size: 0.72rem; font-weight: 700; color: var(--text-dim); white-space: nowrap;
+}
+.rv-side-left { z-index: 1; }
+.rv-side-right { z-index: 1; }
+/* Concept targets desktop first -- side peeks need real width either side
+   of the main page, which a phone screen doesn't have without redesigning
+   this page's whole mobile layout (out of scope for evaluating the idea
+   on its own). */
+@media (max-width: 900px) {
+  .rv-side-panel { display: none; }
+}
+
 .rb-group {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
   box-shadow: var(--shadow); transition: border-color 0.15s, box-shadow 0.15s;
