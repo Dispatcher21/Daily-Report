@@ -1337,13 +1337,32 @@ main { max-width: min(1400px, 94vw); margin: 0 auto; padding: 1rem; }
    report-viewer.html's own renderSidePanels comment for why that ordering.
    Faded/blurred/shrunk so the eye reads them as "nearby, not the point"
    without needing a label to explain it; the label under each is a small
-   assist, not the primary cue. */
-.rv-carousel { position: relative; display: flex; align-items: flex-start; justify-content: center; gap: 0; }
-.rv-carousel .rb-preview-frame { flex: 0 0 auto; max-width: 640px; }
+   assist, not the primary cue.
+
+   .rv-carousel is a plain block, NOT a flex row -- the side panels are
+   position:absolute and taken out of flow entirely, specifically so they
+   can never compete with .rb-preview-frame for width the way flex/grid
+   siblings would. .rb-preview-frame keeps exactly the sizing/centering it
+   always had as a plain block child of <main>; nothing here touches it. */
+/* z-index: 0 (not just position: relative on its own) is what actually
+   makes this its own stacking context -- without an explicit z-index
+   here, a child's negative z-index below isn't scoped to "behind
+   .rb-preview-frame within this component", it resolves against the
+   nearest ancestor that DOES establish one (the page root), sinking the
+   side panel behind the entire rest of the page -- including <main>
+   itself, which then visually and pointer-event-wise sits on top of it,
+   silently eating clicks meant for the button underneath. */
+.rv-carousel { position: relative; z-index: 0; }
 .rv-side-panel {
-  flex: 0 0 auto; align-self: center; position: relative; margin: 0 -2.75rem;
+  /* A negative z-index paints before (behind) .rb-preview-frame -- a
+     plain static in-flow block with no positioning of its own -- despite
+     coming first in the HTML. A positive z-index here would do the
+     opposite: positioned descendants with z-index > 0 paint AFTER
+     ordinary in-flow content in the same stacking context, on top of it. */
+  position: absolute; top: 50%; z-index: -1;
+  transform: translateY(-50%) scale(0.78);
   border: none; background: none; padding: 0 0 1.4rem; cursor: pointer;
-  opacity: 0.32; filter: blur(1.5px) grayscale(35%); transform: scale(0.78);
+  opacity: 0.32; filter: blur(1.5px) grayscale(35%);
   transition: opacity 0.2s ease, filter 0.2s ease, transform 0.2s ease;
 }
 .rv-side-panel:hover, .rv-side-panel:focus-visible { opacity: 0.65; filter: blur(0px) grayscale(0%); }
@@ -1352,8 +1371,11 @@ main { max-width: min(1400px, 94vw); margin: 0 auto; padding: 1rem; }
   position: absolute; bottom: 0; left: 0; right: 0; text-align: center;
   font-size: 0.72rem; font-weight: 700; color: var(--text-dim); white-space: nowrap;
 }
-.rv-side-left { z-index: 1; }
-.rv-side-right { z-index: 1; }
+/* Peeking out from behind the main page's left/right edge, not shoved
+   further out into the surrounding whitespace -- the main frame's own
+   box-shadow/border is what visually reads as "in front of" these. */
+.rv-side-left { right: 100%; transform: translateY(-50%) translateX(40%) scale(0.78); }
+.rv-side-right { left: 100%; transform: translateY(-50%) translateX(-40%) scale(0.78); }
 /* Concept targets desktop first -- side peeks need real width either side
    of the main page, which a phone screen doesn't have without redesigning
    this page's whole mobile layout (out of scope for evaluating the idea
