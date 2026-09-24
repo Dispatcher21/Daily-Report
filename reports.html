@@ -419,6 +419,22 @@ function reportCloudBadgeHtml(r) {
   return `<span class="report-row-cloud" title="Not yet synced to the local folder">${CLOUD_ICON_SVG}</span>`;
 }
 
+// Same quiet-corner-marker treatment as the cloud icon above -- a report
+// with review comments shouldn't shout about it in the badge row next to
+// NO WORK DAY/WEATHER DAY/author, just note it's there for anyone scanning
+// the list. A speech-bubble glyph rather than a number pill keeps it from
+// reading as an unread-count/notification badge, which this isn't -- it
+// says "there's discussion here", not "something's new for you" (that's
+// what the managed-activity alert banner is for).
+const COMMENT_ICON_SVG = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>';
+
+function reportCommentBadgeHtml(r) {
+  const count = Array.isArray(r.comments) ? r.comments.length : 0;
+  if (!count) return '';
+  const label = count === 1 ? '1 comment' : `${count} comments`;
+  return `<span class="report-row-comment" title="${label}">${COMMENT_ICON_SVG}</span>`;
+}
+
 // Simple, theme-safe color rotation -- enough to tell two or three
 // inspectors on the same report apart at a glance without needing a real
 // per-person color picker anywhere in the app. A single inspector (or a
@@ -547,6 +563,7 @@ function renderRow(r) {
         <span class="report-row-sub">${escapeHtml(reportActivityText(r) || 'No activity noted')}</span>
       </div>
       <div class="report-row-actions">
+        ${reportCommentBadgeHtml(r)}
         ${reportCloudBadgeHtml(r)}
         ${reportWarningHtml(r)}
         <a class="btn-sm" href="report-editor.html?project=${project.id}&report=${r.id}">Edit</a>
@@ -572,6 +589,7 @@ function renderCard(r) {
       <div class="report-card-top">
         ${reportCheckboxHtml(r)}
         ${reportWarningHtml(r)}
+        ${reportCommentBadgeHtml(r)}
         ${reportCloudBadgeHtml(r)}
         <span class="report-row-no">#${r.reportNo}</span>
       </div>

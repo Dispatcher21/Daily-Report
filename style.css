@@ -2204,6 +2204,10 @@ input[type="date"] { min-width: 0; }
 .report-row-cloud {
   display: inline-flex; color: var(--text-dim); opacity: 0.7; vertical-align: middle; cursor: default;
 }
+/* Same quiet marker treatment as .report-row-cloud, see reportCommentBadgeHtml. */
+.report-row-comment {
+  display: inline-flex; color: var(--text-dim); opacity: 0.7; vertical-align: middle; cursor: default;
+}
 .report-row .report-row-sub { font-size: 0.83rem; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .report-row .report-row-actions { display: flex; align-items: center; gap: 0.5rem; }
 .report-row-no {
