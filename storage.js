@@ -358,7 +358,12 @@ async function saveReport(report) {
 // skipping that would mean the usual delta-pull Sync Now never picks it up
 // (see pullDeltaCompanyData's own updatedAt-based query) until the next
 // full reconcile.
-async function saveReportApproval(reportId, { status, comment } = {}) {
+// `pin` (optional) is { page, x, y } -- which printed page the commenter
+// tapped and where on it, x/y as 0-1 fractions of that page's own
+// width/height rather than absolute pixels, so the pin lands in the same
+// spot on the page no matter what width it's later rendered at (a phone
+// vs. a wide desktop window, or the page simply getting resized).
+async function saveReportApproval(reportId, { status, comment, pin } = {}) {
   const report = await getReport(reportId, { includeDeleted: true });
   if (!report) throw new Error('Report not found.');
 
@@ -369,6 +374,9 @@ async function saveReportApproval(reportId, { status, comment } = {}) {
   let addedComment = null;
   if (comment && comment.trim()) {
     addedComment = { id: crypto.randomUUID(), author: userName || '', text: comment.trim(), createdAt: Date.now() };
+    if (pin && Number.isFinite(pin.page) && Number.isFinite(pin.x) && Number.isFinite(pin.y)) {
+      addedComment.pin = { page: pin.page, x: pin.x, y: pin.y };
+    }
     report.comments = [...(report.comments || []), addedComment];
   }
 

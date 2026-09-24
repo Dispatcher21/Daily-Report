@@ -1688,8 +1688,27 @@ html:has(.rv-carousel), body:has(.rv-carousel) { overflow-x: hidden; }
 }
 .rv-comment:last-child { margin-bottom: 0; }
 .rv-comment-head { display: flex; justify-content: space-between; gap: 0.75rem; font-size: 0.76rem; color: var(--text-dim); margin-bottom: 0.25rem; padding-right: 1.4rem; }
+.rv-comment-head-left { display: flex; align-items: center; gap: 0.4rem; min-width: 0; }
 .rv-comment-author { font-weight: 700; color: var(--text); }
 .rv-comment-text { font-size: 0.88rem; white-space: pre-wrap; padding-right: 1.4rem; }
+/* Jumps to and flashes the matching marker on the report -- see
+   renderCommentPins/focusPin in report-viewer.html. Styled like a small
+   pill rather than the plain delete "x" above since this is a positive
+   action (go look at this), not a destructive one. */
+.rv-comment-pin-btn {
+  all: unset; cursor: pointer; font-size: 0.72rem; font-weight: 700;
+  color: var(--link); background: var(--brand-dim);
+  padding: 0.1rem 0.45rem; border-radius: 999px; white-space: nowrap;
+}
+/* Briefly flashed on a comment or a pin marker when navigating to it from
+   the other side (pin -> comment or comment -> pin), since a scroll alone
+   is easy to miss when the target was already near the top/bottom of the
+   viewport and barely moves. */
+@keyframes rv-flash {
+  0%, 100% { box-shadow: none; }
+  25%, 75% { box-shadow: 0 0 0 3px var(--brand); }
+}
+.rv-flash { animation: rv-flash 1s ease; }
 /* Always visible rather than hover-revealed -- this app mostly runs on a
    phone, where hover is inert (same reasoning as .report-warn-btn), so a
    reveal-on-hover delete control would just never appear there. Kept small
@@ -1705,6 +1724,45 @@ html:has(.rv-carousel), body:has(.rv-carousel) { overflow-x: hidden; }
 #rv-comment-form {
   flex: 0 0 auto; border-top: 1px solid var(--border); background: var(--surface);
   padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+}
+.rv-pin-row { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.4rem; flex-wrap: wrap; }
+.rv-pin-row .btn-sm { margin-top: 0; }
+/* .btn-sm sets its own `display`, which overrides the UA [hidden]{display:
+   none} rule regardless of specificity -- same issue as .fab's own
+   [hidden] override elsewhere in this file. #rv-btn-pin-clear is toggled
+   via `hidden` (see report-viewer.html), so it needs the same fix. */
+#rv-btn-pin-clear[hidden] { display: none; }
+/* Armed (waiting for the commenter to tap the report) gets the same
+   pressed look as any other active toggle in this app, not a new one. */
+#rv-btn-pin-toggle.active { background: var(--brand); color: var(--on-brand); border-color: var(--brand); }
+
+/* ---------- Pin-drop comments (report-viewer.html) ----------
+   A numbered marker per comment that has one, positioned with left/top as
+   the pin's own x/y (0-1 fractions of its page's rendered size, see
+   saveReportApproval's own comment) -- percentages of THIS wrap, so they
+   track the page correctly however wide it's currently rendered. Sits on
+   the printed page itself, so .rb-preview-page-wrap needing
+   position:relative (already true, see its own rule above) is what makes
+   this possible. A plain circle, not a map-pin teardrop shape -- a
+   teardrop's own tilt would need a second, counter-rotated element just to
+   keep its number upright, for no real gain over a circle centered
+   directly on the tapped point. */
+#rv-preview.rv-pin-armed { cursor: crosshair; }
+.rv-pin-marker {
+  position: absolute; transform: translate(-50%, -50%); z-index: 2;
+  width: 1.6rem; height: 1.6rem; border-radius: 50%;
+  background: var(--danger); border: 2px solid #fff; box-shadow: var(--shadow);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 0.72rem; font-weight: 700;
+  cursor: pointer; padding: 0;
+}
+.rv-pin-marker:hover { filter: brightness(1.1); }
+/* The in-progress pin, before it's actually posted -- hollow/dashed so it
+   never looks like an already-attached comment marker (solid, filled)
+   while it's still just a draft the commenter can move or cancel. */
+.rv-pin-marker.rv-pin-pending {
+  background: transparent; border: 2px dashed var(--warn); box-shadow: none;
+  cursor: default;
 }
 
 /* A project's icon (shown on its home-screen card, its hamburger-menu row,

@@ -107,6 +107,10 @@
         <label>Add a comment
           <textarea id="rv-comment-text" rows="2" placeholder="Visible to everyone who can see this report"></textarea>
         </label>
+        <div class="rv-pin-row">
+          <button type="button" class="btn-sm" id="rv-btn-pin-toggle">&#128205; Pin a spot on the report</button>
+          <button type="button" class="btn-sm" id="rv-btn-pin-clear" hidden>Clear pin</button>
+        </div>
         <button type="button" class="btn-sm" id="rv-btn-add-comment" style="margin-top:0.4rem;">Post Comment</button>
       </div>
     </div>
@@ -153,7 +157,12 @@ async function renderPreview(layout, report, logoBlob) {
   const wraps = pages.map(({ el }) => scalePreviewPage(el, targetWidth));
   sandbox.remove();
   previewEl.innerHTML = '';
-  wraps.forEach((wrap) => previewEl.appendChild(wrap));
+  // dataset.pageIndex is what ties a dropped/rendered pin back to which
+  // printed page it's on -- see the pin-drop feature below.
+  wraps.forEach((wrap, i) => {
+    wrap.dataset.pageIndex = i;
+    previewEl.appendChild(wrap);
+  });
   return targetWidth;
 }
 
@@ -427,6 +436,135 @@ function formatCommentTime(iso) {
 
 let rvCanApprove = false;
 
+// ---------- Pin-drop comments ----------
+//
+// Lets a commenter point at a specific spot on the printed report instead
+// of just describing it in words -- "the rebar spacing here" with an
+// actual "here". A pin is { page, x, y }: which printed page (0-indexed,
+// matches .rb-preview-page-wrap's own dataset.pageIndex from renderPreview)
+// and where on it, x/y as 0-1 fractions of that page's rendered
+// width/height rather than raw pixels, so it lands in the same spot
+// whether it's redrawn on a phone or a wide desktop window.
+let pinModeActive = false;
+let pendingPin = null;
+
+function clamp01(n) { return Math.max(0, Math.min(1, n)); }
+
+// The button's own label/state -- separate from the actual marker (see
+// renderPendingPinMarker) since this also has to reflect "armed, waiting
+// for a tap" even before there's anything to draw yet.
+function updatePinToggleUI() {
+  const toggleBtn = $('#rv-btn-pin-toggle');
+  const clearBtn = $('#rv-btn-pin-clear');
+  const preview = $('#rv-preview');
+  preview.classList.toggle('rv-pin-armed', pinModeActive);
+  clearBtn.hidden = !pendingPin;
+  if (pinModeActive) {
+    toggleBtn.textContent = '\u{1F4CD} Tap the report where you mean…';
+    toggleBtn.classList.add('active');
+  } else if (pendingPin) {
+    toggleBtn.textContent = '\u{1F4CD} Pinned – tap to move';
+    toggleBtn.classList.remove('active');
+  } else {
+    toggleBtn.textContent = '\u{1F4CD} Pin a spot on the report';
+    toggleBtn.classList.remove('active');
+  }
+}
+
+// The marker that follows the pin while it's still just a draft (not
+// posted yet) -- visually distinct (dashed, amber) from the solid numbered
+// markers renderCommentPins draws for actual posted comments below, so a
+// pin-in-progress never looks like it's already attached to something.
+function renderPendingPinMarker() {
+  $$('.rv-pin-pending', $('#rv-preview')).forEach((el) => el.remove());
+  if (!pendingPin) return;
+  const wrap = $$('.rb-preview-page-wrap', $('#rv-preview'))[pendingPin.page];
+  if (!wrap) return;
+  const marker = document.createElement('div');
+  marker.className = 'rv-pin-marker rv-pin-pending';
+  marker.style.left = `${pendingPin.x * 100}%`;
+  marker.style.top = `${pendingPin.y * 100}%`;
+  marker.setAttribute('aria-hidden', 'true');
+  wrap.appendChild(marker);
+}
+
+// Delegated (not per-marker) since .rb-preview-page-wrap elements are torn
+// down and rebuilt on every renderPreview -- this listener, attached once
+// to the (persistent) #rv-preview frame itself, keeps working across every
+// one of those without needing to be re-wired.
+$('#rv-preview').addEventListener('click', (e) => {
+  if (!pinModeActive) return;
+  const wrap = e.target.closest('.rb-preview-page-wrap');
+  if (!wrap) return;
+  const rect = wrap.getBoundingClientRect();
+  pendingPin = {
+    page: Number(wrap.dataset.pageIndex || 0),
+    x: clamp01((e.clientX - rect.left) / rect.width),
+    y: clamp01((e.clientY - rect.top) / rect.height),
+  };
+  pinModeActive = false;
+  updatePinToggleUI();
+  renderPendingPinMarker();
+});
+
+// The solid, numbered markers for comments that already have a pin --
+// numbered in the same order they appear in the comment list below, so
+// "comment 3" and "pin 3" always refer to each other. Redrawn from
+// scratch alongside the comment list itself (see renderReviewPanel)
+// rather than tracked incrementally, since both are cheap to fully
+// rebuild and this way they can never drift out of sync with each other.
+function renderCommentPins(report) {
+  const preview = $('#rv-preview');
+  $$('.rv-pin-marker:not(.rv-pin-pending)', preview).forEach((el) => el.remove());
+  const wraps = $$('.rb-preview-page-wrap', preview);
+  let n = 0;
+  (report.comments || []).forEach((c) => {
+    if (!c.pin) return;
+    n += 1;
+    const wrap = wraps[c.pin.page];
+    if (!wrap) return;
+    const marker = document.createElement('button');
+    marker.type = 'button';
+    marker.className = 'rv-pin-marker';
+    marker.style.left = `${c.pin.x * 100}%`;
+    marker.style.top = `${c.pin.y * 100}%`;
+    marker.textContent = String(n);
+    marker.title = c.text || '';
+    marker.setAttribute('aria-label', `Comment ${n}: ${c.text || ''}`);
+    marker.dataset.commentId = c.id;
+    marker.onclick = () => focusComment(c.id);
+    wrap.appendChild(marker);
+  });
+}
+
+// Pin -> comment (clicking a marker on the report) and comment -> pin
+// (clicking a comment's own "View on report" button) both land here or in
+// focusPin below -- expand the panel/scroll to the report as needed, then
+// a brief highlight flash so the eye actually catches which one just
+// became relevant, since a scroll alone is easy to miss.
+function flashHighlight(el) {
+  if (!el) return;
+  el.classList.remove('rv-flash');
+  void el.offsetWidth;
+  el.classList.add('rv-flash');
+}
+
+function focusComment(commentId) {
+  $('#rv-review-step').classList.remove('rv-collapsed');
+  syncMainBottomPadding();
+  const item = $(`.rv-comment[data-comment-id="${commentId}"]`);
+  if (!item) return;
+  item.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  flashHighlight(item);
+}
+
+function focusPin(commentId) {
+  const marker = $(`.rv-pin-marker[data-comment-id="${commentId}"]`);
+  if (!marker) return;
+  marker.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  flashHighlight(marker);
+}
+
 function renderReviewPanel(report) {
   const status = report.approvalStatus || 'pending';
   const badge = $('#rv-approval-badge');
@@ -444,17 +582,37 @@ function renderReviewPanel(report) {
   const comments = report.comments || [];
   const list = $('#rv-comments');
   list.innerHTML = '';
+  let pinNum = 0;
   comments.forEach((c) => {
     const item = document.createElement('div');
     item.className = 'rv-comment';
+    item.dataset.commentId = c.id;
     const head = document.createElement('div');
     head.className = 'rv-comment-head';
+    // Author + pin badge grouped together so .rv-comment-head's own
+    // space-between (author-side vs. time-side) still only ever splits
+    // two things -- a third top-level flex child here would instead
+    // spread all three apart evenly, stranding the pin badge in the
+    // middle of the row.
+    const left = document.createElement('span');
+    left.className = 'rv-comment-head-left';
     const author = document.createElement('span');
     author.className = 'rv-comment-author';
     author.textContent = c.author || 'Unknown';
+    left.appendChild(author);
+    if (c.pin) {
+      pinNum += 1;
+      const pinBtn = document.createElement('button');
+      pinBtn.type = 'button';
+      pinBtn.className = 'rv-comment-pin-btn';
+      pinBtn.textContent = `\u{1F4CD} ${pinNum}`;
+      pinBtn.title = 'Show where this points to on the report';
+      pinBtn.onclick = () => focusPin(c.id);
+      left.appendChild(pinBtn);
+    }
+    head.appendChild(left);
     const time = document.createElement('span');
     time.textContent = formatCommentTime(c.createdAt);
-    head.appendChild(author);
     head.appendChild(time);
     const text = document.createElement('div');
     text.className = 'rv-comment-text';
@@ -479,6 +637,7 @@ function renderReviewPanel(report) {
     list.appendChild(item);
   });
   $('#rv-comments-empty').hidden = comments.length > 0;
+  renderCommentPins(report);
   syncMainBottomPadding();
 }
 
@@ -509,6 +668,13 @@ $('#rv-review-toggle').onclick = () => {
 
 async function initReviewPanel(report) {
   $('#rv-review-step').hidden = false;
+  // A pin dropped for the last report has no meaning on this one --
+  // reset before renderReviewPanel/renderCommentPins run for the new
+  // report (loadAndShowReport calls this again on every carousel
+  // navigation, same page instance).
+  pinModeActive = false;
+  pendingPin = null;
+  updatePinToggleUI();
   // Needs to be known before the first renderReviewPanel call -- it decides
   // whether each comment gets a delete button.
   rvCanApprove = await companyCan('approveReports');
@@ -531,12 +697,26 @@ async function initReviewPanel(report) {
   // every previous one instead of replacing it.
   $('#rv-btn-approve').onclick = () => applyApproval({ status: 'approved' });
   $('#rv-btn-request-changes').onclick = () => applyApproval({ status: 'changes_requested' });
+  $('#rv-btn-pin-toggle').onclick = () => {
+    pinModeActive = !pinModeActive;
+    updatePinToggleUI();
+  };
+  $('#rv-btn-pin-clear').onclick = () => {
+    pendingPin = null;
+    pinModeActive = false;
+    updatePinToggleUI();
+    renderPendingPinMarker();
+  };
   $('#rv-btn-add-comment').onclick = async () => {
     const textEl = $('#rv-comment-text');
     const text = textEl.value.trim();
     if (!text) return;
-    await applyApproval({ comment: text });
+    await applyApproval({ comment: text, pin: pendingPin });
     textEl.value = '';
+    pendingPin = null;
+    pinModeActive = false;
+    updatePinToggleUI();
+    renderPendingPinMarker();
   };
 }
 </script>
