@@ -60,29 +60,34 @@
     <button type="button" class="rv-side-panel rv-side-right" id="rv-side-right" hidden aria-label="Previous day's report"></button>
   </div>
 
+  <!-- A floating footer, not a normal in-flow card (see style.css) -- the
+       header/approval row and the comment composer stay put while just
+       the comment list in between scrolls, so both "what's the status"
+       and "add a comment" are always reachable without hunting for them
+       at the bottom of a long report + long comment thread. -->
   <div class="step" id="rv-review-step" hidden>
     <div class="step-header">
       <span class="step-num">REVIEW</span>
       <h2>Approval</h2>
     </div>
-    <div class="step-body">
-      <div class="rv-approval-row">
-        <span class="rv-approval-badge" id="rv-approval-badge">Pending</span>
-        <div class="rv-approval-actions" id="rv-approval-actions" hidden>
-          <button type="button" class="btn-sm" id="rv-btn-approve">&#10003; Approve</button>
-          <button type="button" class="btn-sm" id="rv-btn-request-changes">&#8635; Request Changes</button>
-        </div>
+    <div class="rv-approval-row">
+      <span class="rv-approval-badge" id="rv-approval-badge">Pending</span>
+      <div class="rv-approval-actions" id="rv-approval-actions" hidden>
+        <button type="button" class="btn-sm" id="rv-btn-approve">&#10003; Approve</button>
+        <button type="button" class="btn-sm" id="rv-btn-request-changes">&#8635; Request Changes</button>
       </div>
+    </div>
 
+    <div class="rv-comments-scroll" id="rv-comments-scroll">
       <div id="rv-comments"></div>
       <p class="hint" id="rv-comments-empty" hidden style="margin:0.5rem 0 0;">No comments yet.</p>
+    </div>
 
-      <div id="rv-comment-form" hidden style="margin-top:0.75rem;">
-        <label>Add a comment
-          <textarea id="rv-comment-text" rows="2" placeholder="Visible to everyone who can see this report"></textarea>
-        </label>
-        <button type="button" class="btn-sm" id="rv-btn-add-comment" style="margin-top:0.4rem;">Post Comment</button>
-      </div>
+    <div id="rv-comment-form" hidden>
+      <label>Add a comment
+        <textarea id="rv-comment-text" rows="2" placeholder="Visible to everyone who can see this report"></textarea>
+      </label>
+      <button type="button" class="btn-sm" id="rv-btn-add-comment" style="margin-top:0.4rem;">Post Comment</button>
     </div>
   </div>
 </main>
@@ -307,6 +312,7 @@ async function loadAndShowReport(id, { includeDeleted = false } = {}) {
     await initReviewPanel(report);
   } else {
     $('#rv-review-step').hidden = true;
+    syncMainBottomPadding();
   }
   return report;
 }
@@ -410,7 +416,22 @@ function renderReviewPanel(report) {
     list.appendChild(item);
   });
   $('#rv-comments-empty').hidden = comments.length > 0;
+  syncMainBottomPadding();
 }
+
+// #rv-review-step floats fixed over the bottom of the page now (see
+// style.css) instead of taking up its own space in normal flow -- without
+// this, its own footer would just permanently cover whatever's underneath
+// it (the tail of the report preview, or the carousel's side reports).
+// Re-measured on every render because its height isn't fixed: more
+// comments, a wrapped approval row, or a window resize (comment text
+// reflowing) can all change how tall it actually is.
+function syncMainBottomPadding() {
+  const main = document.querySelector('main');
+  const step = $('#rv-review-step');
+  main.style.paddingBottom = step.hidden ? '' : `${step.getBoundingClientRect().height + 16}px`;
+}
+window.addEventListener('resize', syncMainBottomPadding);
 
 async function initReviewPanel(report) {
   $('#rv-review-step').hidden = false;

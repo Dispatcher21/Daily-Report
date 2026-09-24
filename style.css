@@ -1587,9 +1587,29 @@ html:has(.rv-carousel), body:has(.rv-carousel) { overflow-x: hidden; }
 .rf-warning-card ul { text-align: left; margin: 0.9rem 0 1.3rem; padding-left: 1.3rem; }
 .rf-warning-card li { font-weight: 700; margin-bottom: 0.3rem; }
 
-/* ---------- Report approval/comments (report-viewer.html, Manager role) ---------- */
+/* ---------- Report approval/comments (report-viewer.html, Manager role) ----------
+   A floating footer, always on screen, rather than a normal in-flow card at
+   the bottom of the page -- same "don't make someone scroll back down for
+   this" reasoning as report-editor.html's own Save/Generate/Duplicate/
+   Delete footer, just fixed instead of sticky since this page has no
+   two-column layout for a sticky position to anchor its width against.
+   Capped height with only the comment list scrolling inside it (see
+   .rv-comments-scroll) -- the status/actions above it and the composer
+   below it stay reachable even with a long thread, instead of both
+   getting pushed off screen by however many comments there are. */
+#rv-review-step {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+  margin: 0 auto; max-width: min(1400px, 94vw);
+  display: flex; flex-direction: column; max-height: 50vh;
+  border-radius: var(--radius) var(--radius) 0 0;
+  box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.18);
+}
+#rv-review-step .step-header { flex: 0 0 auto; border-radius: var(--radius) var(--radius) 0 0; }
 
-.rv-approval-row { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.75rem; }
+.rv-approval-row {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
+  padding: 0.85rem 1rem 0.6rem;
+}
 .rv-approval-badge {
   font-size: 0.75rem; font-weight: 700; letter-spacing: 0.02em;
   padding: 0.3rem 0.7rem; border-radius: 999px; white-space: nowrap;
@@ -1600,6 +1620,8 @@ html:has(.rv-carousel), body:has(.rv-carousel) { overflow-x: hidden; }
 .rv-approval-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
 .rv-approval-actions .btn-sm { margin-top: 0; }
 
+.rv-comments-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 1rem; }
+
 .rv-comment {
   border: 1px solid var(--border); border-radius: var(--radius-sm);
   padding: 0.6rem 0.75rem; background: var(--surface-2);
@@ -1609,6 +1631,11 @@ html:has(.rv-carousel), body:has(.rv-carousel) { overflow-x: hidden; }
 .rv-comment-head { display: flex; justify-content: space-between; gap: 0.75rem; font-size: 0.76rem; color: var(--text-dim); margin-bottom: 0.25rem; }
 .rv-comment-author { font-weight: 700; color: var(--text); }
 .rv-comment-text { font-size: 0.88rem; white-space: pre-wrap; }
+
+#rv-comment-form {
+  flex: 0 0 auto; border-top: 1px solid var(--border); background: var(--surface);
+  padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+}
 
 /* A project's icon (shown on its home-screen card, its hamburger-menu row,
    and here) and the picker that changes it -- shared by settings.html's
