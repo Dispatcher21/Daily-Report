@@ -261,20 +261,56 @@ function parseSingleColumnList(ws, headerLabel, maxCount) {
 // catalog/contractors/equipment the way re-uploading that file would --
 // this one only ever touches billingEstimates, merged by estimateNo via
 // mergeBillingEstimates in defaults.js.
+//
+// Built with ExcelJS, not the SheetJS (XLSX global) used by every other
+// sheet in this file -- the community SheetJS build here silently drops
+// cell styling, formulas, and freeze panes (confirmed by inspecting its
+// own output: no <b/> in styles.xml, no <f> tags, no <pane> element), so a
+// bold/frozen header and live running-total formulas simply aren't
+// reachable through it. ExcelJS is what quantity-sheet-export.js already
+// uses for the same reason -- this reuses its BRAND_FILL/GRID_BORDER/
+// styleHeaderRow/styleDataRows helpers and depends on the same global
+// ExcelJS (lib/exceljs.min.js) and quantity-calc.js (isLumpSumUnit/
+// earnedTotalFor) it does. Safe here specifically because
+// buildPayAppQuantitiesWorkbook/downloadPayAppQuantitiesFile are only ever
+// called from quantity-sheet.html, the one page that loads all three --
+// project.html/settings.html/index.html also load this file but never
+// call these two functions, so they're never affected by not having
+// ExcelJS loaded.
+//
+// The sheet itself has two header rows, not one: row 1 is the real,
+// parsed header (ESTIMATE NO./DATE/NOTE/item numbers/a trailing computed
+// total column); row 2 is a human-only annotation -- each item's
+// description and unit, so filling this in doesn't require the PAY ITEMS
+// sheet open side by side to know what "618-01" means. Row 2 (and the
+// running-totals row at the bottom) both leave ESTIMATE NO. and DATE
+// blank, which is what makes parsePayAppQuantitiesSheet's own "needs an
+// estimateNo or date to count as a real row" check skip them automatically
+// -- no parser change needed for either one.
 const PAY_APP_QUANTITIES_SHEET = 'PAY APPS';
+const PAY_APP_TOTAL_COL_LABEL = 'TOTAL $ THIS PAY APP';
 
-function buildPayAppQuantitiesWorkbook(payItemCatalog, billingEstimates) {
-  const wb = XLSX.utils.book_new();
-  // Current catalog items first, in their usual order -- then any item
-  // number that shows up in a real billingEstimate but ISN'T in the
-  // catalog anymore (renumbered or removed after it was already billed
-  // against). Skipping those would mean this export has no column for a
-  // real, already-recorded figure -- and since mergeBillingEstimates
-  // treats "this file's itemTotals" as the complete picture for whatever
-  // it does cover, re-uploading that same file unmodified would read back
-  // as the user having deleted that figure, silently wiping it (and
-  // resetting the Pay App's approval status as a side effect) even though
-  // nothing was actually changed.
+function excelColLetter(n) {
+  let s = '';
+  while (n > 0) {
+    const rem = (n - 1) % 26;
+    s = String.fromCharCode(65 + rem) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
+}
+
+// itemNumbers: current catalog items first, in their usual order -- then
+// any item number that shows up in a real billingEstimate but ISN'T in the
+// catalog anymore (renumbered or removed after it was already billed
+// against). Skipping those would mean this export has no column for a
+// real, already-recorded figure -- and since mergeBillingEstimates treats
+// "this file's itemTotals" as the complete picture for whatever it does
+// cover, re-uploading that same file unmodified would read back as the
+// user having deleted that figure, silently wiping it (and resetting the
+// Pay App's approval status as a side effect) even though nothing was
+// actually changed.
+function payAppItemNumbers(payItemCatalog, billingEstimates) {
   const itemNumbers = (payItemCatalog || []).map((it) => it.itemNumber || '').filter(Boolean);
   const knownItems = new Set(itemNumbers);
   (billingEstimates || []).forEach((e) => {
@@ -285,33 +321,121 @@ function buildPayAppQuantitiesWorkbook(payItemCatalog, billingEstimates) {
       }
     });
   });
-  const rows = [['ESTIMATE NO.', 'DATE', 'NOTE', ...itemNumbers]];
-  (billingEstimates || []).forEach((e) => {
-    const itemVals = itemNumbers.map((num) => (e.itemTotals && e.itemTotals[num] != null ? e.itemTotals[num] : ''));
-    rows.push([e.estimateNo || '', e.date || '', e.note || '', ...itemVals]);
+  return itemNumbers;
+}
+
+async function buildPayAppQuantitiesWorkbook(payItemCatalog, billingEstimates) {
+  const catalog = payItemCatalog || [];
+  const estimates = billingEstimates || [];
+  const catalogByNumber = new Map(catalog.map((it) => [it.itemNumber, it]));
+  const itemNumbers = payAppItemNumbers(catalog, estimates);
+  const lastCol = 3 + itemNumbers.length + 1; // ESTIMATE NO./DATE/NOTE + items + the trailing total column
+
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet(PAY_APP_QUANTITIES_SHEET, { views: [{ state: 'frozen', xSplit: 3, ySplit: 2 }] });
+  ws.columns = [
+    { width: 14 }, { width: 14 }, { width: 30 },
+    ...itemNumbers.map(() => ({ width: 13 })),
+    { width: 20 },
+  ];
+
+  const headerRow = ws.getRow(1);
+  headerRow.getCell(1).value = 'ESTIMATE NO.';
+  headerRow.getCell(2).value = 'DATE';
+  headerRow.getCell(3).value = 'NOTE';
+  itemNumbers.forEach((num, i) => { headerRow.getCell(4 + i).value = num; });
+  headerRow.getCell(lastCol).value = PAY_APP_TOTAL_COL_LABEL;
+  styleHeaderRow(ws, 1, lastCol);
+
+  const descRow = ws.getRow(2);
+  descRow.getCell(3).value = 'Item description / unit ↓';
+  itemNumbers.forEach((num, i) => {
+    const cat = catalogByNumber.get(num);
+    const label = !cat
+      ? '(item removed from catalog)'
+      : isLumpSumUnit(cat.unit)
+        ? `${cat.description || ''} (Lump Sum, $)`.trim()
+        : `${cat.description || ''} (${cat.unit || ''})`.trim();
+    descRow.getCell(4 + i).value = label;
   });
-  const ws = XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols'] = [{ wch: 14 }, { wch: 14 }, { wch: 30 }, ...itemNumbers.map(() => ({ wch: 12 }))];
-  XLSX.utils.book_append_sheet(wb, ws, PAY_APP_QUANTITIES_SHEET);
+  descRow.getCell(lastCol).value = 'Auto-calculated -- do not type here';
+  for (let c = 1; c <= lastCol; c++) {
+    const cell = descRow.getCell(c);
+    cell.font = { italic: true, color: { argb: 'FF6B7280' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF3F5F7' } };
+    cell.border = { top: GRID_BORDER, left: GRID_BORDER, bottom: GRID_BORDER, right: GRID_BORDER };
+  }
+  descRow.height = 26;
+  descRow.alignment = { wrapText: true, vertical: 'middle' };
+
+  estimates.forEach((e) => {
+    const rowVals = [e.estimateNo || '', e.date || '', e.note || ''];
+    let totalDollars = 0;
+    let anyPriced = false;
+    itemNumbers.forEach((num) => {
+      const total = e.itemTotals && e.itemTotals[num] != null ? e.itemTotals[num] : null;
+      rowVals.push(total);
+      const cat = catalogByNumber.get(num);
+      if (cat && total != null) {
+        const unitPrice = cat.unitPrice !== '' && cat.unitPrice != null && isFinite(Number(cat.unitPrice)) ? Number(cat.unitPrice) : null;
+        const earned = earnedTotalFor(cat.unit, Number(total), unitPrice);
+        if (earned != null) { totalDollars += earned; anyPriced = true; }
+      }
+    });
+    rowVals.push(anyPriced ? Math.round(totalDollars * 100) / 100 : null);
+    ws.addRow(rowVals);
+  });
+
+  if (estimates.length > 0) {
+    const firstDataRow = 3;
+    const lastDataRow = 2 + estimates.length;
+    styleDataRows(ws, firstDataRow, lastDataRow, lastCol);
+    ws.getColumn(lastCol).numFmt = '$#,##0.00';
+
+    // A real Excel formula, not a value computed once at download time --
+    // stays correct if a figure is hand-edited afterward, without needing
+    // a fresh download to see the new total.
+    const totalRow = ws.addRow(['', '', 'TOTAL TO DATE']);
+    for (let i = 0; i < itemNumbers.length; i++) {
+      const col = 4 + i;
+      const letter = excelColLetter(col);
+      totalRow.getCell(col).value = { formula: `SUM(${letter}${firstDataRow}:${letter}${lastDataRow})` };
+    }
+    const totalLetter = excelColLetter(lastCol);
+    totalRow.getCell(lastCol).value = { formula: `SUM(${totalLetter}${firstDataRow}:${totalLetter}${lastDataRow})` };
+    totalRow.getCell(lastCol).numFmt = '$#,##0.00';
+    totalRow.font = { bold: true };
+    for (let c = 1; c <= lastCol; c++) {
+      totalRow.getCell(c).border = { top: { style: 'double', color: { argb: 'FF1C3D5A' } }, left: GRID_BORDER, bottom: GRID_BORDER, right: GRID_BORDER };
+    }
+  }
+
   return wb;
 }
 
-function downloadPayAppQuantitiesFile(project) {
-  const wb = buildPayAppQuantitiesWorkbook(project.payItemCatalog, project.billingEstimates);
+async function downloadPayAppQuantitiesFile(project) {
+  const wb = await buildPayAppQuantitiesWorkbook(project.payItemCatalog, project.billingEstimates);
   const slug = String(project.name || (project.meta && project.meta.projectNo) || 'project')
     .replace(/[^A-Za-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '')
     .slice(0, 60);
-  writeProjectWorkbook(wb, `PayApps_${slug || 'project'}.xlsx`);
+  const out = await wb.xlsx.writeBuffer();
+  triggerDownload(
+    new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+    `PayApps_${slug || 'project'}.xlsx`
+  );
 }
 
 // Same header-by-label-not-position approach as this file's other sheet
-// parsers -- every header cell that isn't ESTIMATE NO./DATE/NOTE is a pay
-// item's quantity (or, for a Lump Sum item, a dollar figure -- see
-// pay-apps.html's own itemTotals comment) for that row's Pay App. The
-// header text IS the item number, so there's no separate lookup against a
-// PAY ITEMS sheet needed to know
-// which item a column belongs to.
+// parsers -- every header cell that isn't ESTIMATE NO./DATE/NOTE/the
+// trailing computed total column is a pay item's quantity (or, for a Lump
+// Sum item, a dollar figure -- see pay-apps.html's own itemTotals comment)
+// for that row's Pay App. The header text IS the item number, so there's
+// no separate lookup against a PAY ITEMS sheet needed to know which item a
+// column belongs to. Reads with plain SheetJS (not ExcelJS) since it only
+// needs cell values, not styling -- a file ExcelJS wrote is a completely
+// ordinary .xlsx, so SheetJS reads it exactly as well as one it wrote
+// itself.
 function parsePayAppQuantitiesSheet(ws) {
   if (!ws) return null;
   const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
@@ -330,9 +454,10 @@ function parsePayAppQuantitiesSheet(ws) {
   const cNo = findCol(['ESTIMATE NO.', 'ESTIMATE NO', 'ESTIMATE #', 'ESTIMATE']);
   const cDate = findCol(['DATE']);
   const cNote = findCol(['NOTE', 'NOTES']);
+  const cTotal = findCol([PAY_APP_TOTAL_COL_LABEL.toUpperCase()]);
   const itemCols = [];
   header.forEach((cell, i) => {
-    if (i === cNo || i === cDate || i === cNote) return;
+    if (i === cNo || i === cDate || i === cNote || i === cTotal) return;
     const itemNumber = cell != null ? String(cell).trim() : '';
     if (itemNumber) itemCols.push({ index: i, itemNumber });
   });

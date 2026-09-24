@@ -66,7 +66,7 @@
     <div class="step-header">
       <span class="step-num">PAY APPS</span>
       <h2>Pay App Quantities (Excel)</h2>
-      <button type="button" class="info-tip" data-tip="Download a spreadsheet with one row per Pay App and one column per pay item, fill in figures there instead of one at a time on the Pay Apps page, then upload it back. Only ever touches Pay App quantities/dates/notes -- never your project settings or pay item catalog. A Pay App already on file keeps its approval status/comments, reset to Pending only if its figures actually changed." aria-label="What this does">i</button>
+      <button type="button" class="info-tip" data-tip="Download a spreadsheet with one row per Pay App and one column per pay item (with its description/unit shown right under the header, and a running $ total per Pay App and per item), fill in figures there instead of one at a time on the Pay Apps page, then upload it back. Only ever touches Pay App quantities/dates/notes -- never your project settings or pay item catalog. A Pay App already on file keeps its approval status/comments, reset to Pending only if its figures actually changed." aria-label="What this does">i</button>
     </div>
     <div class="step-body">
       <button type="button" class="btn-secondary" id="btn-download-payapp-file" style="margin-bottom:0.75rem;">&#8681; Download Pay App Quantities</button>
@@ -774,10 +774,10 @@ $('#btn-generate').addEventListener('click', async () => {
   }
 });
 
-$('#btn-download-payapp-file').addEventListener('click', () => {
+$('#btn-download-payapp-file').addEventListener('click', async () => {
   if (!project) return;
   try {
-    downloadPayAppQuantitiesFile(project);
+    await downloadPayAppQuantitiesFile(project);
   } catch (err) {
     console.error(err);
     alert(userError("Couldn't build the Pay App file: " + err.message, 'DOWNLOAD_PAYAPP_FILE'));
