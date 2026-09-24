@@ -1362,14 +1362,36 @@ main { max-width: min(1400px, 94vw); margin: 0 auto; padding: 1rem; }
   position: absolute; top: 50%; z-index: -1;
   transform: translateY(-50%) scale(0.78);
   border: none; background: none; padding: 0 0 1.4rem; cursor: pointer;
-  opacity: 0.32; filter: blur(1.5px) grayscale(35%);
-  transition: opacity 0.2s ease, filter 0.2s ease, transform 0.2s ease;
 }
-.rv-side-panel:hover, .rv-side-panel:focus-visible { opacity: 0.65; filter: blur(0px) grayscale(0%); }
-.rv-side-panel .rb-preview-page-wrap { pointer-events: none; box-shadow: var(--shadow); border-radius: var(--radius-sm); overflow: hidden; }
+/* Fade/blur/grayscale live on the thumbnail itself, not the button --
+   opacity on an ancestor would dim the arrow badge and label right along
+   with it, undoing the point of putting a clear, undimmed "click here to
+   move" cue on top of a deliberately-hard-to-read preview. */
+.rv-side-panel .rb-preview-page-wrap {
+  pointer-events: none; box-shadow: var(--shadow); border-radius: var(--radius-sm); overflow: hidden;
+  border: 2px solid #000;
+  opacity: 0.32; filter: blur(1.5px) grayscale(35%);
+  transition: opacity 0.2s ease, filter 0.2s ease;
+}
+.rv-side-panel:hover .rb-preview-page-wrap, .rv-side-panel:focus-visible .rb-preview-page-wrap {
+  opacity: 0.65; filter: blur(0px) grayscale(0%);
+}
 .rv-side-label {
   position: absolute; bottom: 0; left: 0; right: 0; text-align: center;
   font-size: 0.72rem; font-weight: 700; color: var(--text-dim); white-space: nowrap;
+}
+/* The round arrow badge -- always fully visible/crisp (see the comment
+   above), centered over the faded thumbnail underneath it. */
+.rv-side-arrow {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 2.4rem; height: 2.4rem; border-radius: 50%;
+  background: var(--surface); border: 2px solid #000; box-shadow: var(--shadow);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.2rem; font-weight: 700; color: var(--text);
+  transition: transform 0.2s ease;
+}
+.rv-side-panel:hover .rv-side-arrow, .rv-side-panel:focus-visible .rv-side-arrow {
+  transform: translate(-50%, -50%) scale(1.12);
 }
 /* Peeking out from behind the main page's left/right edge, not shoved
    further out into the surrounding whitespace -- the main frame's own
