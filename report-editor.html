@@ -879,6 +879,9 @@ function bindDynamicFields() {
 function renderEditor() {
   bindText('#f-reportNo', 'reportNo');
   bindText('#f-date', 'date');
+  $('#f-date')?.addEventListener('input', () => {
+    $('#editor-title').textContent = `Report #${report.reportNo} - ${report.date || ''}`;
+  });
 
   // Reports saved before multiple inspectors existed only have a flat
   // Representative name plus one shared time-entries array -- fold those
