@@ -1365,8 +1365,13 @@ main { max-width: min(1400px, 94vw); margin: 0 auto; padding: 1rem; }
    resulting scrollbar) reflecting the unclipped overflow. Belt-and-braces
    alongside report-viewer.html's own JS margin measurement (SIDE_SLIVER_*),
    which is what actually keeps the sliver from wanting more room than the
-   viewport has in the first place. */
-html:has(.rv-carousel), body:has(.rv-carousel) { overflow-x: hidden; }
+   viewport has in the first place.
+   clip, not hidden: hidden on both html and body turns body into its own
+   scroll container, and trackpad scrolling could get stuck on it (body
+   also has overscroll-behavior-y: contain, which stops the scroll from
+   passing up to the page). clip hides the overflow the same way without
+   making body scrollable, so this page scrolls like every other page. */
+html:has(.rv-carousel), body:has(.rv-carousel) { overflow-x: clip; }
 .rv-side-panel {
   /* --rv-hide-px/--rv-sliver-px are set inline by report-viewer.html's
      renderSidePanel, in real pixels measured off the actual page margin at
@@ -1384,8 +1389,8 @@ html:has(.rv-carousel), body:has(.rv-carousel) { overflow-x: hidden; }
      coming first in the HTML. A positive z-index here would do the
      opposite: positioned descendants with z-index > 0 paint AFTER
      ordinary in-flow content in the same stacking context, on top of it. */
-  /* Top-aligned beside the report's first page. Centering (top: 50%) put
-     it halfway down a multi-page report, off screen on load. */
+  /* top is set inline by renderSidePanels (report-viewer.html) to center
+     the thumbnail on the main report's first page. */
   position: absolute; top: 0; z-index: -1;
   border: none; background: none; padding: 0 0 1.4rem; cursor: pointer;
 }
@@ -1414,7 +1419,9 @@ html:has(.rv-carousel), body:has(.rv-carousel) { overflow-x: hidden; }
   transform: translateX(-50%);
 }
 .rv-side-arrow {
-  position: absolute; top: 50%;
+  /* 30% down, not 50%: the thumbnail is centered on a first page that's
+     usually taller than the screen, so its middle lands at the footer. */
+  position: absolute; top: 30%;
   width: 2.4rem; height: 2.4rem; border-radius: 50%;
   background: var(--surface); border: 2px solid #000; box-shadow: var(--shadow);
   display: flex; align-items: center; justify-content: center;

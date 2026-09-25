@@ -192,14 +192,13 @@ async function renderPreview(layout, report, logoBlob) {
 // normal way the moment it actually becomes the current report.
 //
 // Sized as a fraction of the main report's own current width, not a fixed
-// pixel value -- 70% "the main report, just a bit smaller", matching how
-// it should feel next to whatever size the main preview happens to be
-// rendering at (screen width, zoom, etc.) rather than looking randomly
-// larger/smaller than it in some viewports.
-const SIDE_THUMB_SCALE = 0.7;
+// pixel value -- 75% of the main report, and vertically centered on its
+// first page (see renderSidePanels), so the side reports read as a stack
+// behind it at whatever size the main preview happens to be rendering at.
+const SIDE_THUMB_SCALE = 0.75;
 // How much of each side panel should actually peek out past the main
 // report's edge, in real pixels -- NOT a fixed fraction of the panel's own
-// (now much larger, 70%-of-main) width. <main> itself caps out at
+// (now much larger, 75%-of-main) width. <main> itself caps out at
 // min(1400px, 94vw) (see style.css), so at plenty of common desktop widths
 // there's only 40-60px of page margin outside it on each side -- a
 // percentage-based sliver sized off the panel's own width would routinely
@@ -277,9 +276,15 @@ async function renderSidePanels(project, current, layout, logoBlob, room, onPick
   // assumed from CSS, measured, so this stays correct through browser
   // resizes, zoom, or a narrower/wider window than whatever this was last
   // tuned against.
-  const mainRect = $('#rv-preview').getBoundingClientRect();
-  const leftMargin = mainRect.left;
-  const rightMargin = window.innerWidth - mainRect.right;
+  // offsetWidth, not the rect's own width: during a carousel transition the
+  // frame is mid-animation at scale(0.94), which would make the margins
+  // look wider than they really are. The transform scales around the
+  // center, so the center itself is still accurate.
+  const frame = $('#rv-preview');
+  const frameRect = frame.getBoundingClientRect();
+  const frameCenterX = (frameRect.left + frameRect.right) / 2;
+  const leftMargin = frameCenterX - frame.offsetWidth / 2;
+  const rightMargin = window.innerWidth - (frameCenterX + frame.offsetWidth / 2);
   const leftSliver = Math.min(SIDE_SLIVER_TARGET, Math.max(0, leftMargin - SIDE_SLIVER_MARGIN_BUFFER));
   const rightSliver = Math.min(SIDE_SLIVER_TARGET, Math.max(0, rightMargin - SIDE_SLIVER_MARGIN_BUFFER));
 
@@ -287,6 +292,23 @@ async function renderSidePanels(project, current, layout, logoBlob, room, onPick
     renderSidePanel($('#rv-side-left'), nextReport, layout, logoBlob, onPick, 'left', thumbWidth, leftSliver),
     renderSidePanel($('#rv-side-right'), prevReport, layout, logoBlob, onPick, 'right', thumbWidth, rightSliver),
   ]);
+
+  // Center each side thumbnail vertically on the main report's FIRST page
+  // (not the whole report -- the photo log pages can make it several
+  // screens tall, which would put the thumbnails far down, off screen).
+  // Layout offsets (offsetTop/offsetHeight), not getBoundingClientRect: the
+  // frame may be mid-transition at scale(0.94) here, which would skew rects.
+  const carousel = $('#rv-carousel');
+  const firstPage = $('#rv-preview .rb-preview-page-wrap');
+  if (firstPage) {
+    let pageTop = 0;
+    for (let el = firstPage; el && el !== carousel; el = el.offsetParent) pageTop += el.offsetTop;
+    const centerY = pageTop + firstPage.offsetHeight / 2;
+    [$('#rv-side-left'), $('#rv-side-right')].forEach((btn) => {
+      const thumb = btn.hidden ? null : btn.querySelector('.rb-preview-page-wrap');
+      if (thumb) btn.style.top = `${Math.round(centerY - thumb.offsetHeight / 2)}px`;
+    });
+  }
   renderMobileNav(prevReport, nextReport, onPick);
 }
 
