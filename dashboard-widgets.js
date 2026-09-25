@@ -314,33 +314,51 @@ function animateDashboardFills() {
 // CSS font-size never adapts to how wide the actual figure turns out to be
 // (a report count and a dollar total need very different sizes to both look
 // intentional), and text-overflow:ellipsis on a number just hides digits.
-// Re-run on resize (debounced below), since a card's available width
-// changes with it.
-function fitDashboardValues() {
-  $$('.dash-card .dc-value').forEach((el) => {
-    // A counting value renders at "0"/"$0" initially, which is shorter
-    // than the real figure it's about to count up to -- measure against
-    // the real one (see statCard) so the shrink decision is still right
-    // once counting finishes, then put the placeholder back.
-    const original = el.textContent;
-    if (el.dataset.finalText) el.textContent = el.dataset.finalText;
-    el.style.fontSize = '';
-    el.style.whiteSpace = 'nowrap';
-    let size = parseFloat(getComputedStyle(el).fontSize);
-    while (el.scrollWidth > el.clientWidth + 0.5 && size > 11) {
-      size -= 0.5;
-      el.style.fontSize = size + 'px';
-    }
-    if (el.scrollWidth > el.clientWidth + 0.5) el.style.whiteSpace = 'normal';
-    if (el.dataset.finalText) el.textContent = original;
-  });
+function fitDashboardValue(el) {
+  // Not laid out (inside a collapsed section) -- nothing to measure yet;
+  // the ResizeObserver below re-fits it once it has a real width.
+  if (el.clientWidth === 0) return;
+  // A counting value renders at "0"/"$0" initially, which is shorter
+  // than the real figure it's about to count up to -- measure against
+  // the real one (see statCard) so the shrink decision is still right
+  // once counting finishes, then put the placeholder back.
+  const original = el.textContent;
+  if (el.dataset.finalText) el.textContent = el.dataset.finalText;
+  el.style.fontSize = '';
+  el.style.whiteSpace = 'nowrap';
+  let size = parseFloat(getComputedStyle(el).fontSize);
+  while (el.scrollWidth > el.clientWidth + 0.5 && size > 11) {
+    size -= 0.5;
+    el.style.fontSize = size + 'px';
+  }
+  if (el.scrollWidth > el.clientWidth + 0.5) el.style.whiteSpace = 'normal';
+  if (el.dataset.finalText) el.textContent = original;
 }
 
-let fitDashboardValuesResizeTimer = null;
-window.addEventListener('resize', () => {
-  clearTimeout(fitDashboardValuesResizeTimer);
-  fitDashboardValuesResizeTimer = setTimeout(fitDashboardValues, 150);
+// Re-fits a card's value whenever the card's own width changes: a window
+// resize or phone rotation, but also a card that was measured while its
+// section was collapsed (zero width) and then gets opened -- e.g. the
+// Manager Dashboard on a phone, which starts collapsed. Width only, so the
+// value's own font-size change (which can change the card's height) never
+// re-triggers it.
+const dashCardWidths = new WeakMap();
+const dashCardObserver = new ResizeObserver((entries) => {
+  entries.forEach((entry) => {
+    const width = Math.round(entry.contentRect.width);
+    if (dashCardWidths.get(entry.target) === width) return;
+    dashCardWidths.set(entry.target, width);
+    const value = entry.target.querySelector('.dc-value');
+    if (value) fitDashboardValue(value);
+  });
 });
+
+// Stat tiles plus the full-width Total Contract Value row above them.
+function fitDashboardValues() {
+  $$('.dash-card .dc-value, .dash-contract-row .dc-value').forEach((el) => {
+    fitDashboardValue(el);
+    dashCardObserver.observe(el.closest('.dash-card, .dash-contract-row'));
+  });
+}
 
 // ---------- Progress-over-time trend chart (hand-rolled SVG line chart) ----------
 // Shared by project.html's own Progress Over Time card and index.html's

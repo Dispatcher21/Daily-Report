@@ -2580,7 +2580,7 @@ input[type="date"] { min-width: 0; }
   padding: 0.55rem 0.7rem; border-radius: var(--radius-sm);
   width: max-content; max-width: 230px; text-align: left;
   box-shadow: var(--shadow-lg);
-  opacity: 0; visibility: hidden; pointer-events: none; z-index: 30;
+  display: none; pointer-events: none; z-index: 30;
   transition: opacity 0.15s ease, transform 0.15s ease;
 }
 [data-tip]::before {
@@ -2588,13 +2588,25 @@ input[type="date"] { min-width: 0; }
   position: absolute; left: 50%; bottom: calc(100% + 8px);
   transform: translateX(-50%) translateY(4px);
   border: 6px solid transparent; border-top-color: var(--text);
-  opacity: 0; visibility: hidden; pointer-events: none; z-index: 30;
+  display: none; pointer-events: none; z-index: 30;
   transition: opacity 0.15s ease, transform 0.15s ease;
 }
+/* Closed bubbles are display: none, not just invisible: an invisible one
+   is still laid out, and one sitting past the screen edge made the whole
+   page wider than a phone (Chrome then zooms the page out to fit it).
+   @starting-style keeps the fade-in on open; browsers without it simply
+   show the bubble without fading. */
 [data-tip]:hover::after, [data-tip]:hover::before,
 [data-tip]:focus-visible::after, [data-tip]:focus-visible::before,
 [data-tip].tip-open::after, [data-tip].tip-open::before {
-  opacity: 1; visibility: visible;
+  display: block; opacity: 1;
+}
+@starting-style {
+  [data-tip]:hover::after, [data-tip]:hover::before,
+  [data-tip]:focus-visible::after, [data-tip]:focus-visible::before,
+  [data-tip].tip-open::after, [data-tip].tip-open::before {
+    opacity: 0;
+  }
 }
 [data-tip]:hover::after, [data-tip]:focus-visible::after, [data-tip].tip-open::after {
   transform: translateX(calc(-50% + var(--tip-offset, 0px))) translateY(0);
@@ -2628,7 +2640,7 @@ input[type="date"] { min-width: 0; }
    weather calendar day needs its bubble content on touch same as
    .info-tip always did. The overflow risk that carve-out also guarded
    against (a hidden bubble still occupying layout space near a viewport
-   edge) is handled generally now by positionTip's --tip-offset instead. */
+   edge) is gone now that closed bubbles are display: none. */
 
 /* A small "i" standing in for a .hint paragraph that would otherwise always
    sit on the page -- the explanation is still exactly one tap or hover
@@ -2808,7 +2820,10 @@ input[type="date"] { min-width: 0; }
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 0.5rem;
+  /* On a narrow phone the label and a large total don't fit side by side;
+     the total drops to its own line instead of shrinking to a tiny size. */
+  flex-wrap: wrap;
+  gap: 0.25rem 0.5rem;
   min-width: 0;
 }
 .dash-contract-row .dc-label { font-size: 0.72rem; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; }

@@ -1187,41 +1187,6 @@ document.addEventListener('scroll', () => {
   $$('[data-tip].tip-open').forEach((t) => t.classList.remove('tip-open'));
 }, { passive: true, capture: true });
 
-// [data-tip]'s bubble is only hidden via opacity/visibility (so it can
-// transition in), never display:none -- so even closed, it's still laid
-// out at its default centered position and counts toward the page's
-// scrollable width. That's invisible and harmless for a trigger away from
-// the edges, but an .info-tip pinned to a card's top-right corner defaults
-// to a bubble centered on itself, which reaches well past the right edge
-// before anything has ever been hovered/tapped to correct it with
-// --tip-offset. Positioning every trigger once up front (and again on
-// resize) means that corrected offset is already in place before it's
-// ever needed, so a never-touched icon doesn't silently widen the page.
-function positionAllTips() {
-  $$('[data-tip]').forEach(positionTip);
-}
-document.addEventListener('DOMContentLoaded', positionAllTips);
-let tipResizeTimer;
-window.addEventListener('resize', () => {
-  clearTimeout(tipResizeTimer);
-  tipResizeTimer = setTimeout(positionAllTips, 150);
-});
-// A card that's [hidden] until its data finishes loading (several of the
-// Manager Dashboard's) is display:none at the DOMContentLoaded pass above,
-// so any tip inside it lays out at zero size and gets --tip-offset: 0 --
-// harmless while still hidden, since display:none excludes it from the
-// page's scrollable width entirely, but wrong the instant it's revealed at
-// its real position without ever having been re-measured. Watching for
-// `hidden` coming off anywhere covers every such card on every page
-// without needing a re-positioning call added at each one's own reveal
-// point.
-new MutationObserver((mutations) => {
-  if (mutations.some((m) => m.target.hasAttribute && !m.target.hasAttribute('hidden'))) {
-    clearTimeout(tipResizeTimer);
-    tipResizeTimer = setTimeout(positionAllTips, 50);
-  }
-}).observe(document.documentElement, { attributes: true, attributeFilter: ['hidden'], subtree: true });
-
 // ---------- Tap-to-open: every [data-tip]'s bubble opens by tap, not just hover ----------
 //
 // [data-tip] showing only on :hover/:focus-visible left it with no path at
