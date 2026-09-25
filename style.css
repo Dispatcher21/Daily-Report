@@ -1331,6 +1331,15 @@ main { max-width: min(1400px, 94vw); margin: 0 auto; padding: 1rem; }
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
   box-shadow: var(--shadow); padding: 0.85rem; max-height: calc(100vh - 3rem); overflow-y: auto;
 }
+/* report-viewer.html's own preview (#rv-preview) is the whole page's
+   content, not a side-by-side pane next to a taller scrolling form the way
+   report-editor.html's live preview is -- the height cap above exists for
+   that layout specifically. Capping it here too squeezed a multi-page
+   report (report + photo log) into one short internally-scrolling box
+   instead of letting it flow down the page at its own full height, which
+   is what let Report Details end up rendering as if it were replacing the
+   report's own cut-off tail instead of appearing cleanly after all of it. */
+#rv-preview { max-height: none; overflow-y: visible; }
 
 /* ---------- report-viewer.html: adjacent-report carousel (concept) ----------
    Left = the next day with a report, right = the previous day's -- see
