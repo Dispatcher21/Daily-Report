@@ -75,8 +75,8 @@
   </div>
   <!-- The side thumbnails' ← / → buttons, fixed at the middle of the screen
        (see positionSideArrows in the script below). -->
-  <button type="button" class="rv-side-arrow" id="rv-side-arrow-left" hidden aria-label="Next day's report">&#8592;</button>
-  <button type="button" class="rv-side-arrow" id="rv-side-arrow-right" hidden aria-label="Previous day's report">&#8594;</button>
+  <button type="button" class="rv-side-arrow" id="rv-side-arrow-left" hidden aria-label="Next day's report"><span class="rv-side-arrow-icon" aria-hidden="true">&#8592;</span><span class="rv-side-pill"></span></button>
+  <button type="button" class="rv-side-arrow" id="rv-side-arrow-right" hidden aria-label="Previous day's report"><span class="rv-side-arrow-icon" aria-hidden="true">&#8594;</span><span class="rv-side-pill"></span></button>
 
   <!-- A floating footer, not normal in-flow content (see #rv-footer in
        style.css), holding two stacked bars: Details and Approvals/Comments.
@@ -243,19 +243,11 @@ async function renderSidePanel(btn, sideReport, layout, logoBlob, onPick, thumbW
   btn.innerHTML = '';
   btn.appendChild(wrap);
   // How far to shift this panel so only `sliverWidth` real px still peek
-  // out past the main report's edge -- and where the label needs to sit
-  // (the middle of that same sliver) to actually land on the visible part
-  // of the panel instead of the ~80% of it tucked behind the main report
-  // on purpose (the "looking through a stack" effect). Set as custom
-  // properties (style.css reads them) rather than fixed CSS values because
-  // both depend on the actual on-screen margin, which varies by viewport
-  // width -- see the SIDE_SLIVER_TARGET comment above.
+  // out past the main report's edge (the "looking through a stack"
+  // effect). A custom property (style.css reads it) rather than a fixed CSS
+  // value because it depends on the actual on-screen margin, which varies
+  // by viewport width -- see the SIDE_SLIVER_TARGET comment above.
   btn.style.setProperty('--rv-hide-px', `${thumbWidth - sliverWidth}px`);
-  btn.style.setProperty('--rv-sliver-px', `${sliverWidth}px`);
-  const label = document.createElement('span');
-  label.className = 'rv-side-label';
-  label.textContent = `#${sideReport.reportNo} · ${sideReport.date || 'no date'}`;
-  btn.appendChild(label);
   btn.hidden = false;
   btn.onclick = () => onPick(sideReport);
 }
@@ -266,6 +258,9 @@ async function renderSidePanel(btn, sideReport, layout, logoBlob, onPick, thumbW
 // and fixed is what keeps them at the middle of the screen while the page
 // scrolls. Horizontally they sit in the middle of their thumbnail's visible
 // sliver; vertically, style.css centers them in the space above the footer.
+// Each has a pill under it naming the report; the sliver is narrower than
+// the pill, so a pill that would run off the screen edge shifts inward
+// (--rv-pill-shift) while the arrow itself stays on the sliver.
 let sideArrowSlivers = { left: 0, right: 0 };
 function positionSideArrows() {
   const frame = $('#rv-preview');
@@ -276,13 +271,33 @@ function positionSideArrows() {
   const half = frame.offsetWidth / 2;
   $('#rv-side-arrow-left').style.left = `${Math.round(centerX - half - sideArrowSlivers.left / 2)}px`;
   $('#rv-side-arrow-right').style.left = `${Math.round(centerX + half + sideArrowSlivers.right / 2)}px`;
+  const edge = 8;
+  [$('#rv-side-arrow-left'), $('#rv-side-arrow-right')].forEach((arrow) => {
+    if (arrow.hidden) return;
+    const pill = arrow.querySelector('.rv-side-pill');
+    pill.style.setProperty('--rv-pill-shift', '0px');
+    const p = pill.getBoundingClientRect();
+    let shift = 0;
+    if (p.left < edge) shift = edge - p.left;
+    else if (p.right > window.innerWidth - edge) shift = window.innerWidth - edge - p.right;
+    pill.style.setProperty('--rv-pill-shift', `${Math.round(shift)}px`);
+  });
 }
 window.addEventListener('resize', positionSideArrows);
 
 function wireSideArrow(arrow, panel, sideReport, onPick) {
   arrow.hidden = panel.hidden;
   arrow.onclick = panel.hidden ? null : () => onPick(sideReport);
-  if (!panel.hidden) arrow.title = panel.querySelector('.rv-side-label').textContent;
+  const pill = arrow.querySelector('.rv-side-pill');
+  pill.replaceChildren();
+  if (panel.hidden) return;
+  // Number over date, two lines: one line is wider than the margin beside
+  // the report at common laptop widths, so it overlapped the report.
+  const no = document.createElement('strong');
+  no.textContent = `#${sideReport.reportNo}`;
+  const date = document.createElement('span');
+  date.textContent = sideReport.date || 'no date';
+  pill.append(no, date);
 }
 
 // User's own spec for this concept: next day's report on the LEFT,

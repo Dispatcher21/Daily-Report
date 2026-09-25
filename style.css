@@ -1373,7 +1373,7 @@ main { max-width: min(1400px, 94vw); margin: 0 auto; padding: 1rem; }
    making body scrollable, so this page scrolls like every other page. */
 html:has(.rv-carousel), body:has(.rv-carousel) { overflow-x: clip; }
 .rv-side-panel {
-  /* --rv-hide-px/--rv-sliver-px are set inline by report-viewer.html's
+  /* --rv-hide-px is set inline by report-viewer.html's
      renderSidePanel, in real pixels measured off the actual page margin at
      render time -- not a fixed fraction of this panel's own width. This
      panel is 70% of the (possibly quite wide) main report, but the margin
@@ -1383,7 +1383,6 @@ html:has(.rv-carousel), body:has(.rv-carousel) { overflow-x: clip; }
      thumbnail) off past the actual edge of the viewport. The defaults
      below only matter before that JS has run once. */
   --rv-hide-px: 82%;
-  --rv-sliver-px: 18%;
   /* A negative z-index paints before (behind) .rb-preview-frame -- a
      plain static in-flow block with no positioning of its own -- despite
      coming first in the HTML. A positive z-index here would do the
@@ -1392,12 +1391,11 @@ html:has(.rv-carousel), body:has(.rv-carousel) { overflow-x: clip; }
   /* top is set inline by renderSidePanels (report-viewer.html) to center
      the thumbnail on the main report's first page. */
   position: absolute; top: 0; z-index: -1;
-  border: none; background: none; padding: 0 0 1.4rem; cursor: pointer;
+  border: none; background: none; padding: 0; cursor: pointer;
 }
 /* Fade/blur/grayscale live on the thumbnail itself, not the button --
-   opacity on an ancestor would dim the arrow badge and label right along
-   with it, undoing the point of putting a clear, undimmed "click here to
-   move" cue on top of a deliberately-hard-to-read preview. */
+   the button itself stays plain so its hover/focus state is what drives
+   the highlight. */
 .rv-side-panel .rb-preview-page-wrap {
   pointer-events: none; box-shadow: var(--shadow); border-radius: var(--radius-sm); overflow: hidden;
   border: 2px solid #000;
@@ -1407,29 +1405,37 @@ html:has(.rv-carousel), body:has(.rv-carousel) { overflow-x: clip; }
 .rv-side-panel:hover .rb-preview-page-wrap, .rv-side-panel:focus-visible .rb-preview-page-wrap {
   opacity: 0.65; filter: blur(0px) grayscale(0%);
 }
-/* The label centers itself on the MIDDLE OF THE VISIBLE SLIVER, not the
-   middle of the whole (mostly hidden-behind-the-main-report) panel -- half
-   of the visible fraction in from this panel's own outer edge. */
-.rv-side-label {
-  position: absolute; bottom: 0;
-  font-size: 0.72rem; font-weight: 700; color: var(--text-dim); white-space: nowrap;
-  transform: translateX(-50%);
-}
 .rv-side-arrow {
   /* Fixed on screen, not part of the thumbnail (see positionSideArrows in
      report-viewer.html, which sets left). Vertically centered in the space
-     above the footer, so opening Details or Approvals never covers it. */
+     above the footer, so opening Details or Approvals never covers it. The
+     button is the circle's size; the pill hangs below it, so the circle
+     (not circle + pill) is what's centered. */
   position: fixed; z-index: 20; top: calc((100vh - var(--rv-footer-h, 0px)) / 2);
   transform: translate(-50%, -50%);
-  width: 2.4rem; height: 2.4rem; border-radius: 50%; padding: 0; cursor: pointer;
-  background: var(--surface); border: 2px solid #000; box-shadow: var(--shadow);
+  width: 2.4rem; height: 2.4rem; padding: 0; border: none; background: none; cursor: pointer;
+}
+.rv-side-arrow-icon {
   display: flex; align-items: center; justify-content: center;
+  width: 100%; height: 100%; border-radius: 50%;
+  background: var(--surface); border: 2px solid #000; box-shadow: var(--shadow);
   font-size: 1.2rem; font-weight: 700; color: var(--text);
   transition: transform 0.2s ease;
 }
-.rv-side-arrow:hover, .rv-side-arrow:focus-visible { transform: translate(-50%, -50%) scale(1.12); }
-/* display: flex above overrides the UA [hidden] rule. */
-.rv-side-arrow[hidden] { display: none; }
+.rv-side-arrow:hover .rv-side-arrow-icon, .rv-side-arrow:focus-visible .rv-side-arrow-icon { transform: scale(1.12); }
+/* The report number/date under the arrow. --rv-pill-shift (set by
+   positionSideArrows) nudges it back on screen when the sliver is too
+   narrow for it to sit centered. */
+.rv-side-pill {
+  position: absolute; top: calc(100% + 0.4rem); left: 50%;
+  transform: translateX(calc(-50% + var(--rv-pill-shift, 0px)));
+  display: flex; flex-direction: column; align-items: center; line-height: 1.2;
+  white-space: nowrap; font-size: 0.68rem; color: var(--text-dim);
+  padding: 0.25rem 0.6rem; border-radius: 999px;
+  background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow);
+}
+.rv-side-pill strong { font-size: 0.74rem; color: var(--text); }
+.rv-side-pill:empty { display: none; }
 /* Peeking out from behind the main page's left/right edge, not shoved
    further out into the surrounding whitespace -- the main frame's own
    box-shadow/border is what visually reads as "in front of" these. */
@@ -1437,12 +1443,10 @@ html:has(.rv-carousel), body:has(.rv-carousel) { overflow-x: clip; }
   right: 100%;
   transform: translateX(var(--rv-hide-px));
 }
-.rv-side-left .rv-side-label { left: calc(var(--rv-sliver-px) / 2); }
 .rv-side-right {
   left: 100%;
   transform: translateX(calc(-1 * var(--rv-hide-px)));
 }
-.rv-side-right .rv-side-label { left: calc(100% - var(--rv-sliver-px) / 2); }
 /* Concept targets desktop first -- side peeks need real width either side
    of the main page, which a phone screen doesn't have without redesigning
    this page's whole mobile layout (out of scope for evaluating the idea
