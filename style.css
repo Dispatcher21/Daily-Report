@@ -1407,30 +1407,29 @@ html:has(.rv-carousel), body:has(.rv-carousel) { overflow-x: clip; }
 .rv-side-panel:hover .rb-preview-page-wrap, .rv-side-panel:focus-visible .rb-preview-page-wrap {
   opacity: 0.65; filter: blur(0px) grayscale(0%);
 }
-/* Both the label and the arrow badge center themselves on the MIDDLE OF
-   THE VISIBLE SLIVER, not the middle of the whole (mostly hidden-behind-
-   the-main-report) panel -- half of the visible fraction in from this
-   panel's own outer edge. Centering on the panel's full width instead
-   (the original version of this) put both of them mostly behind the main
-   report too, off-center from the sliver of thumbnail actually on screen. */
+/* The label centers itself on the MIDDLE OF THE VISIBLE SLIVER, not the
+   middle of the whole (mostly hidden-behind-the-main-report) panel -- half
+   of the visible fraction in from this panel's own outer edge. */
 .rv-side-label {
   position: absolute; bottom: 0;
   font-size: 0.72rem; font-weight: 700; color: var(--text-dim); white-space: nowrap;
   transform: translateX(-50%);
 }
 .rv-side-arrow {
-  /* 30% down, not 50%: the thumbnail is centered on a first page that's
-     usually taller than the screen, so its middle lands at the footer. */
-  position: absolute; top: 30%;
-  width: 2.4rem; height: 2.4rem; border-radius: 50%;
+  /* Fixed on screen, not part of the thumbnail (see positionSideArrows in
+     report-viewer.html, which sets left). Vertically centered in the space
+     above the footer, so opening Details or Approvals never covers it. */
+  position: fixed; z-index: 20; top: calc((100vh - var(--rv-footer-h, 0px)) / 2);
+  transform: translate(-50%, -50%);
+  width: 2.4rem; height: 2.4rem; border-radius: 50%; padding: 0; cursor: pointer;
   background: var(--surface); border: 2px solid #000; box-shadow: var(--shadow);
   display: flex; align-items: center; justify-content: center;
   font-size: 1.2rem; font-weight: 700; color: var(--text);
   transition: transform 0.2s ease;
 }
-.rv-side-panel:hover .rv-side-arrow, .rv-side-panel:focus-visible .rv-side-arrow {
-  transform: translate(-50%, -50%) scale(1.12);
-}
+.rv-side-arrow:hover, .rv-side-arrow:focus-visible { transform: translate(-50%, -50%) scale(1.12); }
+/* display: flex above overrides the UA [hidden] rule. */
+.rv-side-arrow[hidden] { display: none; }
 /* Peeking out from behind the main page's left/right edge, not shoved
    further out into the surrounding whitespace -- the main frame's own
    box-shadow/border is what visually reads as "in front of" these. */
@@ -1438,24 +1437,18 @@ html:has(.rv-carousel), body:has(.rv-carousel) { overflow-x: clip; }
   right: 100%;
   transform: translateX(var(--rv-hide-px));
 }
-.rv-side-left .rv-side-label, .rv-side-left .rv-side-arrow {
-  left: calc(var(--rv-sliver-px) / 2);
-}
-.rv-side-left .rv-side-arrow { transform: translate(-50%, -50%); }
+.rv-side-left .rv-side-label { left: calc(var(--rv-sliver-px) / 2); }
 .rv-side-right {
   left: 100%;
   transform: translateX(calc(-1 * var(--rv-hide-px)));
 }
-.rv-side-right .rv-side-label, .rv-side-right .rv-side-arrow {
-  left: calc(100% - var(--rv-sliver-px) / 2);
-}
-.rv-side-right .rv-side-arrow { transform: translate(-50%, -50%); }
+.rv-side-right .rv-side-label { left: calc(100% - var(--rv-sliver-px) / 2); }
 /* Concept targets desktop first -- side peeks need real width either side
    of the main page, which a phone screen doesn't have without redesigning
    this page's whole mobile layout (out of scope for evaluating the idea
    on its own). */
 @media (max-width: 900px) {
-  .rv-side-panel { display: none; }
+  .rv-side-panel, .rv-side-arrow { display: none; }
 }
 /* No side peeks to reserve desktop-width breathing room for on a phone
    screen (see above) -- let the report itself use the space instead of

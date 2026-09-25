@@ -73,6 +73,10 @@
     <button type="button" class="rv-mobile-nav rv-mobile-nav-prev" id="rv-mobile-nav-prev" hidden aria-label="Previous report">&#8592;</button>
     <button type="button" class="rv-mobile-nav rv-mobile-nav-next" id="rv-mobile-nav-next" hidden aria-label="Next report">&#8594;</button>
   </div>
+  <!-- The side thumbnails' ← / → buttons, fixed at the middle of the screen
+       (see positionSideArrows in the script below). -->
+  <button type="button" class="rv-side-arrow" id="rv-side-arrow-left" hidden aria-label="Next day's report">&#8592;</button>
+  <button type="button" class="rv-side-arrow" id="rv-side-arrow-right" hidden aria-label="Previous day's report">&#8594;</button>
 
   <!-- A floating footer, not normal in-flow content (see #rv-footer in
        style.css), holding two stacked bars: Details and Approvals/Comments.
@@ -223,7 +227,7 @@ async function findAdjacentReports(project, current, room) {
   };
 }
 
-async function renderSidePanel(btn, sideReport, layout, logoBlob, onPick, arrowDir, thumbWidth, sliverWidth) {
+async function renderSidePanel(btn, sideReport, layout, logoBlob, onPick, thumbWidth, sliverWidth) {
   btn.onclick = null;
   if (!sideReport || sliverWidth < SIDE_SLIVER_MIN) {
     btn.hidden = true;
@@ -239,29 +243,46 @@ async function renderSidePanel(btn, sideReport, layout, logoBlob, onPick, arrowD
   btn.innerHTML = '';
   btn.appendChild(wrap);
   // How far to shift this panel so only `sliverWidth` real px still peek
-  // out past the main report's edge -- and where the arrow badge/label
-  // need to sit (the middle of that same sliver) to actually land on the
-  // visible part of the panel instead of the ~80% of it tucked behind the
-  // main report on purpose (the "looking through a stack" effect). Set as
-  // custom properties (style.css reads them) rather than fixed CSS values
-  // because both depend on the actual on-screen margin, which varies by
-  // viewport width -- see the SIDE_SLIVER_TARGET comment above.
+  // out past the main report's edge -- and where the label needs to sit
+  // (the middle of that same sliver) to actually land on the visible part
+  // of the panel instead of the ~80% of it tucked behind the main report
+  // on purpose (the "looking through a stack" effect). Set as custom
+  // properties (style.css reads them) rather than fixed CSS values because
+  // both depend on the actual on-screen margin, which varies by viewport
+  // width -- see the SIDE_SLIVER_TARGET comment above.
   btn.style.setProperty('--rv-hide-px', `${thumbWidth - sliverWidth}px`);
   btn.style.setProperty('--rv-sliver-px', `${sliverWidth}px`);
-  // A round arrow badge over the thumbnail -- the fade/blur/shrink alone
-  // read as "a preview of something", not obviously "click to go here",
-  // so this is the more literal "this is a nav control" cue on top of it.
-  const arrow = document.createElement('span');
-  arrow.className = 'rv-side-arrow';
-  arrow.setAttribute('aria-hidden', 'true');
-  arrow.textContent = arrowDir === 'left' ? '←' : '→';
-  btn.appendChild(arrow);
   const label = document.createElement('span');
   label.className = 'rv-side-label';
   label.textContent = `#${sideReport.reportNo} · ${sideReport.date || 'no date'}`;
   btn.appendChild(label);
   btn.hidden = false;
   btn.onclick = () => onPick(sideReport);
+}
+
+// The ← / → buttons for the side thumbnails. They're separate fixed
+// buttons, not part of the thumbnails: position: fixed doesn't work inside
+// the thumbnails (their transform turns fixed into relative-to-thumbnail),
+// and fixed is what keeps them at the middle of the screen while the page
+// scrolls. Horizontally they sit in the middle of their thumbnail's visible
+// sliver; vertically, style.css centers them in the space above the footer.
+let sideArrowSlivers = { left: 0, right: 0 };
+function positionSideArrows() {
+  const frame = $('#rv-preview');
+  // offsetWidth, not the rect's width: the frame may be mid-transition at
+  // scale(0.94), which scales around its center (so the center is exact).
+  const r = frame.getBoundingClientRect();
+  const centerX = (r.left + r.right) / 2;
+  const half = frame.offsetWidth / 2;
+  $('#rv-side-arrow-left').style.left = `${Math.round(centerX - half - sideArrowSlivers.left / 2)}px`;
+  $('#rv-side-arrow-right').style.left = `${Math.round(centerX + half + sideArrowSlivers.right / 2)}px`;
+}
+window.addEventListener('resize', positionSideArrows);
+
+function wireSideArrow(arrow, panel, sideReport, onPick) {
+  arrow.hidden = panel.hidden;
+  arrow.onclick = panel.hidden ? null : () => onPick(sideReport);
+  if (!panel.hidden) arrow.title = panel.querySelector('.rv-side-label').textContent;
 }
 
 // User's own spec for this concept: next day's report on the LEFT,
@@ -289,8 +310,8 @@ async function renderSidePanels(project, current, layout, logoBlob, room, onPick
   const rightSliver = Math.min(SIDE_SLIVER_TARGET, Math.max(0, rightMargin - SIDE_SLIVER_MARGIN_BUFFER));
 
   await Promise.all([
-    renderSidePanel($('#rv-side-left'), nextReport, layout, logoBlob, onPick, 'left', thumbWidth, leftSliver),
-    renderSidePanel($('#rv-side-right'), prevReport, layout, logoBlob, onPick, 'right', thumbWidth, rightSliver),
+    renderSidePanel($('#rv-side-left'), nextReport, layout, logoBlob, onPick, thumbWidth, leftSliver),
+    renderSidePanel($('#rv-side-right'), prevReport, layout, logoBlob, onPick, thumbWidth, rightSliver),
   ]);
 
   // Center each side thumbnail vertically on the main report's FIRST page
@@ -309,6 +330,10 @@ async function renderSidePanels(project, current, layout, logoBlob, room, onPick
       if (thumb) btn.style.top = `${Math.round(centerY - thumb.offsetHeight / 2)}px`;
     });
   }
+  sideArrowSlivers = { left: leftSliver, right: rightSliver };
+  wireSideArrow($('#rv-side-arrow-left'), $('#rv-side-left'), nextReport, onPick);
+  wireSideArrow($('#rv-side-arrow-right'), $('#rv-side-right'), prevReport, onPick);
+  positionSideArrows();
   renderMobileNav(prevReport, nextReport, onPick);
 }
 
@@ -384,6 +409,8 @@ async function loadAndShowReport(id, { includeDeleted = false } = {}) {
     } else {
       $('#rv-side-left').hidden = true;
       $('#rv-side-right').hidden = true;
+      $('#rv-side-arrow-left').hidden = true;
+      $('#rv-side-arrow-right').hidden = true;
       $('#rv-mobile-nav-prev').hidden = true;
       $('#rv-mobile-nav-next').hidden = true;
     }
@@ -734,7 +761,10 @@ function renderReviewPanel(report) {
 // resizes, since the footer's height changes with both.
 function syncMainBottomPadding() {
   const main = document.querySelector('main');
-  main.style.paddingBottom = `${$('#rv-footer').getBoundingClientRect().height + 32}px`;
+  const footerHeight = $('#rv-footer').getBoundingClientRect().height;
+  main.style.paddingBottom = `${footerHeight + 32}px`;
+  // The side arrows (style.css) center themselves in the space above this.
+  document.documentElement.style.setProperty('--rv-footer-h', `${footerHeight}px`);
 }
 window.addEventListener('resize', syncMainBottomPadding);
 
