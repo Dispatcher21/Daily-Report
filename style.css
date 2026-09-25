@@ -1331,15 +1331,6 @@ main { max-width: min(1400px, 94vw); margin: 0 auto; padding: 1rem; }
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
   box-shadow: var(--shadow); padding: 0.85rem; max-height: calc(100vh - 3rem); overflow-y: auto;
 }
-/* report-viewer.html's own preview (#rv-preview) is the whole page's
-   content, not a side-by-side pane next to a taller scrolling form the way
-   report-editor.html's live preview is -- the height cap above exists for
-   that layout specifically. Capping it here too squeezed a multi-page
-   report (report + photo log) into one short internally-scrolling box
-   instead of letting it flow down the page at its own full height, which
-   is what let Report Details end up rendering as if it were replacing the
-   report's own cut-off tail instead of appearing cleanly after all of it. */
-#rv-preview { max-height: none; overflow-y: visible; }
 
 /* ---------- report-viewer.html: adjacent-report carousel (concept) ----------
    Left = the next day with a report, right = the previous day's -- see
@@ -1729,33 +1720,6 @@ html:has(.rv-carousel), body:has(.rv-carousel) { overflow-x: hidden; }
   color: var(--text-dim); opacity: 0.6; border-radius: 50%;
 }
 .rv-comment-delete:hover { opacity: 1; background: var(--danger-bg); color: var(--danger); }
-
-/* ---------- Report Details / revision history ----------
-   A plain, normal-flow card (see #rv-history-step's own comment in
-   report-viewer.html for why it needs no footer-avoidance logic of its
-   own) -- same card language as .rv-comment above, just read-only. */
-.rv-history-summary { font-size: 0.9rem; color: var(--text); margin-bottom: 0.75rem; }
-.rv-history-summary div { margin-bottom: 0.15rem; }
-.rv-history-summary div:last-child { margin-bottom: 0; }
-/* Capped and internally scrollable rather than letting a long-lived,
-   often-edited report push the whole page taller and taller -- the
-   summary above (created/last changed) always stays visible either way. */
-.rv-history-list { max-height: 22rem; overflow-y: auto; }
-.rv-history-entry {
-  border: 1px solid var(--border); border-radius: var(--radius-sm);
-  padding: 0.55rem 0.75rem; background: var(--surface-2);
-  margin-bottom: 0.5rem;
-}
-.rv-history-entry:last-child { margin-bottom: 0; }
-.rv-history-entry-head { display: flex; align-items: baseline; gap: 0.4rem; flex-wrap: wrap; font-size: 0.82rem; }
-.rv-history-entry-verb { font-weight: 700; color: var(--text); }
-.rv-history-entry-user { color: var(--text-dim); }
-.rv-history-entry-time { color: var(--text-dim); font-size: 0.76rem; margin-left: auto; white-space: nowrap; }
-.rv-history-entry-change {
-  font-size: 0.82rem; color: var(--text-dim); margin-top: 0.3rem;
-  padding-left: 0.6rem; border-left: 2px solid var(--border);
-}
-.rv-history-entry-change:first-of-type { margin-top: 0.4rem; }
 
 #rv-comment-form {
   flex: 0 0 auto; border-top: 1px solid var(--border); background: var(--surface);
