@@ -34,9 +34,7 @@
   <span></span>
 </header>
 <div class="back-bar">
-  <a href="#" id="bb-back-link">&larr; Reports</a>
-  <span class="bb-sep">//</span>
-  <span class="bb-cur">Viewing</span>
+  <span id="bb-trail"></span>
   <!-- A real navigation to the separate editor page, not an in-place
        unlock -- editing stays its own function, reached deliberately. -->
   <a href="#" id="bb-edit-link" class="btn-sm" style="margin-left:auto;">&#9998; Edit</a>
@@ -401,6 +399,15 @@ async function loadAndShowReport(id, { includeDeleted = false } = {}) {
 
   document.title = `Report #${report.reportNo} — ${activeProject.name}`;
   $('#viewer-title').textContent = `Report #${report.reportNo} - ${report.date || ''}${report.deleted ? ' (Deleted)' : ''}`;
+  // Re-rendered here (not just once at page load) since this whole function
+  // re-runs on every carousel navigation to an adjacent report -- the trail
+  // has to follow which report is actually showing.
+  renderBreadcrumb('#bb-trail', [
+    { label: 'Home', href: 'index.html' },
+    { label: activeProject.name, href: `project.html?id=${activeProject.id}` },
+    { label: 'Reports', href: `reports.html?project=${activeProject.id}` },
+    { label: `Report #${report.reportNo}${report.deleted ? ' (Deleted)' : ''}` },
+  ]);
   if (report.deleted) {
     // report-editor.html only ever looks up active reports, so linking
     // there for a trashed one would just silently bounce back to the
@@ -489,11 +496,6 @@ window.addEventListener('popstate', () => location.reload());
   }
   activeProject = project;
   $('#project-name-sub').textContent = project.name;
-  $('#bb-back-link').href = `reports.html?project=${project.id}`;
-  $('#bb-back-link').addEventListener('click', (e) => {
-    e.preventDefault();
-    goBackOrFallback(e.currentTarget.href);
-  });
 
   // includeDeleted: this is the "View" link from the Trash section on
   // reports.html, which only ever links here with a trashed report's own

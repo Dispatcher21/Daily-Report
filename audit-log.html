@@ -36,9 +36,7 @@
   <span></span>
 </header>
 <div class="back-bar">
-  <a href="company-management.html">&larr; Company Management</a>
-  <span class="bb-sep">//</span>
-  <span class="bb-cur">Audit Log</span>
+  <span id="bb-trail"></span>
 </div>
 
 <main>
@@ -88,6 +86,11 @@ async function init() {
     return;
   }
   $('#al-company-sub').textContent = `Admin — ${room.name || 'Audit Log'}`;
+  renderBreadcrumb('#bb-trail', [
+    { label: 'Home', href: 'index.html' },
+    { label: 'Settings', href: 'settings.html?tab=company' },
+    { label: 'Audit Log' },
+  ]);
 
   allEntries = (await getAllAuditEntries()).filter((e) => auditEntryInCompany(e, room));
   await Promise.all(allEntries.map(async (e) => { e.tampered = (await verifyAuditEntry(e)) === false; }));

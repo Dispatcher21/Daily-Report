@@ -28,24 +28,36 @@ const PROJECT_ICON_OPTIONS = [
   '\u{1F3D4}\u{FE0F}', '\u{1F692}', '\u{1F3DF}\u{FE0F}', '\u{1F5FA}\u{FE0F}', '\u{1F50C}',
 ];
 
-// The back-bar link on every page used to be a plain link to one hardcoded
-// parent page, which ignores how the user actually got there (e.g. a report
-// opened from Audit Log lands back on the project's report list instead of
-// Audit Log). This makes it a genuine "back" button: if the page was reached
-// by navigating from elsewhere in the app, retrace that step with the real
-// browser history; only pages opened with no in-app history to unwind
-// (a fresh tab, a bookmark, a reload) fall back to the hardcoded parent URL
-// each page already computes for its back-bar link.
-function goBackOrFallback(fallbackHref) {
-  if (document.referrer) {
-    try {
-      if (new URL(document.referrer).origin === location.origin) {
-        history.back();
-        return;
-      }
-    } catch (err) { /* malformed referrer -- fall through to the fallback */ }
-  }
-  location.href = fallbackHref;
+// ---------- Breadcrumb trail ----------
+//
+// Every page's back-bar used to be a single "<- Reports"-style link, either
+// a fixed parent URL or (via the old goBackOrFallback, since replaced by
+// this) wherever the browser's real history happened to lead -- which
+// routinely didn't match its own label at all (a report opened from a
+// search result or the Manager dashboard still said "<- Reports", but
+// clicking it landed you back on whatever you'd actually come from). A
+// real, deterministic path instead: Home / Project Name / Reports /
+// Report #NNN, built from what page this actually is, never from history.
+// Every segment but the last is a genuine link to that exact page; the
+// last is the current page, shown but not a link.
+//
+// containerSelector should point at a plain, otherwise-empty element (an
+// inner span, not the whole .back-bar) so this can safely overwrite its
+// innerHTML on every call without touching sibling elements the page keeps
+// in the same bar (an Edit/Download/View Report button, usually pinned
+// right via margin-left:auto) -- see any of report-viewer.html/
+// report-photos.html's own #bb-trail usage.
+function renderBreadcrumb(containerSelector, segments) {
+  const container = typeof containerSelector === 'string' ? document.querySelector(containerSelector) : containerSelector;
+  if (!container) return;
+  container.innerHTML = segments.map((seg, i) => {
+    const isLast = i === segments.length - 1;
+    const label = (i === 0 ? '&larr; ' : '') + escapeHtml(seg.label);
+    const crumb = (seg.href && !isLast)
+      ? `<a href="${escapeHtml(seg.href)}">${label}</a>`
+      : `<span class="${isLast ? 'bb-cur' : ''}">${label}</span>`;
+    return i === 0 ? crumb : `<span class="bb-sep"> // </span>${crumb}`;
+  }).join('');
 }
 
 // ---------- Hamburger menu ----------

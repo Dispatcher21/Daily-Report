@@ -33,9 +33,7 @@
   <span></span>
 </header>
 <div class="back-bar">
-  <a href="company-management.html" id="bb-back-link">&larr; Company Management</a>
-  <span class="bb-sep">//</span>
-  <span class="bb-cur">Required Fields</span>
+  <span id="bb-trail"></span>
 </div>
 
 <main>
@@ -425,6 +423,14 @@ async function init() {
   }
   document.title = `Required Fields — ${project.name}`;
   $('#project-name-sub').textContent = project.name;
+  // Per-project (reached from project.html's own "Open Visual Field
+  // Editor" link), not a company-wide admin page -- the old static
+  // "<- Company Management" link never actually matched that.
+  renderBreadcrumb('#bb-trail', [
+    { label: 'Home', href: 'index.html' },
+    { label: project.name, href: `project.html?id=${project.id}` },
+    { label: 'Required Fields' },
+  ]);
 
   originalOrder = getFieldOrder(project);
   originalHidden = new Set(project.hiddenFields || []);
@@ -445,10 +451,10 @@ async function init() {
     location.href = `required-fields.html?project=${e.target.value}`;
   });
 
-  $('#bb-back-link').addEventListener('click', (e) => {
-    e.preventDefault();
-    if (!confirmDiscardIfDirty()) return;
-    goBackOrFallback(e.currentTarget.href);
+  $('#bb-trail').addEventListener('click', (e) => {
+    const link = e.target.closest('a');
+    if (!link) return;
+    if (!confirmDiscardIfDirty()) e.preventDefault();
   });
 
   window.addEventListener('beforeunload', (e) => {

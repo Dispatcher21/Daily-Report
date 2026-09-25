@@ -28,7 +28,7 @@
   <span></span>
 </header>
 <div class="back-bar">
-  <a href="index.html" id="bb-back-link">&larr; Home</a>
+  <span id="bb-trail"></span>
 </div>
 
 <main>
@@ -99,6 +99,7 @@ let mgrCanReports = false;
 let mgrCanPayApps = false;
 
 async function renderManagerPage() {
+  renderBreadcrumb('#bb-trail', [{ label: 'Home', href: 'index.html' }, { label: 'Manager' }]);
   [mgrCanReports, mgrCanPayApps] = await Promise.all([companyCan('approveReports'), companyCan('approvePayApps')]);
   if (!mgrCanReports && !mgrCanPayApps) {
     $('#mgr-no-access').hidden = false;

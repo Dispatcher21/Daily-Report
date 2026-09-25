@@ -28,9 +28,7 @@
   <span></span>
 </header>
 <div class="back-bar">
-  <a href="#" id="bb-back-link">&larr; Quantity Sheet</a>
-  <span class="bb-sep">//</span>
-  <span class="bb-cur">Pay Apps</span>
+  <span id="bb-trail"></span>
 </div>
 
 <main>
@@ -102,11 +100,12 @@ async function init() {
   }
   document.title = `Pay Apps — ${project.name}`;
   $('#project-name-sub').textContent = project.name;
-  $('#bb-back-link').href = `quantity-sheet.html?project=${project.id}`;
-  $('#bb-back-link').addEventListener('click', (e) => {
-    e.preventDefault();
-    goBackOrFallback(e.currentTarget.href);
-  });
+  renderBreadcrumb('#bb-trail', [
+    { label: 'Home', href: 'index.html' },
+    { label: project.name, href: `project.html?id=${project.id}` },
+    { label: 'Quantity Sheet', href: `quantity-sheet.html?project=${project.id}` },
+    { label: 'Pay Apps' },
+  ]);
 
   allReports = (await getReportsForProject(project.id)).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
   canApprovePayApps = await companyCan('approvePayApps');

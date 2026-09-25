@@ -243,9 +243,7 @@
   <span></span>
 </header>
 <div class="back-bar">
-  <a href="index.html">&larr; All Projects</a>
-  <span class="bb-sep">//</span>
-  <span class="bb-cur">Settings</span>
+  <span id="bb-trail"></span>
 </div>
 
 <main>
@@ -2440,6 +2438,7 @@ const openSyncOnLoad = !!queryParam('openSync');
 setSettingsTab(queryParam('tab') === 'company' ? 'company' : 'you');
 
 (async () => {
+  renderBreadcrumb('#bb-trail', [{ label: 'Home', href: 'index.html' }, { label: 'Settings' }]);
   $('#f-user-name').value = (await getUserName()) || '';
   renderInstallSection();
   await renderSyncSection();

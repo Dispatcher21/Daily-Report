@@ -28,9 +28,7 @@
   <span></span>
 </header>
 <div class="back-bar">
-  <a href="#" id="bb-back-link">&larr; Reports</a>
-  <span class="bb-sep">//</span>
-  <span class="bb-cur">Photos</span>
+  <span id="bb-trail"></span>
   <a href="#" id="bb-report-link" class="btn-sm" style="margin-left:auto;">View Report</a>
 </div>
 
@@ -58,11 +56,6 @@ const reportId = queryParam('report');
     return;
   }
   $('#project-name-sub').textContent = project.name;
-  $('#bb-back-link').href = `reports.html?project=${project.id}`;
-  $('#bb-back-link').addEventListener('click', (e) => {
-    e.preventDefault();
-    goBackOrFallback(e.currentTarget.href);
-  });
 
   let report = await getReport(reportId);
   if (!report || report.projectId !== project.id || !reportInScope(report, room)) {
@@ -81,6 +74,13 @@ const reportId = queryParam('report');
   document.title = `Photos — Report #${report.reportNo} — ${project.name}`;
   $('#rp-title').textContent = `Report #${report.reportNo} - ${report.date || ''} Photos`;
   $('#bb-report-link').href = `report-viewer.html?project=${project.id}&report=${report.id}`;
+  renderBreadcrumb('#bb-trail', [
+    { label: 'Home', href: 'index.html' },
+    { label: project.name, href: `project.html?id=${project.id}` },
+    { label: 'Reports', href: `reports.html?project=${project.id}` },
+    { label: `Report #${report.reportNo}`, href: `report-viewer.html?project=${project.id}&report=${report.id}` },
+    { label: 'Photos' },
+  ]);
 
   const photos = (report.photos || []).map((blob, i) => ({ blob, i })).filter((p) => p.blob);
   $('#rp-empty').hidden = photos.length > 0;

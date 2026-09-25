@@ -33,9 +33,7 @@
   <span></span>
 </header>
 <div class="back-bar">
-  <a href="index.html">&larr; All Projects</a>
-  <span class="bb-sep">//</span>
-  <span class="bb-cur" id="bb-project-name"></span>
+  <span id="bb-trail"></span>
 </div>
 
 <main>
@@ -306,7 +304,7 @@ async function init() {
 
   document.title = project.name + ' — Daily Work Reports';
   $('#project-title').textContent = project.name;
-  $('#bb-project-name').textContent = project.name;
+  renderBreadcrumb('#bb-trail', [{ label: 'Home', href: 'index.html' }, { label: project.name }]);
 
   showPageBackground(project);
 

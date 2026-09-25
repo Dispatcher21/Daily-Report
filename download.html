@@ -64,9 +64,7 @@
   <span></span>
 </header>
 <div class="back-bar">
-  <a href="#" id="bb-back-link">&larr; Reports</a>
-  <span class="bb-sep">//</span>
-  <span class="bb-cur">Download</span>
+  <span id="bb-trail"></span>
 </div>
 
 <main>
@@ -123,11 +121,6 @@ function isMobileDevice() {
   }
   document.title = `Download — ${project.name}`;
   $('#project-name-sub').textContent = project.name;
-  $('#bb-back-link').href = `reports.html?project=${project.id}`;
-  $('#bb-back-link').addEventListener('click', (e) => {
-    e.preventDefault();
-    goBackOrFallback(e.currentTarget.href);
-  });
 
   const reports = [];
   for (const id of reportIds) {
@@ -158,6 +151,19 @@ function isMobileDevice() {
   $('#preview-title').textContent = reports.length === 1
     ? `Report #${reports[0].reportNo} — ${reports[0].date || ''}`
     : `${reports.length} reports selected`;
+  // Single report: link straight to it, same as report-photos.html's own
+  // trail. Multiple (bulk download from reports.html): nothing specific to
+  // link to, "Download" is just the leaf.
+  const reportCrumb = reports.length === 1
+    ? { label: `Report #${reports[0].reportNo}`, href: `report-viewer.html?project=${project.id}&report=${reports[0].id}` }
+    : null;
+  renderBreadcrumb('#bb-trail', [
+    { label: 'Home', href: 'index.html' },
+    { label: project.name, href: `project.html?id=${project.id}` },
+    { label: 'Reports', href: `reports.html?project=${project.id}` },
+    ...(reportCrumb ? [reportCrumb] : []),
+    { label: 'Download' },
+  ]);
 
   const layout = await loadPrintLayout();
   const logoBlob = await getReportLogo();
