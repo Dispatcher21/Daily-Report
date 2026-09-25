@@ -74,6 +74,28 @@
     <button type="button" class="rv-mobile-nav rv-mobile-nav-next" id="rv-mobile-nav-next" hidden aria-label="Next report">&#8594;</button>
   </div>
 
+  <!-- A normal, in-flow card -- NOT floating like the Approvals/Comments
+       footer below, so it never needs its own footer-avoidance logic. It
+       just sits at the bottom of <main>'s ordinary content, and
+       syncMainBottomPadding (see below) already pads <main> enough to
+       clear the fixed footer for whatever's there, this section included --
+       nothing extra needed here for that. Pulled straight from the audit
+       log (see renderReportHistory), scoped to just this one report by its
+       own id (entityType/entityId on each entry) -- no separate history
+       store, this reuses the exact same data the audit log already
+       writes. -->
+  <div class="step" id="rv-history-step" hidden>
+    <div class="step-header">
+      <span class="step-num">HISTORY</span>
+      <h2>Report Details</h2>
+    </div>
+    <div class="step-body">
+      <div class="rv-history-summary" id="rv-history-summary"></div>
+      <div class="rv-history-list" id="rv-history-list"></div>
+      <p class="hint" id="rv-history-empty" hidden style="margin:0.5rem 0 0;">No other activity recorded for this report yet.</p>
+    </div>
+  </div>
+
   <!-- A floating footer, not a normal in-flow card (see style.css) --
        collapsed to just its header by default (see #rv-review-toggle
        below): the full panel took up a lot of screen just sitting there,
@@ -361,6 +383,7 @@ async function loadAndShowReport(id, { includeDeleted = false } = {}) {
     $('#rv-review-step').hidden = true;
     syncMainBottomPadding();
   }
+  await renderReportHistory(report);
   return report;
 }
 
@@ -432,6 +455,66 @@ function formatCommentTime(iso) {
   const d = new Date(iso);
   if (isNaN(d)) return '';
   return d.toLocaleString();
+}
+
+// ---------- Report Details / revision history ----------
+//
+// Pulls straight from the audit log (the same getAllAuditEntries() the
+// Audit Log admin page itself uses), filtered down to just this report's
+// own entries by entityType/entityId -- no separate history store, no new
+// write path, just a narrower read of data the app already collects on
+// every save/approve/comment. AUDIT_ACTION_VERBS comes from audit-log.js,
+// already loaded on this page. Not gated behind any permission (unlike the
+// Approvals/Comments panel) -- this is the same "who did what when"
+// already visible to anyone with the Audit Log page, just pre-filtered to
+// the one report already open instead of the whole company's activity.
+async function renderReportHistory(report) {
+  const summary = $('#rv-history-summary');
+  const createdWho = report.createdBy ? ` by ${escapeHtml(report.createdBy)}` : '';
+  const editedWho = report.lastEditedBy ? ` by ${escapeHtml(report.lastEditedBy)}` : '';
+  const lines = [`Created ${formatCommentTime(report.createdAt) || 'unknown date'}${createdWho}`];
+  // A second line is only worth showing when it actually says something
+  // different -- a report untouched since creation would otherwise show
+  // two identical-looking lines for the same moment.
+  if (report.updatedAt && report.updatedAt !== report.createdAt) {
+    lines.push(`Last changed ${formatCommentTime(report.updatedAt) || 'unknown date'}${editedWho}`);
+  }
+  summary.innerHTML = lines.map((l) => `<div>${l}</div>`).join('');
+
+  const all = await getAllAuditEntries();
+  const entries = all
+    .filter((e) => e.entityType === 'report' && e.entityId === report.id)
+    .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+  const list = $('#rv-history-list');
+  list.innerHTML = '';
+  entries.forEach((e) => {
+    const item = document.createElement('div');
+    item.className = 'rv-history-entry';
+    const head = document.createElement('div');
+    head.className = 'rv-history-entry-head';
+    const verb = AUDIT_ACTION_VERBS[e.action] || e.action;
+    const verbEl = document.createElement('span');
+    verbEl.className = 'rv-history-entry-verb';
+    verbEl.textContent = verb;
+    const userEl = document.createElement('span');
+    userEl.className = 'rv-history-entry-user';
+    userEl.textContent = e.userName || 'Unknown';
+    const timeEl = document.createElement('span');
+    timeEl.className = 'rv-history-entry-time';
+    timeEl.textContent = formatCommentTime(e.timestamp);
+    head.append(verbEl, userEl, timeEl);
+    item.appendChild(head);
+    (e.changes || []).forEach((c) => {
+      const line = document.createElement('div');
+      line.className = 'rv-history-entry-change';
+      line.textContent = `${c.label}: ${c.from || '(blank)'} → ${c.to || '(blank)'}`;
+      item.appendChild(line);
+    });
+    list.appendChild(item);
+  });
+  $('#rv-history-empty').hidden = entries.length > 0;
+  $('#rv-history-step').hidden = false;
 }
 
 let rvCanApprove = false;
