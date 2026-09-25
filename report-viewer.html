@@ -74,26 +74,29 @@
     <button type="button" class="rv-mobile-nav rv-mobile-nav-next" id="rv-mobile-nav-next" hidden aria-label="Next report">&#8594;</button>
   </div>
 
-  <!-- A normal, in-flow card -- NOT floating like the Approvals/Comments
-       footer below, so it never needs its own footer-avoidance logic. It
-       just sits at the bottom of <main>'s ordinary content, and
-       syncMainBottomPadding (see below) already pads <main> enough to
-       clear the fixed footer for whatever's there, this section included --
-       nothing extra needed here for that. Pulled straight from the audit
-       log (see renderReportHistory), scoped to just this one report by its
-       own id (entityType/entityId on each entry) -- no separate history
-       store, this reuses the exact same data the audit log already
-       writes. -->
-  <div class="step" id="rv-history-step" hidden>
-    <div class="step-header">
-      <span class="step-num">HISTORY</span>
-      <h2>Report Details</h2>
-    </div>
-    <div class="step-body">
-      <div class="rv-history-summary" id="rv-history-summary"></div>
-      <div class="rv-history-list" id="rv-history-list"></div>
-      <p class="hint" id="rv-history-empty" hidden style="margin:0.5rem 0 0;">No other activity recorded for this report yet.</p>
-    </div>
+  <!-- Plain page content, deliberately NOT a .step card with its own dark
+       header bar -- sitting directly under the Approvals/Comments footer,
+       a second card styled like that one just read as a second floating
+       footer stacked on top of the first. Bare eyebrow labels instead (the
+       same quiet, unboxed style quantity-sheet.html uses for its own
+       "Excel Preview"/"Export Options" sections), so this reads as an
+       ordinary part of the page below the report, not another panel
+       competing with the real footer above it.
+
+       A normal, in-flow block either way -- NOT floating -- so it never
+       needs its own footer-avoidance logic; it just sits at the bottom of
+       <main>'s ordinary content, and syncMainBottomPadding (see below)
+       already pads <main> enough to clear the fixed footer for whatever's
+       there, this section included. Pulled straight from the audit log
+       (see renderReportHistory), scoped to just this one report by its own
+       id (entityType/entityId on each entry) -- no separate history store,
+       this reuses the exact same data the audit log already writes. -->
+  <div id="rv-history-section" hidden>
+    <div class="eyebrow">Report Details</div>
+    <div class="rv-history-summary" id="rv-history-summary"></div>
+    <div class="eyebrow">Revision History</div>
+    <div class="rv-history-list" id="rv-history-list"></div>
+    <p class="hint" id="rv-history-empty" hidden style="margin:0.5rem 0 0;">No other activity recorded for this report yet.</p>
   </div>
 
   <!-- A floating footer, not a normal in-flow card (see style.css) --
@@ -514,7 +517,7 @@ async function renderReportHistory(report) {
     list.appendChild(item);
   });
   $('#rv-history-empty').hidden = entries.length > 0;
-  $('#rv-history-step').hidden = false;
+  $('#rv-history-section').hidden = false;
 }
 
 let rvCanApprove = false;
