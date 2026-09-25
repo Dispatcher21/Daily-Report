@@ -31,6 +31,8 @@ Newest first. Dates are when the work shipped.
     past the edge.
   - Fixed Settings' Projects list failing to load when a project had no
     pay item list on file.
+  - Fixed the Audit Log's filters running past the edge of a phone
+    screen (which made the page zoom out).
   - The app's version now shows at the bottom of every page, linking to
     these notes.
 

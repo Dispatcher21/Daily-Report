@@ -1884,7 +1884,10 @@ input[type="date"] { min-width: 0; }
 
 .field-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* minmax(0, 1fr), not 1fr: a plain 1fr column can't shrink below its
+     widest control's built-in minimum (dropdowns too, not just dates), so
+     on a phone the Audit Log's filters ran past the screen edge. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0 0.75rem;
 }
 /* Quantity Sheet's From/To date range -- the two fields most likely to
@@ -1904,7 +1907,7 @@ input[type="date"] { min-width: 0; }
 /* Four filters (Project/User/From/To) forced into two columns wraps to a
    second row for no reason once there's width for all four in one. */
 @media (min-width: 800px) {
-  #audit-log-filters { grid-template-columns: repeat(4, 1fr); }
+  #audit-log-filters { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
 .hint { font-size: 0.8rem; font-weight: 400; color: var(--text-dim); margin: 0.25rem 0 0; }
