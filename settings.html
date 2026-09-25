@@ -35,11 +35,6 @@
   }
   .settings-tab[aria-selected="true"] { background: var(--brand); border-color: var(--brand); color: var(--on-brand); }
   .settings-panel[hidden] { display: none; }
-  .app-version {
-    display: block; text-align: right; margin: 1.5rem 0 0.5rem;
-    font-size: 0.72rem; color: var(--text-dim); opacity: 0.7; text-decoration: none;
-  }
-  .app-version:hover { text-decoration: underline; opacity: 1; }
 
   /* An expanding section is a .step-shaped <details> -- same visual family
      as everything else in this app, just collapsible. Defaults to closed
@@ -754,8 +749,6 @@
     <div id="company-status" class="hint" style="margin-top:0.75rem;" hidden></div>
     <div class="err" id="company-error" hidden></div>
   </div>
-
-  <a class="app-version" href="patch-notes.txt" target="_blank" rel="noopener">v0.039</a>
 
 </main>
 
@@ -1878,7 +1871,7 @@ async function renderCmProjects() {
           <span class="cm-project-icon" data-pick-icon="${p.id}" title="Change icon">${p.icon || '&#128193;'}</span>
           <div>
             <div class="cm-project-name">${escapeHtml(p.name)}</div>
-            <div class="cm-project-sub">${p.payItemCatalog.length} pay item(s)${p.meta.projectNo ? ' &middot; #' + escapeHtml(p.meta.projectNo) : ''}</div>
+            <div class="cm-project-sub">${(p.payItemCatalog || []).length} pay item(s)${p.meta.projectNo ? ' &middot; #' + escapeHtml(p.meta.projectNo) : ''}</div>
           </div>
         </div>
         <div class="cm-project-actions">

@@ -3,6 +3,92 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.043 -- 2026-09-25
+  - Report viewer: the report is now plain page content instead of a box
+    with its own scrollbar, so the whole report -- including the last
+    photos -- scrolls with the page and is never hidden behind the
+    footer. This also addresses scrolling getting stuck, or snapping
+    back, on laptop trackpads.
+  - New Details bar stacked above Approvals / Comments at the bottom of
+    the report viewer: who created the report and when, the last change,
+    and the report's full revision history from the Audit Log. Only one
+    of the two bars opens at a time.
+  - The previous/next reports on either side of the viewer now sit
+    stacked behind the report (75% size, centered on its first page).
+    Their arrow buttons stay in the middle of the screen as you scroll,
+    with the report number and date in a pill under each.
+  - Every page's back link is now a full breadcrumb trail (e.g. "Home //
+    Project // Reports // Report #213"), each part a link, instead of a
+    single back link that didn't always go where its label said.
+  - Calendars (Manager Dashboard's Report Activity and each project's
+    weather calendar) now show one month at a time with previous/next
+    and Today buttons instead of one long scrolling list, open on the
+    current month, and outline today's date. Day columns stay evenly
+    sized on a phone.
+  - Phone fixes on the home page: the page no longer zooms out (which
+    also made the calendar day popup run off the side), and large dollar
+    totals on the dashboard shrink to fit their cards instead of running
+    past the edge.
+  - Fixed Settings' Projects list failing to load when a project had no
+    pay item list on file.
+  - The app's version now shows at the bottom of every page, linking to
+    these notes.
+
+0.042 -- 2026-09-24
+  - Report viewer: previous/next day reports now peek out on either side
+    of the report on desktop -- click one to move to it -- with plain
+    previous/next arrows on a phone, where the report also uses the full
+    screen width and can be pinch-zoomed.
+  - Approvals / Comments on the report viewer is now a footer that stays
+    on screen while scrolling, collapsed to its header until tapped.
+  - Comments can pin a specific spot on the report: tap "Pin a spot on
+    the report", then tap the report. Pinned comments show a numbered
+    marker on the page. Comments can also be deleted by anyone who can
+    review.
+  - Reports with review comments get a small comment badge in the
+    reports list.
+  - Pay App quantities can now be downloaded and re-uploaded as their own
+    Excel file from the Quantity Sheet page (one row per Pay App, one
+    column per pay item), separate from the Project Data file. Fixed a
+    case where a figure for a renumbered or removed pay item could be
+    silently lost on re-upload.
+  - The report editor's header now updates when the date is changed, and
+    the managed-projects alert clears once the changed item is viewed.
+
+0.041 -- 2026-09-23
+  - New Manager role. Admins can let members approve reports and Pay
+    Apps (Company settings > Access & Members). Reviewers can approve,
+    request changes, and comment on a report or Pay App, pick the
+    projects they manage, and get a Manager page listing everything
+    waiting on their review, plus an alert banner when a managed project
+    has new activity.
+  - The out-of-sync alert now shows under the header on every page, not
+    just the reports list, and syncs every linked project itself when
+    clicked. Settings has a new Sync to Folder section listing every
+    linked project.
+  - The header's refresh button now shows on every device, checks for an
+    app update first, and shows its progress step by step.
+  - Report editor: the separate Hours box is gone (hours come from each
+    inspector's own time), Inspectors starts open, Duplicate is fixed,
+    and Save / Generate / Duplicate / Delete stay pinned at the bottom
+    on desktop.
+
+0.040 -- 2026-09-22
+  - New menu button (top left of every page) listing Home, your projects
+    in the same folders and order as the home screen, and Settings.
+  - Project Settings gained Icon & Background and Required Fields, so a
+    project's own settings no longer mean hunting through Company
+    settings. Project Settings and the Project Dashboard's sections can
+    each be collapsed, and more project icons were added.
+  - Manager Dashboard: Hours per Employee can show Total, Last 30 Days,
+    Last 7 Days, or Current Week, and its labels are readable on small
+    bars. Manage Included Projects is now per person and available to
+    anyone who can see the dashboard.
+  - Layout clean-ups: the dashboards are grouped in one box, the Project
+    Dashboard's summary cards are shorter, the progress chart no longer
+    shows cluttered dots, and on a phone the header drops its title when
+    a company logo is shown instead of squeezing both.
+
 0.039 -- 2026-09-22
   - The Audit Log now also covers a device's own name changing, and
     joining, creating, or leaving a company (including unlocking Admin) --

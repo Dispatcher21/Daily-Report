@@ -3368,3 +3368,10 @@ input[type="date"] { min-width: 0; }
   padding: 1rem;
 }
 .dash-box > *:last-child { margin-bottom: 0; }
+
+/* Version link at the bottom of every page (added by common.js). */
+.app-version {
+  display: block; text-align: right; margin: 1.5rem 0 0.5rem;
+  font-size: 0.72rem; color: var(--text-dim); opacity: 0.7; text-decoration: none;
+}
+.app-version:hover { text-decoration: underline; opacity: 1; }

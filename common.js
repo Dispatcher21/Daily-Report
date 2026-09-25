@@ -9,6 +9,16 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+// The app's version, shown at the bottom of every page as a link to the
+// patch notes. Bump it together with each new patch-notes.txt entry.
+const APP_VERSION = '0.043';
+document.addEventListener('DOMContentLoaded', () => {
+  const main = document.querySelector('main');
+  if (!main) return;
+  main.insertAdjacentHTML('beforeend',
+    `<a class="app-version" href="patch-notes.txt" target="_blank" rel="noopener">v${APP_VERSION}</a>`);
+});
+
 // The icon a project shows on its home-screen card, hamburger-menu row,
 // and (project.html's own Project Settings > Appearance step) itself --
 // settings.html's Projects list and project.html both pick from this same
