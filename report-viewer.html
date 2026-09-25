@@ -74,15 +74,29 @@
     <button type="button" class="rv-mobile-nav rv-mobile-nav-next" id="rv-mobile-nav-next" hidden aria-label="Next report">&#8594;</button>
   </div>
 
-  <!-- A floating footer, not a normal in-flow card (see style.css) --
-       collapsed to just its header by default (see #rv-review-toggle
-       below): the full panel took up a lot of screen just sitting there,
-       and most visits don't need it open. Tap/click the header to expand;
-       once open, the approval row and composer stay put while just the
-       comment list in between scrolls, so both "what's the status" and
-       "add a comment" are always reachable without hunting for them at
-       the bottom of a long report + long comment thread. -->
-  <div class="step rv-collapsed" id="rv-review-step" hidden>
+  <!-- A floating footer, not normal in-flow content (see #rv-footer in
+       style.css), holding two stacked bars: Details and Approvals/Comments.
+       Each is collapsed to its header by default and only one opens at a
+       time. Once open, the approval row and composer stay put while just
+       the comment list in between scrolls. -->
+  <div class="rv-footer" id="rv-footer">
+  <div class="step rv-footer-step rv-collapsed" id="rv-details-step">
+    <div class="step-header" id="rv-details-toggle">
+      <span class="step-num">DETAILS</span>
+      <h2>Report Details / History</h2>
+      <span class="step-chevron">&#9656;</span>
+    </div>
+    <div class="step-body">
+      <div class="rv-details-summary" id="rv-details-summary"></div>
+      <div class="rv-details-scroll">
+        <div class="rv-details-label">Revision History</div>
+        <div id="rv-history-list"></div>
+        <p class="hint" id="rv-history-empty" hidden style="margin:0;">No activity recorded for this report yet.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="step rv-footer-step rv-collapsed" id="rv-review-step" hidden>
     <div class="step-header" id="rv-review-toggle">
       <span class="step-num">REVIEW</span>
       <h2>Approvals / Comments</h2>
@@ -114,6 +128,7 @@
         <button type="button" class="btn-sm" id="rv-btn-add-comment" style="margin-top:0.4rem;">Post Comment</button>
       </div>
     </div>
+  </div>
   </div>
 </main>
 
@@ -361,6 +376,7 @@ async function loadAndShowReport(id, { includeDeleted = false } = {}) {
     $('#rv-review-step').hidden = true;
     syncMainBottomPadding();
   }
+  await renderReportDetails(report);
   return report;
 }
 
@@ -432,6 +448,56 @@ function formatCommentTime(iso) {
   const d = new Date(iso);
   if (isNaN(d)) return '';
   return d.toLocaleString();
+}
+
+// Fills the Details footer bar: who created the report and when, the last
+// change, and this report's own entries from the audit log (the same data
+// the Audit Log page shows, filtered to this report's id).
+async function renderReportDetails(report) {
+  const createdWho = report.createdBy ? ` by ${report.createdBy}` : '';
+  const lines = [`Created ${formatCommentTime(report.createdAt) || 'unknown date'}${createdWho}`];
+  if (report.updatedAt && report.updatedAt !== report.createdAt) {
+    const editedWho = report.lastEditedBy ? ` by ${report.lastEditedBy}` : '';
+    lines.push(`Last changed ${formatCommentTime(report.updatedAt) || 'unknown date'}${editedWho}`);
+  }
+  const summary = $('#rv-details-summary');
+  summary.replaceChildren(...lines.map((text) => {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div;
+  }));
+
+  const entries = (await getAllAuditEntries())
+    .filter((e) => e.entityType === 'report' && e.entityId === report.id)
+    .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+  const list = $('#rv-history-list');
+  list.replaceChildren(...entries.map((e) => {
+    const item = document.createElement('div');
+    item.className = 'rv-history-entry';
+    const head = document.createElement('div');
+    head.className = 'rv-history-entry-head';
+    const verb = document.createElement('span');
+    verb.className = 'rv-history-entry-verb';
+    // The audit log's verbs read "Commented on <report>"; here the report
+    // is already implied, so drop the trailing "on".
+    verb.textContent = (AUDIT_ACTION_VERBS[e.action] || e.action).replace(/ on$/, '');
+    const user = document.createElement('span');
+    user.className = 'rv-history-entry-user';
+    user.textContent = e.userName || 'Unknown';
+    const time = document.createElement('span');
+    time.className = 'rv-history-entry-time';
+    time.textContent = formatCommentTime(e.timestamp);
+    head.append(verb, user, time);
+    item.appendChild(head);
+    (e.changes || []).forEach((c) => {
+      const line = document.createElement('div');
+      line.className = 'rv-history-entry-change';
+      line.textContent = `${c.label}: ${c.from || '(blank)'} → ${c.to || '(blank)'}`;
+      item.appendChild(line);
+    });
+    return item;
+  }));
+  $('#rv-history-empty').hidden = entries.length > 0;
 }
 
 let rvCanApprove = false;
@@ -550,8 +616,7 @@ function flashHighlight(el) {
 }
 
 function focusComment(commentId) {
-  $('#rv-review-step').classList.remove('rv-collapsed');
-  syncMainBottomPadding();
+  setFooterOpen($('#rv-review-step'));
   const item = $(`.rv-comment[data-comment-id="${commentId}"]`);
   if (!item) return;
   item.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -641,30 +706,29 @@ function renderReviewPanel(report) {
   syncMainBottomPadding();
 }
 
-// #rv-review-step floats fixed over the bottom of the page now (see
-// style.css) instead of taking up its own space in normal flow -- without
-// this, its own footer would just permanently cover whatever's underneath
-// it (the tail of the report preview, or the carousel's side reports).
-// Re-measured on every render because its height isn't fixed: more
-// comments, a wrapped approval row, or a window resize (comment text
-// reflowing) can all change how tall it actually is.
+// #rv-footer floats fixed over the bottom of the page, so <main> is padded
+// by its height plus 32px of clear space -- otherwise it would cover the
+// end of the report. Re-measured whenever a bar opens/closes or the window
+// resizes, since the footer's height changes with both.
 function syncMainBottomPadding() {
   const main = document.querySelector('main');
-  const step = $('#rv-review-step');
-  main.style.paddingBottom = step.hidden ? '' : `${step.getBoundingClientRect().height + 16}px`;
+  main.style.paddingBottom = `${$('#rv-footer').getBoundingClientRect().height + 32}px`;
 }
 window.addEventListener('resize', syncMainBottomPadding);
 
-// Collapsed to just the header by default (see the .rv-collapsed class
-// already on #rv-review-step in the markup) -- .onclick, not
-// addEventListener, since #rv-review-toggle is a static element that
-// persists across every carousel navigation (loadAndShowReport runs
-// initReviewPanel again each time), same reasoning as the approve/comment
-// buttons below.
-$('#rv-review-toggle').onclick = () => {
-  $('#rv-review-step').classList.toggle('rv-collapsed');
+// Opens one footer bar and collapses the other (null collapses both).
+function setFooterOpen(step) {
+  $$('#rv-footer .rv-footer-step').forEach((s) => s.classList.toggle('rv-collapsed', s !== step));
   syncMainBottomPadding();
-};
+}
+function toggleFooterStep(step) {
+  setFooterOpen(step.classList.contains('rv-collapsed') ? step : null);
+}
+
+// .onclick, not addEventListener: these headers persist across every
+// carousel navigation, and a second listener would stack on the first.
+$('#rv-review-toggle').onclick = () => toggleFooterStep($('#rv-review-step'));
+$('#rv-details-toggle').onclick = () => toggleFooterStep($('#rv-details-step'));
 
 async function initReviewPanel(report) {
   $('#rv-review-step').hidden = false;
