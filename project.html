@@ -779,8 +779,8 @@ function weatherCalDayHtml(dayNum, r, iso) {
   // Every branch below gets data-report-id + .wcal-clickable so the single
   // delegated listener in renderWeatherCalendar can open the day-detail
   // modal for any day that has a real report, regardless of its type; and
-  // data-date so the "scroll to today" logic below can find any day
-  // regardless of whether it has a report at all.
+  // data-date so the month pager can find (and outline) today's cell
+  // whether or not it has a report.
   if (isNoWorkDayReport(r)) {
     return `
       <div class="wcal-day wcal-nwd wcal-clickable" data-tip="No Work Day" tabindex="0" data-report-id="${r.id}" data-date="${iso}">
@@ -848,40 +848,25 @@ function weatherCalDayHtml(dayNum, r, iso) {
 function renderWeatherCalendar(loggable) {
   const byDate = new Map(loggable.map((r) => [r.date, r]));
   const months = [...new Set(loggable.map((r) => r.date.slice(0, 7)))].sort();
-  $('#dash-weather-calendar').innerHTML = months.map((mk) => {
-    const [y, m] = mk.split('-').map(Number);
-    const first = new Date(y, m - 1, 1);
-    const daysInMonth = new Date(y, m, 0).getDate();
-    const monthLabel = first.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-    const cells = [];
-    for (let i = 0; i < first.getDay(); i++) cells.push('<div class="wcal-day wcal-day-empty"></div>');
-    for (let d = 1; d <= daysInMonth; d++) {
-      const iso = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      cells.push(weatherCalDayHtml(d, byDate.get(iso), iso));
-    }
-    return `
-      <div class="wcal-month">
-        <div class="wcal-month-label">${escapeHtml(monthLabel)}</div>
+  // One month at a time with prev/next/Today (renderMonthPager in
+  // dashboard-widgets.js), starting on the current month.
+  renderMonthPager($('#dash-weather-calendar'), {
+    firstMonth: months[0],
+    lastMonth: [months[months.length - 1], todayIso().slice(0, 7)].sort().pop(),
+    renderMonth: (mk) => {
+      const [y, m] = mk.split('-').map(Number);
+      const first = new Date(y, m - 1, 1);
+      const daysInMonth = new Date(y, m, 0).getDate();
+      const cells = [];
+      for (let i = 0; i < first.getDay(); i++) cells.push('<div class="wcal-day wcal-day-empty"></div>');
+      for (let d = 1; d <= daysInMonth; d++) {
+        const iso = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        cells.push(weatherCalDayHtml(d, byDate.get(iso), iso));
+      }
+      return `
         <div class="wcal-weekdays">${WCAL_WEEKDAY_LABELS.map((l) => `<div>${l}</div>`).join('')}</div>
-        <div class="wcal-grid">${cells.join('')}</div>
-      </div>`;
-  }).join('');
-
-  // Default to today's row instead of the earliest month on file -- same
-  // reasoning and implementation as the Manager Dashboard's own calendar
-  // (see index.html's renderMdCalendar): offsetTop resolves against
-  // whatever positioned ancestor is nearest, not necessarily this scroll
-  // container, so getBoundingClientRect is the reliable way to find "how
-  // far down this container" a cell actually sits.
-  requestAnimationFrame(() => {
-    const container = $('#dash-weather-calendar');
-    const todayCell = container.querySelector(`[data-date="${todayIso()}"]`);
-    if (!todayCell) { container.scrollTop = container.scrollHeight; return; } // today's own month has nothing on file yet -- fall back to the most recent end
-    const cellRect = todayCell.getBoundingClientRect();
-    const containerRect = container.getBoundingClientRect();
-    const offsetWithinContainer = cellRect.top - containerRect.top + container.scrollTop;
-    const target = offsetWithinContainer - container.clientHeight / 2 + todayCell.offsetHeight / 2;
-    container.scrollTop = Math.max(0, target);
+        <div class="wcal-grid">${cells.join('')}</div>`;
+    },
   });
 }
 

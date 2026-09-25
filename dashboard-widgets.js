@@ -555,3 +555,63 @@ function setupCollapsibleSteps(container) {
     });
   });
 }
+
+// ---------- Month-by-month calendar pager ----------
+// Shows one month at a time with ‹ / › / Today buttons, instead of every
+// month stacked in a scrolling list. Used by index.html's Report Activity
+// calendar and project.html's weather calendar. Months are 'YYYY-MM' keys.
+// `renderMonth(monthKey)` returns that month's weekday row + day grid
+// (the month name is shown in the nav bar, not by renderMonth). Every month
+// from firstMonth to lastMonth is reachable, including empty ones. The
+// month being shown is kept across re-renders while it's still in range;
+// otherwise it starts on the current month (clamped into range).
+function calMonthKey(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function calAddMonths(monthKey, delta) {
+  const [y, m] = monthKey.split('-').map(Number);
+  return calMonthKey(new Date(y, m - 1 + delta, 1));
+}
+
+function renderMonthPager(container, { firstMonth, lastMonth, renderMonth }) {
+  const clamp = (mk) => (mk < firstMonth ? firstMonth : mk > lastMonth ? lastMonth : mk);
+  const todayMonth = clamp(todayIso().slice(0, 7));
+  const kept = container.dataset.month;
+  const month = kept && kept >= firstMonth && kept <= lastMonth ? kept : todayMonth;
+  container.dataset.month = month;
+  container._monthPager = { firstMonth, lastMonth, renderMonth };
+
+  const [y, m] = month.split('-').map(Number);
+  const label = new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  container.innerHTML = `
+    <div class="cal-nav">
+      <button type="button" class="cal-nav-btn" data-cal-step="-1" aria-label="Previous month"${month <= firstMonth ? ' disabled' : ''}>&#8249;</button>
+      <div class="cal-nav-label" aria-live="polite">${escapeHtml(label)}</div>
+      <button type="button" class="cal-nav-btn" data-cal-step="1" aria-label="Next month"${month >= lastMonth ? ' disabled' : ''}>&#8250;</button>
+      <button type="button" class="cal-nav-today" data-cal-today${month === todayMonth ? ' disabled' : ''}>Today</button>
+    </div>
+    <div class="wcal-month">${renderMonth(month)}</div>`;
+  const todayCell = container.querySelector(`[data-date="${todayIso()}"]`);
+  if (todayCell) todayCell.classList.add('wcal-today');
+
+  // One delegated listener per container, wired once; it reads the latest
+  // options from container._monthPager, so re-renders don't stack listeners.
+  if (!container.dataset.pagerWired) {
+    container.dataset.pagerWired = '1';
+    container.addEventListener('click', (e) => {
+      const btn = e.target.closest('.cal-nav-btn, .cal-nav-today');
+      if (!btn || btn.disabled) return;
+      const opts = container._monthPager;
+      container.dataset.month = btn.hasAttribute('data-cal-today')
+        ? todayIso().slice(0, 7)
+        : calAddMonths(container.dataset.month, Number(btn.dataset.calStep));
+      renderMonthPager(container, opts);
+      // Keep keyboard focus on the same control after the re-render.
+      const same = btn.hasAttribute('data-cal-today')
+        ? container.querySelector('.cal-nav-today')
+        : container.querySelector(`.cal-nav-btn[data-cal-step="${btn.dataset.calStep}"]`);
+      if (same && !same.disabled) same.focus();
+    });
+  }
+}

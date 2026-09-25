@@ -1271,65 +1271,46 @@ function renderMdCalendar(included, reports) {
   });
 
   const months = [...new Set(dated.map((r) => r.date.slice(0, 7)))].sort();
-  $('#md-calendar').innerHTML = months.map((mk) => {
-    const [y, m] = mk.split('-').map(Number);
-    const first = new Date(y, m - 1, 1);
-    const daysInMonth = new Date(y, m, 0).getDate();
-    const monthLabel = first.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-    const cells = [];
-    for (let i = 0; i < first.getDay(); i++) cells.push('<div class="wcal-day wcal-day-empty"></div>');
-    for (let d = 1; d <= daysInMonth; d++) {
-      const iso = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      const dayMap = mdCalendarByDate.get(iso);
-      if (!dayMap || dayMap.size === 0) {
-        cells.push(`<div class="wcal-day" data-date="${iso}"><span class="wcal-day-num">${d}</span></div>`);
-        continue;
-      }
-      const projectIds = [...dayMap.keys()];
-      const shown = projectIds.slice(0, MDCAL_MAX_PILLS);
-      const extra = projectIds.length - shown.length;
-      const pills = shown
-        .map((pid) => {
-          const project = mdCalendarProjectById.get(pid);
-          return `<span class="mdcal-pill" style="background:${mdCalendarColorByProjectId.get(pid)}" title="${escapeHtml(project ? project.name : '')}">${escapeHtml(mdShortProjectLabel(project ? project.name : ''))}</span>`;
-        })
-        .join('') + (extra > 0 ? `<span class="mdcal-pill-more">+${extra} more</span>` : '');
-      cells.push(`
-        <div class="wcal-day wcal-clickable" tabindex="0" data-date="${iso}" data-cal-date="${iso}">
-          <span class="wcal-day-num">${d}</span>
-          <div class="mdcal-pills">${pills}</div>
-        </div>`);
-    }
-    return `
-      <div class="wcal-month">
-        <div class="wcal-month-label">${escapeHtml(monthLabel)}</div>
-        <div class="wcal-weekdays">${MDCAL_WEEKDAY_LABELS.map((l) => `<div>${l}</div>`).join('')}</div>
-        <div class="wcal-grid">${cells.join('')}</div>
-      </div>`;
-  }).join('');
-
-  // Default to showing today's date, not the earliest month on file -- the
-  // calendar spans a project's whole history, and someone opening this
-  // dashboard almost always cares about "what happened recently", not what
-  // happened on day one. Centers today's row in the scrollable area rather
-  // than just snapping it to the very top, so a few days of context above
-  // today are visible too.
-  requestAnimationFrame(() => {
-    const container = $('#md-calendar');
-    const todayCell = container.querySelector(`[data-date="${todayIso()}"]`);
-    if (!todayCell) { container.scrollTop = container.scrollHeight; return; } // no exact cell (e.g. today's month has no data yet) -- fall back to the most recent end
-    // offsetTop is relative to the nearest *positioned* ancestor, which
-    // isn't necessarily this scroll container (none of .wcal-month/.wcal-grid
-    // set position, so it can resolve all the way up to <body>) --
-    // getBoundingClientRect diffed against the container's own is the only
-    // reliable way to get "how far down this container's own content" a
-    // cell sits, however deep the wrapper markup between them goes.
-    const cellRect = todayCell.getBoundingClientRect();
-    const containerRect = container.getBoundingClientRect();
-    const offsetWithinContainer = cellRect.top - containerRect.top + container.scrollTop;
-    const target = offsetWithinContainer - container.clientHeight / 2 + todayCell.offsetHeight / 2;
-    container.scrollTop = Math.max(0, target);
+  renderMonthPager($('#md-calendar'), {
+    firstMonth: months[0],
+    lastMonth: [months[months.length - 1], todayIso().slice(0, 7)].sort().pop(),
+    renderMonth: mdCalendarMonthHtml,
   });
+}
+
+// One month's weekday row + day grid for the Report Activity calendar
+// (renderMonthPager in dashboard-widgets.js shows one month at a time).
+function mdCalendarMonthHtml(mk) {
+  const [y, m] = mk.split('-').map(Number);
+  const first = new Date(y, m - 1, 1);
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < first.getDay(); i++) cells.push('<div class="wcal-day wcal-day-empty"></div>');
+  for (let d = 1; d <= daysInMonth; d++) {
+    const iso = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const dayMap = mdCalendarByDate.get(iso);
+    if (!dayMap || dayMap.size === 0) {
+      cells.push(`<div class="wcal-day" data-date="${iso}"><span class="wcal-day-num">${d}</span></div>`);
+      continue;
+    }
+    const projectIds = [...dayMap.keys()];
+    const shown = projectIds.slice(0, MDCAL_MAX_PILLS);
+    const extra = projectIds.length - shown.length;
+    const pills = shown
+      .map((pid) => {
+        const project = mdCalendarProjectById.get(pid);
+        return `<span class="mdcal-pill" style="background:${mdCalendarColorByProjectId.get(pid)}" title="${escapeHtml(project ? project.name : '')}">${escapeHtml(mdShortProjectLabel(project ? project.name : ''))}</span>`;
+      })
+      .join('') + (extra > 0 ? `<span class="mdcal-pill-more">+${extra} more</span>` : '');
+    cells.push(`
+      <div class="wcal-day wcal-clickable" tabindex="0" data-date="${iso}" data-cal-date="${iso}">
+        <span class="wcal-day-num">${d}</span>
+        <div class="mdcal-pills">${pills}</div>
+      </div>`);
+  }
+  return `
+    <div class="wcal-weekdays">${MDCAL_WEEKDAY_LABELS.map((l) => `<div>${l}</div>`).join('')}</div>
+    <div class="wcal-grid">${cells.join('')}</div>`;
 }
 
 function mdDayDetailRow(label, value) {

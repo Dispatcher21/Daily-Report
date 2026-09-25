@@ -3173,15 +3173,28 @@ input[type="date"] { min-width: 0; }
 
 .weather-view-controls { display: flex; justify-content: flex-end; margin-bottom: 0.7rem; }
 
-/* One mini month per card, stacked -- a project's dated reports rarely span
-   more than a handful of months, so this reads better than paging through a
-   single always-current-month calendar the way a scheduling app would. */
-.weather-calendar { display: flex; flex-direction: column; gap: 1.1rem; max-height: 460px; overflow-y: auto; padding-right: 0.25rem; }
+/* One month at a time with ‹ / › / Today buttons (renderMonthPager in
+   dashboard-widgets.js), not every month stacked in a scrolling box -- the
+   whole month is always visible, nothing scrolls inside the card. */
+.weather-calendar { display: flex; flex-direction: column; gap: 0.6rem; }
 .weather-calendar[hidden] { display: none; }
-/* Project Dashboard's own Weather & Schedule card only -- see #dash-weather-log above. */
-#dash-weather-calendar { max-height: 180px; }
-.wcal-month-label { font-weight: 700; font-size: 0.85rem; margin-bottom: 0.5rem; }
-.wcal-weekdays, .wcal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.cal-nav { display: flex; align-items: center; gap: 0.4rem; }
+.cal-nav-label { flex: 1; text-align: center; font-weight: 700; font-size: 0.95rem; }
+.cal-nav-btn, .cal-nav-today {
+  border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  border-radius: var(--radius-sm); cursor: pointer; font-weight: 700;
+}
+.cal-nav-btn { width: 2.2rem; height: 2.2rem; font-size: 1.3rem; line-height: 1; padding: 0; }
+.cal-nav-today { height: 2.2rem; padding: 0 0.8rem; font-size: 0.8rem; }
+.cal-nav-btn:hover:not(:disabled), .cal-nav-today:hover:not(:disabled) { border-color: var(--brand-light); }
+.cal-nav-btn:disabled, .cal-nav-today:disabled { opacity: 0.4; cursor: default; }
+/* Today's date, so it's easy to find in the grid. */
+.wcal-day.wcal-today { box-shadow: 0 0 0 2px var(--brand-light); }
+/* minmax(0, 1fr), not 1fr: a plain 1fr column can't shrink below its
+   content, so a day with a pill ("Activity", a project label) widened its
+   whole column and pushed Saturday off the card on a phone. The pills
+   already truncate with an ellipsis once their cell is narrower. */
+.wcal-weekdays, .wcal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
 .wcal-weekdays { margin-bottom: 4px; text-align: center; font-size: 0.68rem; font-weight: 700; color: var(--text-dim); }
 .wcal-day {
   position: relative; aspect-ratio: 1; border: 1px solid var(--border); border-radius: var(--radius-sm);
@@ -3224,26 +3237,25 @@ input[type="date"] { min-width: 0; }
   font-size: 0.58rem; font-weight: 700; letter-spacing: 0.02em; color: var(--text-dim);
 }
 /* data-tip's bubble opens upward off the whole page's cursor position by
-   default -- inside a short calendar cell that's fine, but a day in the top
-   row of a month card sits at (or above) this scrollable list's own top
-   edge, same clipping problem as the pay item list's first row. */
-.weather-calendar .wcal-month:first-child .wcal-grid > :nth-child(-n+7)[data-tip]::after {
+   default -- inside a short calendar cell that's fine, but on a day in the
+   top row it would cover the month nav bar, so those open downward. */
+.weather-calendar .wcal-month .wcal-grid > :nth-child(-n+7)[data-tip]::after {
   bottom: auto; top: calc(100% + 14px);
   transform: translateX(calc(-50% + var(--tip-offset, 0px))) translateY(-4px);
 }
-.weather-calendar .wcal-month:first-child .wcal-grid > :nth-child(-n+7)[data-tip]::before {
+.weather-calendar .wcal-month .wcal-grid > :nth-child(-n+7)[data-tip]::before {
   bottom: auto; top: calc(100% + 8px);
   transform: translateX(-50%) translateY(-4px);
   border-top-color: transparent; border-bottom-color: var(--text);
 }
-.weather-calendar .wcal-month:first-child .wcal-grid > :nth-child(-n+7)[data-tip]:hover::after,
-.weather-calendar .wcal-month:first-child .wcal-grid > :nth-child(-n+7)[data-tip]:focus-visible::after,
-.weather-calendar .wcal-month:first-child .wcal-grid > :nth-child(-n+7)[data-tip].tip-open::after {
+.weather-calendar .wcal-month .wcal-grid > :nth-child(-n+7)[data-tip]:hover::after,
+.weather-calendar .wcal-month .wcal-grid > :nth-child(-n+7)[data-tip]:focus-visible::after,
+.weather-calendar .wcal-month .wcal-grid > :nth-child(-n+7)[data-tip].tip-open::after {
   transform: translateX(calc(-50% + var(--tip-offset, 0px))) translateY(0);
 }
-.weather-calendar .wcal-month:first-child .wcal-grid > :nth-child(-n+7)[data-tip]:hover::before,
-.weather-calendar .wcal-month:first-child .wcal-grid > :nth-child(-n+7)[data-tip]:focus-visible::before,
-.weather-calendar .wcal-month:first-child .wcal-grid > :nth-child(-n+7)[data-tip].tip-open::before {
+.weather-calendar .wcal-month .wcal-grid > :nth-child(-n+7)[data-tip]:hover::before,
+.weather-calendar .wcal-month .wcal-grid > :nth-child(-n+7)[data-tip]:focus-visible::before,
+.weather-calendar .wcal-month .wcal-grid > :nth-child(-n+7)[data-tip].tip-open::before {
   transform: translateX(-50%) translateY(0);
 }
 
