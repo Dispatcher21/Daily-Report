@@ -47,9 +47,18 @@ function deleteTutorialDb() {
   });
 }
 
+// Forget which page tours have played and whether the person chose the
+// walkthrough, so every new tutorial starts with the inspector's welcome.
+function resetTourState() {
+  Object.keys(sessionStorage)
+    .filter((k) => k.startsWith('dr-tour-'))
+    .forEach((k) => sessionStorage.removeItem(k));
+}
+
 (async () => {
   const exiting = queryParam('exit') === '1';
   try {
+    resetTourState();
     if (exiting) {
       sessionStorage.removeItem(TUTORIAL_FLAG_KEY);
       $('#tut-title').textContent = 'Leaving the tutorial';

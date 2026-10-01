@@ -144,14 +144,16 @@ function parseTourDialogue(text) {
     if ((m = line.match(/^character name:\s*(.*)$/i))) { out.name = m[1].trim() || null; return; }
     if (/^===.*===$/.test(line)) {
       finish();
-      m = line.match(/\(([^)]*\.html)\)/i);
-      page = m ? (out.pages[m[1].trim().toLowerCase()] = out.pages[m[1].trim().toLowerCase()] || []) : null;
+      m = line.match(/\(([^)]+)\)/);
+      const key = m && m[1].trim().toLowerCase();
+      page = key ? (out.pages[key] = out.pages[key] || []) : null;
       return;
     }
     if (!page) return;
     if (/^\[\s*\d*\s*\]$/.test(line)) { finish(); step = { emotion: 'neutral', target: null, lines: [] }; page.push(step); return; }
     if (!step) return;
     if (!step.lines.length && (m = line.match(/^emotion:\s*(.*)$/i))) { step.emotion = m[1].trim().toLowerCase(); return; }
+    if (!step.lines.length && (m = line.match(/^(walkthrough|explore) button:\s*(.*)$/i))) { step[`${m[1].toLowerCase()}Button`] = m[2].trim(); return; }
     if (!step.lines.length && (m = line.match(/^points at:\s*(.*)$/i))) {
       const t = m[1].trim();
       step.target = /^(nothing|none|-)?$/i.test(t) ? null : t;
@@ -187,12 +189,32 @@ function tourStepsForPage(page) {
   return steps.map((s) => {
     if (!TOUR_ART.emotions[s.emotion]) console.warn(`Tutorial: no "${s.emotion}" emotion image, showing neutral`);
     const t = tourResolveTarget(page, s.target);
-    return { emotion: s.emotion, say: s.say, target: t && t.selector, before: t && t.before };
+    return { emotion: s.emotion, say: s.say, target: t && t.selector, before: t && t.before, walkthroughButton: s.walkthroughButton, exploreButton: s.exploreButton };
   });
 }
 
 // ---------- Engine ----------
 const TOUR_DONE_PREFIX = 'dr-tour-done:';
+// 'guided' (each page's tour plays the first time it opens) or 'explore'
+// (only when Tips is tapped). Unset until the person answers the welcome.
+// tutorial.html clears it, and the done flags, on every enter and exit.
+const TOUR_MODE_KEY = 'dr-tour-mode';
+
+function tourMode() {
+  try { return sessionStorage.getItem(TOUR_MODE_KEY); } catch (e) { return null; }
+}
+function setTourMode(mode) {
+  try { sessionStorage.setItem(TOUR_MODE_KEY, mode); } catch (e) {}
+}
+
+// Used only if dialogue.txt can't be loaded at all.
+const TOUR_FALLBACK = {
+  welcome: [{ emotion: 'happy', say: "Hi there! This is a sandbox with an example project, so nothing you do here touches your real work. Want a walkthrough, or would you rather explore on your own?" }],
+  'no tips': [{ emotion: 'thinking', say: "I couldn't load my notes. Check your connection and refresh the page." }],
+};
+function tourSection(key) {
+  return tourStepsForPage(key) || (!tourDialogue && TOUR_FALLBACK[key]) || null;
+}
 const TOUR_TYPE_MS = 18; // per character while the line types out
 
 function tourPageKey() {
@@ -224,6 +246,7 @@ function tourVisible(el) {
 const tour = {
   steps: [], index: 0, root: null, ring: null, hand: null, typing: null, raf: 0, target: null,
 
+  // This page's tour. Without `force`, only if it hasn't played yet.
   start(force) {
     const key = tourPageKey();
     const steps = tourStepsForPage(key);
@@ -231,12 +254,37 @@ const tour = {
     if (!force) {
       try { if (sessionStorage.getItem(TOUR_DONE_PREFIX + key)) return false; } catch (e) {}
     }
+    this.play(steps, { doneKey: key });
+    return true;
+  },
+
+  // The first thing shown in a new tutorial: its last line asks whether to
+  // take the walkthrough or explore alone.
+  welcome() {
+    const steps = tourSection('welcome');
+    if (!steps) { setTourMode('guided'); this.start(false); return; }
+    this.play(steps, { choice: true });
+  },
+
+  choose(mode) {
+    setTourMode(mode);
+    this.end(false);
+    if (mode === 'guided') this.start(false);
+    else this.playSection('explore');
+  },
+
+  playSection(key) {
+    const steps = tourSection(key);
+    if (steps) this.play(steps, {});
+  },
+
+  play(steps, opts) {
     this.end(false);
     this.steps = steps;
+    this.opts = opts;
     this.index = 0;
     this.build();
     this.show();
-    return true;
   },
 
   build() {
@@ -264,6 +312,10 @@ const tour = {
           <button type="button" class="tour-btn tour-back">Back</button>
           <button type="button" class="tour-btn tour-next">Next</button>
         </div>
+        <div class="tour-choice" hidden>
+          <button type="button" class="tour-btn tour-choose-explore"></button>
+          <button type="button" class="tour-btn tour-choose-guided"></button>
+        </div>
       </div>
       <img class="tour-char" alt="">`;
     this.root.querySelector('.tour-name').textContent = (tourDialogue && tourDialogue.name) || TOUR_ART.name;
@@ -272,17 +324,29 @@ const tour = {
     document.body.append(this.ring, this.hand, this.root);
     this.root.querySelector('.tour-next').addEventListener('click', () => this.next());
     this.root.querySelector('.tour-back').addEventListener('click', () => this.go(this.index - 1));
-    this.root.querySelector('.tour-skip').addEventListener('click', () => this.end(true));
+    this.root.querySelector('.tour-skip').addEventListener('click', () => this.skip());
+    this.root.querySelector('.tour-choose-guided').addEventListener('click', () => this.choose('guided'));
+    this.root.querySelector('.tour-choose-explore').addEventListener('click', () => this.choose('explore'));
     // Tapping the text while it's still typing finishes the line.
     this.root.querySelector('.tour-text').addEventListener('click', () => this.finishTyping());
     this.onKey = (e) => {
-      if (e.key === 'Escape') this.end(true);
-      else if (e.key === 'ArrowRight') this.next();
+      if (e.key === 'Escape') this.skip();
+      else if (e.key === 'ArrowRight' && !this.onChoice()) this.next();
       else if (e.key === 'ArrowLeft') this.go(this.index - 1);
     };
     document.addEventListener('keydown', this.onKey);
     const loop = () => { this.place(); this.raf = requestAnimationFrame(loop); };
     this.raf = requestAnimationFrame(loop);
+  },
+
+  // Skipping the welcome counts as choosing to explore.
+  skip() {
+    if (this.opts && this.opts.choice) { setTourMode('explore'); this.end(false); }
+    else this.end(true);
+  },
+
+  onChoice() {
+    return !!(this.opts && this.opts.choice && this.index === this.steps.length - 1);
   },
 
   next() {
@@ -305,6 +369,15 @@ const tour = {
     this.root.querySelector('.tour-count').textContent = `${this.index + 1} / ${this.steps.length}`;
     this.root.querySelector('.tour-back').disabled = this.index === 0;
     this.root.querySelector('.tour-next').textContent = this.index === this.steps.length - 1 ? 'Got it' : 'Next';
+    const choice = this.onChoice();
+    this.root.querySelector('.tour-controls').hidden = choice && this.steps.length === 1;
+    this.root.querySelector('.tour-next').hidden = choice;
+    this.root.querySelector('.tour-skip').hidden = choice;
+    this.root.querySelector('.tour-choice').hidden = !choice;
+    if (choice) {
+      this.root.querySelector('.tour-choose-guided').textContent = step.walkthroughButton || 'Show me around';
+      this.root.querySelector('.tour-choose-explore').textContent = step.exploreButton || "I'll explore";
+    }
     this.type(step.say);
     this.target = null;
     if (step.target) {
@@ -383,36 +456,40 @@ const tour = {
   },
 
   end(markDone) {
-    if (markDone) {
-      try { sessionStorage.setItem(TOUR_DONE_PREFIX + tourPageKey(), '1'); } catch (e) {}
+    if (markDone && this.opts && this.opts.doneKey) {
+      try { sessionStorage.setItem(TOUR_DONE_PREFIX + this.opts.doneKey, '1'); } catch (e) {}
     }
     clearInterval(this.typing);
     this.typing = null;
     cancelAnimationFrame(this.raf);
     if (this.onKey) document.removeEventListener('keydown', this.onKey);
     [this.root, this.ring, this.hand].forEach((el) => el && el.remove());
-    this.root = this.ring = this.hand = this.target = null;
+    this.root = this.ring = this.hand = this.target = this.opts = null;
   },
 };
 
-// Starts once the dialogue is loaded and the page has had a moment to
-// render its own content.
+// Once the dialogue is loaded and the page has had a moment to render: a
+// new tutorial opens with the welcome; after that, page tours play by
+// themselves only for someone who chose the walkthrough.
 function startTourWhenReady() {
-  Promise.all([tourDialogueReady, new Promise((r) => setTimeout(r, 900))]).then(() => tour.start(false));
+  Promise.all([tourDialogueReady, new Promise((r) => setTimeout(r, 900))]).then(() => {
+    const mode = tourMode();
+    if (mode === 'guided') tour.start(false);
+    else if (mode !== 'explore') tour.welcome();
+  });
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', startTourWhenReady);
 else startTourWhenReady();
 
-// The banner's Tips button (common.js) replays this page's tour -- shown
-// only on pages that have one.
-function syncTipsButton() {
+// The banner's Tips button (common.js) replays this page's tour, or says
+// there's nothing for this page yet.
+function showTipsButton() {
   const btn = document.querySelector('.tutorial-tips');
-  if (btn) btn.hidden = !(tourDialogue && (tourDialogue.pages[tourPageKey()] || []).length);
+  if (btn) btn.hidden = false;
 }
-tourDialogueReady.then(() => {
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', syncTipsButton);
-  else syncTipsButton();
-});
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', showTipsButton);
+else showTipsButton();
 document.addEventListener('click', (e) => {
-  if (e.target.closest('.tutorial-tips')) tour.start(true);
+  if (!e.target.closest('.tutorial-tips')) return;
+  if (!tour.start(true)) tour.playSection('no tips');
 });

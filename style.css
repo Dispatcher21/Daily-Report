@@ -822,6 +822,9 @@ button.tutorial-exit { background: none; font: inherit; font-weight: 700; cursor
 }
 .tour-text { margin: 0.35rem 0 0.6rem; font-size: 0.95rem; line-height: 1.45; min-height: 4.2em; cursor: pointer; white-space: pre-line; }
 .tour-controls { display: flex; align-items: center; gap: 0.4rem; }
+.tour-choice { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.4rem; }
+.tour-choice .tour-choose-guided { background: var(--brand); border-color: var(--brand); color: var(--on-brand); }
+.tour-root [hidden] { display: none !important; }
 .tour-count { margin-right: auto; font-size: 0.75rem; color: var(--text-dim); font-variant-numeric: tabular-nums; }
 .tour-btn {
   border: 1px solid var(--border); background: var(--surface-2); color: var(--text);

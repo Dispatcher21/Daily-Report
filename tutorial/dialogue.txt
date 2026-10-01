@@ -19,6 +19,8 @@
 #  - The text can run over several lines; they're joined into one
 #    paragraph. Leave a blank line inside the text to start a new
 #    paragraph. Don't start a text line with #.
+#  - Besides the pages, three special sections (WELCOME, EXPLORE ON
+#    YOUR OWN, and NO TIPS YET) are explained where they appear below.
 #  - Keep each line to 2-3 sentences. On a phone the box fits about 4
 #    short lines before it crowds the screen.
 #
@@ -57,14 +59,52 @@
 CHARACTER NAME: Inspector
 
 
+=== WELCOME (welcome) ===
+# Pops up as soon as the tutorial opens. The LAST line in this section
+# gets two buttons instead of Next. Change the button wording on the
+# "Walkthrough button" and "Explore button" lines. Picking the
+# walkthrough starts the tour of whatever page they're on, and each
+# page's tour then plays the first time they open it. Picking explore
+# plays the EXPLORE ON YOUR OWN section, and after that tours only play
+# when they tap Tips.
+
+[1]
+Emotion: happy
+Points at: nothing
+Walkthrough button: Show me around
+Explore button: I'll explore
+Hi there! I'm your site inspector. This is a sandbox with an example
+project, so nothing you do here touches your real work. Want me to walk
+you through it, or would you rather poke around on your own?
+
+
+=== EXPLORE ON YOUR OWN (explore) ===
+# Plays when they pick the explore button above.
+
+[1]
+Emotion: happy
+Points at: tips button
+Go for it! If you get stuck, tap Tips up here and I'll explain whatever
+page you're on.
+
+
+=== NO TIPS YET (no tips) ===
+# Plays when Tips is tapped on a page that has no tour of its own.
+
+[1]
+Emotion: thinking
+Points at: nothing
+I don't have notes for this page yet. Tap Tips on the home page, the
+project page, the reports list, or a report and I'll walk you through it.
+
+
 === HOME PAGE (index.html) ===
 
 [1]
 Emotion: happy
 Points at: nothing
-Hi there! I'm your site inspector. I'll walk you through the app using an
-example project, so nothing here touches your real work. Tap Next to keep
-going, or Skip whenever you like.
+Let's start at home base. This is where all your projects and reports
+come together. Tap Next to keep going, or Skip whenever you like.
 
 [2]
 Emotion: pointing
