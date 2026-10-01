@@ -5,8 +5,11 @@
 {
   "name": "daily-report",
   "compatibility_date": "2025-09-01",
+  // Maps "/" to index.html (see the comment in that file).
+  "main": "cloudflare-worker.js",
   "assets": {
     "directory": "./",
+    "binding": "ASSETS",
     // Serve "report-viewer.html" at exactly that path. The default redirects
     // it to "/report-viewer", which breaks the service worker's cached file
     // list and the app's own page checks.

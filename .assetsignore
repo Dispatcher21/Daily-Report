@@ -9,3 +9,4 @@ CNAME
 wrangler.jsonc
 .wrangler
 node_modules
+cloudflare-worker.js
