@@ -2,6 +2,14 @@
 // photo/signature blobs) on-device. No library needed.
 
 const DB_NAME = 'daily-report-app';
+// Tutorial mode (see tutorial.html) uses its own separate database, so
+// nothing done during the tutorial can ever touch real projects/reports.
+// The flag lives in sessionStorage: it ends when this tab/window closes.
+const TUTORIAL_DB_NAME = 'daily-report-tutorial';
+const TUTORIAL_FLAG_KEY = 'dr-tutorial';
+function isTutorialMode() {
+  try { return sessionStorage.getItem(TUTORIAL_FLAG_KEY) === '1'; } catch (e) { return false; }
+}
 const DB_VERSION = 6;
 const REPORTS_STORE = 'reports';
 const PROJECTS_STORE = 'projects';
@@ -14,7 +22,9 @@ const USER_NAME_SETTING_KEY = 'userName';
 
 function openDb() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    // Checked on every open, not once at load, so tutorial.html can switch
+    // into tutorial mode and immediately write the example data.
+    const req = indexedDB.open(isTutorialMode() ? TUTORIAL_DB_NAME : DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains(REPORTS_STORE)) {
@@ -36,7 +46,13 @@ function openDb() {
         db.createObjectStore(COMPANY_THEMES_STORE, { keyPath: 'id' });
       }
     };
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => {
+      const db = req.result;
+      // Let go when something asks to delete/upgrade this database (e.g.
+      // clearing the tutorial copy) instead of blocking it indefinitely.
+      db.onversionchange = () => db.close();
+      resolve(db);
+    };
     req.onerror = () => reject(req.error);
   });
 }

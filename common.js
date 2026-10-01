@@ -19,6 +19,23 @@ document.addEventListener('DOMContentLoaded', () => {
     `<a class="app-version" href="patch-notes.txt" target="_blank" rel="noopener">v${APP_VERSION}</a>`);
 });
 
+// Tutorial mode (see tutorial.html / storage.js isTutorialMode): a banner on
+// every page so the example data is never mistaken for real work, with the
+// way out always one tap away.
+function inTutorialMode() {
+  return typeof isTutorialMode === 'function' && isTutorialMode();
+}
+document.addEventListener('DOMContentLoaded', () => {
+  if (!inTutorialMode() || location.pathname.endsWith('tutorial.html')) return;
+  const banner = document.createElement('div');
+  banner.className = 'tutorial-banner';
+  banner.innerHTML = `
+    <span><strong>Tutorial mode</strong> &middot; Example data only. Nothing you do here touches your real projects or is synced.</span>
+    <a class="tutorial-exit" href="tutorial.html?exit=1">Exit tutorial</a>`;
+  const header = document.querySelector('.app-header');
+  if (header) header.after(banner); else document.body.prepend(banner);
+});
+
 // The icon a project shows on its home-screen card, hamburger-menu row,
 // and (project.html's own Project Settings > Appearance step) itself --
 // settings.html's Projects list and project.html both pick from this same
@@ -106,7 +123,10 @@ async function initHamburgerMenu() {
       <div id="hb-projects"><div class="hb-empty">Loading&hellip;</div></div>
       <hr>
       <a class="hb-row" href="settings.html"><span class="hb-row-icon" aria-hidden="true">&#9881;&#65039;</span><span class="hb-row-label">Settings</span></a>
-      <button type="button" class="hb-row hb-danger" id="hb-logout"><span class="hb-row-icon" aria-hidden="true">&#128682;</span><span class="hb-row-label">Log out</span></button>
+      ${inTutorialMode()
+        ? '<a class="hb-row hb-danger" href="tutorial.html?exit=1"><span class="hb-row-icon" aria-hidden="true">&#127891;</span><span class="hb-row-label">Exit Tutorial</span></a>'
+        : `<a class="hb-row" href="tutorial.html" id="hb-tutorial"><span class="hb-row-icon" aria-hidden="true">&#127891;</span><span class="hb-row-label">Start Tutorial</span></a>
+      <button type="button" class="hb-row hb-danger" id="hb-logout"><span class="hb-row-icon" aria-hidden="true">&#128682;</span><span class="hb-row-label">Log out</span></button>`}
     </div>
   `;
   document.body.append(backdrop, panel);
@@ -191,7 +211,12 @@ async function initHamburgerMenu() {
     projectsEl.innerHTML = '<div class="hb-empty">Couldn\'t load projects.</div>';
   }
 
-  panel.querySelector('#hb-logout').addEventListener('click', async () => {
+  const tutorialRow = panel.querySelector('#hb-tutorial');
+  if (tutorialRow) tutorialRow.addEventListener('click', (e) => {
+    if (!confirm('Start the tutorial? It opens an example project with sample reports to explore. Your real projects stay untouched, and you can exit any time.')) e.preventDefault();
+  });
+  const logoutBtn = panel.querySelector('#hb-logout');
+  if (logoutBtn) logoutBtn.addEventListener('click', async () => {
     if (!confirm("Log out on this device? You'll need to enter your name again next time.")) return;
     if (typeof saveUserName === 'function') await saveUserName('');
     location.href = 'login.html';

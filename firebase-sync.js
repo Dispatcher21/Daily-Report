@@ -201,6 +201,12 @@ async function decryptWithAdminPassword(adminPassword, encRecord) {
 // window.FirebaseCore, in case this runs before that (both are plain
 // <script> tags; module scripts execute after classic ones).
 function waitForFirebaseCore() {
+  // Every company sync call goes through here. Tutorial mode's example
+  // company exists only on this device -- refusing here guarantees nothing
+  // from the tutorial is ever sent to (or pulled from) the cloud.
+  if (typeof isTutorialMode === 'function' && isTutorialMode()) {
+    return Promise.reject(new Error('Sync is turned off in tutorial mode.'));
+  }
   if (window.FirebaseCore) return Promise.resolve(window.FirebaseCore);
   return new Promise((resolve) => {
     window.addEventListener('firebase-core-ready', () => resolve(window.FirebaseCore), { once: true });
@@ -789,6 +795,7 @@ async function changeCompanyAdminPassword(currentAdminPassword, newAdminPassword
 // stored -- only their hash).
 
 async function listCustomRoles() {
+  if (isTutorialMode()) return []; // nothing syncs in tutorial mode (see waitForFirebaseCore)
   const room = await getCompanyRoom();
   if (!room) return [];
   const { db, ensureSignedIn } = await waitForFirebaseCore();
@@ -932,6 +939,7 @@ async function pushCompanyLogo() {
 // copy is actually newer than what this device last synced -- skips the
 // Storage download otherwise (see file header).
 async function pullCompanyLogo() {
+  if (isTutorialMode()) return false; // nothing syncs in tutorial mode (see waitForFirebaseCore)
   const room = await getCompanyRoom();
   if (!room) return false;
 
@@ -1056,6 +1064,7 @@ async function saveCompanyThemes(themes) {
 // changed" idea as pullCompanyLogo. An empty/never-touched list is a
 // legitimate, common state (most companies won't use this), not an error.
 async function pullCompanyThemes() {
+  if (isTutorialMode()) return false; // nothing syncs in tutorial mode (see waitForFirebaseCore)
   const room = await getCompanyRoom();
   if (!room) return false;
 
@@ -1131,6 +1140,7 @@ async function pushUserLayout(code, userName) {
 // back. Silent on failure, same reasoning as pullCompanyThemes -- this
 // rides along on the same background/join/Sync Now passes those do.
 async function pullUserLayout(code, userName) {
+  if (isTutorialMode()) return false; // nothing syncs in tutorial mode (see waitForFirebaseCore)
   if (!userName) return false;
   const { db, ensureSignedIn } = await waitForFirebaseCore();
   const { doc, getDoc } = await import(FIRESTORE_SDK);
@@ -1179,6 +1189,7 @@ async function pullUserLayout(code, userName) {
 // device -- same live-push-with-retry pattern as
 // onCompanySyncProjectChanged/onCompanySyncReportChanged above.
 async function onCompanySyncUserLayoutChanged(userName) {
+  if (isTutorialMode()) return; // nothing syncs in tutorial mode (see waitForFirebaseCore)
   const room = await getCompanyRoom();
   if (!room) return;
   await withSyncRetry(() => pushUserLayout(room.code, userName));
@@ -1314,6 +1325,12 @@ const TOMBSTONE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 // silent background pull failing is fine to just log, but a manual refresh
 // should tell the person who asked for it that it didn't work.
 async function autoPullCompanyData(force) {
+  // Nothing syncs in tutorial mode (see waitForFirebaseCore). A background
+  // pull just skips; a pull someone explicitly asked for says why.
+  if (isTutorialMode()) {
+    if (force) throw new Error('Sync is turned off in tutorial mode.');
+    return;
+  }
   const room = await getCompanyRoom();
   if (!room) return;
   if (!force) {
@@ -1522,6 +1539,7 @@ async function pushAuditEntryToCompany(code, entry) {
 }
 
 async function onCompanySyncAuditEntry(entry) {
+  if (isTutorialMode()) return; // nothing syncs in tutorial mode (see waitForFirebaseCore)
   const room = await getCompanyRoom();
   if (!room) return;
   await pushAuditEntryToCompany(room.code, entry);
@@ -2037,6 +2055,7 @@ async function withSyncRetry(fn, attempts = 3, baseDelayMs = 400) {
 // never something to await the caller for, and never sent to Firestore
 // (see pushProjectToCompany/pushReportToCompany's exclusion of it).
 async function onCompanySyncProjectChanged(project, deleted) {
+  if (isTutorialMode()) return; // nothing syncs in tutorial mode (see waitForFirebaseCore)
   const room = await getCompanyRoom();
   if (!room) return;
   if (deleted) {
@@ -2058,6 +2077,7 @@ async function onCompanySyncProjectChanged(project, deleted) {
 // through this same plain path, deleted/deletedAt/deletedBy fields and
 // all. See storage.js's PERMANENT DELETION comment for why.
 async function onCompanySyncReportChanged(report) {
+  if (isTutorialMode()) return; // nothing syncs in tutorial mode (see waitForFirebaseCore)
   const room = await getCompanyRoom();
   if (!room) return;
   try {

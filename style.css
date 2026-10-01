@@ -771,6 +771,21 @@ button.global-sync-banner:disabled { opacity: 0.7; cursor: default; }
   text-decoration: none;
 }
 
+/* Tutorial mode (common.js): same placement as the banners above, in the
+   brand color so it reads as "you're in a special mode", not a warning. */
+.tutorial-banner {
+  display: flex; align-items: center; justify-content: center; flex-wrap: wrap;
+  gap: 0.4rem 1rem; padding: 0.6rem 1rem;
+  background: var(--brand); color: var(--on-brand);
+  font-size: 0.86rem; text-align: center;
+}
+.tutorial-exit {
+  color: var(--on-brand); font-weight: 700; white-space: nowrap;
+  border: 1.5px solid currentColor; border-radius: 999px; padding: 0.15rem 0.75rem;
+  text-decoration: none;
+}
+.tutorial-exit:hover { background: rgba(255, 255, 255, 0.15); }
+
 .back-bar {
   background: var(--surface-2);
   border-bottom: 1px solid var(--border);
