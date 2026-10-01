@@ -820,7 +820,7 @@ button.tutorial-exit { background: none; font: inherit; font-weight: 700; cursor
   font-size: 0.72rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase;
   padding: 0.15rem 0.6rem; border-radius: 999px;
 }
-.tour-text { margin: 0.35rem 0 0.6rem; font-size: 0.95rem; line-height: 1.45; min-height: 4.2em; cursor: pointer; }
+.tour-text { margin: 0.35rem 0 0.6rem; font-size: 0.95rem; line-height: 1.45; min-height: 4.2em; cursor: pointer; white-space: pre-line; }
 .tour-controls { display: flex; align-items: center; gap: 0.4rem; }
 .tour-count { margin-right: auto; font-size: 0.75rem; color: var(--text-dim); font-variant-numeric: tabular-nums; }
 .tour-btn {

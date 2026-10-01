@@ -22,30 +22,174 @@ const TOUR_ART = {
   hand: { src: 'tutorial/hand.svg', width: 80, height: 80, tip: { x: 9, y: 10 }, displayWidth: 56 },
 };
 
-// ---------- Scripts, per page ----------
-// Each step: `say` (the line), `emotion` (a TOUR_ART.emotions key),
-// optional `target` (CSS selector to highlight and point at; skipped if it
-// isn't on the page or visible), optional `before` (runs first, e.g. to open
-// a collapsed section so the target is visible).
-const TOUR_PAGES = {
-  'index.html': [
-    { emotion: 'happy', say: "Hi there! I'm your site inspector. I'll walk you through the app using an example project, so nothing here touches your real work. Tap Next to keep going, or Skip whenever you like." },
-    {
-      emotion: 'pointing', target: '#md-overview-step',
+// ---------- Things the hand can point at, per page ----------
+// The lines themselves live in tutorial/dialogue.txt, so they can be edited
+// without touching code. A line's "Points at:" names one of these. Names
+// are matched loosely: case, punctuation, a leading "the", and anything in
+// (parentheses) are ignored. `selector` is a CSS selector, or a list tried
+// in order (the first one visible wins, e.g. a desktop panel vs. its phone
+// stand-in). `before` runs first, e.g. to open a collapsed section. The
+// '*' list works on every page. Keep the name lists at the top of
+// dialogue.txt in step with these.
+function tourExpand(sel) {
+  const el = document.querySelector(sel);
+  if (el && el.classList.contains('collapsed')) {
+    const hd = el.querySelector(':scope > .step-header');
+    if (hd) hd.click();
+  }
+}
+function tourOpenEditorGroup(id) {
+  const card = document.querySelector(`#rb-group-${id}`);
+  if (card && !card.classList.contains('open')) {
+    const hd = card.querySelector('[data-toggle-group]');
+    if (hd) hd.click();
+  }
+}
+const TOUR_TARGETS = {
+  '*': {
+    'menu button': { selector: '#hamburger-btn' },
+    'sync button': { selector: '.header-sync-btn' },
+    'tutorial bar': { selector: '.tutorial-banner' },
+    'tips button': { selector: '.tutorial-tips' },
+    'breadcrumb': { selector: '#bb-trail' },
+  },
+  'index.html': {
+    'portfolio panel': {
+      selector: '#md-overview-step',
       before: () => {
         const toggle = document.querySelector('#md-mobile-toggle');
         if (toggle && getComputedStyle(toggle).display !== 'none' && toggle.getAttribute('aria-expanded') !== 'true') toggle.click();
       },
-      say: 'This is the Manager Dashboard. It rolls up every project you manage: total contract value, money earned so far, reports filed this week, and who is behind schedule.',
     },
-    { emotion: 'neutral', target: '#md-calendar-step', say: 'The Report Activity calendar shows every report, one month at a time. Use the arrows to move between months, and tap a day to see what was done.' },
-    { emotion: 'pointing', target: '#hub-grid .hub-card[data-drag-type="project"]', say: "These are your projects. Each card opens that project's dashboard, reports, and quantities." },
-    { emotion: 'neutral', target: '#hamburger-btn', say: 'The menu gets you anywhere fast: home, any project, Settings, and this tutorial.' },
-    { emotion: 'thinking', target: '.header-sync-btn', say: "This button syncs with your company and checks for app updates. It's switched off in the tutorial, so nothing ever leaves this device." },
-    { emotion: 'happy', target: '.tutorial-banner', say: 'You can leave the tutorial any time from this bar, and tap Tips to hear from me again on any page.' },
-    { emotion: 'pointing', target: '#hub-grid .hub-card[data-drag-type="project"]', say: "Let's look inside the example project. Tap DEMO-101 to continue the tour!" },
-  ],
+    'activity calendar': { selector: '#md-calendar-step' },
+    'project card': { selector: '#hub-grid .hub-card[data-drag-type="project"]' },
+  },
+  'project.html': {
+    'new report tile': { selector: '#card-new-report' },
+    'view reports tile': { selector: '#card-view-reports' },
+    'quick quantity tile': { selector: '#card-quick-quantity' },
+    'quantity sheet tile': { selector: '#card-quantity-sheet' },
+    'dashboard overview': { selector: '#dash-content > .step:first-child' },
+    'pay items panel': { selector: '#dash-content .step-pair > .step:first-child', before: () => tourExpand('#dash-content .step-pair > .step:first-child') },
+    'weather panel': { selector: '#dash-weather-step', before: () => tourExpand('#dash-weather-step') },
+    'trend chart': { selector: '#dash-trend-step', before: () => tourExpand('#dash-trend-step') },
+    'project settings button': { selector: '#btn-toggle-settings' },
+  },
+  'reports.html': {
+    'filters': { selector: '.filter-row' },
+    'search box': { selector: '#f-search' },
+    'view toggle': { selector: '#view-toggle' },
+    'report list': { selector: '#report-list' },
+    'first report': { selector: ['#report-list .report-row', '#report-list .report-card'] },
+    'checkbox': { selector: '#report-list .report-row-check' },
+    'select all': { selector: '#btn-select-all' },
+    'comment badge': { selector: '#report-list .report-corner-badge' },
+    'new report button': { selector: '#fab-new-report' },
+    'deleted reports': { selector: '#trash-step' },
+  },
+  'report-viewer.html': {
+    'report page': { selector: '#rv-preview' },
+    'side reports': { selector: ['#rv-side-left:not([hidden])', '#rv-side-right:not([hidden])', '#rv-side-arrow-right', '#rv-side-arrow-left', '#rv-mobile-nav-next', '#rv-mobile-nav-prev'] },
+    'details bar': { selector: '#rv-details-toggle' },
+    'review bar': { selector: '#rv-review-toggle' },
+    'pinned comment': { selector: '.rv-pin-marker:not(.rv-pin-pending)' },
+    'edit button': { selector: '#bb-edit-link' },
+  },
+  'report-editor.html': {
+    'no work day button': { selector: '#btn-no-work-day' },
+    'weather day button': { selector: '#btn-weather-day' },
+    'report info': { selector: '#step-reportInfo' },
+    'date field': { selector: '#f-date' },
+    'inspectors': { selector: '#inspectors-toggle' },
+    'sections': { selector: '#rb-groups' },
+    'contractors section': { selector: '#rb-group-contractorsEquipment', before: () => tourOpenEditorGroup('contractorsEquipment') },
+    'pay items section': { selector: '#rb-group-payItems', before: () => tourOpenEditorGroup('payItems') },
+    'weather section': { selector: '#rb-group-weather', before: () => tourOpenEditorGroup('weather') },
+    'fetch weather button': { selector: '#btn-fetch-weather', before: () => tourOpenEditorGroup('weather') },
+    'photos section': { selector: '#rb-group-photos', before: () => tourOpenEditorGroup('photos') },
+    'live preview': { selector: ['#rb-preview-col', '#rb-mobile-tabs'] },
+    'preview tabs': { selector: '#rb-mobile-tabs' },
+    'save button': { selector: '#btn-save-report' },
+    'generate button': { selector: '#btn-generate' },
+    'duplicate button': { selector: '#btn-duplicate-report' },
+  },
 };
+
+// ---------- Dialogue file ----------
+const TOUR_DIALOGUE_URL = 'tutorial/dialogue.txt';
+
+function tourNameKey(name) {
+  return String(name || '').toLowerCase().replace(/\([^)]*\)/g, ' ')
+    .replace(/[^a-z0-9]+/g, ' ').trim().replace(/^the /, '');
+}
+
+// Reads dialogue.txt into { name, pages: { 'index.html': [steps] } }. The
+// format is explained at the top of that file. Each step's text lines are
+// joined into one paragraph; a blank line inside a step starts a new one.
+function parseTourDialogue(text) {
+  const out = { name: null, pages: {} };
+  let page = null, step = null;
+  const finish = () => {
+    if (!step) return;
+    const paras = step.lines.join('\n').split(/\n\s*\n/).map((p) => p.split('\n').map((l) => l.trim()).filter(Boolean).join(' ')).filter(Boolean);
+    step.say = paras.join('\n');
+    delete step.lines;
+    if (!step.say) page.splice(page.indexOf(step), 1);
+    step = null;
+  };
+  text.split(/\r?\n/).forEach((raw) => {
+    const line = raw.trim();
+    let m;
+    if (line.startsWith('#')) return;
+    if ((m = line.match(/^character name:\s*(.*)$/i))) { out.name = m[1].trim() || null; return; }
+    if (/^===.*===$/.test(line)) {
+      finish();
+      m = line.match(/\(([^)]*\.html)\)/i);
+      page = m ? (out.pages[m[1].trim().toLowerCase()] = out.pages[m[1].trim().toLowerCase()] || []) : null;
+      return;
+    }
+    if (!page) return;
+    if (/^\[\s*\d*\s*\]$/.test(line)) { finish(); step = { emotion: 'neutral', target: null, lines: [] }; page.push(step); return; }
+    if (!step) return;
+    if (!step.lines.length && (m = line.match(/^emotion:\s*(.*)$/i))) { step.emotion = m[1].trim().toLowerCase(); return; }
+    if (!step.lines.length && (m = line.match(/^points at:\s*(.*)$/i))) {
+      const t = m[1].trim();
+      step.target = /^(nothing|none|-)?$/i.test(t) ? null : t;
+      return;
+    }
+    step.lines.push(raw);
+  });
+  finish();
+  return out;
+}
+
+// Turns a "Points at" name into { selector, before }. A name starting with
+// # or . is taken as a CSS selector as-is.
+function tourResolveTarget(page, name) {
+  if (!name) return null;
+  if (/^[#.]/.test(name)) return { selector: name };
+  const key = tourNameKey(name);
+  const found = (TOUR_TARGETS[page] || {})[key] || TOUR_TARGETS['*'][key];
+  if (!found) console.warn(`Tutorial: nothing called "${name}" to point at on ${page}`);
+  return found || null;
+}
+
+let tourDialogue = null;
+const tourDialogueReady = fetch(TOUR_DIALOGUE_URL, { cache: 'no-store' })
+  .then((res) => (res.ok ? res.text() : Promise.reject(new Error(`HTTP ${res.status}`))))
+  .then((text) => { tourDialogue = parseTourDialogue(text); })
+  .catch((e) => { console.error('Tutorial: could not load the dialogue file:', e); });
+
+function tourStepsForPage(page) {
+  if (!tourDialogue) return null;
+  const steps = tourDialogue.pages[page];
+  if (!steps || !steps.length) return null;
+  return steps.map((s) => {
+    if (!TOUR_ART.emotions[s.emotion]) console.warn(`Tutorial: no "${s.emotion}" emotion image, showing neutral`);
+    const t = tourResolveTarget(page, s.target);
+    return { emotion: s.emotion, say: s.say, target: t && t.selector, before: t && t.before };
+  });
+}
 
 // ---------- Engine ----------
 const TOUR_DONE_PREFIX = 'dr-tour-done:';
@@ -82,8 +226,8 @@ const tour = {
 
   start(force) {
     const key = tourPageKey();
-    const steps = TOUR_PAGES[key];
-    if (!steps || !steps.length) return false;
+    const steps = tourStepsForPage(key);
+    if (!steps) return false;
     if (!force) {
       try { if (sessionStorage.getItem(TOUR_DONE_PREFIX + key)) return false; } catch (e) {}
     }
@@ -122,7 +266,7 @@ const tour = {
         </div>
       </div>
       <img class="tour-char" alt="">`;
-    this.root.querySelector('.tour-name').textContent = TOUR_ART.name;
+    this.root.querySelector('.tour-name').textContent = (tourDialogue && tourDialogue.name) || TOUR_ART.name;
     // Preload every emotion so switching expressions doesn't flash.
     Object.values(TOUR_ART.emotions).forEach((src) => { new Image().src = src; });
     document.body.append(this.ring, this.hand, this.root);
@@ -169,7 +313,7 @@ const tour = {
       const started = Date.now();
       const find = () => {
         if (this.steps[this.index] !== step || !this.root) return;
-        const el = document.querySelector(step.target);
+        const el = [].concat(step.target).map((sel) => document.querySelector(sel)).find(tourVisible);
         if (tourVisible(el)) {
           this.target = el;
           el.scrollIntoView({ block: 'center', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
@@ -219,14 +363,22 @@ const tour = {
     // fingertip. The tip goes to the middle of a small target, or a little
     // way into a big one from its top-left -- aiming at a big panel's
     // bottom-right put the hand right under the dialogue box.
+    // Near the bottom or right edge there's no room for the hand's body, so
+    // it flips to point down or left from the other side instead.
     const art = TOUR_ART.hand;
     const scale = art.displayWidth / art.width;
-    const tip = { x: art.tip.x * scale, y: art.tip.y * scale };
     const w = art.width * scale, h = art.height * scale;
-    const tipX = Math.min(r.left + Math.min(r.width / 2, 70), window.innerWidth - (w - tip.x) - 4);
-    const tipY = Math.min(r.top + Math.min(r.height / 2, 50), window.innerHeight - (h - tip.y) - 4);
+    const tipX = r.left + Math.min(r.width / 2, 70);
+    const tipY = r.top + Math.min(r.height / 2, 50);
+    const flipX = tipX + (w - art.tip.x * scale) > window.innerWidth - 4;
+    const flipY = tipY + (h - art.tip.y * scale) > window.innerHeight - 4;
+    const tip = {
+      x: (flipX ? art.width - art.tip.x : art.tip.x) * scale,
+      y: (flipY ? art.height - art.tip.y : art.tip.y) * scale,
+    };
     this.hand.style.left = `${tipX - tip.x}px`;
     this.hand.style.top = `${tipY - tip.y}px`;
+    this.hand.style.scale = `${flipX ? -1 : 1} ${flipY ? -1 : 1}`;
     this.hand.hidden = false;
   },
 
@@ -243,9 +395,10 @@ const tour = {
   },
 };
 
-// Starts once the page has had a moment to render its own content.
+// Starts once the dialogue is loaded and the page has had a moment to
+// render its own content.
 function startTourWhenReady() {
-  setTimeout(() => tour.start(false), 900);
+  Promise.all([tourDialogueReady, new Promise((r) => setTimeout(r, 900))]).then(() => tour.start(false));
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', startTourWhenReady);
 else startTourWhenReady();
@@ -254,10 +407,12 @@ else startTourWhenReady();
 // only on pages that have one.
 function syncTipsButton() {
   const btn = document.querySelector('.tutorial-tips');
-  if (btn) btn.hidden = !TOUR_PAGES[tourPageKey()];
+  if (btn) btn.hidden = !(tourDialogue && (tourDialogue.pages[tourPageKey()] || []).length);
 }
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', syncTipsButton);
-else syncTipsButton();
+tourDialogueReady.then(() => {
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', syncTipsButton);
+  else syncTipsButton();
+});
 document.addEventListener('click', (e) => {
   if (e.target.closest('.tutorial-tips')) tour.start(true);
 });

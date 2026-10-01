@@ -1,0 +1,313 @@
+# ======================================================================
+#  TUTORIAL DIALOGUE
+#  Everything the inspector says during the tutorial lives in this file.
+#  Edit it, save it, and the site picks up the changes on the next page
+#  load. No code changes and no app update needed.
+# ======================================================================
+#
+# HOW IT WORKS
+#  - Lines starting with # (like this one) are notes for you. The app
+#    ignores them.
+#  - Each page starts with a header like:
+#        === PROJECT PAGE (project.html) ===
+#    The file name in (parentheses) is what ties the lines to the page.
+#    The words before it are just a label for you.
+#  - Each line the inspector says starts with a number in [brackets],
+#    then an Emotion line, a Points at line, and the text. The numbers
+#    are only labels: lines play in the order they appear in this file,
+#    so you can move one just by cutting and pasting it.
+#  - The text can run over several lines; they're joined into one
+#    paragraph. Leave a blank line inside the text to start a new
+#    paragraph. Don't start a text line with #.
+#  - Keep each line to 2-3 sentences. On a phone the box fits about 4
+#    short lines before it crowds the screen.
+#
+# EMOTIONS (which character image shows)
+#    neutral, happy, thinking, surprised, pointing
+#  An unknown emotion shows neutral.
+#
+# POINTS AT (what the hand taps while the line shows)
+#  Use one of the names listed for that page below, or "nothing".
+#  Capital letters, "the", and anything in (parentheses) are ignored, so
+#  "the menu button (top left)" works the same as "menu button".
+#  If a name isn't on the list, or the thing isn't on screen right then,
+#  the line still shows, just without the hand.
+#
+#  Any page:    menu button, sync button, tutorial bar, tips button,
+#               breadcrumb
+#  Home:        portfolio panel, activity calendar, project card
+#  Project:     new report tile, view reports tile, quick quantity tile,
+#               quantity sheet tile, dashboard overview, pay items panel,
+#               weather panel, trend chart, project settings button
+#  Reports:     filters, search box, view toggle, report list,
+#               first report, checkbox, select all, comment badge,
+#               new report button, deleted reports
+#  Viewer:      report page, side reports, details bar, review bar,
+#               pinned comment, edit button
+#  Editor:      no work day button, weather day button, report info,
+#               date field, inspectors, sections, contractors section,
+#               pay items section, weather section, fetch weather button,
+#               photos section, live preview, preview tabs, save button,
+#               generate button, duplicate button
+#
+#  Need to point at something that isn't listed? Ask and it can be added.
+#
+# The name on the inspector's dialogue box:
+
+CHARACTER NAME: Inspector
+
+
+=== HOME PAGE (index.html) ===
+
+[1]
+Emotion: happy
+Points at: nothing
+Hi there! I'm your site inspector. I'll walk you through the app using an
+example project, so nothing here touches your real work. Tap Next to keep
+going, or Skip whenever you like.
+
+[2]
+Emotion: pointing
+Points at: portfolio panel
+This is the Manager Dashboard. It rolls up every project you manage: total
+contract value, money earned so far, reports filed this week, and who is
+behind schedule.
+
+[3]
+Emotion: neutral
+Points at: activity calendar
+The Report Activity calendar shows every report, one month at a time. Use
+the arrows to move between months, and tap a day to see what was done.
+
+[4]
+Emotion: pointing
+Points at: project card
+These are your projects. Each card opens that project's dashboard, reports,
+and quantities.
+
+[5]
+Emotion: neutral
+Points at: menu button (top left)
+The menu gets you anywhere fast: home, any project, Settings, and this
+tutorial.
+
+[6]
+Emotion: thinking
+Points at: sync button (top right, circular arrows)
+This button syncs with your company and checks for app updates. It's
+switched off in the tutorial, so nothing ever leaves this device.
+
+[7]
+Emotion: happy
+Points at: tutorial bar
+You can leave the tutorial any time from this bar, and tap Tips to hear
+from me again on any page.
+
+[8]
+Emotion: pointing
+Points at: project card
+Let's look inside the example project. Tap DEMO-101 to continue the tour!
+
+
+=== PROJECT PAGE (project.html) ===
+
+[1]
+Emotion: happy
+Points at: nothing
+Welcome to DEMO-101, a drainage job about three weeks in. Every project
+gets a page like this one.
+
+[2]
+Emotion: pointing
+Points at: new report tile
+New Report starts today's daily work report. You'll be filling these in
+most days, so it lives right up top.
+
+[3]
+Emotion: neutral
+Points at: view reports tile
+View Reports lists every report filed on this project, so you can open,
+print, or edit any of them.
+
+[4]
+Emotion: neutral
+Points at: quick quantity tile
+Quick Quantity Add is for logging pay item quantities for a date without
+writing a whole report.
+
+[5]
+Emotion: thinking
+Points at: quantity sheet tile
+The Quantity Sheet totals every pay item over a date range. Handy at the
+end of the month.
+
+[6]
+Emotion: pointing
+Points at: dashboard overview
+The dashboard keeps score for you: how much of the contract and schedule
+is used up, hours worked, and a fun fact or two.
+
+[7]
+Emotion: neutral
+Points at: pay items panel
+Pay Item Completion shows how far along each item is, by quantity or by
+dollars billed. Search or sort it to find one fast.
+
+[8]
+Emotion: thinking
+Points at: weather panel
+Weather and Schedule pulls the conditions from every report, and flags
+weather days, no work days, and days traffic control needed attention.
+
+[9]
+Emotion: neutral
+Points at: trend chart
+Progress Over Time charts how the job is moving, report by report.
+
+[10]
+Emotion: neutral
+Points at: project settings button
+Project Settings holds the project's details, icon and background,
+required fields, and imports.
+
+[11]
+Emotion: pointing
+Points at: view reports tile
+Let's look at the reports. Tap View Reports to keep going!
+
+
+=== REPORTS LIST (reports.html) ===
+
+[1]
+Emotion: happy
+Points at: report list
+Here's every report on the project, newest first. Each one shows its
+date, what was done, and its report number.
+
+[2]
+Emotion: neutral
+Points at: filters
+Narrow the list by date range, search the activity and notes, or change
+the sort order. Clear puts everything back.
+
+[3]
+Emotion: neutral
+Points at: view toggle
+Switch between a compact list and a grid of page thumbnails.
+
+[4]
+Emotion: thinking
+Points at: checkbox
+Tick a few reports, or tap Select all, and a bar appears to print them,
+build a quantity sheet from them, edit them all at once, or delete them.
+
+[5]
+Emotion: surprised
+Points at: comment badge
+This little bubble means someone left a comment on that report. You'll
+see it when you open the report.
+
+[6]
+Emotion: neutral
+Points at: deleted reports
+Deleted something by mistake? Deleted Reports keeps it so you can bring
+it back.
+
+[7]
+Emotion: pointing
+Points at: first report
+Tap any report to open it. Let's try the newest one!
+
+
+=== REPORT VIEWER (report-viewer.html) ===
+
+[1]
+Emotion: happy
+Points at: report page
+This is the finished report, laid out exactly like the printed form.
+
+[2]
+Emotion: pointing
+Points at: side reports
+The reports from the days before and after peek in from the sides. Tap
+one, or use the arrows, to flip through the job day by day.
+
+[3]
+Emotion: neutral
+Points at: details bar
+Report Details shows who wrote the report and every change made to it
+since.
+
+[4]
+Emotion: thinking
+Points at: review bar
+Approvals and Comments is where a report gets approved or sent back for
+changes. Comments can even pin a spot on the page.
+
+[5]
+Emotion: pointing
+Points at: edit button
+Need to change something? Tap Edit to open this report in the editor.
+Give it a try!
+
+
+=== REPORT EDITOR (report-editor.html) ===
+
+[1]
+Emotion: happy
+Points at: nothing
+This is the report editor, where the daily report gets written. Every
+change shows up on the preview as you type.
+
+[2]
+Emotion: neutral
+Points at: no work day button
+No work on site today? No Work Day or Weather Day fills in the day for
+you in one tap.
+
+[3]
+Emotion: neutral
+Points at: report info
+Report Info has the report number, the date, and the inspectors who
+worked the day, with their hours.
+
+[4]
+Emotion: pointing
+Points at: sections
+Everything else is grouped into sections. Tap one to open it.
+
+[5]
+Emotion: neutral
+Points at: contractors section
+Contractors and Equipment counts the crew and machines for each
+contractor on site.
+
+[6]
+Emotion: thinking
+Points at: pay items section
+Pay Items is where quantities get logged. They feed the project
+dashboard and the Quantity Sheet.
+
+[7]
+Emotion: surprised
+Points at: fetch weather button
+Don't feel like typing the weather? Fetch Weather fills it in for the
+report's date.
+
+[8]
+Emotion: pointing
+Points at: live preview
+The live preview shows the report as it'll print. Tap any part of it to
+jump straight to that field.
+
+[9]
+Emotion: neutral
+Points at: save button
+Save keeps your changes. Generate Report checks the required fields,
+then gets the finished report ready to download.
+
+[10]
+Emotion: happy
+Points at: tips button
+That's the tour! Look around as much as you like. On any page, tap Tips
+and I'll pop back up.
