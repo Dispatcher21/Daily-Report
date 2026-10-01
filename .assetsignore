@@ -1,0 +1,11 @@
+# Files Cloudflare should not publish (see wrangler.jsonc): repo internals,
+# dev-only scripts/templates, and the deploy config itself.
+.git
+.claude
+scripts
+template
+APP-BREAKDOWN.txt
+CNAME
+wrangler.jsonc
+.wrangler
+node_modules

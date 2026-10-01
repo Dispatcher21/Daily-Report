@@ -1,0 +1,15 @@
+// Cloudflare (Workers static assets) config for the test site. The app is
+// plain static files with no build step, so this just serves the repo's
+// files as-is. Only the test branch's Cloudflare project uses this; the
+// live site (inspector-manager.com) doesn't.
+{
+  "name": "daily-report",
+  "compatibility_date": "2025-09-01",
+  "assets": {
+    "directory": "./",
+    // Serve "report-viewer.html" at exactly that path. The default redirects
+    // it to "/report-viewer", which breaks the service worker's cached file
+    // list and the app's own page checks.
+    "html_handling": "none"
+  }
+}
