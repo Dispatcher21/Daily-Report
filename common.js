@@ -31,9 +31,16 @@ document.addEventListener('DOMContentLoaded', () => {
   banner.className = 'tutorial-banner';
   banner.innerHTML = `
     <span><strong>Tutorial mode</strong> &middot; Example data only. Nothing you do here touches your real projects or is synced.</span>
-    <a class="tutorial-exit" href="tutorial.html?exit=1">Exit tutorial</a>`;
+    <span class="tutorial-banner-actions">
+      <button type="button" class="tutorial-exit tutorial-tips" hidden>Tips</button>
+      <a class="tutorial-exit" href="tutorial.html?exit=1">Exit tutorial</a>
+    </span>`;
   const header = document.querySelector('.app-header');
   if (header) header.after(banner); else document.body.prepend(banner);
+  // The guided tour (character + pointer), only ever needed in tutorial mode.
+  const tourScript = document.createElement('script');
+  tourScript.src = 'tutorial-tour.js';
+  document.body.appendChild(tourScript);
 });
 
 // One-time tutorial offer for a first-time user: login.html marks it
