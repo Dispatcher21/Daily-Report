@@ -785,6 +785,12 @@ button.global-sync-banner:disabled { opacity: 0.7; cursor: default; }
   text-decoration: none;
 }
 .tutorial-exit:hover { background: rgba(255, 255, 255, 0.15); }
+/* First-time tutorial offer (common.js): two equal buttons side by side. */
+.tutorial-offer-actions { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+.tutorial-offer-actions > * {
+  flex: 1 1 8rem; margin: 0; min-height: 2.75rem;
+  display: flex; align-items: center; justify-content: center; text-decoration: none;
+}
 
 .back-bar {
   background: var(--surface-2);

@@ -298,6 +298,14 @@
       </div>
     </details>
 
+    <details class="settings-section" id="tutorial-section">
+      <summary>Tutorial<span class="settings-section-chevron">&#9656;</span><span class="settings-section-sub">Explore the app with an example project</span></summary>
+      <div class="settings-section-body">
+        <p class="hint" id="tutorial-section-text" style="margin:0 0 0.6rem;">Opens an example project with sample reports, photos, approvals, and a Pay App to explore. It's kept completely separate from your real projects and is never synced -- exit any time.</p>
+        <a class="btn-primary" id="btn-tutorial" href="tutorial.html" style="display:block; text-align:center; text-decoration:none;">Start Tutorial</a>
+      </div>
+    </details>
+
     <details class="settings-section" id="sync-section">
       <summary>Sync to Folder<span class="settings-section-chevron">&#9656;</span><span class="settings-section-sub">Catch up every linked project from one place</span></summary>
       <div class="settings-section-body">
@@ -780,6 +788,13 @@ function setSettingsTab(tab) {
   try { history.replaceState(null, '', tab === 'company' ? '?tab=company' : 'settings.html'); } catch (e) {}
 }
 $$('.settings-tab').forEach((b) => b.addEventListener('click', () => setSettingsTab(b.dataset.tab)));
+
+// Tutorial section: Start, or Exit while already in tutorial mode.
+if (inTutorialMode()) {
+  $('#tutorial-section-text').textContent = "You're in the tutorial now. Exiting clears the example data and takes you back to your own projects.";
+  $('#btn-tutorial').textContent = 'Exit Tutorial';
+  $('#btn-tutorial').href = 'tutorial.html?exit=1';
+}
 
 // A quick edit-pencil reveals its neighbouring controls block and stays
 // revealed -- one click, no need to hide it again for something this small.

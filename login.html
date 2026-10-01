@@ -95,6 +95,9 @@ $('#btn-continue').addEventListener('click', async () => {
       loginThrottleReset('join-company');
     }
     finishProgressBanner("You're all set!");
+    // First time this device has been set up: offer the tutorial once on
+    // the home page (see common.js). Never again after that, either way.
+    try { if (!localStorage.getItem(TUTORIAL_OFFER_KEY)) localStorage.setItem(TUTORIAL_OFFER_KEY, 'pending'); } catch (e) {}
     location.href = 'index.html';
   } catch (err) {
     console.error(err);

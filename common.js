@@ -36,6 +36,34 @@ document.addEventListener('DOMContentLoaded', () => {
   if (header) header.after(banner); else document.body.prepend(banner);
 });
 
+// One-time tutorial offer for a first-time user: login.html marks it
+// 'pending' the first time this device is set up, the home page shows it
+// once, and either answer marks it 'done' so it never comes back. The
+// tutorial stays reachable from the menu and Settings afterward.
+const TUTORIAL_OFFER_KEY = 'dr-tutorial-offer';
+document.addEventListener('DOMContentLoaded', () => {
+  if (inTutorialMode() || !document.querySelector('#index-layout')) return;
+  let pending = false;
+  try { pending = localStorage.getItem(TUTORIAL_OFFER_KEY) === 'pending'; } catch (e) {}
+  if (!pending) return;
+  const markDone = () => { try { localStorage.setItem(TUTORIAL_OFFER_KEY, 'done'); } catch (e) {} };
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'tutorial-offer-overlay';
+  overlay.innerHTML = `
+    <div class="modal-card" role="dialog" aria-labelledby="tutorial-offer-title">
+      <h2 id="tutorial-offer-title" style="margin:0 0 0.5rem;">Welcome! Want a quick tour?</h2>
+      <p style="margin:0 0 1.1rem;">The tutorial opens an example project with sample reports, photos, and approvals, so you can try everything without touching your own data. You can exit any time, and find it later in the menu or Settings.</p>
+      <div class="tutorial-offer-actions">
+        <a class="btn-primary" href="tutorial.html" id="tutorial-offer-start">Start tutorial</a>
+        <button type="button" class="btn-secondary" id="tutorial-offer-skip">Not now</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector('#tutorial-offer-start').addEventListener('click', markDone);
+  overlay.querySelector('#tutorial-offer-skip').addEventListener('click', () => { markDone(); overlay.remove(); });
+});
+
 // The icon a project shows on its home-screen card, hamburger-menu row,
 // and (project.html's own Project Settings > Appearance step) itself --
 // settings.html's Projects list and project.html both pick from this same
