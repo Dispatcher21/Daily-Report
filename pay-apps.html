@@ -195,7 +195,7 @@ function renderEstimateHistory() {
   const dateCounts = new Map();
   (project.billingEstimates || []).forEach((e) => dateCounts.set(e.date, (dateCounts.get(e.date) || 0) + 1));
   container.innerHTML = `
-    <table class="estimate-table">
+    <div class="table-scroll"><table class="estimate-table">
       <thead><tr><th>Estimate</th><th>Date</th><th>Note</th><th>Status</th><th></th><th></th><th></th></tr></thead>
       <tbody>
         ${sorted.map((e) => {
@@ -218,7 +218,7 @@ function renderEstimateHistory() {
           return rowHtml + reviewRowHtml;
         }).join('')}
       </tbody>
-    </table>`;
+    </table></div>`;
   $$('.est-edit', container).forEach((btn) => {
     btn.addEventListener('click', () => {
       const estimate = (project.billingEstimates || []).find((e) => e.id === btn.dataset.id);

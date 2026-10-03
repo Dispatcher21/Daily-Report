@@ -38,6 +38,10 @@ function tourExpand(sel) {
     if (hd) hd.click();
   }
 }
+function tourOpenDetails(sel) {
+  const el = document.querySelector(sel);
+  if (el && el.tagName === 'DETAILS' && !el.open) el.open = true;
+}
 function tourOpenEditorGroup(id) {
   const card = document.querySelector(`#rb-group-${id}`);
   if (card && !card.classList.contains('open')) {
@@ -52,6 +56,7 @@ const TOUR_TARGETS = {
     'tutorial bar': { selector: '.tutorial-banner' },
     'tips button': { selector: '.tutorial-tips' },
     'breadcrumb': { selector: '#bb-trail' },
+    'activity banner': { selector: '#managed-projects-alert-banner' },
   },
   'index.html': {
     'portfolio panel': {
@@ -112,6 +117,60 @@ const TOUR_TARGETS = {
     'save button': { selector: '#btn-save-report' },
     'generate button': { selector: '#btn-generate' },
     'duplicate button': { selector: '#btn-duplicate-report' },
+  },
+  'quantity-sheet.html': {
+    'report range': { selector: '.step:has(#range-mode-picker)' },
+    'range options': { selector: '#range-mode-picker' },
+    'manage pay apps link': { selector: '#link-pay-apps' },
+    'pay app file': { selector: '#payapp-file-step' },
+    'quantities': { selector: '.step:has(#view-picker)' },
+    'view tabs': { selector: '#view-picker' },
+    'item bars': { selector: '#qty-bars' },
+    'excel preview': { selector: '#totals-preview-table' },
+    'download button': { selector: '#btn-generate' },
+  },
+  'quick-quantity.html': {
+    'date field': { selector: '#f-date' },
+    'item list': { selector: '#catalog-list' },
+    'first quantity box': { selector: '#catalog-list input' },
+    'add item not in catalog': { selector: '#add-manual-section' },
+    'save button': { selector: '#btn-save-quantities' },
+  },
+  'pay-apps.html': {
+    'pay app history': { selector: '.step:has(#estimate-history)' },
+    'review link': { selector: '#estimate-history .est-review-toggle' },
+    'pay app form': { selector: '.step:has(#estimate-form)' },
+    'totals': { selector: '#payapp-summary' },
+    'first item': { selector: '#payapp-items-list > *' },
+    'enter by button': { selector: '#payapp-items-list .pac-mode-toggle' },
+    'record button': { selector: '#btn-record-estimate' },
+  },
+  'download.html': {
+    'logo warning': { selector: '#no-logo-warning' },
+    'pdf preview': { selector: ['#pdf-preview-wrap', '#pdf-mobile-gallery'] },
+    'download button': { selector: '#btn-download-pdf' },
+  },
+  'report-photos.html': {
+    'photos': { selector: '#rp-photo-grid' },
+    'view report button': { selector: '#bb-report-link' },
+  },
+  'manager.html': {
+    'reports to review': { selector: '#mgr-review-step' },
+    'first report': { selector: '#mgr-review-list .mp-row' },
+    'pay apps to review': { selector: '#mgr-payapp-review-step' },
+    'managed projects': { selector: '#mgr-projects-step' },
+    'project checkboxes': { selector: '#mgr-project-checks' },
+  },
+  'settings.html': {
+    'you tab': { selector: '#tab-you' },
+    'company tab': { selector: '#tab-company' },
+    'profile': { selector: '.settings-section:has(#f-user-name)', before: () => tourOpenDetails('.settings-section:has(#f-user-name)') },
+    'appearance': { selector: '.settings-section:has(#theme-picker)', before: () => tourOpenDetails('.settings-section:has(#theme-picker)') },
+    'theme buttons': { selector: '#theme-picker', before: () => tourOpenDetails('.settings-section:has(#theme-picker)') },
+    'accent colors': { selector: '#accent-swatches', before: () => tourOpenDetails('.settings-section:has(#theme-picker)') },
+    'app section': { selector: '.settings-section:has(#btn-install)' },
+    'tutorial section': { selector: '#tutorial-section' },
+    'sync to folder': { selector: '#sync-section' },
   },
 };
 
@@ -222,15 +281,16 @@ function tourPageKey() {
   return file || 'index.html';
 }
 
-// Fixed bars pinned to the bottom of the page (the report viewer's footer,
-// the editor's save row on a phone) -- the tour sits above them.
+// Bars pinned to the bottom of the screen (the report viewer's footer, the
+// editor's save row on a phone, a sticky Download/Save bar) -- the tour
+// sits above them.
 function tourBottomClearance() {
   let clearance = 0;
-  ['#rv-footer', '.save-row'].forEach((sel) => {
+  ['#rv-footer', '.save-row', '.export-bar'].forEach((sel) => {
     const el = document.querySelector(sel);
     if (!el) return;
     const cs = getComputedStyle(el);
-    if (cs.position !== 'fixed' || cs.display === 'none') return;
+    if ((cs.position !== 'fixed' && cs.position !== 'sticky') || cs.display === 'none') return;
     const r = el.getBoundingClientRect();
     if (r.height > 0 && r.bottom >= window.innerHeight - 2) clearance = Math.max(clearance, window.innerHeight - r.top);
   });
@@ -422,10 +482,22 @@ const tour = {
   // footer, and the ring/hand on the target as the page scrolls or reflows.
   place() {
     if (!this.root) return;
-    this.root.style.bottom = `${tourBottomClearance() + 12}px`;
     const el = this.target;
-    if (!el || !tourVisible(el)) { this.ring.hidden = true; this.hand.hidden = true; return; }
-    const r = el.getBoundingClientRect();
+    const shown = el && tourVisible(el);
+    const r = shown ? el.getBoundingClientRect() : null;
+    // The box lives in the bottom-right corner, but moves to the top when it
+    // would sit on top of the thing being pointed at (a button at the very
+    // bottom of the page) and the top is clear.
+    const gap = tourBottomClearance() + 12;
+    let atTop = false;
+    if (r) {
+      const h = this.root.offsetHeight, w = this.root.offsetWidth;
+      const covers = (top) => r.right > window.innerWidth - 12 - w && r.left < window.innerWidth - 12 && r.bottom > top && r.top < top + h;
+      atTop = covers(window.innerHeight - gap - h) && !covers(12);
+    }
+    this.root.style.bottom = atTop ? 'auto' : `${gap}px`;
+    this.root.style.top = atTop ? '12px' : 'auto';
+    if (!r) { this.ring.hidden = true; this.hand.hidden = true; return; }
     const pad = 6;
     Object.assign(this.ring.style, {
       left: `${r.left - pad}px`, top: `${r.top - pad}px`,
