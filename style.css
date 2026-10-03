@@ -837,14 +837,21 @@ button.tutorial-exit { background: none; font: inherit; font-weight: 700; cursor
   position: fixed; z-index: 1150; pointer-events: none;
   border: 3px solid #f5c400; border-radius: 10px;
   box-shadow: 0 0 0 4px rgba(245, 196, 0, 0.3), 0 0 18px rgba(245, 196, 0, 0.55);
-  transition: left 0.25s ease, top 0.25s ease, width 0.25s ease, height 0.25s ease;
+  /* The target's box, set every frame by tutorial-tour.js, plus a 6px gap. */
+  left: calc(var(--tour-x, 0px) - 6px); top: calc(var(--tour-y, 0px) - 6px);
+  width: calc(var(--tour-w, 0px) + 12px); height: calc(var(--tour-h, 0px) + 12px);
 }
 .tour-hand {
   position: fixed; z-index: 1210; pointer-events: none; height: auto;
   filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.35));
-  transition: left 0.35s ease, top 0.35s ease;
+  left: var(--tour-hand-x, 0px); top: var(--tour-hand-y, 0px);
+  scale: var(--tour-hand-sx, 1) var(--tour-hand-sy, 1);
   animation: tour-tap 1.1s ease-in-out infinite;
 }
+/* Sliding over to the next step's target. Off the rest of the time, so the
+   ring and hand track the page exactly while it scrolls. */
+.tour-ring.tour-glide { transition: left 0.3s ease, top 0.3s ease, width 0.3s ease, height 0.3s ease; }
+.tour-hand.tour-glide { transition: left 0.3s ease, top 0.3s ease; }
 /* Taps toward the target: the fingertip touches it at the middle of the
    cycle and eases back down-right in between. */
 @keyframes tour-tap {
@@ -853,8 +860,8 @@ button.tutorial-exit { background: none; font: inherit; font-weight: 700; cursor
 }
 .tour-ring[hidden], .tour-hand[hidden] { display: none; }
 @media (prefers-reduced-motion: reduce) {
-  .tour-hand { animation: none; transition: none; }
-  .tour-ring { transition: none; }
+  .tour-hand, .tour-hand.tour-glide { animation: none; transition: none; }
+  .tour-ring, .tour-ring.tour-glide { transition: none; }
 }
 /* Phone: smaller inspector, the box takes the rest of the width. */
 @media (max-width: 600px) {

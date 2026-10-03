@@ -297,6 +297,33 @@ function tourBottomClearance() {
   return clearance;
 }
 
+// The sticky header at the top: a target scrolled up under it is hidden,
+// so the ring and hand only cover the part of it still showing.
+function tourTopClearance(el) {
+  const header = document.querySelector('.app-header');
+  if (!header || (el && header.contains(el))) return 0;
+  const pos = getComputedStyle(header).position;
+  if (pos !== 'sticky' && pos !== 'fixed') return 0;
+  return Math.max(0, header.getBoundingClientRect().bottom);
+}
+
+// True for something inside a bar that's pinned in place (the header, the
+// viewer's footer, the editor's tabs or save row): it never slides under
+// one of those bars, so it's never clipped by them.
+function tourInPinnedBar(el) {
+  for (let n = el; n && n !== document.body; n = n.parentElement) {
+    const pos = getComputedStyle(n).position;
+    if (pos === 'fixed' || pos === 'sticky') return true;
+  }
+  return false;
+}
+
+// First visible match for a step's selector (or list of selectors).
+function tourFindTarget(target) {
+  if (!target) return null;
+  return [].concat(target).map((sel) => document.querySelector(sel)).find(tourVisible) || null;
+}
+
 function tourVisible(el) {
   if (!el) return false;
   const r = el.getBoundingClientRect();
@@ -446,9 +473,10 @@ const tour = {
       const started = Date.now();
       const find = () => {
         if (this.steps[this.index] !== step || !this.root) return;
-        const el = [].concat(step.target).map((sel) => document.querySelector(sel)).find(tourVisible);
-        if (tourVisible(el)) {
+        const el = tourFindTarget(step.target);
+        if (el) {
           this.target = el;
+          this.glide();
           el.scrollIntoView({ block: 'center', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
         } else if (Date.now() - started < 1500) setTimeout(find, 100);
       };
@@ -480,15 +508,45 @@ const tour = {
 
   // Runs every frame while the tour is open: keeps the box above any fixed
   // footer, and the ring/hand on the target as the page scrolls or reflows.
+  // Slides the ring and hand over to a new step's target. Only then:
+  // while the page scrolls or shifts they follow it exactly, no lag.
+  glide() {
+    if (!this.ring || this.ring.hidden) return; // first appearance: no slide from nowhere
+    [this.ring, this.hand].forEach((el) => el.classList.add('tour-glide'));
+    clearTimeout(this.glideTimer);
+    this.glideTimer = setTimeout(() => {
+      [this.ring, this.hand].forEach((el) => el && el.classList.remove('tour-glide'));
+    }, 400);
+  },
+
+  // Runs every frame while the tour is open. Measures the target and hands
+  // its box to CSS as variables on the ring and hand (--tour-x/-y/-w/-h,
+  // --tour-hand-x/-y/-sx/-sy), which position them -- so they move in step
+  // with the page as it scrolls, reflows, or opens and closes sections. A
+  // target the page has redrawn since (replaced, or hidden and shown again)
+  // is looked up again from the step's selector.
   place() {
     if (!this.root) return;
+    const step = this.steps[this.index];
+    if (this.target && (!this.target.isConnected || !tourVisible(this.target))) {
+      this.target = tourFindTarget(step && step.target) || this.target;
+    }
     const el = this.target;
-    const shown = el && tourVisible(el);
-    const r = shown ? el.getBoundingClientRect() : null;
+    const bottomBars = tourBottomClearance();
+    let r = null;
+    if (el && el.isConnected && tourVisible(el)) {
+      // Only the part of the target that isn't under the sticky header or a
+      // bar pinned to the bottom.
+      const b = el.getBoundingClientRect();
+      const pinned = tourInPinnedBar(el);
+      const top = pinned ? b.top : Math.max(b.top, tourTopClearance(el));
+      const bottom = pinned ? b.bottom : Math.min(b.bottom, window.innerHeight - bottomBars);
+      if (bottom - top >= 8) r = { left: b.left, right: b.right, top, bottom, width: b.width, height: bottom - top };
+    }
     // The box lives in the bottom-right corner, but moves to the top when it
     // would sit on top of the thing being pointed at (a button at the very
     // bottom of the page) and the top is clear.
-    const gap = tourBottomClearance() + 12;
+    const gap = bottomBars + 12;
     let atTop = false;
     if (r) {
       const h = this.root.offsetHeight, w = this.root.offsetWidth;
@@ -498,11 +556,11 @@ const tour = {
     this.root.style.bottom = atTop ? 'auto' : `${gap}px`;
     this.root.style.top = atTop ? '12px' : 'auto';
     if (!r) { this.ring.hidden = true; this.hand.hidden = true; return; }
-    const pad = 6;
-    Object.assign(this.ring.style, {
-      left: `${r.left - pad}px`, top: `${r.top - pad}px`,
-      width: `${r.width + pad * 2}px`, height: `${r.height + pad * 2}px`,
-    });
+    const ring = this.ring.style;
+    ring.setProperty('--tour-x', `${r.left}px`);
+    ring.setProperty('--tour-y', `${r.top}px`);
+    ring.setProperty('--tour-w', `${r.width}px`);
+    ring.setProperty('--tour-h', `${r.height}px`);
     this.ring.hidden = false;
     // The hand points up-left, so its body hangs down-right of the
     // fingertip. The tip goes to the middle of a small target, or a little
@@ -521,9 +579,11 @@ const tour = {
       x: (flipX ? art.width - art.tip.x : art.tip.x) * scale,
       y: (flipY ? art.height - art.tip.y : art.tip.y) * scale,
     };
-    this.hand.style.left = `${tipX - tip.x}px`;
-    this.hand.style.top = `${tipY - tip.y}px`;
-    this.hand.style.scale = `${flipX ? -1 : 1} ${flipY ? -1 : 1}`;
+    const hand = this.hand.style;
+    hand.setProperty('--tour-hand-x', `${tipX - tip.x}px`);
+    hand.setProperty('--tour-hand-y', `${tipY - tip.y}px`);
+    hand.setProperty('--tour-hand-sx', flipX ? -1 : 1);
+    hand.setProperty('--tour-hand-sy', flipY ? -1 : 1);
     this.hand.hidden = false;
   },
 
@@ -533,6 +593,7 @@ const tour = {
     }
     clearInterval(this.typing);
     this.typing = null;
+    clearTimeout(this.glideTimer);
     cancelAnimationFrame(this.raf);
     if (this.onKey) document.removeEventListener('keydown', this.onKey);
     [this.root, this.ring, this.hand].forEach((el) => el && el.remove());
