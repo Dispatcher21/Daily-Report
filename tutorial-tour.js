@@ -42,6 +42,13 @@ function tourOpenDetails(sel) {
   const el = document.querySelector(sel);
   if (el && el.tagName === 'DETAILS' && !el.open) el.open = true;
 }
+// Pay Apps: open the newest recorded one (if nothing's open yet) so the
+// panel's parts are on screen to point at.
+function tourOpenFirstPayApp() {
+  if (document.querySelector('.pa-list-item.selected')) return;
+  const first = document.querySelector('.pa-list-item');
+  if (first) first.click();
+}
 function tourOpenEditorGroup(id) {
   const card = document.querySelector(`#rb-group-${id}`);
   if (card && !card.classList.contains('open')) {
@@ -137,13 +144,15 @@ const TOUR_TARGETS = {
     'save button': { selector: '#btn-save-quantities' },
   },
   'pay-apps.html': {
-    'pay app history': { selector: '.step:has(#estimate-history)' },
-    'review link': { selector: '#estimate-history .est-review-toggle' },
-    'pay app form': { selector: '.step:has(#estimate-form)' },
-    'totals': { selector: '#payapp-summary' },
-    'first item': { selector: '#payapp-items-list > *' },
-    'enter by button': { selector: '#payapp-items-list .pac-mode-toggle' },
-    'record button': { selector: '#btn-record-estimate' },
+    'pay app list': { selector: '#pa-list-step' },
+    'first pay app': { selector: '.pa-list-item' },
+    'new pay app button': { selector: '#pa-new-btn' },
+    'status': { selector: '#pa-status-line', before: tourOpenFirstPayApp },
+    'items': { selector: '#payapp-items-list', before: tourOpenFirstPayApp },
+    'differences filter': { selector: '#pa-filter', before: tourOpenFirstPayApp },
+    'enter by button': { selector: '#payapp-items-list .pac-mode-toggle', before: tourOpenFirstPayApp },
+    'totals bar': { selector: '#pa-actionbar', before: tourOpenFirstPayApp },
+    'review section': { selector: '#pa-review', before: tourOpenFirstPayApp },
   },
   'download.html': {
     'logo warning': { selector: '#no-logo-warning' },

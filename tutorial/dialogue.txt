@@ -56,8 +56,9 @@
 #               excel preview, download button
 #  Quick Quantity: date field, item list, first quantity box,
 #               add item not in catalog, save button
-#  Pay Apps:    pay app history, review link, pay app form, totals,
-#               first item, enter by button, record button
+#  Pay Apps:    pay app list, first pay app, new pay app button, status,
+#               items, differences filter, enter by button, totals bar,
+#               review section
 #  Download:    logo warning, pdf preview, download button
 #  Photos:      photos, view report button
 #  Manager:     reports to review, first report, pay apps to review,
@@ -463,37 +464,56 @@ billing against what you've logged in the field.
 
 [2]
 Emotion: neutral
-Points at: pay app history
-Every recorded Pay App is listed here with its approval status.
+Points at: pay app list
+Every Pay App on the project is listed here, newest first, with its
+status and how much it billed.
 
 [3]
 Emotion: pointing
-Points at: review link
-Review opens a Pay App to approve it or send it back with comments.
-Edit lets you fix its numbers.
+Points at: first pay app
+Tap one to open it. Let's look at Pay App 2, which the engineer sent
+back.
 
 [4]
-Emotion: neutral
-Points at: pay app form
-To record a new one, give it a number and date, then enter what the
-contractor billed for each item.
+Emotion: surprised
+Points at: status
+Its status and comments show right at the top, so you know where it
+stands before you dig in.
 
 [5]
-Emotion: surprised
-Points at: totals
-Your logged quantities and the Pay App are compared as you type. Any
-difference shows up right here.
+Emotion: neutral
+Points at: items
+Each item lines up your logged total against what the Pay App billed.
+Anything that doesn't match gets a colored edge.
 
 [6]
 Emotion: thinking
-Points at: enter by button
-Some items are easier to enter in dollars or percent. Tap this to
-switch how you enter that item.
+Points at: differences filter
+Lots of items? Only differences hides the ones that already match.
 
 [7]
+Emotion: neutral
+Points at: enter by button
+Some items are easier to enter in dollars. Tap Enter by $ to switch
+how that item is entered.
+
+[8]
 Emotion: pointing
-Points at: record button
-When everything matches up, tap Record Pay App to save it.
+Points at: totals bar
+The totals and the Save button stay right here at the bottom while you
+work.
+
+[9]
+Emotion: neutral
+Points at: review section
+Approving, sending it back for changes, and comments all happen down
+here.
+
+[10]
+Emotion: happy
+Points at: new pay app button
+When the next Pay App comes in, start it here. It fills in with your
+own totals, so you only change what's different.
 
 
 === DOWNLOAD REPORT (download.html) ===
