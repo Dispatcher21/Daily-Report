@@ -1013,22 +1013,28 @@ async function saveCompanyThemes(themes) {
       t.hasBackgroundImage = false;
       t.backgroundImage = null;
       t.backgroundImageFetched = true;
+      t.backgroundImageVersion = Date.now();
     } else if (t._newBackgroundFile) {
       await uploadBytes(ref(storage, themeAssetPath(room.code, t.id, 'background')), t._newBackgroundFile, { contentType: t._newBackgroundFile.type });
       t.hasBackgroundImage = true;
       t.backgroundImage = t._newBackgroundFile;
       t.backgroundImageFetched = true;
+      // Tells other devices it's a new image, not the one they already have
+      // (see replaceAllCompanyThemes in storage.js).
+      t.backgroundImageVersion = Date.now();
     }
     if (t._removeDecalImage) {
       await deleteObject(ref(storage, themeAssetPath(room.code, t.id, 'decal'))).catch(() => {});
       t.hasDecalImage = false;
       t.decalImage = null;
       t.decalImageFetched = true;
+      t.decalImageVersion = Date.now();
     } else if (t._newDecalFile) {
       await uploadBytes(ref(storage, themeAssetPath(room.code, t.id, 'decal')), t._newDecalFile, { contentType: t._newDecalFile.type });
       t.hasDecalImage = true;
       t.decalImage = t._newDecalFile;
       t.decalImageFetched = true;
+      t.decalImageVersion = Date.now();
     }
     delete t._newBackgroundFile;
     delete t._newDecalFile;
@@ -1387,14 +1393,22 @@ async function pushProjectToCompany(code, project) {
   const { ref, uploadBytes, deleteObject } = await import(STORAGE_SDK);
   await ensureSignedIn();
 
-  // Same story as report photos: a device that pulled this project before
-  // its background image finished downloading in the background (see
-  // pullCompanyMediaInBackground) must never write hasBackgroundImage as
-  // if that meant "no background" -- it just means "unknown here yet".
-  // Preserve whatever the doc currently says for that case instead.
+  // The background photo is only uploaded by the device that changed it
+  // last. backgroundImageVersion is when it was last set or removed (see
+  // project.html/settings.html); a device whose copy is older than the
+  // cloud's -- it hasn't pulled the new photo yet, or hasn't finished
+  // downloading it -- must never upload its stale photo over the new one
+  // just because it saved something else about the project. Re-uploading
+  // the same photo on every save was also wasted bandwidth.
+  const projectRef = doc(db, 'companies', code, 'projects', project.id);
+  const existingDoc = await getDoc(projectRef);
+  const remote = existingDoc.exists() ? existingDoc.data() : null;
+  const localVersion = project.backgroundImageVersion || 0;
+  const remoteVersion = remote ? (remote.backgroundImageVersion || 0) : 0;
   const bgFetched = project.backgroundImageFetched !== false;
   let hasBackgroundImage;
-  if (bgFetched) {
+  let backgroundImageVersion;
+  if (bgFetched && (!remote || localVersion > remoteVersion)) {
     const bgRef = ref(storage, projectBackgroundPath(code, project.id));
     if (project.backgroundImage) {
       await uploadBytes(bgRef, project.backgroundImage, { contentType: project.backgroundImage.type || 'image/jpeg' });
@@ -1402,9 +1416,10 @@ async function pushProjectToCompany(code, project) {
       await deleteObject(bgRef).catch(() => {});
     }
     hasBackgroundImage = !!project.backgroundImage;
+    backgroundImageVersion = localVersion;
   } else {
-    const existingDoc = await getDoc(doc(db, 'companies', code, 'projects', project.id));
-    hasBackgroundImage = existingDoc.exists() ? !!existingDoc.data().hasBackgroundImage : false;
+    hasBackgroundImage = remote ? !!remote.hasBackgroundImage : false;
+    backgroundImageVersion = remoteVersion;
   }
 
   // pendingPush is this device's own local dirty-tracking flag (see
@@ -1413,7 +1428,50 @@ async function pushProjectToCompany(code, project) {
   const { backgroundImage: _bg, backgroundImageFetched: _bgf, pendingPush: _pp, ...rest } = project;
   const data = JSON.parse(JSON.stringify(rest));
   data.hasBackgroundImage = hasBackgroundImage;
-  await setDoc(doc(db, 'companies', code, 'projects', project.id), data);
+  if (backgroundImageVersion) data.backgroundImageVersion = backgroundImageVersion;
+  else delete data.backgroundImageVersion;
+  await setDoc(projectRef, data);
+
+  // This device's photo was the stale one: point its own copy at the
+  // cloud's photo and fetch it, since the record just written has the same
+  // updatedAt as the local one and the next pull would otherwise skip it.
+  if (backgroundImageVersion !== localVersion) {
+    const local = await getProject(project.id);
+    if (local && (local.backgroundImageVersion || 0) === localVersion) {
+      local.backgroundImageVersion = backgroundImageVersion || undefined;
+      local.backgroundImage = null;
+      local.backgroundImageFetched = !hasBackgroundImage;
+      await putProjectRaw(local);
+      if (hasBackgroundImage) {
+        fetchProjectBackground(code, local)
+          .then((updated) => putProjectRaw(updated))
+          .then(() => window.dispatchEvent(new CustomEvent('company-media-updated')))
+          .catch((err) => console.error('background image pull:', err));
+      } else {
+        window.dispatchEvent(new CustomEvent('company-media-updated'));
+      }
+    }
+  }
+}
+
+// What a pulled project record should do about its background photo: keep
+// this device's copy only if it's the same photo (same
+// backgroundImageVersion -- a replaced photo keeps hasBackgroundImage true,
+// so that alone can't tell), otherwise mark it for download. A photo set
+// before versions existed has none, so there's no telling whether it's the
+// same one -- it's re-downloaded whenever its project record changes.
+function applyPulledBackground(project, data, existing) {
+  const samePhoto = existing && data.backgroundImageVersion && existing.backgroundImageVersion === data.backgroundImageVersion;
+  if (!data.hasBackgroundImage) {
+    project.backgroundImage = null;
+    project.backgroundImageFetched = true;
+  } else if (samePhoto && existing.backgroundImageFetched && existing.backgroundImage) {
+    project.backgroundImage = existing.backgroundImage;
+    project.backgroundImageFetched = true;
+  } else {
+    project.backgroundImage = null;
+    project.backgroundImageFetched = false;
+  }
 }
 
 // Downloads a project's background image if it hasn't been fetched by this
@@ -1612,17 +1670,7 @@ async function pullAllCompanyData(code, onProgress) {
     delete project.hasBackgroundImage;
 
     const existing = existingProjectsById.get(d.id) || null;
-    const alreadyFetched = existing && existing.backgroundImageFetched && existing.backgroundImage;
-    if (!data.hasBackgroundImage) {
-      project.backgroundImage = null;
-      project.backgroundImageFetched = true;
-    } else if (alreadyFetched) {
-      project.backgroundImage = existing.backgroundImage;
-      project.backgroundImageFetched = true;
-    } else {
-      project.backgroundImage = null;
-      project.backgroundImageFetched = false;
-    }
+    applyPulledBackground(project, data, existing);
 
     const result = await mergeProjectRecord(project, existing);
     if (result !== 'skipped') summary.projectsPulled++;
@@ -1799,17 +1847,7 @@ async function pullDeltaCompanyData(code, onProgress, cursor) {
     delete project.hasBackgroundImage;
 
     const existing = await getProject(d.id);
-    const alreadyFetched = existing && existing.backgroundImageFetched && existing.backgroundImage;
-    if (!data.hasBackgroundImage) {
-      project.backgroundImage = null;
-      project.backgroundImageFetched = true;
-    } else if (alreadyFetched) {
-      project.backgroundImage = existing.backgroundImage;
-      project.backgroundImageFetched = true;
-    } else {
-      project.backgroundImage = null;
-      project.backgroundImageFetched = false;
-    }
+    applyPulledBackground(project, data, existing);
 
     const result = await mergeProjectRecord(project, existing);
     if (result !== 'skipped') summary.projectsPulled++;
