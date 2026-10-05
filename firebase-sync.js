@@ -281,6 +281,7 @@ async function createCompanyRoom({ name, password, adminPassword }, onProgress) 
   await saveSetting(COMPANY_NAME_SETTING, name || '');
   await saveSetting(COMPANY_ADMIN_SETTING, true);
   await saveSetting(COMPANY_PERMISSIONS_SETTING, DEFAULT_PERMISSIONS);
+  await refreshMembership(); // a signed-in creator is the company's first admin member
 
   if (await getReportLogo()) {
     if (onProgress) onProgress({ phase: 'logo' });
@@ -339,6 +340,18 @@ async function joinCompanyRoom(password, onProgress) {
     companyDoc = realSnap.data();
   }
 
+  const result = await enterCompany(code, companyDoc, { roleId, scopedPermissions, projectIds }, onProgress);
+  if (typeof logCompanyAuditEvent === 'function') {
+    const changes = roleId ? [{ label: 'Via Custom Setup', from: '', to: data.name || 'Custom Setup' }] : [];
+    logCompanyAuditEvent('company', companyDoc.name || 'Company', 'joined', changes).catch((err) => console.error('audit log:', err));
+  }
+  return result;
+}
+
+// Connects this device to a company it's been let into (by the company
+// password above, or by a signed-in account that's already a member -- see
+// rejoinAccountCompany) and pulls everything down.
+async function enterCompany(code, companyDoc, { roleId = null, scopedPermissions = null, projectIds = null } = {}, onProgress) {
   await saveSetting(COMPANY_CODE_SETTING, code);
   await saveSetting(COMPANY_NAME_SETTING, companyDoc.name || '');
   await saveSetting(COMPANY_ADMIN_SETTING, false);
@@ -349,6 +362,10 @@ async function joinCompanyRoom(password, onProgress) {
     scopedPermissions ? { ...DEFAULT_PERMISSIONS, ...scopedPermissions } : { ...DEFAULT_PERMISSIONS, ...(companyDoc.permissions || {}) }
   );
   await saveSetting(LOGO_SYNCED_AT_SETTING, null);
+  // A signed-in account becomes (or stays) a member, and its role and
+  // project access take over from the plain-member defaults above -- before
+  // the pull, so a member limited to some projects never pulls the rest.
+  await refreshMembership({ joined: true });
 
   const pulled = await pullAllCompanyData(code, onProgress);
   await pullCompanyThemes().catch((err) => console.error('theme pull:', err));
@@ -359,10 +376,6 @@ async function joinCompanyRoom(password, onProgress) {
   // photo just to finish logging in. They land locally moments later; see
   // pullCompanyMediaInBackground.
   pullCompanyMediaInBackground(code);
-  if (typeof logCompanyAuditEvent === 'function') {
-    const changes = roleId ? [{ label: 'Via Custom Setup', from: '', to: data.name || 'Custom Setup' }] : [];
-    logCompanyAuditEvent('company', companyDoc.name || 'Company', 'joined', changes).catch((err) => console.error('audit log:', err));
-  }
   return { code, name: companyDoc.name || '', ...pulled };
 }
 
@@ -393,6 +406,13 @@ async function unlockCompanyAdmin(adminPassword) {
   // have joined under -- full access, not a narrower view layered on top.
   await saveSetting(COMPANY_PROJECT_SCOPE_SETTING, null);
   await saveSetting(COMPANY_ROLE_ID_SETTING, null);
+  // A signed-in member who knows the admin password is an admin.
+  const account = await getAccount();
+  if (account) {
+    const { setDoc, serverTimestamp } = await import(FIRESTORE_SDK);
+    await setDoc(doc(db, 'companies', room.code, 'members', account.uid), { role: 'admin', projectIds: null, updatedAt: serverTimestamp() }, { merge: true });
+    await refreshMembership();
+  }
   if (typeof logCompanyAuditEvent === 'function') {
     logCompanyAuditEvent('company', room.name || 'Company', 'admin-unlocked', []).catch((err) => console.error('audit log:', err));
   }
@@ -460,6 +480,266 @@ async function leaveCompanyRoom() {
   for (const id of projectIdsToDelete) await deleteProject(id); // also soft-deletes any of its remaining reports (none this device touched, by construction)
 }
 
+// ---------- Accounts ----------
+//
+// Optional sign-in with an email and password, alongside the company
+// password (which keeps working exactly as before). A signed-in person is
+// recorded as a member of the company they join --
+// companies/{code}/members/{uid}: email, name, role, status, and which
+// projects they may see -- and that member record, not the company-wide
+// "members can..." switches or this device's admin flag, decides what this
+// device lets them do. users/{uid} remembers which company an account
+// belongs to, so signing in on another device reconnects it without the
+// company password.
+//
+// Creating an account upgrades this device's existing anonymous sign-in in
+// place (linkWithCredential), so it keeps the same Firebase user id and
+// nothing on the device changes hands.
+
+const MEMBER_ROLES = ['inspector', 'manager', 'admin'];
+const MEMBER_ROLE_LABELS = { inspector: 'Inspector', manager: 'Manager', admin: 'Admin' };
+// What each role may do, in the same terms as DEFAULT_PERMISSIONS (admin
+// is the device's admin flag instead -- everything).
+const ROLE_PERMISSIONS = {
+  inspector: { ...DEFAULT_PERMISSIONS, membersCanEditOwnReports: true },
+  manager: {
+    ...DEFAULT_PERMISSIONS,
+    membersCanEditOwnReports: true,
+    membersCanEditAnyReport: true,
+    membersCanEditProjects: true,
+    membersCanViewManagerDashboard: true,
+    membersCanApproveReports: true,
+    membersCanApprovePayApps: true,
+  },
+};
+const ACCOUNT_MIN_PASSWORD = 8;
+
+function accountErrorMessage(err) {
+  const code = (err && err.code) || '';
+  if (code === 'auth/invalid-email') return 'That email address doesn’t look right.';
+  if (['auth/invalid-credential', 'auth/wrong-password', 'auth/user-not-found', 'auth/invalid-login-credentials'].includes(code)) return 'Email or password is incorrect.';
+  if (code === 'auth/email-already-in-use' || code === 'auth/credential-already-in-use') return 'That email already has an account. Sign in instead.';
+  if (code === 'auth/weak-password') return `Choose a password with at least ${ACCOUNT_MIN_PASSWORD} characters.`;
+  if (code === 'auth/too-many-requests') return 'Too many attempts. Wait a few minutes and try again.';
+  if (code === 'auth/network-request-failed') return 'No connection. Signing in needs signal (only the first time on a device).';
+  if (code === 'auth/user-disabled') return 'This account has been turned off. Ask your company admin.';
+  return (err && err.message) || 'Something went wrong.';
+}
+
+// The signed-in account, or null for an anonymous device (and always in
+// tutorial mode, which never touches Firebase).
+async function getAccount() {
+  let core;
+  try { core = await waitForFirebaseCore(); } catch (e) { return null; }
+  await core.auth.authStateReady();
+  const u = core.auth.currentUser;
+  if (!u || u.isAnonymous) return null;
+  return { uid: u.uid, email: u.email || '', emailVerified: !!u.emailVerified, displayName: u.displayName || '' };
+}
+
+async function writeAccountProfile(uid, fields) {
+  const { db } = await waitForFirebaseCore();
+  const { doc, setDoc, serverTimestamp } = await import(FIRESTORE_SDK);
+  await setDoc(doc(db, 'users', uid), { ...fields, updatedAt: serverTimestamp() }, { merge: true });
+}
+
+async function readAccountProfile(uid) {
+  const { db } = await waitForFirebaseCore();
+  const { doc, getDoc } = await import(FIRESTORE_SDK);
+  const snap = await getDoc(doc(db, 'users', uid));
+  return snap.exists() ? snap.data() : null;
+}
+
+// Turns this device's anonymous sign-in into an account (same user id).
+async function createAccount({ name, email, password }) {
+  name = (name || '').trim();
+  email = (email || '').trim();
+  if (!name) throw new Error('Enter your name.');
+  if (!email) throw new Error('Enter your email.');
+  if (!password || password.length < ACCOUNT_MIN_PASSWORD) throw new Error(`Choose a password with at least ${ACCOUNT_MIN_PASSWORD} characters.`);
+  const { auth, authApi, ensureSignedIn, resetSignIn } = await waitForFirebaseCore();
+  await ensureSignedIn();
+  const current = auth.currentUser;
+  if (!current || !current.isAnonymous) throw new Error('This device is already signed in to an account.');
+  let user;
+  try {
+    user = (await authApi.linkWithCredential(current, authApi.EmailAuthProvider.credential(email, password))).user;
+  } catch (err) {
+    throw new Error(accountErrorMessage(err));
+  }
+  resetSignIn();
+  await authApi.updateProfile(user, { displayName: name });
+  authApi.sendEmailVerification(user).catch((err) => console.error('verification email:', err));
+  await saveUserName(name);
+  await writeAccountProfile(user.uid, { email: user.email, displayName: name });
+  await refreshMembership();
+  return { uid: user.uid, email: user.email };
+}
+
+// Signs in to an existing account. If the account already belongs to a
+// company and this device isn't connected to one, reconnects it -- no
+// company password needed. A device connected to a different company is
+// refused (it'd mix two companies' data) until it leaves that one.
+async function signInAccount({ email, password }, onProgress) {
+  email = (email || '').trim();
+  if (!email || !password) throw new Error('Enter your email and password.');
+  const { auth, authApi, resetSignIn } = await waitForFirebaseCore();
+  const roomBefore = await getCompanyRoom();
+  let user;
+  try {
+    user = (await authApi.signInWithEmailAndPassword(auth, email, password)).user;
+  } catch (err) {
+    throw new Error(accountErrorMessage(err));
+  }
+  resetSignIn();
+  const profile = await readAccountProfile(user.uid);
+  if (roomBefore && profile && profile.companyCode && profile.companyCode !== roomBefore.code) {
+    await authApi.signOut(auth);
+    resetSignIn();
+    throw new Error(`This account belongs to ${profile.companyName || 'a different company'}, but this device is connected to ${roomBefore.name || 'another company'}. Leave that company in Settings first, then sign in.`);
+  }
+  const name = user.displayName || (profile && profile.displayName) || '';
+  if (name) await saveUserName(name);
+  if (roomBefore) {
+    await refreshMembership();
+    return { company: roomBefore.name || '', rejoined: false };
+  }
+  if (profile && profile.companyCode) {
+    const result = await rejoinAccountCompany(profile.companyCode, onProgress);
+    return { company: result.name, rejoined: true };
+  }
+  return { company: '', rejoined: false };
+}
+
+// Reconnects a signed-in member to their company on this device.
+async function rejoinAccountCompany(code, onProgress) {
+  const account = await getAccount();
+  if (!account) throw new Error('Sign in first.');
+  const { db } = await waitForFirebaseCore();
+  const { doc, getDoc } = await import(FIRESTORE_SDK);
+  const companySnap = await getDoc(doc(db, 'companies', code));
+  if (!companySnap.exists()) throw new Error('Your company could not be found. Ask your admin for the company password.');
+  const memberSnap = await getDoc(doc(db, 'companies', code, 'members', account.uid));
+  if (!memberSnap.exists()) throw new Error('You’re no longer a member of your company. Ask your admin.');
+  if (memberSnap.data().status === 'disabled') throw new Error('Your access to this company has been turned off. Ask your admin.');
+  return enterCompany(code, companySnap.data(), {}, onProgress);
+}
+
+// Signs out: this device leaves the company (keeping the reports this
+// person created or edited, same as Leave) and goes back to the sign-in
+// screen.
+async function signOutAccount() {
+  const { auth, authApi, resetSignIn } = await waitForFirebaseCore();
+  if (await getCompanyRoom()) await leaveCompanyRoom();
+  await authApi.signOut(auth);
+  resetSignIn();
+  await saveUserName('');
+}
+
+async function sendAccountPasswordReset(email) {
+  email = (email || '').trim();
+  if (!email) throw new Error('Enter your email first.');
+  const { auth, authApi } = await waitForFirebaseCore();
+  try {
+    await authApi.sendPasswordResetEmail(auth, email);
+  } catch (err) {
+    throw new Error(accountErrorMessage(err));
+  }
+}
+
+async function resendAccountVerification() {
+  const { auth, authApi } = await waitForFirebaseCore();
+  if (!auth.currentUser || auth.currentUser.isAnonymous) throw new Error('Not signed in.');
+  await authApi.sendEmailVerification(auth.currentUser);
+}
+
+// Re-reads the account from Firebase (e.g. after the person clicks the
+// verification link in their email).
+async function reloadAccount() {
+  const { auth } = await waitForFirebaseCore();
+  if (auth.currentUser) await auth.currentUser.reload();
+  return getAccount();
+}
+
+// Keeps the account's display name (and its member record) in step with
+// the name saved in Settings.
+async function updateAccountName(name) {
+  const account = await getAccount();
+  if (!account) return;
+  const { auth, authApi } = await waitForFirebaseCore();
+  await authApi.updateProfile(auth.currentUser, { displayName: name });
+  await writeAccountProfile(account.uid, { displayName: name });
+  await refreshMembership();
+}
+
+// ---------- Membership ----------
+
+// Reads (creating if needed) this account's member record in the connected
+// company and applies its role and project access to this device. A no-op
+// for an anonymous device or one with no company.
+async function refreshMembership() {
+  const account = await getAccount();
+  const room = await getCompanyRoom();
+  if (!account || !room) return null;
+  const { db } = await waitForFirebaseCore();
+  const { doc, getDoc, setDoc, serverTimestamp } = await import(FIRESTORE_SDK);
+  const ref = doc(db, 'companies', room.code, 'members', account.uid);
+  const snap = await getDoc(ref);
+  const name = (await getUserName()) || account.displayName || '';
+  let member;
+  if (snap.exists()) {
+    member = snap.data();
+    if (member.email !== account.email || member.displayName !== name) {
+      await setDoc(ref, { email: account.email, displayName: name, updatedAt: serverTimestamp() }, { merge: true });
+    }
+  } else {
+    // First time this account is seen in this company: a device that's
+    // already unlocked admin brings that along; anyone else starts as an
+    // inspector with access to every project.
+    member = {
+      uid: account.uid,
+      email: account.email,
+      displayName: name,
+      role: room.isAdmin ? 'admin' : 'inspector',
+      status: 'active',
+      projectIds: null,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+    await setDoc(ref, member);
+  }
+  await writeAccountProfile(account.uid, { email: account.email, displayName: name, companyCode: room.code, companyName: room.name || '' });
+  await applyMembership(member);
+  return member;
+}
+
+// A member record's role and project access, as this device's settings
+// (the same ones companyCan/projectInScope already read).
+async function applyMembership(member) {
+  const role = MEMBER_ROLES.includes(member.role) ? member.role : 'inspector';
+  await saveSetting(COMPANY_ROLE_ID_SETTING, null);
+  if (role === 'admin') {
+    await saveSetting(COMPANY_ADMIN_SETTING, true);
+    await saveSetting(COMPANY_PROJECT_SCOPE_SETTING, null);
+    return;
+  }
+  await saveSetting(COMPANY_ADMIN_SETTING, false);
+  await saveSetting(COMPANY_PERMISSIONS_SETTING, ROLE_PERMISSIONS[role]);
+  await saveSetting(COMPANY_PROJECT_SCOPE_SETTING, Array.isArray(member.projectIds) ? member.projectIds : null);
+}
+
+// This device's member record, without changing anything (null if not
+// signed in, not in a company, or not recorded yet).
+async function getMyMembership() {
+  const account = await getAccount();
+  const room = await getCompanyRoom();
+  if (!account || !room) return null;
+  const { db } = await waitForFirebaseCore();
+  const { doc, getDoc } = await import(FIRESTORE_SDK);
+  const snap = await getDoc(doc(db, 'companies', room.code, 'members', account.uid));
+  return snap.exists() ? snap.data() : null;
+}
+
 // Pulls in anything new from the room, then pushes every local project and
 // report back out -- pull first, same ordering as the local-folder sync,
 // so a stale local copy can't clobber something newer that's already in
@@ -491,6 +771,10 @@ async function syncCompanyRoomNow(onProgress) {
       }
     }
   }
+
+  // A signed-in member's own role/project access (set by an admin) takes
+  // over from the company-wide switches just applied.
+  await refreshMembership().catch((err) => console.error('membership:', err));
 
   // Delta by default -- see pullCompanyDataSmart -- with a full pull still
   // falling back in automatically often enough (FULL_RECONCILE_INTERVAL_MS)
@@ -1344,6 +1628,8 @@ async function autoPullCompanyData(force) {
     if (Date.now() - last < AUTO_PULL_THROTTLE_MS) return;
   }
   try {
+    // Picks up a role or project-access change an admin made elsewhere.
+    await refreshMembership().catch((err) => console.error('membership:', err));
     await pullCompanyDataSmart(room.code, null, force);
     // Own try/catch, not allowed to fail this pull -- themes previously
     // only synced on join or a manual Sync Now (same cadence as the

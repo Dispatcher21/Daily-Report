@@ -14,7 +14,13 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/fireba
 import {
   getAuth,
   signInAnonymously,
-  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  linkWithCredential,
+  EmailAuthProvider,
+  sendEmailVerification,
+  sendPasswordResetEmail,
+  updateProfile,
+  signOut,
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import { getFirestore } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import { getStorage } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js';
@@ -52,35 +58,41 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
-// Resolves once a signed-in (anonymous) user exists, signing in if needed.
-// Cached so repeated calls (from multiple pages/components) don't each kick
-// off their own sign-in race.
+// Resolves once someone is signed in: whoever this device already has
+// (an account, or an earlier anonymous session -- Firebase keeps both
+// across reloads and offline), otherwise a new anonymous session. Waits
+// for Firebase to finish restoring the saved session first, so it never
+// signs in anonymously over the top of a signed-in account. Cached so
+// repeated calls don't each start their own sign-in; resetSignIn() clears
+// that after signing in or out of an account.
 let signedInPromise = null;
 function ensureSignedIn() {
   if (!signedInPromise) {
-    signedInPromise = new Promise((resolve, reject) => {
-      const unsubscribe = onAuthStateChanged(
-        auth,
-        (user) => {
-          if (user) {
-            unsubscribe();
-            resolve(user);
-          }
-        },
-        (err) => {
-          unsubscribe();
-          reject(err);
-        }
-      );
-      signInAnonymously(auth).catch((err) => {
-        unsubscribe();
-        reject(err);
+    signedInPromise = auth.authStateReady()
+      .then(() => auth.currentUser || signInAnonymously(auth).then((cred) => cred.user))
+      .catch((err) => {
+        signedInPromise = null;
+        throw err;
       });
-    });
   }
   return signedInPromise;
 }
+function resetSignIn() {
+  signedInPromise = null;
+}
+
+// Account sign-in, for firebase-sync.js's Accounts section (plain scripts
+// can't import from the SDK themselves).
+const authApi = {
+  signInWithEmailAndPassword,
+  linkWithCredential,
+  EmailAuthProvider,
+  sendEmailVerification,
+  sendPasswordResetEmail,
+  updateProfile,
+  signOut,
+};
 
 // Plain-global bridge for the rest of the app (see file header).
-window.FirebaseCore = { app, auth, db, storage, ensureSignedIn, projectId: firebaseConfig.projectId };
+window.FirebaseCore = { app, auth, db, storage, ensureSignedIn, resetSignIn, authApi, projectId: firebaseConfig.projectId };
 window.dispatchEvent(new CustomEvent('firebase-core-ready'));

@@ -57,6 +57,14 @@
     margin-left: auto; transition: transform 0.15s; flex: 0 0 auto;
   }
   details.settings-section[open] > summary .settings-section-chevron { transform: rotate(90deg); }
+  /* Account: role at the company, and the verify-your-email reminder. */
+  .account-role { margin: 0 0 0.5rem; font-size: 0.88rem; font-weight: 600; color: var(--text-dim); }
+  .account-verify {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 0.2rem 0.6rem;
+    padding: 0.5rem 0.75rem; font-size: 0.88rem;
+    background: var(--warn-bg); border: 1px solid var(--warn-border); border-radius: var(--radius-sm);
+  }
+  .account-verify .text-btn { padding: 0.1rem 0.2rem; min-height: 0; font-size: 0.88rem; }
   details.settings-section > summary .settings-section-sub {
     font-weight: 500; font-size: 0.8rem; opacity: 0.85; margin-left: 0.5rem;
   }
@@ -250,6 +258,33 @@
 
   <!-- =================== YOU =================== -->
   <div class="settings-panel" id="panel-you">
+
+    <details class="settings-section" id="account-section" open>
+      <summary>Account<span class="settings-section-chevron">&#9656;</span><span class="settings-section-sub" id="account-sub"></span></summary>
+      <div class="settings-section-body">
+        <div id="account-signed-out" hidden>
+          <p class="hint" style="margin-top:0;">You're using this device without an account. With one, you sign in on any phone or computer with your email and password, and your company admin can see who's who.</p>
+          <div style="display:flex; gap:0.6rem; flex-wrap:wrap;">
+            <a class="btn-primary" id="account-create-link" href="login.html?mode=create&amp;next=settings.html" style="text-align:center; text-decoration:none; width:auto; flex:1 1 12rem;">Create Account</a>
+            <a class="btn-secondary" id="account-signin-link" href="login.html?mode=signin&amp;next=settings.html" style="text-align:center; text-decoration:none; flex:1 1 12rem;">Sign In</a>
+          </div>
+        </div>
+        <div id="account-signed-in" hidden>
+          <p style="margin:0 0 0.5rem;">Signed in as <strong id="account-name"></strong> <span class="hint" style="display:inline;" id="account-email"></span></p>
+          <p class="account-role" id="account-role" hidden></p>
+          <div class="account-verify" id="account-verify" hidden>
+            <span>Check your email to verify your address.</span>
+            <button type="button" class="text-btn" id="btn-account-resend">Resend email</button>
+            <button type="button" class="text-btn" id="btn-account-recheck">I've verified it</button>
+          </div>
+          <div style="display:flex; gap:0.6rem; flex-wrap:wrap; margin-top:0.75rem;">
+            <button type="button" class="btn-secondary" id="btn-account-reset" style="margin-top:0;">Change Password</button>
+            <button type="button" class="btn-secondary" id="btn-account-signout" style="margin-top:0;">Sign Out</button>
+          </div>
+          <div class="success" id="account-notice" hidden style="margin-top:0.75rem;"></div>
+        </div>
+      </div>
+    </details>
 
     <details class="settings-section" open>
       <summary>Profile<span class="settings-section-chevron">&#9656;</span></summary>
@@ -1184,9 +1219,11 @@ async function refreshCompanySection() {
     return;
   }
 
-  $('#company-line').textContent = room.isAdmin
-    ? `Connected to "${room.name || 'your company'}" — Admin`
-    : `Connected to "${room.name || 'your company'}"`;
+  // A signed-in member's role comes from their member record; otherwise
+  // it's just admin or not, as before.
+  const member = await getMyMembership().catch(() => null);
+  const roleLabel = member ? MEMBER_ROLE_LABELS[member.role] : (room.isAdmin ? 'Admin' : '');
+  $('#company-line').textContent = `Connected to "${room.name || 'your company'}"${roleLabel ? ` — ${roleLabel}` : ''}`;
 
   $('#company-admin-only').hidden = !room.isAdmin;
   $('#company-unlock-admin').hidden = room.isAdmin;
@@ -2425,10 +2462,81 @@ $('#btn-save-user-name').addEventListener('click', async () => {
     return;
   }
   await saveUserName(name);
+  // Keeps a signed-in account's name (and its company member record) the same.
+  await updateAccountName(name).catch((err) => console.error('account name:', err));
+  renderAccount();
   const el = $('#user-name-saved');
   el.hidden = false;
   clearTimeout(el._t);
   el._t = setTimeout(() => { el.hidden = true; }, 2500);
+});
+
+// ---------- Account ----------
+
+async function renderAccount() {
+  const account = await getAccount().catch(() => null);
+  const offline = !navigator.onLine;
+  $('#account-signed-out').hidden = !!account;
+  $('#account-signed-in').hidden = !account;
+  $('#account-sub').textContent = account ? account.email : (offline ? '' : 'Not signed in');
+  if (!account) return;
+  $('#account-name').textContent = (await getUserName()) || account.displayName || '';
+  $('#account-email').textContent = `(${account.email})`;
+  $('#account-verify').hidden = account.emailVerified;
+  const member = await getMyMembership().catch(() => null);
+  const room = await getCompanyRoom();
+  const roleEl = $('#account-role');
+  roleEl.hidden = !(member && room);
+  if (member && room) {
+    const projects = Array.isArray(member.projectIds)
+      ? `${member.projectIds.length} project${member.projectIds.length === 1 ? '' : 's'}`
+      : 'all projects';
+    roleEl.textContent = `${MEMBER_ROLE_LABELS[member.role] || 'Inspector'} at ${room.name || 'your company'} \u00b7 ${projects}`;
+  }
+}
+
+function accountNotice(text) {
+  const el = $('#account-notice');
+  el.textContent = text;
+  el.hidden = false;
+}
+
+$('#btn-account-resend').addEventListener('click', async () => {
+  try {
+    await resendAccountVerification();
+    accountNotice('Verification email sent. Check your spam folder too.');
+  } catch (err) {
+    alert(err.message);
+  }
+});
+$('#btn-account-recheck').addEventListener('click', async () => {
+  const account = await reloadAccount().catch(() => null);
+  await renderAccount();
+  if (account && !account.emailVerified) accountNotice("Not verified yet. Click the link in the email, then try again.");
+});
+$('#btn-account-reset').addEventListener('click', async () => {
+  const account = await getAccount();
+  if (!account) return;
+  try {
+    await sendAccountPasswordReset(account.email);
+    accountNotice(`A link to change your password was sent to ${account.email}.`);
+  } catch (err) {
+    alert(err.message);
+  }
+});
+$('#btn-account-signout').addEventListener('click', async () => {
+  const room = await getCompanyRoom();
+  const ok = confirm(room
+    ? `Sign out? This device will also leave ${room.name || 'your company'}, keeping only the reports you created or edited. Signing back in reconnects everything.`
+    : 'Sign out of your account on this device?');
+  if (!ok) return;
+  try {
+    await signOutAccount();
+    location.href = 'login.html';
+  } catch (err) {
+    console.error(err);
+    alert(userError("Couldn't sign out: " + err.message, 'ACCOUNT_SIGN_OUT'));
+  }
 });
 
 // ---------- Init ----------
@@ -2462,6 +2570,7 @@ setSettingsTab(queryParam('tab') === 'company' ? 'company' : 'you');
     $('#sync-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
   await refreshCompanySection();
+  await renderAccount();
 })();
 </script>
 </body>
