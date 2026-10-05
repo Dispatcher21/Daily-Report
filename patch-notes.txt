@@ -3,6 +3,23 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.045 -- 2026-10-05
+  - Pay Apps page rebuilt. Recorded Pay Apps are listed on the left with
+    their date, status, amount billed and comment count; picking one (or
+    + New Pay App) opens it on the right.
+  - Filling in a Pay App: choose whether you're entering each item's
+    total to date or only what this Pay App adds. Each box starts blank
+    with the previous Pay App's figure beside it for reference; leave an
+    item blank if nothing new was billed. This Pay App's total, the total
+    billed to date and the % of contract stay pinned at the bottom.
+  - A recorded Pay App shows a breakdown: what it billed against what
+    your daily reports logged (for this Pay App and to date), the
+    difference on each item, and each item's planned quantity from
+    Project Settings with how much of it is billed, flagging items over
+    plan. Approve / Request Changes and comments sit below it.
+  - Deleting a Pay App now asks first, and leaving with unsaved changes
+    warns you.
+
 0.044 -- 2026-10-05
   - Fixed a replaced project background photo not showing up on your
     other devices: they kept the old photo. Saving anything else about
