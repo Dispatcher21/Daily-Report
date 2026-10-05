@@ -32,45 +32,101 @@
 </div>
 
 <main>
-  <div class="step-pair">
-  <div class="step">
+  <div class="pa-layout">
+  <div class="step pa-list-step" id="pa-list-step">
     <div class="step-header">
       <span class="step-num">HISTORY</span>
-      <h2>Recorded Pay Apps</h2>
-      <button type="button" class="info-tip" data-tip="Every Pay App recorded for this project, newest first. Edit one to adjust its saved quantities, or remove it entirely." aria-label="What this does">i</button>
+      <h2>Pay Apps</h2>
+      <button type="button" class="info-tip" data-tip="Every Pay App recorded for this project, newest first. Pick one to check its numbers, review it, or edit it." aria-label="What this does">i</button>
     </div>
     <div class="step-body">
-      <div id="estimate-history"></div>
+      <button type="button" class="btn-primary" id="pa-new-btn">+ New Pay App</button>
+      <div class="pa-list" id="pa-list"></div>
     </div>
   </div>
 
-  <div class="step">
+  <div class="step pa-detail-step" id="pa-detail-step">
     <div class="step-header">
-      <span class="step-num">BILLING</span>
-      <h2 id="payapp-form-title">Pay App</h2>
+      <span class="step-num" id="pa-detail-tag">NEW</span>
+      <h2 id="pa-detail-title">New Pay App</h2>
       <button type="button" class="info-tip" data-tip="Record a Pay App each time one is approved, with the engineer-approved quantity for every item as of that date. Once one's on file, it (not raw inspector totals) is what this project's dashboards are based on through that date -- reports filed after it keep counting normally on top." aria-label="What this does">i</button>
     </div>
     <div class="step-body">
-      <div class="field-grid" id="estimate-form">
-        <label>Pay App No. <input type="text" id="f-est-no"></label>
-        <label>Date <input type="date" id="f-est-date"></label>
-        <label>Note (optional) <input type="text" id="f-est-note" placeholder="e.g. Pay Application 3"></label>
+      <div class="pa-empty" id="pa-empty" hidden>
+        <p>Pick a Pay App on the left to see its breakdown or review it, or start a new one.</p>
       </div>
 
-      <div class="eyebrow" style="margin-top:1rem;">Item Quantities <button type="button" class="info-tip" data-tip="Inspector Total is the reference running total as of this Pay App's date, for comparison -- not editable here. Pay App Total is what gets approved and saved; it starts pre-filled with the Inspector Total (or, when editing one already recorded, whatever it was last saved as), adjust whatever needs it." aria-label="What this does">i</button></div>
-      <div class="payapp-summary" id="payapp-summary">
-        <div><span class="ps-label">Inspector Total</span><span class="ps-value" id="payapp-total-inspector">—</span></div>
-        <div><span class="ps-label">Pay App Total</span><span class="ps-value" id="payapp-total-contractor">—</span></div>
-        <div><span class="ps-label">% Diff</span><span class="ps-value" id="payapp-total-pctdiff">—</span></div>
-        <div><span class="ps-label">$ Diff</span><span class="ps-value" id="payapp-total-costdiff">—</span></div>
-      </div>
-      <div class="payapp-list" id="payapp-items-list"></div>
+      <!-- A recorded Pay App: what it billed, compared with the daily
+           reports and the project's plan. Read-only; Edit opens the form. -->
+      <div id="pa-view" hidden>
+        <div class="pa-view-top">
+          <div class="pa-status-line" id="pa-status-line">
+            <span class="rv-approval-badge" id="pa-detail-badge"></span>
+            <button type="button" class="text-btn" id="pa-jump-review"></button>
+            <span class="pa-status" id="pa-view-status" role="status"></span>
+          </div>
+          <div class="pa-view-actions">
+            <button type="button" class="btn-sm" id="pa-edit-btn">&#9998; Edit</button>
+            <button type="button" class="btn-sm btn-sm-danger" id="btn-delete-estimate">Delete</button>
+          </div>
+        </div>
+        <p class="pa-view-meta" id="pa-view-meta"></p>
 
-      <div style="display:flex; gap:0.6rem; align-items:center; margin-top:1rem; flex-wrap:wrap;">
-        <button type="button" class="btn-secondary" id="btn-record-estimate">+ Record Pay App</button>
-        <button type="button" class="text-btn" id="btn-cancel-edit-estimate" hidden>Cancel Edit</button>
+        <div class="pa-sum-grid" id="pa-sum-grid"></div>
+        <ul class="pa-callouts" id="pa-callouts"></ul>
+
+        <div class="pa-items-head">
+          <div class="eyebrow">Breakdown <button type="button" class="info-tip" data-tip="Billed is what this Pay App approved. Logged is what your daily reports recorded through the Pay App's date. Plan is the planned quantity from Project Settings." aria-label="What this does">i</button></div>
+          <div class="view-toggle pa-filter" id="pa-filter" role="group" aria-label="Show">
+            <button type="button" class="view-toggle-btn active" data-filter="all">All items <span id="pa-count-all"></span></button>
+            <button type="button" class="view-toggle-btn" data-filter="diff">Only differences <span id="pa-count-diff"></span></button>
+          </div>
+        </div>
+        <div class="pa-items pa-breakdown" id="pa-breakdown"></div>
+        <p class="hint" id="pa-items-none" hidden>Every item was billed exactly as logged.</p>
+
+        <section class="pa-review" id="pa-review">
+          <div class="eyebrow">Review</div>
+          <div id="pa-review-body"></div>
+        </section>
       </div>
-      <p class="hint" id="estimate-error" style="color:var(--danger);" hidden></p>
+
+      <!-- Filling in a Pay App (new, or Edit on a recorded one). -->
+      <div id="pa-editor" hidden>
+        <p class="pa-note" id="pa-approved-note" hidden>This Pay App is approved. Saving changes to it sends it back to Pending for another review.</p>
+        <div class="field-grid pa-fields" id="estimate-form">
+          <label>Pay App No. <input type="text" id="f-est-no"></label>
+          <label>Date <input type="date" id="f-est-date"></label>
+          <label class="pa-field-note">Note (optional) <input type="text" id="f-est-note" placeholder="e.g. Pay Application 3"></label>
+        </div>
+
+        <div class="pa-basis">
+          <span class="pa-basis-label">What are you entering?</span>
+          <div class="view-toggle pa-filter" id="pa-basis" role="group" aria-label="What are you entering">
+            <button type="button" class="view-toggle-btn" data-basis="total">Totals to date</button>
+            <button type="button" class="view-toggle-btn" data-basis="period">This Pay App only</button>
+          </div>
+          <p class="pa-basis-hint" id="pa-basis-hint"></p>
+        </div>
+
+        <div class="pa-items-head">
+          <div class="eyebrow">Items</div>
+        </div>
+        <div class="pa-items" id="payapp-items-list"></div>
+
+        <div class="pa-actionbar" id="pa-actionbar">
+          <div class="pa-run-totals" id="payapp-summary">
+            <div><span class="rt-label">This Pay App</span><span class="rt-value" id="rt-period">—</span></div>
+            <div><span class="rt-label">Billed to date</span><span class="rt-value" id="rt-total">—</span></div>
+            <div><span class="rt-label">Of contract</span><span class="rt-value" id="rt-contract">—</span></div>
+          </div>
+          <div class="pa-savebar-actions">
+            <button type="button" class="btn-primary" id="btn-record-estimate">Record Pay App</button>
+            <button type="button" class="text-btn" id="btn-cancel-edit-estimate" hidden>Cancel</button>
+          </div>
+          <p class="hint" id="estimate-error" style="color:var(--danger); margin:0.4rem 0 0;" hidden></p>
+        </div>
+      </div>
     </div>
   </div>
   </div>
@@ -88,8 +144,17 @@
 const projectId = queryParam('project');
 let project = null;
 let allReports = [];
-let editingEstimateId = null; // the Pay App the form below is currently editing, if any -- see startEditEstimate
-let expandedReviewId = null; // the Pay App whose approval/comment panel is open, if any -- see renderEstimateHistory
+// What the right-hand panel shows: 'new' (recording a new Pay App), a
+// recorded Pay App's id, or null (nothing picked yet).
+let selectedId = null;
+let dirty = false; // unsaved changes in the panel -- see confirmDiscard
+let itemFilter = 'all'; // 'all' or 'diff' (only items where the Pay App differs)
+// What the Pay App fields hold: 'total' (each item's total billed to date,
+// all earlier Pay Apps included) or 'period' (only what this Pay App adds
+// since the one before it). A Pay App is always SAVED as to-date totals
+// (itemTotals), whichever way it was entered. Remembered per device.
+const ENTRY_BASIS_SETTING = 'payAppEntryBasis';
+let entryBasis = 'total';
 let canApprovePayApps = false; // same companyCan gate as report-viewer.html's review panel, checked once at load
 
 async function init() {
@@ -109,30 +174,30 @@ async function init() {
 
   allReports = (await getReportsForProject(project.id)).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
   canApprovePayApps = await companyCan('approvePayApps');
+  entryBasis = (await getSetting(ENTRY_BASIS_SETTING)) === 'period' ? 'period' : 'total';
 
   // manager.html's Needs Your Review list links straight in with ?estimate=
-  // so a manager lands with that Pay App's review panel already open,
-  // instead of having to find and click "Review" on it themselves.
-  const focusEstimateId = queryParam('estimate');
-  if (focusEstimateId) expandedReviewId = focusEstimateId;
-
-  renderEstimateHistory();
-  renderPayAppItemsTable();
-  $('#f-est-no').value = nextEstimateNo(project.billingEstimates);
-  $('#f-est-date').value = todayIso();
-
-  if (focusEstimateId) {
-    const row = $('.est-review-row');
-    if (row) row.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
+  // so a manager lands on that Pay App with its review section in view.
+  const focusId = queryParam('estimate');
+  const estimates = project.billingEstimates || [];
+  if (focusId && estimates.some((e) => e.id === focusId)) selectedId = focusId;
+  else selectedId = estimates.length ? null : 'new';
+  renderList();
+  renderDetail();
+  if (focusId && selectedId === focusId) $('#pa-review').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-// ---------- Billing estimates ----------
+// ---------- Helpers ----------
 
 const PAYAPP_APPROVAL_LABELS = {
   approved: 'Approved',
   changes_requested: 'Changes Requested',
 };
+
+function statusBadgeHtml(estimate) {
+  const status = estimate.approvalStatus || 'pending';
+  return `<span class="rv-approval-badge rv-${status}">${PAYAPP_APPROVAL_LABELS[status] || 'Pending'}</span>`;
+}
 
 function payAppCommentTime(ms) {
   if (!ms) return '';
@@ -141,13 +206,562 @@ function payAppCommentTime(ms) {
   return d.toLocaleString();
 }
 
-// Same shape and same classes (.rv-approval-badge/.rv-comment*) as
-// report-viewer.html's review panel -- status + comment thread, visible to
-// everyone who can see this project; only the Approve/Request Changes/Post
-// Comment controls are gated on canApprovePayApps (the Manager role).
-function payAppReviewPanelHtml(estimate) {
+function fmtMoney(n) {
+  return n == null ? '—' : n.toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+}
+
+function selectedEstimate() {
+  return selectedId && selectedId !== 'new' ? (project.billingEstimates || []).find((e) => e.id === selectedId) || null : null;
+}
+
+// What a recorded Pay App billed in total, from its saved itemTotals and the
+// catalog's unit prices -- itemTotals holds a dollar figure for Lump Sum
+// items and a quantity for everything else (see the save handler below).
+function payAppBilledTotal(estimate) {
+  const catalog = new Map((project.payItemCatalog || []).map((c) => [c.itemNumber, c]));
+  let total = 0, any = false;
+  Object.entries(estimate.itemTotals || {}).forEach(([itemNumber, value]) => {
+    const item = catalog.get(itemNumber);
+    const v = Number(value);
+    if (!isFinite(v)) return;
+    const price = item ? parsedUnitPrice(item) : null;
+    if (item && isLumpSumUnit(item.unit)) { total += v; any = true; }
+    else if (price != null) { total += v * price; any = true; }
+  });
+  return any ? total : null;
+}
+
+// Changing what the panel shows throws away anything typed but not saved,
+// so ask first.
+function confirmDiscard() {
+  if (!dirty) return true;
+  return confirm('Discard the changes you made to this Pay App?');
+}
+
+function select(id) {
+  if (id === selectedId) return;
+  if (!confirmDiscard()) return;
+  selectedId = id;
+  panelMode = id === 'new' ? 'edit' : 'view';
+  renderList();
+  renderDetail();
+  if (window.matchMedia('(max-width: 1049px)').matches) {
+    $('#pa-detail-step').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
+
+// ---------- The list ----------
+
+function renderList() {
+  const sorted = sortedEstimates(project.billingEstimates).slice().reverse(); // newest first
+  // Two Pay Apps sharing a date isn't just a display quirk -- the progress
+  // chart and dashboard math can only place one on that date, so whichever
+  // was saved last silently wins and the other's approved quantities never
+  // count toward anything (see progressOverTime, quantity-calc.js). Flagged
+  // here so it's visible from the list itself.
+  const dateCounts = new Map();
+  (project.billingEstimates || []).forEach((e) => dateCounts.set(e.date, (dateCounts.get(e.date) || 0) + 1));
+  $('#pa-new-btn').classList.toggle('pa-new-active', selectedId === 'new');
+  $('#pa-list').innerHTML = sorted.length === 0
+    ? '<p class="hint" style="margin:0.75rem 0 0;">No Pay Apps recorded yet.</p>'
+    : sorted.map((e) => {
+      const billed = payAppBilledTotal(e);
+      const comments = (e.comments || []).length;
+      return `
+      <button type="button" class="pa-list-item${e.id === selectedId ? ' selected' : ''}" data-id="${e.id}">
+        <span class="pa-li-top"><span class="pa-li-name">Pay App ${escapeHtml(e.estimateNo)}</span>${statusBadgeHtml(e)}</span>
+        <span class="pa-li-sub">${escapeHtml(e.date || 'No date')}${billed != null ? ` · ${fmtMoney(billed)}` : ''}${comments ? ` · ${comments} comment${comments === 1 ? '' : 's'}` : ''}</span>
+        ${e.note ? `<span class="pa-li-note">${escapeHtml(e.note)}</span>` : ''}
+        ${dateCounts.get(e.date) > 1 ? `<span class="pill payapp-diff-over pa-li-warn" title="Another Pay App also uses this date -- only one of them counts toward the progress chart. Give one a different date to fix it.">Shared date</span>` : ''}
+      </button>`;
+    }).join('');
+}
+
+$('#pa-list').addEventListener('click', (e) => {
+  const item = e.target.closest('.pa-list-item');
+  if (item) select(item.dataset.id);
+});
+$('#pa-new-btn').addEventListener('click', () => select('new'));
+
+// ---------- The panel ----------
+//
+// Two views of the right-hand panel: the form (panelMode 'edit') for a new
+// Pay App or Edit on a recorded one, and the breakdown ('view') of a
+// recorded one -- what it billed, compared with the daily reports and the
+// project's plan.
+let panelMode = 'view';
+
+function renderDetail() {
+  const estimate = selectedEstimate();
+  const isNew = selectedId === 'new';
+  if (isNew) panelMode = 'edit';
+  $('#pa-empty').hidden = !!(estimate || isNew);
+  $('#pa-view').hidden = !(estimate && panelMode === 'view');
+  $('#pa-editor').hidden = !(isNew || (estimate && panelMode === 'edit'));
+  $('#estimate-error').hidden = true;
+  $('#pa-view-status').textContent = '';
+  dirty = false;
+  $('#pa-detail-tag').textContent = isNew ? 'NEW' : 'PAY APP';
+  if (!estimate && !isNew) {
+    $('#pa-detail-title').textContent = 'Pay App';
+    return;
+  }
+  $('#pa-detail-title').textContent = isNew ? 'New Pay App'
+    : (panelMode === 'edit' ? `Editing Pay App ${estimate.estimateNo}` : `Pay App ${estimate.estimateNo}`);
+  if (panelMode === 'view') renderBreakdown(estimate);
+  else renderEditor(estimate);
+}
+
+['#f-est-no', '#f-est-date', '#f-est-note'].forEach((sel) => $(sel).addEventListener('input', markDirty));
+
+function markDirty() {
+  if (dirty) return;
+  dirty = true;
+  // Cancel only means something once there's something to undo.
+  $('#btn-cancel-edit-estimate').hidden = false;
+}
+
+$('#pa-jump-review').addEventListener('click', () => {
+  $('#pa-review').scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+
+$('#pa-edit-btn').addEventListener('click', () => {
+  panelMode = 'edit';
+  renderDetail();
+});
+
+// Cancel: back to the breakdown for a recorded Pay App, or a fresh form
+// for a new one.
+$('#btn-cancel-edit-estimate').addEventListener('click', () => {
+  dirty = false;
+  if (selectedId !== 'new') panelMode = 'view';
+  renderDetail();
+});
+
+// ---------- Figures ----------
+//
+// Every figure is kept in "stored units" -- the same convention itemTotals
+// is saved in: a dollar amount for a Lump Sum item (see earnedTotalFor), a
+// plain quantity for everything else -- and converted to whatever is shown
+// (qty, % of a Lump Sum's value, or $) only at the edges.
+
+// The Pay App this one builds on, by date: for a recorded one, the one
+// right before it; for a new one, the latest on file.
+function previousEstimate(editing) {
+  const sorted = sortedEstimates(project.billingEstimates);
+  if (!editing) return sorted.pop() || null;
+  const idx = sorted.findIndex((e) => e.id === editing.id);
+  return idx > 0 ? sorted[idx - 1] : null;
+}
+
+function totalsMap(estimate) {
+  const m = new Map();
+  Object.entries((estimate && estimate.itemTotals) || {}).forEach(([k, v]) => {
+    if (v != null && v !== '' && isFinite(Number(v))) m.set(String(k).trim(), Number(v));
+  });
+  return m;
+}
+
+// Quantities logged on the daily reports dated after `fromDate` (if any)
+// through `toDate`, by item. A report with no date can't be placed in a
+// billing period, so it's left out of both.
+function loggedBetween(fromDate, toDate) {
+  const m = new Map();
+  allReports.forEach((r) => {
+    if (!r.date || r.date > toDate || (fromDate && r.date <= fromDate)) return;
+    (r.payItems || []).forEach((p) => {
+      const key = String(p.itemNumber || '').trim();
+      const q = Number(p.qty);
+      if (!key || !isFinite(q)) return;
+      m.set(key, (m.get(key) || 0) + q);
+    });
+  });
+  return m;
+}
+
+// Every catalog item, plus anything a Pay App billed that isn't in it.
+function payAppItems(...estimates) {
+  const flat = [];
+  estimates.forEach((e) => totalsMap(e).forEach((qty, itemNumber) => flat.push({ itemNumber, qty: 0 })));
+  return fullPayItemCatalogOverview(flat, project.payItemCatalog).map((it) => ({
+    itemNumber: it.itemNumber,
+    description: it.description,
+    unit: it.unit || '',
+    isLump: isLumpSumUnit(it.unit),
+    price: it.unitPrice != null ? Number(it.unitPrice) : null,
+    planned: it.planned,
+    contractTotal: it.contractTotal,
+  }));
+}
+
+function itemCost(it, stored) {
+  if (stored == null) return null;
+  if (it.isLump) return stored;
+  return it.price != null ? stored * it.price : null;
+}
+
+// Stored units -> readable text in the item's own terms (qty + unit, or %).
+function itemText(it, stored, signed) {
+  if (stored == null) return '—';
+  const sign = signed && stored > 0 ? '+' : '';
+  if (it.isLump && it.price > 0) return `${sign}${(Math.round((stored / it.price) * 1000) / 10).toLocaleString()}%`;
+  return `${sign}${(Math.round(stored * 10000) / 10000).toLocaleString()} ${it.unit}`.trim();
+}
+
+function contractTotalOf(items) {
+  return items.reduce((sum, it) => sum + (it.contractTotal != null ? it.contractTotal : 0), 0);
+}
+
+// ---------- The form ----------
+//
+// Each item's box starts blank, with the previous Pay App's figure beside
+// it (and as the box's placeholder) for reference. Blank means nothing new
+// was billed on that item: its total to date stays where the previous Pay
+// App left it.
+
+// The form's items by item number -- see renderEditor.
+let editorItems = new Map();
+function rowItem(row) { return editorItems.get(row.dataset.item); }
+
+// An input's typed value -> stored units (null if blank or not computable).
+function inputToStored(input, it) {
+  const raw = input.value.trim();
+  const v = Number(raw);
+  if (raw === '' || !isFinite(v)) return null;
+  if (input.dataset.mode === 'cost') return it.isLump ? v : (it.price > 0 ? v / it.price : null);
+  if (input.dataset.mode === 'pct') return it.price > 0 ? (v / 100) * it.price : null;
+  return v;
+}
+
+// Stored units -> what an input in `mode` shows.
+function storedToInputValue(it, mode, stored) {
+  if (stored == null || !isFinite(stored)) return '';
+  const round = (n, places) => String(Math.round(n * 10 ** places) / 10 ** places);
+  if (mode === 'cost') return round(it.isLump ? stored : stored * it.price, 2);
+  if (mode === 'pct') return round((stored / it.price) * 100, 4); // 4 places: a Lump Sum's % has to land back on its exact dollar figure
+  return round(stored, 4);
+}
+
+function payAppInputMarkup(itemNumber, mode, unit) {
+  const common = `class="payapp-qty-input" data-item="${escapeHtml(itemNumber)}" data-mode="${mode}" aria-label="Pay App amount for ${escapeHtml(itemNumber)}"`;
+  if (mode === 'cost') return `<span class="pa-affix">$</span><input type="number" step="0.01" inputmode="decimal" ${common}>`;
+  if (mode === 'pct') return `<input type="number" step="any" inputmode="decimal" ${common}><span class="pa-affix">%</span>`;
+  return `<input type="number" step="any" inputmode="decimal" ${common}><span class="pa-affix">${escapeHtml(unit || '')}</span>`;
+}
+
+function payAppModeToggleLabel(mode, isLump) {
+  if (mode === 'cost') return isLump ? 'Enter by %' : 'Enter by qty';
+  return 'Enter by $';
+}
+
+function renderBasisHint(prev) {
+  $$('#pa-basis .view-toggle-btn').forEach((b) => b.classList.toggle('active', b.dataset.basis === entryBasis));
+  const prevName = prev ? `Pay App ${escapeHtml(prev.estimateNo)} (${escapeHtml(prev.date || 'no date')})` : '';
+  let hint;
+  if (!prev) hint = "This is the first Pay App, so what it adds and its totals to date are the same thing. Enter each item it bills.";
+  else if (entryBasis === 'total') hint = `Enter each item's <strong>total billed to date</strong>, including ${prevName}. Leave an item blank if nothing new was billed on it.`;
+  else hint = `Enter only what <strong>this Pay App adds</strong> for each item since ${prevName}. Leave an item blank if nothing new was billed on it.`;
+  $('#pa-basis-hint').innerHTML = hint;
+  const head = $('#payapp-items-list .pa-head-entry');
+  if (head) head.textContent = entryBasis === 'total' ? 'Total to date' : 'This Pay App adds';
+}
+
+function renderEditor(editing) {
+  const prev = previousEstimate(editing);
+  const prevTotals = totalsMap(prev);
+  const ownTotals = totalsMap(editing);
+  const items = payAppItems(prev, editing);
+  editorItems = new Map(items.map((it) => [it.itemNumber, it]));
+  $('#pa-approved-note').hidden = !(editing && editing.approvalStatus === 'approved');
+  $('#f-est-no').value = editing ? editing.estimateNo : nextEstimateNo(project.billingEstimates);
+  $('#f-est-date').value = editing ? editing.date : todayIso();
+  $('#f-est-note').value = editing ? (editing.note || '') : '';
+  $('#btn-record-estimate').textContent = editing ? 'Save Changes' : 'Record Pay App';
+  // Editing can always go back to the breakdown; a new one only once
+  // something's been typed.
+  $('#btn-cancel-edit-estimate').hidden = !editing;
+  const list = $('#payapp-items-list');
+  if (items.length === 0) {
+    list.innerHTML = '<p class="hint" style="margin:0;">This project has no pay items in its catalog yet.</p>';
+    renderBasisHint(prev);
+    return;
+  }
+  list.innerHTML = `
+    <div class="pa-row pa-edit-row pa-row-head" aria-hidden="true">
+      <span>Item</span><span>${prev ? `Pay App ${escapeHtml(prev.estimateNo)} (to date)` : 'Previous Pay App'}</span><span class="pa-head-entry"></span>
+    </div>` + items.map((it) => {
+    const mode = it.isLump && it.price > 0 ? 'pct' : 'qty';
+    const prevStored = prevTotals.get(it.itemNumber) || 0;
+    return `
+    <div class="pa-row pa-edit-row" data-item="${escapeHtml(it.itemNumber)}" data-prev="${prevStored}">
+      <div class="pa-cell-item">
+        <span class="pa-item-no">${escapeHtml(it.itemNumber)}</span>
+        <span class="pa-item-desc">${escapeHtml(it.description)}</span>
+      </div>
+      <div class="pa-cell-prev">
+        <span class="pa-cell-label">${prev ? `Pay App ${escapeHtml(prev.estimateNo)}` : 'Previous'}</span>
+        <span class="pa-cell-value">${prev ? itemText(it, prevStored) : '—'}</span>
+        <span class="pa-cell-money">${prev && itemCost(it, prevStored) != null ? fmtMoney(itemCost(it, prevStored)) : ''}</span>
+      </div>
+      <div class="pa-cell-payapp">
+        <span class="pa-cell-label pa-entry-label"></span>
+        <span class="pac-field-input-row">${payAppInputMarkup(it.itemNumber, mode, it.unit)}</span>
+        <span class="pa-cell-money"><span class="payapp-contractor-money"></span>${it.price > 0 ? `<button type="button" class="pac-mode-toggle">${payAppModeToggleLabel(mode, it.isLump)}</button>` : ''}</span>
+        <span class="pa-other-basis"></span>
+      </div>
+    </div>`;
+  }).join('');
+  // A recorded Pay App opens with its own figures in the boxes wherever
+  // they differ from the one before it (blank still means "same as before").
+  $$('.pa-edit-row:not(.pa-row-head)', list).forEach((row) => {
+    if (!editing) return;
+    const it = rowItem(row);
+    const prevStored = Number(row.dataset.prev);
+    const own = ownTotals.has(it.itemNumber) ? ownTotals.get(it.itemNumber) : 0;
+    if (Math.abs(own - prevStored) < 1e-9) return;
+    const input = row.querySelector('.payapp-qty-input');
+    input.value = storedToInputValue(it, input.dataset.mode, entryBasis === 'period' ? own - prevStored : own);
+  });
+  renderBasisHint(prev);
+  refreshEntryRows();
+}
+
+// A row's figures in stored units. Blank = nothing new: to date stays at
+// the previous Pay App's figure.
+function rowFigures(row) {
+  const it = rowItem(row);
+  const input = row.querySelector('.payapp-qty-input');
+  const entered = inputToStored(input, it);
+  const prev = Number(row.dataset.prev) || 0;
+  let toDate;
+  if (entered == null) toDate = prev;
+  else toDate = entryBasis === 'period' ? prev + entered : entered;
+  return { it, input, entered, prev, toDate, period: toDate - prev };
+}
+
+// Per-row helper text and placeholders, plus the running totals in the bar.
+function refreshEntryRows() {
+  let period = 0, toDate = 0, any = false;
+  const rows = $$('#payapp-items-list .pa-edit-row:not(.pa-row-head)');
+  rows.forEach((row) => {
+    const f = rowFigures(row);
+    f.input.placeholder = entryBasis === 'period' ? '0' : storedToInputValue(f.it, f.input.dataset.mode, f.prev);
+    row.querySelector('.pa-entry-label').textContent = entryBasis === 'total' ? 'Total to date' : 'This Pay App adds';
+    const periodCost = itemCost(f.it, f.period);
+    const toDateCost = itemCost(f.it, f.toDate);
+    row.querySelector('.payapp-contractor-money').textContent = f.entered == null ? ''
+      : (periodCost != null ? `${periodCost >= 0 ? '+' : ''}${fmtMoney(periodCost)} this Pay App · ` : '');
+    const other = row.querySelector('.pa-other-basis');
+    other.classList.toggle('pa-negative', f.period < -1e-9);
+    if (f.entered == null) other.textContent = '';
+    else if (entryBasis === 'period') other.textContent = `To date: ${itemText(f.it, f.toDate)}`;
+    else other.textContent = f.period < -1e-9 ? `Less than the last Pay App (${itemText(f.it, f.period, true)})` : `Adds: ${itemText(f.it, f.period, true)}`;
+    if (periodCost != null) period += periodCost;
+    if (toDateCost != null) { toDate += toDateCost; any = true; }
+  });
+  const contract = contractTotalOf(rows.map(rowItem));
+  $('#rt-period').textContent = any ? fmtMoney(period) : '—';
+  $('#rt-total').textContent = any ? fmtMoney(toDate) : '—';
+  $('#rt-contract').textContent = any && contract > 0 ? `${Math.round((toDate / contract) * 1000) / 10}%` : '—';
+}
+
+$('#payapp-items-list').addEventListener('input', (e) => {
+  if (!e.target.classList.contains('payapp-qty-input')) return;
+  markDirty();
+  refreshEntryRows();
+});
+
+// Switches one item's box between its default entry (qty, or % for Lump
+// Sum) and a raw $ amount -- for the item whose billed dollar figure just
+// doesn't divide back into a clean quantity or percent. Converted through
+// stored units, so toggling never loses what's typed.
+$('#payapp-items-list').addEventListener('click', (e) => {
+  const btn = e.target.closest('.pac-mode-toggle');
+  if (!btn) return;
+  const row = btn.closest('.pa-row');
+  const it = rowItem(row);
+  const input = row.querySelector('.payapp-qty-input');
+  const stored = inputToStored(input, it);
+  const nextMode = input.dataset.mode === 'cost' ? (it.isLump ? 'pct' : 'qty') : 'cost';
+  row.querySelector('.pac-field-input-row').innerHTML = payAppInputMarkup(it.itemNumber, nextMode, it.unit);
+  row.querySelector('.payapp-qty-input').value = storedToInputValue(it, nextMode, stored);
+  btn.textContent = payAppModeToggleLabel(nextMode, it.isLump);
+  refreshEntryRows();
+  row.querySelector('.payapp-qty-input').focus();
+});
+
+// Totals to date <-> this Pay App only. Converts every filled-in box across,
+// so what's typed means the same thing afterward. Not an edit.
+$('#pa-basis').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-basis]');
+  if (!btn || btn.dataset.basis === entryBasis) return;
+  const figures = $$('#payapp-items-list .pa-edit-row:not(.pa-row-head)').map((row) => rowFigures(row));
+  entryBasis = btn.dataset.basis;
+  saveSetting(ENTRY_BASIS_SETTING, entryBasis).catch(() => {});
+  figures.forEach((f) => {
+    if (f.entered == null) return;
+    f.input.value = storedToInputValue(f.it, f.input.dataset.mode, entryBasis === 'period' ? f.period : f.toDate);
+  });
+  renderBasisHint(previousEstimate(selectedEstimate()));
+  refreshEntryRows();
+});
+
+// ---------- The breakdown ----------
+
+// How far apart billed and logged are -- not a claim about direction, just
+// a flag worth a second look.
+function payAppDiffSeverity(pctDiff) {
+  if (pctDiff === 0) return 'match';
+  if (pctDiff <= 0.01) return 'ok';
+  if (pctDiff <= 0.05) return 'warn';
+  return 'over';
+}
+
+function signedMoney(n) {
+  if (n == null) return '—';
+  if (Math.round(n) === 0) return '$0';
+  return `${n > 0 ? '+' : '−'}${fmtMoney(Math.abs(n))}`;
+}
+
+function renderBreakdown(estimate) {
+  const prev = previousEstimate(estimate);
+  const billedToDate = totalsMap(estimate);
+  const prevTotals = totalsMap(prev);
+  const loggedToDate = loggedBetween(null, estimate.date);
+  const loggedPeriod = loggedBetween(prev ? prev.date : null, estimate.date);
+  const items = payAppItems(prev, estimate);
+
+  // Status and comments up top; the review controls are further down.
   const status = estimate.approvalStatus || 'pending';
-  const badge = `<span class="rv-approval-badge rv-${status}">${PAYAPP_APPROVAL_LABELS[status] || 'Pending'}</span>`;
+  const badge = $('#pa-detail-badge');
+  badge.className = `rv-approval-badge rv-${status}`;
+  badge.textContent = PAYAPP_APPROVAL_LABELS[status] || 'Pending';
+  const comments = (estimate.comments || []).length;
+  $('#pa-jump-review').textContent = comments ? `${comments} comment${comments === 1 ? '' : 's'} ↓` : (canApprovePayApps ? 'Review ↓' : 'Comments ↓');
+  $('#pa-view-meta').textContent = [
+    `Dated ${estimate.date || '(no date)'}`,
+    estimate.note || '',
+    prev ? `follows Pay App ${prev.estimateNo} (${prev.date || 'no date'})` : 'first Pay App on this project',
+  ].filter(Boolean).join(' · ');
+
+  const sums = { billedPeriod: 0, billedTotal: 0, loggedPeriod: 0, loggedTotal: 0, contract: 0 };
+  let diffCount = 0, overPlan = [], billedItems = 0;
+  const rows = items.map((it) => {
+    const bTotal = billedToDate.get(it.itemNumber) || 0;
+    const bPrev = prevTotals.get(it.itemNumber) || 0;
+    const bPeriod = bTotal - bPrev;
+    const lTotal = loggedToDate.get(it.itemNumber) || 0;
+    const lPeriod = loggedPeriod.get(it.itemNumber) || 0;
+    const diff = bTotal - lTotal;
+    const cost = (n) => itemCost(it, n);
+    [['billedPeriod', bPeriod], ['billedTotal', bTotal], ['loggedPeriod', lPeriod], ['loggedTotal', lTotal]]
+      .forEach(([k, n]) => { const c = cost(n); if (c != null) sums[k] += c; });
+    if (it.contractTotal != null) sums.contract += it.contractTotal;
+    if (Math.abs(bPeriod) > 1e-9) billedItems++;
+
+    const differs = Math.abs(diff) > 1e-9;
+    const base = cost(lTotal) != null ? Math.abs(cost(lTotal)) : Math.abs(lTotal);
+    const diffSize = cost(diff) != null ? Math.abs(cost(diff)) : Math.abs(diff);
+    const pct = base > 0 ? diffSize / base : (differs ? null : 0);
+    const severity = !differs ? 'match' : (pct != null ? payAppDiffSeverity(pct) : 'over');
+    if (differs) diffCount++;
+
+    // Plan, from Project Settings: planned quantity for most items; a Lump
+    // Sum's plan is the whole item (100% of its value).
+    const planStored = it.isLump ? it.price : it.planned;
+    const planPct = planStored > 0 ? bTotal / planStored : null;
+    const over = planPct != null && planPct > 1 + 1e-9;
+    if (over) overPlan.push(it.itemNumber);
+
+    const pair = (billed, logged, signed) => `
+        <span class="pa-bd-billed">${itemText(it, billed, signed)}${cost(billed) != null ? ` <span class="pa-bd-money">${fmtMoney(cost(billed))}</span>` : ''}</span>
+        <span class="pa-bd-logged">Logged ${itemText(it, logged, signed)}</span>`;
+    return `
+    <div class="pa-row pa-bd-row${severity === 'warn' || severity === 'over' ? ` pa-row-${severity}` : ''}" data-item="${escapeHtml(it.itemNumber)}" data-differs="${differs ? '1' : ''}">
+      <div class="pa-cell-item">
+        <span class="pa-item-no">${escapeHtml(it.itemNumber)}</span>
+        <span class="pa-item-desc">${escapeHtml(it.description)}</span>
+      </div>
+      <div class="pa-bd-cell"><span class="pa-cell-label">This Pay App</span>${pair(bPeriod, lPeriod, true)}</div>
+      <div class="pa-bd-cell"><span class="pa-cell-label">To date</span>${pair(bTotal, lTotal)}</div>
+      <div class="pa-bd-cell">
+        <span class="pa-cell-label">Billed vs logged</span>
+        ${differs
+          ? `<span class="pa-bd-billed">${itemText(it, diff, true)} ${diff > 0 ? 'over' : 'under'}</span>
+             <span class="pa-bd-logged">${cost(diff) != null ? signedMoney(cost(diff)) : ''} <span class="pill payapp-diff-pill payapp-diff-${severity}">${pct != null ? (pct * 100).toFixed(1) + '%' : 'not logged'}</span></span>`
+          : '<span class="pill payapp-diff-pill payapp-diff-match">Matches</span>'}
+      </div>
+      <div class="pa-bd-cell">
+        <span class="pa-cell-label">Plan</span>
+        ${planStored > 0
+          ? `<span class="pa-bd-billed">${it.isLump ? 'Lump sum' : itemText(it, planStored)}</span>
+             <span class="pa-plan-bar" title="${Math.round(planPct * 1000) / 10}% of plan billed"><span style="width:${Math.min(100, planPct * 100)}%"></span></span>
+             <span class="pa-bd-logged">${Math.round(planPct * 1000) / 10}% billed${over ? ' <span class="pill payapp-diff-over">Over plan</span>' : ''}</span>`
+          : '<span class="pa-bd-logged">No plan set</span>'}
+      </div>
+    </div>`;
+  });
+  $('#pa-breakdown').innerHTML = `
+    <div class="pa-row pa-bd-row pa-row-head" aria-hidden="true">
+      <span>Item</span><span>This Pay App</span><span>To date</span><span>Billed vs logged</span><span>Plan</span>
+    </div>` + rows.join('');
+
+  const diffTotal = sums.billedTotal - sums.loggedTotal;
+  const card = (label, value, sub, cls) => `
+    <div class="pa-sum-card${cls ? ' ' + cls : ''}"><span class="pa-sum-label">${label}</span><span class="pa-sum-value">${value}</span>${sub ? `<span class="pa-sum-sub">${sub}</span>` : ''}</div>`;
+  $('#pa-sum-grid').innerHTML =
+    card('This Pay App', fmtMoney(sums.billedPeriod), `${billedItems} item${billedItems === 1 ? '' : 's'} billed · logged ${fmtMoney(sums.loggedPeriod)}`)
+    + card('Billed to date', fmtMoney(sums.billedTotal), sums.contract > 0 ? `${Math.round((sums.billedTotal / sums.contract) * 1000) / 10}% of ${fmtMoney(sums.contract)} contract` : '')
+    + card('Logged to date', fmtMoney(sums.loggedTotal), `in daily reports through ${escapeHtml(estimate.date || '')}`)
+    + card('Billed vs logged', signedMoney(diffTotal), Math.round(diffTotal) === 0 ? 'matches your reports' : (diffTotal > 0 ? 'billed more than logged' : 'billed less than logged'),
+      Math.round(diffTotal) === 0 ? 'pa-sum-ok' : 'pa-sum-warn');
+
+  const callouts = [];
+  if (diffCount) callouts.push(`<li class="pa-callout-warn"><strong>${diffCount} item${diffCount === 1 ? '' : 's'}</strong> billed differently than your reports logged. <button type="button" class="text-btn pa-show-diffs">Show them</button></li>`);
+  else callouts.push('<li class="pa-callout-ok">Every item was billed exactly as your reports logged it.</li>');
+  if (overPlan.length) callouts.push(`<li class="pa-callout-warn"><strong>Over plan:</strong> ${overPlan.map(escapeHtml).join(', ')} -- billed past the planned quantity in Project Settings.</li>`);
+  $('#pa-callouts').innerHTML = callouts.join('');
+  $('#pa-count-all').textContent = `(${items.length})`;
+  $('#pa-count-diff').textContent = `(${diffCount})`;
+  applyItemFilter();
+  renderReview();
+}
+
+$('#pa-callouts').addEventListener('click', (e) => {
+  if (!e.target.closest('.pa-show-diffs')) return;
+  itemFilter = 'diff';
+  applyItemFilter();
+  $('#pa-breakdown').scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+
+function applyItemFilter() {
+  const rows = $$('#pa-breakdown .pa-row:not(.pa-row-head)');
+  let shown = 0;
+  rows.forEach((row) => {
+    const hide = itemFilter === 'diff' && !row.dataset.differs;
+    row.hidden = hide;
+    if (!hide) shown++;
+  });
+  $('#pa-items-none').hidden = !(itemFilter === 'diff' && rows.length && shown === 0);
+  $$('#pa-filter .view-toggle-btn').forEach((b) => b.classList.toggle('active', b.dataset.filter === itemFilter));
+}
+
+$('#pa-filter').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-filter]');
+  if (!btn) return;
+  itemFilter = btn.dataset.filter;
+  applyItemFilter();
+});
+
+// ---------- Review (approval + comments) ----------
+
+// Same shape and classes (.rv-approval-badge/.rv-comment*) as
+// report-viewer.html's review panel -- status + comment thread, visible to
+// everyone who can see this project; only the Approve/Request
+// Changes/Post Comment controls are gated on canApprovePayApps.
+function renderReview() {
+  const estimate = selectedEstimate();
+  if (!estimate) return;
   const comments = estimate.comments || [];
   const commentsHtml = comments.length
     ? comments.map((c) => `
@@ -156,399 +770,85 @@ function payAppReviewPanelHtml(estimate) {
         <div class="rv-comment-text">${escapeHtml(c.text || '')}</div>
       </div>`).join('')
     : '<p class="hint" style="margin:0;">No comments yet.</p>';
-
-  return `
-    <div class="rv-approval-row">${badge}</div>
+  $('#pa-review-body').innerHTML = `
+    <div class="rv-approval-row">${statusBadgeHtml(estimate)}
     ${canApprovePayApps ? `
-    <div class="rv-approval-actions">
-      <button type="button" class="btn-sm est-review-approve" data-id="${estimate.id}">&#10003; Approve</button>
-      <button type="button" class="btn-sm est-review-request-changes" data-id="${estimate.id}">&#8635; Request Changes</button>
-    </div>` : ''}
-    <div style="margin-top:0.75rem;">${commentsHtml}</div>
+      <span class="rv-approval-actions">
+        <button type="button" class="btn-sm" id="pa-approve">&#10003; Approve</button>
+        <button type="button" class="btn-sm" id="pa-request-changes">&#8635; Request Changes</button>
+      </span>` : ''}
+    </div>
+    <div class="pa-comments">${commentsHtml}</div>
     ${canApprovePayApps ? `
-    <div style="margin-top:0.75rem;">
-      <label>Add a comment
-        <textarea class="est-review-comment-text" data-id="${estimate.id}" rows="2" placeholder="Visible to everyone who can see this project"></textarea>
-      </label>
-      <button type="button" class="btn-sm est-review-add-comment" data-id="${estimate.id}" style="margin-top:0.4rem;">Post Comment</button>
-    </div>` : ''}`;
+    <label class="pa-comment-form">Add a comment
+      <textarea id="pa-comment-text" rows="2" placeholder="Visible to everyone who can see this project"></textarea>
+    </label>
+    <button type="button" class="btn-sm" id="pa-add-comment">Post Comment</button>` : ''}`;
 }
 
-async function applyPayAppApproval(estimateId, patch) {
-  project = await saveBillingEstimateApproval(project.id, estimateId, patch);
-  renderEstimateHistory();
+async function applyPayAppApproval(patch) {
+  const estimate = selectedEstimate();
+  if (!estimate) return;
+  // Approving or commenting saves the Pay App's own record; anything typed
+  // in the panel but not saved yet would otherwise be silently dropped by
+  // the re-render below.
+  if (!confirmDiscard()) return;
+  project = await saveBillingEstimateApproval(project.id, estimate.id, patch);
+  renderList();
+  renderDetail();
 }
 
-function renderEstimateHistory() {
-  const sorted = sortedEstimates(project.billingEstimates).slice().reverse(); // newest first
-  const container = $('#estimate-history');
-  if (sorted.length === 0) {
-    container.innerHTML = '<p class="hint" style="margin:0;">No estimates recorded yet.</p>';
-    return;
+$('#pa-review').addEventListener('click', (e) => {
+  if (e.target.closest('#pa-approve')) applyPayAppApproval({ status: 'approved' });
+  else if (e.target.closest('#pa-request-changes')) applyPayAppApproval({ status: 'changes_requested' });
+  else if (e.target.closest('#pa-add-comment')) {
+    const text = $('#pa-comment-text').value.trim();
+    if (text) applyPayAppApproval({ comment: text });
   }
-  // Two Pay Apps sharing a date isn't just a display quirk -- the progress
-  // chart and dashboard math can only place one on that date, so whichever
-  // was saved last silently wins and the other's approved quantities never
-  // count toward anything (see progressOverTime, quantity-calc.js). Flagged
-  // here so it's visible from the list itself, not just discovered later as
-  // "why does the chart only have 5 stars."
-  const dateCounts = new Map();
-  (project.billingEstimates || []).forEach((e) => dateCounts.set(e.date, (dateCounts.get(e.date) || 0) + 1));
-  container.innerHTML = `
-    <table class="estimate-table">
-      <thead><tr><th>Estimate</th><th>Date</th><th>Note</th><th>Status</th><th></th><th></th><th></th></tr></thead>
-      <tbody>
-        ${sorted.map((e) => {
-          const dupeDate = dateCounts.get(e.date) > 1;
-          const status = e.approvalStatus || 'pending';
-          const badge = `<span class="rv-approval-badge rv-${status}">${PAYAPP_APPROVAL_LABELS[status] || 'Pending'}</span>`;
-          const rowHtml = `
-          <tr${e.id === editingEstimateId ? ' class="est-editing"' : ''}>
-            <td>${escapeHtml(e.estimateNo)}</td>
-            <td>${e.date}${dupeDate ? ` <span class="pill payapp-diff-over" data-tip="Another Pay App also uses this date -- only one of them actually counts toward the progress chart. Give one a different date to fix it." title="Shared with another Pay App">Shared date</span>` : ''}</td>
-            <td>${escapeHtml(e.note || '')}</td>
-            <td>${badge}</td>
-            <td><button type="button" class="text-btn est-review-toggle" data-id="${e.id}">${e.id === expandedReviewId ? 'Hide' : 'Review'}</button></td>
-            <td><button type="button" class="text-btn est-edit" data-id="${e.id}">Edit</button></td>
-            <td><button type="button" class="text-btn est-remove" data-id="${e.id}" style="color:var(--danger);">&times;</button></td>
-          </tr>`;
-          const reviewRowHtml = e.id === expandedReviewId
-            ? `<tr class="est-review-row"><td colspan="7">${payAppReviewPanelHtml(e)}</td></tr>`
-            : '';
-          return rowHtml + reviewRowHtml;
-        }).join('')}
-      </tbody>
-    </table>`;
-  $$('.est-edit', container).forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const estimate = (project.billingEstimates || []).find((e) => e.id === btn.dataset.id);
-      if (estimate) startEditEstimate(estimate);
-    });
-  });
-  $$('.est-remove', container).forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      project.billingEstimates = (project.billingEstimates || []).filter((e) => e.id !== btn.dataset.id);
-      await saveProject(project);
-      if (editingEstimateId === btn.dataset.id) cancelEditEstimate();
-      if (expandedReviewId === btn.dataset.id) expandedReviewId = null;
-      renderEstimateHistory();
-      renderPayAppItemsTable();
-    });
-  });
-  $$('.est-review-toggle', container).forEach((btn) => {
-    btn.addEventListener('click', () => {
-      expandedReviewId = expandedReviewId === btn.dataset.id ? null : btn.dataset.id;
-      renderEstimateHistory();
-    });
-  });
-  $$('.est-review-approve', container).forEach((btn) => {
-    btn.addEventListener('click', () => applyPayAppApproval(btn.dataset.id, { status: 'approved' }));
-  });
-  $$('.est-review-request-changes', container).forEach((btn) => {
-    btn.addEventListener('click', () => applyPayAppApproval(btn.dataset.id, { status: 'changes_requested' }));
-  });
-  $$('.est-review-add-comment', container).forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      const id = btn.dataset.id;
-      const textEl = $(`.est-review-comment-text[data-id="${id}"]`, container);
-      const text = textEl.value.trim();
-      if (!text) return;
-      await applyPayAppApproval(id, { comment: text });
-    });
-  });
-}
-
-// Populates the Pay App form with an already-recorded one's own values --
-// its No./Date/Note as typed, and (via renderPayAppItemsTable, which reads
-// editingEstimateId) its own saved itemTotals per item instead of today's
-// reference figures -- so "+ Record Pay App" (relabeled "Save Changes"
-// while editing) updates it in place rather than creating a new one.
-function startEditEstimate(estimate) {
-  editingEstimateId = estimate.id;
-  $('#f-est-no').value = estimate.estimateNo;
-  $('#f-est-date').value = estimate.date;
-  $('#f-est-note').value = estimate.note || '';
-  $('#payapp-form-title').textContent = `Pay App -- Editing ${estimate.estimateNo}`;
-  $('#btn-record-estimate').textContent = 'Save Changes';
-  $('#btn-cancel-edit-estimate').hidden = false;
-  renderEstimateHistory();
-  renderPayAppItemsTable();
-  $('#payapp-form-title').scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
-function cancelEditEstimate() {
-  editingEstimateId = null;
-  $('#f-est-no').value = nextEstimateNo(project.billingEstimates);
-  $('#f-est-date').value = todayIso();
-  $('#f-est-note').value = '';
-  $('#payapp-form-title').textContent = 'Pay App';
-  $('#btn-record-estimate').textContent = '+ Record Pay App';
-  $('#btn-cancel-edit-estimate').hidden = true;
-  renderEstimateHistory();
-  renderPayAppItemsTable();
-}
-
-$('#btn-cancel-edit-estimate').addEventListener('click', cancelEditEstimate);
-
-// The "Inspector Total" column is a reference figure, not what gets saved:
-// normally today's running total (effectivePayItemFlatEntries -- the
-// latest Pay App on file, if any, plus whatever's been reported since).
-// While editing an existing Pay App, it's instead that Pay App's own
-// baseline -- the Pay App before it (if any) plus reports up to its own
-// date, excluding its own not-yet-resaved figures from "latest" -- and the
-// adjacent input pre-fills from that Pay App's actual saved itemTotals
-// rather than the reference, since editing means showing what's really
-// there, not a fresh guess.
-// Builds just the input (plus its % or $ decoration) for one card's Pay App
-// Total field -- pulled out on its own so both the initial render and the
-// $ /Qty/% mode toggle (payAppToggleMode, below) can produce the exact same
-// markup instead of two copies drifting apart. `mode` is 'qty' (plain
-// quantity, the default for a normal unit), 'pct' (percent of contract
-// value, the default for Lump Sum), or 'cost' (a raw dollar amount, typed
-// straight off the pay application when neither a quantity nor a percent
-// comes out even -- see payAppRowContractorCost for how each mode turns
-// back into a dollar figure).
-function payAppInputMarkup(itemNumber, isLump, unitPrice, inspectorCost, mode, value) {
-  const dataAttrs = isLump ? `data-lump-price="${unitPrice}"` : `data-unit-price="${unitPrice != null ? unitPrice : ''}"`;
-  const common = `class="payapp-qty-input" data-item="${escapeHtml(itemNumber)}" data-mode="${mode}" ${dataAttrs} data-inspector-cost="${inspectorCost != null ? inspectorCost : ''}"`;
-  if (mode === 'cost') return `$ <input type="number" step="0.01" ${common} value="${value}">`;
-  if (mode === 'pct') return `<input type="number" step="any" min="0" max="100" ${common} value="${value}"> %`;
-  return `<input type="number" step="any" ${common} value="${value}">`;
-}
-
-function payAppModeToggleLabel(mode, isLump) {
-  if (mode === 'cost') return isLump ? 'Enter by %' : 'Enter by Qty';
-  return 'Enter by $';
-}
-
-function renderPayAppItemsTable() {
-  const editing = editingEstimateId ? (project.billingEstimates || []).find((e) => e.id === editingEstimateId) : null;
-  const items = fullPayItemCatalogOverview(
-    effectivePayItemFlatEntries(allReports, project.billingEstimates, editingEstimateId),
-    project.payItemCatalog
-  );
-  const list = $('#payapp-items-list');
-  if (items.length === 0) {
-    list.innerHTML = '';
-    $('#payapp-summary').hidden = true;
-    return;
-  }
-  $('#payapp-summary').hidden = false;
-  list.innerHTML = items.map((it) => {
-    // A Lump Sum item's "quantity" is already a dollar figure (see
-    // earnedTotalFor) -- editing/showing that directly here would mean
-    // typing a raw dollar amount instead of the percent complete a
-    // Lump Sum is actually billed by. Converted to/from percent of its
-    // Unit Price (already that item's whole contract value for Lump
-    // Sum, see contractTotalFor) purely at this UI layer -- what
-    // actually gets stored in itemTotals stays a dollar figure, same
-    // as every other unit, so none of the earned-value math elsewhere
-    // needs to know the difference. Falls back to a plain dollar entry
-    // if the item has no Unit Price on file to compute a percent of.
-    const isLump = isLumpSumUnit(it.unit) && it.unitPrice != null && it.unitPrice > 0;
-    const pct = isLump ? (it.total / it.unitPrice) * 100 : null;
-    // Editing pre-fills from what's actually saved for this item, not
-    // the reference -- falling back to the reference if this Pay App
-    // never had a figure for it (e.g. the item was added after it was
-    // recorded).
-    const savedRaw = editing && editing.itemTotals && editing.itemTotals[it.itemNumber] != null
-      ? Number(editing.itemTotals[it.itemNumber])
-      : null;
-    const prefill = savedRaw != null ? (isLump ? (savedRaw / it.unitPrice) * 100 : savedRaw) : (isLump ? pct : it.total);
-    const defaultMode = isLump ? 'pct' : 'qty';
-    const inspectorCost = it.earnedTotal != null ? it.earnedTotal : null;
-    // The $-entry toggle only makes sense where there's a Unit Price to
-    // convert against -- with none on file there's nothing to turn a
-    // dollar figure back into for itemTotals (or elsewhere, back into %/qty).
-    const canToggle = it.unitPrice != null && it.unitPrice > 0;
-    const inputHtml = payAppInputMarkup(
-      it.itemNumber, isLump, it.unitPrice, inspectorCost, defaultMode,
-      isLump ? pct.toFixed(1) : prefill
-    );
-    return `
-    <div class="payapp-card">
-      <div class="pac-top">
-        <span class="pac-label">${escapeHtml(it.itemNumber)}<span class="pac-desc">${escapeHtml(it.description)}</span></span>
-        <span class="pac-unit">${escapeHtml(it.unit || '')}</span>
-      </div>
-      <div class="pac-compare">
-        <div class="pac-field">
-          <div class="pac-field-label">Inspector Total</div>
-          <div class="pac-field-value">${isLump ? pct.toFixed(1) + '%' : it.total.toLocaleString()}</div>
-          <div class="pac-field-money">${inspectorCost != null ? fmtMoney(inspectorCost) : '—'}</div>
-        </div>
-        <div class="pac-field">
-          <div class="pac-field-label">Pay App Total</div>
-          <div class="pac-field-input-row">${inputHtml}</div>
-          <div class="pac-field-money payapp-contractor-money">—</div>
-          ${canToggle ? `<button type="button" class="pac-mode-toggle">${payAppModeToggleLabel(defaultMode, isLump)}</button>` : ''}
-        </div>
-      </div>
-      <div class="pac-diff">
-        <span class="pill payapp-diff-pill payapp-diff-match">—</span>
-        <span class="pac-diff-cost payapp-diff-cost">—</span>
-      </div>
-    </div>`;
-  }).join('');
-  $$('.payapp-qty-input', list).forEach((input) => input.addEventListener('input', updatePayAppDiffs));
-  updatePayAppDiffs();
-}
-
-// Swaps one card's Pay App Total field between its default mode (Qty, or %
-// for Lump Sum) and a raw $ entry -- for the item whose billed dollar
-// figure just doesn't divide back into a clean quantity or percent, so
-// typing the $ amount directly (instead of hand-solving for whatever
-// quantity happens to produce it) is the whole point. Converts the
-// currently-entered value across the switch via its own dollar equivalent
-// (payAppRowContractorCost), so toggling never loses what's already typed.
-$('#payapp-items-list').addEventListener('click', (e) => {
-  const btn = e.target.closest('.pac-mode-toggle');
-  if (!btn) return;
-  const card = btn.closest('.payapp-card');
-  const input = card.querySelector('.payapp-qty-input');
-  const isLump = input.dataset.lumpPrice != null;
-  const unitPrice = Number(isLump ? input.dataset.lumpPrice : input.dataset.unitPrice);
-  const currentCost = payAppRowContractorCost(input);
-  const nextMode = input.dataset.mode === 'cost' ? (isLump ? 'pct' : 'qty') : 'cost';
-  let nextValue = '';
-  if (currentCost != null && unitPrice > 0) {
-    if (nextMode === 'cost') nextValue = currentCost.toFixed(2);
-    else if (nextMode === 'pct') nextValue = ((currentCost / unitPrice) * 100).toFixed(1);
-    else nextValue = String(Math.round((currentCost / unitPrice) * 1e6) / 1e6);
-  }
-  const inspectorCost = input.dataset.inspectorCost !== '' ? Number(input.dataset.inspectorCost) : null;
-  const rowEl = card.querySelector('.pac-field-input-row');
-  rowEl.innerHTML = payAppInputMarkup(input.dataset.item, isLump, unitPrice, inspectorCost, nextMode, nextValue);
-  rowEl.querySelector('.payapp-qty-input').addEventListener('input', updatePayAppDiffs);
-  btn.textContent = payAppModeToggleLabel(nextMode, isLump);
-  updatePayAppDiffs();
 });
 
-// A card's contractor-side dollar cost from its Pay App Total input's
-// current value -- null when there's nothing to compute it from (no Unit
-// Price on file, or the field's not a valid number), same "can't compute,
-// don't pretend to" rule as the rest of this app's earned-value math. $
-// mode needs no conversion at all -- the typed value already is the cost.
-function payAppRowContractorCost(input) {
-  const v = Number(input.value);
-  if (!isFinite(v) || input.value.trim() === '') return null;
-  if (input.dataset.mode === 'cost') return v;
-  if (input.dataset.lumpPrice != null) return (v / 100) * Number(input.dataset.lumpPrice);
-  const unitPrice = input.dataset.unitPrice;
-  return unitPrice ? v * Number(unitPrice) : null;
-}
-
-// Which severity band a % diff falls into -- not a claim about direction
-// (over- vs under-billed), just how far apart the two totals are, so the
-// pill reads as a flag worth a second look rather than an accusation.
-function payAppDiffSeverity(pctDiff) {
-  if (pctDiff === 0) return 'match';
-  if (pctDiff <= 0.01) return 'ok';
-  if (pctDiff <= 0.05) return 'warn';
-  return 'over';
-}
-
-// Same formula as the reference comparison sheet this was built to match:
-// $ Diff = Inspector Total - Pay App (contractor) Total, % Diff = that
-// difference's size relative to Inspector Total. Recomputed on every
-// keystroke in any card (see renderPayAppItemsTable's own input listeners)
-// rather than only at render time, so it reads as genuinely live instead
-// of a snapshot that goes stale the moment something's typed.
-function updatePayAppDiffs() {
-  const list = $('#payapp-items-list');
-  let totalContractor = 0, totalInspector = 0, hasAny = false;
-  $$('.payapp-qty-input', list).forEach((input) => {
-    const card = input.closest('.payapp-card');
-    const contractorCost = payAppRowContractorCost(input);
-    const inspectorCostRaw = input.dataset.inspectorCost;
-    const inspectorCost = inspectorCostRaw !== '' ? Number(inspectorCostRaw) : null;
-    const moneyEl = card.querySelector('.payapp-contractor-money');
-    const pillEl = card.querySelector('.payapp-diff-pill');
-    const costEl = card.querySelector('.payapp-diff-cost');
-    moneyEl.textContent = contractorCost != null ? fmtMoney(contractorCost) : '—';
-    if (contractorCost == null || inspectorCost == null) {
-      pillEl.textContent = '—';
-      pillEl.className = 'pill payapp-diff-pill payapp-diff-match';
-      costEl.textContent = '—';
-      return;
-    }
-    const costDiff = inspectorCost - contractorCost;
-    const pctDiff = inspectorCost !== 0 ? Math.abs(costDiff) / inspectorCost : (costDiff === 0 ? 0 : null);
-    pillEl.textContent = pctDiff != null ? (pctDiff * 100).toFixed(1) + '% diff' : 'n/a';
-    pillEl.className = 'pill payapp-diff-pill payapp-diff-' + (pctDiff != null ? payAppDiffSeverity(pctDiff) : 'match');
-    costEl.textContent = fmtMoney(costDiff);
-    totalContractor += contractorCost;
-    totalInspector += inspectorCost;
-    hasAny = true;
-  });
-  const totalCostDiff = totalInspector - totalContractor;
-  const totalPctDiff = totalInspector !== 0 ? Math.abs(totalCostDiff) / totalInspector : null;
-  $('#payapp-total-inspector').textContent = hasAny ? fmtMoney(totalInspector) : '—';
-  $('#payapp-total-contractor').textContent = hasAny ? fmtMoney(totalContractor) : '—';
-  $('#payapp-total-pctdiff').textContent = totalPctDiff != null ? (totalPctDiff * 100).toFixed(1) + '%' : '—';
-  $('#payapp-total-costdiff').textContent = hasAny ? fmtMoney(totalCostDiff) : '—';
-}
-
-function fmtMoney(n) {
-  return n == null ? '—' : n.toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
-}
+// ---------- Save / delete ----------
 
 $('#btn-record-estimate').addEventListener('click', async () => {
   const estimateNo = $('#f-est-no').value.trim();
   const date = $('#f-est-date').value;
   const note = $('#f-est-note').value.trim();
+  const editing = selectedEstimate();
   $('#estimate-error').hidden = true;
   if (!estimateNo || !date) {
     $('#estimate-error').textContent = 'Pay App No. and Date are both required.';
     $('#estimate-error').hidden = false;
     return;
   }
-  // See renderEstimateHistory's own comment -- a second Pay App on the same
-  // date isn't a cosmetic issue, it silently drops one of them from the
-  // progress chart and dashboard math entirely. Confirmed rather than just
-  // a passive warning, since it's easy to miss a one-line note and this is
-  // the one mistake here that isn't obviously recoverable later.
-  const dateCollision = (project.billingEstimates || []).find((e) => e.date === date && e.id !== editingEstimateId);
+  // A second Pay App on the same date silently drops one of them from the
+  // progress chart and dashboard math entirely -- confirmed rather than
+  // just warned about, since it's easy to miss and hard to notice later.
+  const dateCollision = (project.billingEstimates || []).find((e) => e.date === date && (!editing || e.id !== editing.id));
   if (dateCollision) {
     const ok = confirm(
       `Pay App ${dateCollision.estimateNo} is already dated ${date}. Two Pay Apps on the same date can't both show on the progress chart -- only one will actually count toward it or the dashboard.\n\nSave with this date anyway?`
     );
     if (!ok) return;
   }
+  // Always saved as to-date totals in stored units (a dollar figure for
+  // Lump Sum, a quantity for everything else), however it was entered --
+  // a blank box carries the previous Pay App's figure forward (see
+  // rowFigures).
   const itemTotals = {};
-  $$('.payapp-qty-input').forEach((input) => {
-    const v = input.value.trim();
-    if (v === '') return;
-    // itemTotals always stores the same convention regardless of which
-    // mode a row was actually entered in -- a dollar figure for Lump Sum
-    // (see earnedTotalFor), a plain quantity for everything else -- so
-    // this is the one place that needs to know whether the input held a
-    // percent, a raw quantity, or (the $-entry toggle) a dollar amount
-    // that still needs converting back to whichever of those two the item
-    // actually uses.
-    const isLump = input.dataset.lumpPrice != null;
-    const unitPrice = Number(isLump ? input.dataset.lumpPrice : input.dataset.unitPrice);
-    let stored;
-    if (input.dataset.mode === 'cost') {
-      const cost = Number(v);
-      stored = isLump ? cost : (unitPrice > 0 ? cost / unitPrice : null);
-    } else if (isLump) {
-      stored = (Number(v) / 100) * unitPrice; // pct mode
-    } else {
-      stored = Number(v); // qty mode
-    }
-    if (stored != null && isFinite(stored)) itemTotals[input.dataset.item] = stored;
+  $$('#payapp-items-list .pa-edit-row:not(.pa-row-head)').forEach((row) => {
+    const f = rowFigures(row);
+    if (!isFinite(f.toDate) || Math.abs(f.toDate) < 1e-9) return;
+    itemTotals[row.dataset.item] = Math.round(f.toDate * 1e6) / 1e6;
   });
   if (!project.billingEstimates) project.billingEstimates = [];
   let savedEstimate;
-  if (editingEstimateId) {
-    savedEstimate = project.billingEstimates.find((e) => e.id === editingEstimateId);
-    // An approval that already happened shouldn't silently keep applying to
-    // figures that have since changed underneath it -- back to Pending so a
-    // manager notices and re-reviews, same reasoning as any other approval
-    // workflow. A no-op edit (re-saving with identical values) doesn't reset it.
+  if (editing) {
+    savedEstimate = editing;
+    // An approval shouldn't silently keep applying to figures that have
+    // since changed underneath it -- back to Pending so a manager notices
+    // and re-reviews. A no-op re-save doesn't reset it.
     const contentChanged = savedEstimate.estimateNo !== estimateNo || savedEstimate.date !== date
-      || savedEstimate.note !== note || JSON.stringify(savedEstimate.itemTotals) !== JSON.stringify(itemTotals);
+      || (savedEstimate.note || '') !== note || JSON.stringify(savedEstimate.itemTotals) !== JSON.stringify(itemTotals);
     Object.assign(savedEstimate, { estimateNo, date, note, itemTotals });
     if (contentChanged && savedEstimate.approvalStatus) savedEstimate.approvalStatus = 'pending';
   } else {
@@ -560,18 +860,30 @@ $('#btn-record-estimate').addEventListener('click', async () => {
   // alert banner (common.js) which Pay App actually changed.
   savedEstimate.updatedAt = Date.now();
   await saveProject(project);
-  const wasEditing = !!editingEstimateId;
-  editingEstimateId = null;
-  $('#payapp-form-title').textContent = 'Pay App';
-  $('#btn-record-estimate').textContent = '+ Record Pay App';
-  $('#btn-cancel-edit-estimate').hidden = true;
-  renderEstimateHistory();
-  renderPayAppItemsTable();
-  $('#f-est-no').value = '';
-  $('#f-est-date').value = '';
-  $('#f-est-note').value = '';
-  $('#f-est-no').value = nextEstimateNo(project.billingEstimates);
-  if (wasEditing) $('#f-est-date').value = todayIso();
+  dirty = false;
+  selectedId = savedEstimate.id;
+  panelMode = 'view';
+  renderList();
+  renderDetail();
+  $('#pa-view-status').textContent = editing ? 'Saved.' : 'Recorded.';
+  $('#pa-detail-step').scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+
+$('#btn-delete-estimate').addEventListener('click', async () => {
+  const estimate = selectedEstimate();
+  if (!estimate) return;
+  if (!confirm(`Delete Pay App ${estimate.estimateNo} (${estimate.date})? This can't be undone.`)) return;
+  project.billingEstimates = (project.billingEstimates || []).filter((e) => e.id !== estimate.id);
+  await saveProject(project);
+  dirty = false;
+  selectedId = project.billingEstimates.length ? null : 'new';
+  renderList();
+  renderDetail();
+});
+
+// Leaving the page with unsaved Pay App changes.
+window.addEventListener('beforeunload', (e) => {
+  if (dirty) { e.preventDefault(); e.returnValue = ''; }
 });
 
 init();
