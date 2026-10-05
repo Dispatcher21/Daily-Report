@@ -3219,6 +3219,7 @@ input[type="date"] { min-width: 0; }
    what this Pay App adds), so it's clear what the typed figure means. */
 .pa-other-basis { font-size: 0.75rem; font-weight: 600; color: var(--text); }
 .pa-other-basis:empty { display: none; }
+.pa-other-basis.pa-negative { color: var(--danger); }
 .pa-items-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 0.5rem 1rem; flex-wrap: wrap; margin: 1.1rem 0 0.5rem; }
 .pa-items-head .eyebrow { margin: 0; padding: 0; border: 0; }
 .pa-filter { flex-wrap: wrap; flex-shrink: 1; min-width: 0; } /* wraps instead of widening a 320px phone */
@@ -3285,35 +3286,63 @@ input[type="date"] { min-width: 0; }
   background: var(--surface); border-top: 1px solid var(--border);
   box-shadow: 0 -6px 14px rgba(0, 0, 0, 0.08); border-radius: 0 0 var(--radius) var(--radius);
 }
-/* This Pay App / To date x Pay App / Inspector / Difference. */
-.pa-totals {
-  display: grid; grid-template-columns: auto repeat(3, minmax(0, 1fr)); gap: 0.1rem 1rem;
-  align-items: baseline; margin-bottom: 0.55rem; max-width: 46rem;
-}
-.pa-totals .pt-head { font-size: 0.64rem; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-dim); }
-.pa-totals .pt-row-label { font-size: 0.78rem; font-weight: 700; white-space: nowrap; }
-.pa-totals .pt-contract { display: block; font-size: 0.68rem; font-weight: 600; color: var(--text-dim); }
-.pa-totals .pt-value { font-weight: 700; font-size: 1rem; font-variant-numeric: tabular-nums; }
+/* Running totals while filling one in: this Pay App, billed to date, and
+   what that is of the contract. */
+.pa-run-totals { display: flex; flex-wrap: wrap; gap: 0.2rem 1.5rem; margin-bottom: 0.55rem; }
+.pa-run-totals > div { display: flex; flex-direction: column; min-width: 0; }
+.pa-run-totals .rt-label { font-size: 0.64rem; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-dim); }
+.pa-run-totals .rt-value { font-weight: 700; font-size: 1.1rem; font-variant-numeric: tabular-nums; }
 .pa-savebar-actions { display: flex; align-items: center; gap: 0.4rem 0.75rem; flex-wrap: wrap; }
 .pa-savebar-actions .btn-primary { width: auto; margin: 0; padding: 0.65rem 1.4rem; font-size: 1rem; }
 .pa-delete { color: var(--danger); margin-left: auto; }
 .pa-status { color: var(--ok); font-weight: 700; font-size: 0.85rem; }
-/* Phone: same grid, tighter, so the bar stays short. */
-.pa-totals .pt-short { display: none; }
 @media (max-width: 699px) {
-  .pa-totals { grid-template-columns: auto repeat(3, auto); justify-content: space-between; gap: 0.05rem 0.4rem; margin-bottom: 0.45rem; }
-  .pa-totals .pt-value { font-size: 0.8rem; }
-  .pa-totals .pt-head { font-size: 0.58rem; }
-  .pa-totals .pt-row-label { font-size: 0.68rem; }
-  .pa-totals .pt-contract { font-size: 0.6rem; }
-  .pa-totals .pt-long { display: none; }
-  .pa-totals .pt-short { display: inline; }
-  .pa-totals .pt-contract { white-space: normal; max-width: 4.5rem; }
+  .pa-run-totals { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 0.5rem; margin-bottom: 0.45rem; }
+  .pa-run-totals .rt-value { font-size: 0.95rem; }
   .pa-savebar-actions .btn-primary { padding: 0.55rem 1.1rem; }
-@media (max-width: 379px) {
-  .pa-totals { gap: 0.05rem 0.3rem; }
-  .pa-totals .pt-value { font-size: 0.74rem; }
 }
+}
+
+/* The form's rows: Item / previous Pay App (reference) / this entry. */
+.pa-edit-row { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1.5fr); }
+.pa-cell-prev { display: flex; flex-direction: column; align-items: flex-start; gap: 0.1rem; min-width: 0; color: var(--text-dim); }
+.pa-cell-prev .pa-cell-value { font-weight: 600; }
+.pa-cell-payapp input.payapp-qty-input::placeholder { color: var(--text-dim); opacity: 0.55; font-weight: 600; }
+
+/* A recorded Pay App's breakdown. */
+.pa-view-top { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
+.pa-view-top .pa-status-line { margin: 0; }
+.pa-view-actions { display: flex; gap: 0.4rem; }
+.pa-view-actions .btn-sm { margin: 0; }
+.pa-view-meta { margin: 0 0 0.9rem; font-size: 0.85rem; color: var(--text-dim); }
+.pa-sum-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.6rem; }
+.pa-sum-card { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; padding: 0.65rem 0.8rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.pa-sum-label { font-size: 0.66rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-dim); }
+.pa-sum-value { font-size: 1.2rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.pa-sum-sub { font-size: 0.75rem; color: var(--text-dim); }
+.pa-sum-card.pa-sum-warn { border-color: var(--warn-border); background: var(--warn-bg); }
+.pa-sum-card.pa-sum-warn .pa-sum-value { color: var(--warn); }
+.pa-sum-card.pa-sum-ok .pa-sum-value { color: var(--ok); }
+.pa-callouts { list-style: none; margin: 0.75rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+.pa-callouts li { padding: 0.5rem 0.75rem; border-radius: var(--radius-sm); font-size: 0.88rem; }
+.pa-callouts .pa-callout-warn { background: var(--warn-bg); color: var(--text); border: 1px solid var(--warn-border); }
+.pa-callouts .pa-callout-ok { background: var(--ok-bg); color: var(--ok); }
+.pa-callouts .text-btn { padding: 0 0.2rem; min-height: 0; font-size: 0.88rem; }
+.pa-bd-row { grid-template-columns: minmax(0, 1.5fr) repeat(3, minmax(0, 1fr)) minmax(0, 0.9fr); align-items: start; }
+.pa-bd-row.pa-row-head { align-items: center; }
+.pa-bd-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 0.1rem; min-width: 0; }
+.pa-bd-billed { font-weight: 700; }
+.pa-bd-money { font-weight: 500; font-size: 0.78rem; color: var(--text-dim); }
+.pa-bd-logged { font-size: 0.78rem; color: var(--text-dim); }
+.pa-plan-bar { display: block; width: 100%; max-width: 7rem; height: 5px; margin: 0.15rem 0; background: var(--surface-3); border-radius: 3px; overflow: hidden; }
+.pa-plan-bar > span { display: block; height: 100%; background: var(--brand); }
+@media (max-width: 899px) {
+  .pa-sum-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 699px) {
+  .pa-edit-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); }
+  .pa-bd-row { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem 0.75rem; }
+  .pa-sum-value { font-size: 1.05rem; }
 }
 
 /* ---------- Progress-over-time chart ---------- */
