@@ -323,6 +323,7 @@ async function joinCompanyRoom(password, onProgress) {
   const snap = await getDoc(doc(db, 'companies', enteredHash));
   if (!snap.exists()) throw new Error('No company found with that password.');
   const data = snap.data();
+  if (data.passwordChangedAt) throw new Error('This company password has been changed. Ask your admin for the new one.');
 
   let code = enteredHash;
   let companyDoc = data;
@@ -366,7 +367,7 @@ async function enterCompany(code, companyDoc, { roleId = null, scopedPermissions
     COMPANY_PERMISSIONS_SETTING,
     scopedPermissions ? { ...DEFAULT_PERMISSIONS, ...scopedPermissions } : { ...DEFAULT_PERMISSIONS, ...(companyDoc.permissions || {}) }
   );
-  await saveSetting(LOGO_SYNCED_AT_SETTING, null);
+  await clearCompanyBranding();
   // A signed-in account becomes (or stays) a member, and its role and
   // project access take over from the plain-member defaults above -- before
   // the pull, so a member limited to some projects never pulls the rest.
@@ -423,6 +424,17 @@ async function unlockCompanyAdmin(adminPassword) {
   }
 }
 
+// The logo and home-screen themes belong to the company, not the device:
+// shed when leaving, and reset when joining, so a company with no logo of
+// its own never shows the last company's.
+async function clearCompanyBranding() {
+  await clearReportLogo();
+  await deleteSetting(LOGO_SYNCED_AT_SETTING);
+  await replaceAllCompanyThemes([]);
+  await deleteSetting(THEMES_SYNCED_AT_SETTING);
+  if (window.appCompanyTheme && window.appCompanyTheme.get()) window.appCompanyTheme.reset();
+}
+
 // Leaves the room on this device only -- the room and its data on the
 // server are completely untouched, exactly like "Forget This Folder" for
 // the local-folder sync (rejoining pulls everything straight back down).
@@ -472,7 +484,7 @@ async function leaveCompanyRoom() {
   await deleteSetting(COMPANY_PERMISSIONS_SETTING);
   await deleteSetting(COMPANY_PROJECT_SCOPE_SETTING);
   await deleteSetting(COMPANY_ROLE_ID_SETTING);
-  await deleteSetting(LOGO_SYNCED_AT_SETTING);
+  await clearCompanyBranding();
 
   // deleteReport (soft-delete into local Trash), not a hard removal -- see
   // storage.js's PERMANENT DELETION comment for why nothing in this app
@@ -626,6 +638,7 @@ async function rejoinAccountCompany(code, onProgress) {
   if (!companySnap.exists()) throw new Error('Your company could not be found. Ask your admin for the company password.');
   const memberSnap = await getDoc(doc(db, 'companies', code, 'members', account.uid));
   if (!memberSnap.exists()) throw new Error('You’re no longer a member of your company. Ask your admin.');
+  if (memberSnap.data().movedTo && memberSnap.data().movedTo !== code) return rejoinAccountCompany(memberSnap.data().movedTo, onProgress);
   if (memberSnap.data().status === 'disabled') throw new Error('Your access to this company has been turned off. Ask your admin.');
   if (memberSnap.data().status === 'pending') throw new PendingApprovalError(companySnap.data().name);
   return enterCompany(code, companySnap.data(), {}, onProgress);
@@ -661,7 +674,7 @@ async function disconnectCompanyKeepingUnsynced() {
   await deleteSetting(COMPANY_PERMISSIONS_SETTING);
   await deleteSetting(COMPANY_PROJECT_SCOPE_SETTING);
   await deleteSetting(COMPANY_ROLE_ID_SETTING);
-  await deleteSetting(LOGO_SYNCED_AT_SETTING);
+  await clearCompanyBranding();
 
   const inCompany = { code };
   const reports = (await getAllReports({ includeDeleted: true })).filter((r) => reportInScope(r, inCompany) && r.companyCode === code);
@@ -741,6 +754,10 @@ async function refreshMembership({ joined = false } = {}) {
       window.dispatchEvent(new CustomEvent('company-access-ended', { detail: { company: room.name || '', status: 'removed' } }));
       return null;
     }
+  }
+  if (snap.exists() && snap.data().movedTo && snap.data().movedTo !== room.code) {
+    // The company changed its password; this member follows it.
+    if (await followCompanyMove(snap.data())) return refreshMembership({ joined });
   }
   if (snap.exists()) {
     member = snap.data();
@@ -1240,7 +1257,11 @@ async function changeCompanyPassword(newPassword, adminPassword, onProgress) {
 
   const newCode = await hashText(newPassword);
   if (onProgress) onProgress({ phase: 'creating' });
+  // Everything else on the company doc (themes, the approval switch, ...)
+  // carries over as is; the logo is re-uploaded below.
+  const { adminPasswordHash: _oldHash, companyPasswordEnc: _oldEnc, logoUpdatedAt: _oldLogo, movedTo: _oldMove, ...carried } = oldData;
   await setDoc(doc(db, 'companies', newCode), {
+    ...carried,
     name: oldData.name || '',
     // Recomputed fresh rather than carried over from oldData -- the
     // password's already confirmed correct above, so this is a free
@@ -1252,6 +1273,8 @@ async function changeCompanyPassword(newPassword, adminPassword, onProgress) {
     managerDashboard: oldData.managerDashboard || null,
     createdAt: serverTimestamp(),
   });
+  await copyCompanyAccounts(room.code, newCode, oldData.name || '', onProgress);
+  await copyCompanyThemeImages(room.code, newCode, oldData.themes || []);
 
   if (onProgress) onProgress({ phase: 'roles' });
   const rolesSnap = await getDocs(collection(db, 'companies', room.code, 'roles'));
@@ -1281,6 +1304,13 @@ async function changeCompanyPassword(newPassword, adminPassword, onProgress) {
     await setDoc(doc(db, 'companies', newCode, 'userLayouts', layoutDoc.id), layoutDoc.data());
   }
 
+  if (onProgress) onProgress({ phase: 'history' });
+  await copyCompanyAuditLog(room.code, newCode);
+
+  // This device's copies of the company's projects and reports move to the
+  // new address too -- otherwise the push below skips every one of them as
+  // "another company's" and the new company starts out empty.
+  await relabelLocalCompanyData(room.code, newCode);
   await saveSetting(COMPANY_CODE_SETTING, newCode);
   await saveSetting(LOGO_SYNCED_AT_SETTING, null); // force a fresh logo push under the new address
 
@@ -1289,6 +1319,11 @@ async function changeCompanyPassword(newPassword, adminPassword, onProgress) {
     await pushCompanyLogo();
   }
   await pushAllLocalData(newCode, onProgress);
+  const account = await getAccount();
+  if (account) await writeAccountProfile(account.uid, { companyCode: newCode, companyName: oldData.name || '' });
+  // The old password stops letting anyone new in. (Its data stays put, as
+  // before, as a fallback.)
+  await setDoc(doc(db, 'companies', room.code), { passwordChangedAt: serverTimestamp() }, { merge: true });
 
   // After the code switch, not before -- writeAuditEntry stamps whatever
   // company getCompanyRoom() currently resolves to, and this event belongs
@@ -1299,6 +1334,93 @@ async function changeCompanyPassword(newPassword, adminPassword, onProgress) {
   }
 
   return { oldCode: room.code, newCode };
+}
+
+// Moves this device's copies of a company's projects, reports and history
+// from one company address to another (after a company password change).
+async function relabelLocalCompanyData(oldCode, newCode) {
+  for (const p of await getAllProjects()) {
+    if (p.companyCode === oldCode) await putProjectRaw({ ...p, companyCode: newCode });
+  }
+  for (const r of await getAllReports({ includeDeleted: true })) {
+    if (r.companyCode === oldCode) await putReportRaw({ ...r, companyCode: newCode });
+  }
+  for (const e of await getAllAuditEntries()) {
+    if (e.companyCode === oldCode) await saveAuditEntry({ ...e, companyCode: newCode });
+  }
+}
+
+// Members and pre-approved emails follow the company to its new password.
+// Each still-current member's old record is marked with where the company
+// went, so their devices follow it on their own (see followCompanyMove);
+// anyone turned off or removed is left behind.
+async function copyCompanyAccounts(oldCode, newCode, companyName, onProgress) {
+  const { db } = await waitForFirebaseCore();
+  const { doc, setDoc, collection, getDocs, query, where, serverTimestamp } = await import(FIRESTORE_SDK);
+  if (onProgress) onProgress({ phase: 'members' });
+  const account = await getAccount();
+  const members = (await getDocs(collection(db, 'companies', oldCode, 'members'))).docs.map((d) => ({ ...d.data(), uid: d.id }));
+  // This admin's own record first: the new company's rules need an admin
+  // on record before anyone else can be added.
+  members.sort((a, b) => (b.uid === (account && account.uid)) - (a.uid === (account && account.uid)));
+  for (const m of members) {
+    await setDoc(doc(db, 'companies', newCode, 'members', m.uid), { ...m, movedTo: null, updatedAt: serverTimestamp() });
+  }
+  for (const m of members) {
+    if (m.status === 'disabled') continue;
+    await setDoc(doc(db, 'companies', oldCode, 'members', m.uid), { movedTo: newCode, movedToName: companyName }, { merge: true });
+  }
+  if (!account) return; // pre-approved emails are only ever added (and readable) by a signed-in admin
+  const invites = await getDocs(query(collection(db, 'invites'), where('companyCode', '==', oldCode)));
+  for (const d of invites.docs) {
+    await setDoc(doc(db, 'invites', d.id), { companyCode: newCode, companyName }, { merge: true });
+  }
+}
+
+async function copyCompanyThemeImages(oldCode, newCode, themes) {
+  const { storage } = await waitForFirebaseCore();
+  const { ref, getBytes, getMetadata, uploadBytes } = await import(STORAGE_SDK);
+  for (const t of themes) {
+    for (const kind of ['background', 'decal']) {
+      if (!(kind === 'background' ? t.hasBackgroundImage : t.hasDecalImage)) continue;
+      try {
+        const from = ref(storage, themeAssetPath(oldCode, t.id, kind));
+        const [bytes, meta] = await Promise.all([getBytes(from), getMetadata(from)]);
+        await uploadBytes(ref(storage, themeAssetPath(newCode, t.id, kind)), bytes, { contentType: meta.contentType });
+      } catch (err) {
+        console.error('theme image copy:', err);
+      }
+    }
+  }
+}
+
+async function copyCompanyAuditLog(oldCode, newCode) {
+  const { db } = await waitForFirebaseCore();
+  const { doc, collection, getDocs, writeBatch } = await import(FIRESTORE_SDK);
+  const entries = (await getDocs(collection(db, 'companies', oldCode, 'auditLog'))).docs;
+  for (let i = 0; i < entries.length; i += 400) {
+    const batch = writeBatch(db);
+    for (const d of entries.slice(i, i + 400)) {
+      const data = d.data();
+      batch.set(doc(db, 'companies', newCode, 'auditLog', d.id), data.companyCode ? { ...data, companyCode: newCode } : data);
+    }
+    await batch.commit();
+  }
+}
+
+// A signed-in member whose company changed its password: this device
+// moves to the new address on its own, no new password needed. Returns
+// true when it moved.
+async function followCompanyMove(member) {
+  if (!member || !member.movedTo) return false;
+  const room = await getCompanyRoom();
+  if (!room || room.code === member.movedTo) return false;
+  await relabelLocalCompanyData(room.code, member.movedTo);
+  await saveSetting(COMPANY_CODE_SETTING, member.movedTo);
+  if (member.movedToName) await saveSetting(COMPANY_NAME_SETTING, member.movedToName);
+  await saveSetting(LOGO_SYNCED_AT_SETTING, null);
+  await saveSetting(THEMES_SYNCED_AT_SETTING, null);
+  return true;
 }
 
 // Everything recoverable (the company password, every custom setup's
