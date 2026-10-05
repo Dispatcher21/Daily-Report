@@ -68,8 +68,17 @@
           <label class="pa-field-note">Note (optional) <input type="text" id="f-est-note" placeholder="e.g. Pay Application 3"></label>
         </div>
 
+        <div class="pa-basis">
+          <span class="pa-basis-label">What are you entering?</span>
+          <div class="view-toggle pa-filter" id="pa-basis" role="group" aria-label="What are you entering">
+            <button type="button" class="view-toggle-btn" data-basis="total">Totals to date</button>
+            <button type="button" class="view-toggle-btn" data-basis="period">This Pay App only</button>
+          </div>
+          <p class="pa-basis-hint" id="pa-basis-hint"></p>
+        </div>
+
         <div class="pa-items-head">
-          <div class="eyebrow">Items <button type="button" class="info-tip" data-tip="Inspector is your logged running total as of this Pay App's date, for comparison. Pay App is what gets approved and saved: it starts filled in with the Inspector figure (or, for one already recorded, what was saved), so only change the items that differ." aria-label="What this does">i</button></div>
+          <div class="eyebrow">Items <button type="button" class="info-tip" data-tip="Inspector is what you've logged, for comparison: the previous Pay App plus reports filed since, up to this Pay App's date. Pay App is what gets approved and saved. It starts filled in with the Inspector figure (or, for one already recorded, what was saved), so only change the items that differ." aria-label="What this does">i</button></div>
           <div class="view-toggle pa-filter" id="pa-filter" role="group" aria-label="Show">
             <button type="button" class="view-toggle-btn active" data-filter="all">All items <span id="pa-count-all"></span></button>
             <button type="button" class="view-toggle-btn" data-filter="diff">Only differences <span id="pa-count-diff"></span></button>
@@ -84,12 +93,21 @@
         </section>
 
         <div class="pa-actionbar" id="pa-actionbar">
-          <div class="pa-totals" id="payapp-summary">
-            <div><span class="ps-label">Inspector</span><span class="ps-value" id="payapp-total-inspector">—</span></div>
-            <div><span class="ps-label">Pay App</span><span class="ps-value" id="payapp-total-contractor">—</span></div>
-            <div><span class="ps-label">Difference</span><span class="ps-value" id="payapp-total-costdiff">—</span> <span class="ps-pct" id="payapp-total-pctdiff"></span></div>
+          <div class="pa-totals" id="payapp-summary" role="table" aria-label="Totals">
+            <span class="pt-corner" role="columnheader"></span>
+            <span class="pt-head" role="columnheader">Pay App</span>
+            <span class="pt-head" role="columnheader">Inspector</span>
+            <span class="pt-head" role="columnheader">Difference</span>
+            <span class="pt-row-label" id="pt-period-label" role="rowheader"><span class="pt-long">This Pay App</span><span class="pt-short">This app</span></span>
+            <span class="pt-value" id="pt-period-payapp">—</span>
+            <span class="pt-value" id="pt-period-insp">—</span>
+            <span class="pt-value" id="pt-period-diff">—</span>
+            <span class="pt-row-label" role="rowheader">To date <span class="pt-contract" id="pt-contract"></span></span>
+            <span class="pt-value" id="pt-total-payapp">—</span>
+            <span class="pt-value" id="pt-total-insp">—</span>
+            <span class="pt-value" id="pt-total-diff">—</span>
           </div>
-          <div class="pa-actions">
+          <div class="pa-savebar-actions">
             <button type="button" class="btn-primary" id="btn-record-estimate">Record Pay App</button>
             <button type="button" class="text-btn" id="btn-cancel-edit-estimate" hidden>Cancel</button>
             <button type="button" class="text-btn pa-delete" id="btn-delete-estimate" hidden>Delete</button>
@@ -120,6 +138,12 @@ let allReports = [];
 let selectedId = null;
 let dirty = false; // unsaved changes in the panel -- see confirmDiscard
 let itemFilter = 'all'; // 'all' or 'diff' (only items where the Pay App differs)
+// What the Pay App fields hold: 'total' (each item's total billed to date,
+// all earlier Pay Apps included) or 'period' (only what this Pay App adds
+// since the one before it). A Pay App is always SAVED as to-date totals
+// (itemTotals), whichever way it was entered. Remembered per device.
+const ENTRY_BASIS_SETTING = 'payAppEntryBasis';
+let entryBasis = 'total';
 let canApprovePayApps = false; // same companyCan gate as report-viewer.html's review panel, checked once at load
 
 async function init() {
@@ -139,6 +163,7 @@ async function init() {
 
   allReports = (await getReportsForProject(project.id)).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
   canApprovePayApps = await companyCan('approvePayApps');
+  entryBasis = (await getSetting(ENTRY_BASIS_SETTING)) === 'period' ? 'period' : 'total';
 
   // manager.html's Needs Your Review list links straight in with ?estimate=
   // so a manager lands on that Pay App with its review section in view.
@@ -188,8 +213,9 @@ function payAppBilledTotal(estimate) {
     const item = catalog.get(itemNumber);
     const v = Number(value);
     if (!isFinite(v)) return;
+    const price = item ? parsedUnitPrice(item) : null;
     if (item && isLumpSumUnit(item.unit)) { total += v; any = true; }
-    else if (item && item.unitPrice != null) { total += v * Number(item.unitPrice); any = true; }
+    else if (price != null) { total += v * price; any = true; }
   });
   return any ? total : null;
 }
@@ -303,19 +329,94 @@ $('#btn-cancel-edit-estimate').addEventListener('click', () => {
   renderDetail();
 });
 
-// Builds just the input (plus its % or $ decoration) for one item's Pay App
-// field -- pulled out on its own so both the initial render and the $
-// /Qty/% mode toggle (below) produce the exact same markup. `mode` is 'qty'
-// (plain quantity, the default for a normal unit), 'pct' (percent of
-// contract value, the default for Lump Sum), or 'cost' (a raw dollar
-// amount, typed straight off the pay application when neither a quantity
-// nor a percent comes out even -- see payAppRowContractorCost for how each
-// mode turns back into a dollar figure).
-function payAppInputMarkup(itemNumber, isLump, unitPrice, inspectorCost, mode, value, unit) {
-  const dataAttrs = isLump ? `data-lump-price="${unitPrice}"` : `data-unit-price="${unitPrice != null ? unitPrice : ''}"`;
-  const common = `class="payapp-qty-input" data-item="${escapeHtml(itemNumber)}" data-mode="${mode}" ${dataAttrs} data-inspector-cost="${inspectorCost != null ? inspectorCost : ''}" data-unit="${escapeHtml(unit || '')}" aria-label="Pay App amount for ${escapeHtml(itemNumber)}"`;
+// ---------- Items ----------
+//
+// Every figure here is kept in "stored units" -- the same convention
+// itemTotals is saved in: a dollar amount for a Lump Sum item (see
+// earnedTotalFor), a plain quantity for everything else -- and converted to
+// whatever an input shows (qty, % of a Lump Sum's value, or $) only at the
+// edges. Each row carries three stored figures as data attributes:
+//   data-prev  the previous Pay App's to-date figure (0 if this is the first)
+//   data-insp  the Inspector to-date figure (previous Pay App + reports since)
+// and its input holds either a to-date or a this-Pay-App figure, per
+// entryBasis.
+
+// The Pay App this one builds on, by date: for a recorded one, the one
+// right before it; for a new one, the latest on file.
+function previousEstimate(editing) {
+  const sorted = sortedEstimates(project.billingEstimates);
+  if (!editing) return sorted.pop() || null;
+  const idx = sorted.findIndex((e) => e.id === editing.id);
+  return idx > 0 ? sorted[idx - 1] : null;
+}
+
+// Inspector to-date figures for a Pay App: the previous Pay App's own
+// totals plus every report filed after it -- and, for a recorded one, only
+// reports up to its own date, so an older Pay App isn't compared against
+// work logged after it.
+function inspectorItems(editing, prev) {
+  const reports = allReports.filter((r) => {
+    if (!r.date) return true; // can't be placed relative to a cutoff -- kept, same as effectivePayItemFlatEntries
+    if (prev && r.date <= prev.date) return false;
+    if (editing && r.date > editing.date) return false;
+    return true;
+  });
+  const flat = Object.entries((prev && prev.itemTotals) || {})
+    .filter(([, qty]) => qty != null && qty !== '')
+    .map(([itemNumber, qty]) => ({ itemNumber, qty: Number(qty) }))
+    .concat(reports.flatMap((r) => r.payItems || []));
+  return fullPayItemCatalogOverview(flat, project.payItemCatalog);
+}
+
+function rowPrice(row) {
+  const p = row.dataset.price;
+  return p === '' || p == null ? null : Number(p);
+}
+function rowIsLump(row) { return row.dataset.lump === '1'; }
+
+// Stored units -> dollars. null when the item has no Unit Price to price it.
+function storedToCost(row, stored) {
+  if (stored == null) return null;
+  if (rowIsLump(row)) return stored;
+  const price = rowPrice(row);
+  return price != null ? stored * price : null;
+}
+
+// An input's typed value -> stored units (null if blank or not computable).
+function inputToStored(input) {
+  const raw = input.value.trim();
+  const v = Number(raw);
+  if (raw === '' || !isFinite(v)) return null;
+  const row = input.closest('.pa-row');
+  const price = rowPrice(row);
+  if (input.dataset.mode === 'cost') return rowIsLump(row) ? v : (price > 0 ? v / price : null);
+  if (input.dataset.mode === 'pct') return price > 0 ? (v / 100) * price : null;
+  return v;
+}
+
+// Stored units -> what an input in `mode` shows.
+function storedToInputValue(row, mode, stored) {
+  if (stored == null || !isFinite(stored)) return '';
+  const price = rowPrice(row);
+  const round = (n, places) => String(Math.round(n * 10 ** places) / 10 ** places);
+  if (mode === 'cost') return round(rowIsLump(row) ? stored : stored * price, 2);
+  if (mode === 'pct') return round((stored / price) * 100, 4); // 4 places: a Lump Sum's % has to land back on its exact dollar figure
+  return round(stored, 4);
+}
+
+// Stored units -> readable text in the item's own terms (qty + unit, or %).
+function storedToText(row, stored, signed) {
+  if (stored == null) return '—';
+  const price = rowPrice(row);
+  const sign = signed && stored > 0 ? '+' : '';
+  if (rowIsLump(row) && price > 0) return `${sign}${(Math.round((stored / price) * 1000) / 10).toLocaleString()}%`;
+  return `${sign}${(Math.round(stored * 10000) / 10000).toLocaleString()} ${row.dataset.unit || ''}`.trim();
+}
+
+function payAppInputMarkup(itemNumber, mode, value, unit) {
+  const common = `class="payapp-qty-input" data-item="${escapeHtml(itemNumber)}" data-mode="${mode}" aria-label="Pay App amount for ${escapeHtml(itemNumber)}"`;
   if (mode === 'cost') return `<span class="pa-affix">$</span><input type="number" step="0.01" inputmode="decimal" ${common} value="${value}">`;
-  if (mode === 'pct') return `<input type="number" step="any" min="0" max="100" inputmode="decimal" ${common} value="${value}"><span class="pa-affix">%</span>`;
+  if (mode === 'pct') return `<input type="number" step="any" inputmode="decimal" ${common} value="${value}"><span class="pa-affix">%</span>`;
   return `<input type="number" step="any" inputmode="decimal" ${common} value="${value}"><span class="pa-affix">${escapeHtml(unit || '')}</span>`;
 }
 
@@ -324,19 +425,22 @@ function payAppModeToggleLabel(mode, isLump) {
   return 'Enter by $';
 }
 
-// The Inspector column is a reference figure, not what gets saved:
-// normally today's running total (effectivePayItemFlatEntries -- the
-// latest Pay App on file, if any, plus whatever's been reported since).
-// For a recorded Pay App, it's instead that Pay App's own baseline -- the
-// Pay App before it (if any) plus reports up to its own date -- and the
-// Pay App field pre-fills from what was actually saved rather than the
-// reference, since opening one means showing what's really there.
+function renderBasisHint(prev) {
+  $$('#pa-basis .view-toggle-btn').forEach((b) => b.classList.toggle('active', b.dataset.basis === entryBasis));
+  const prevName = prev ? `Pay App ${escapeHtml(prev.estimateNo)} (${escapeHtml(prev.date || 'no date')})` : '';
+  let hint;
+  if (!prev) hint = "This is the first Pay App, so what it adds and its totals to date are the same thing.";
+  else if (entryBasis === 'total') hint = `Enter each item's <strong>total billed to date</strong>, including ${prevName} and everything before it.`;
+  else hint = `Enter only what <strong>this Pay App adds</strong> for each item since ${prevName}. Leave an item at 0 if nothing new was billed.`;
+  $('#pa-basis-hint').innerHTML = hint;
+}
+
 function renderPayAppItemsTable() {
   const editing = selectedEstimate();
-  const items = fullPayItemCatalogOverview(
-    effectivePayItemFlatEntries(allReports, project.billingEstimates, editing ? editing.id : null),
-    project.payItemCatalog
-  );
+  const prev = previousEstimate(editing);
+  const prevTotals = (prev && prev.itemTotals) || {};
+  const items = inspectorItems(editing, prev);
+  renderBasisHint(prev);
   const list = $('#payapp-items-list');
   if (items.length === 0) {
     list.innerHTML = '<p class="hint" style="margin:0;">This project has no pay items in its catalog yet.</p>';
@@ -348,41 +452,36 @@ function renderPayAppItemsTable() {
     <div class="pa-row pa-row-head" aria-hidden="true">
       <span>Item</span><span>Inspector</span><span>Pay App</span><span>Difference</span>
     </div>` + items.map((it) => {
-    // A Lump Sum item's "quantity" is already a dollar figure (see
-    // earnedTotalFor) -- shown and entered here as percent of its Unit
-    // Price (that item's whole contract value for Lump Sum) instead, purely
-    // at this UI layer; itemTotals still stores the dollar figure. Falls
-    // back to plain entry if there's no Unit Price to compute a percent of.
-    const isLump = isLumpSumUnit(it.unit) && it.unitPrice != null && it.unitPrice > 0;
-    const pct = isLump ? (it.total / it.unitPrice) * 100 : null;
+    // A Lump Sum item is shown and entered as percent of its value (its
+    // Unit Price is the whole contract value for Lump Sum) when there's a
+    // price to take a percent of; plain entry otherwise.
+    const isLump = isLumpSumUnit(it.unit);
+    const price = it.unitPrice != null ? Number(it.unitPrice) : null;
+    const defaultMode = isLump && price > 0 ? 'pct' : 'qty';
+    const prevStored = prevTotals[it.itemNumber] != null ? Number(prevTotals[it.itemNumber]) : 0;
+    const inspStored = Number(it.total) || 0;
+    // Recorded Pay Apps open with what was actually saved; new ones start
+    // from the Inspector figure, so only the items that differ need typing.
     const savedRaw = editing && editing.itemTotals && editing.itemTotals[it.itemNumber] != null
-      ? Number(editing.itemTotals[it.itemNumber])
-      : null;
-    const prefill = savedRaw != null ? (isLump ? (savedRaw / it.unitPrice) * 100 : savedRaw) : (isLump ? pct : it.total);
-    const defaultMode = isLump ? 'pct' : 'qty';
-    const inspectorCost = it.earnedTotal != null ? it.earnedTotal : null;
-    // The $-entry toggle only makes sense where there's a Unit Price to
-    // convert against.
-    const canToggle = it.unitPrice != null && it.unitPrice > 0;
-    const inputHtml = payAppInputMarkup(
-      it.itemNumber, isLump, it.unitPrice, inspectorCost, defaultMode,
-      isLump ? Number(prefill).toFixed(1) : prefill, it.unit
-    );
+      ? Number(editing.itemTotals[it.itemNumber]) : null;
+    const toDate = savedRaw != null ? savedRaw : inspStored;
+    const canToggle = price != null && price > 0;
     return `
-    <div class="pa-row" data-item="${escapeHtml(it.itemNumber)}">
+    <div class="pa-row" data-item="${escapeHtml(it.itemNumber)}" data-unit="${escapeHtml(it.unit || '')}" data-lump="${isLump ? '1' : ''}" data-price="${price != null ? price : ''}" data-prev="${prevStored}" data-insp="${inspStored}" data-start="${toDate}" data-planned="${it.planned != null ? it.planned : ''}">
       <div class="pa-cell-item">
         <span class="pa-item-no">${escapeHtml(it.itemNumber)}</span>
         <span class="pa-item-desc">${escapeHtml(it.description)}</span>
       </div>
       <div class="pa-cell-insp">
         <span class="pa-cell-label">Inspector</span>
-        <span class="pa-cell-value">${isLump ? pct.toFixed(1) + '%' : it.total.toLocaleString()} <span class="pa-affix">${isLump ? '' : escapeHtml(it.unit || '')}</span></span>
-        <span class="pa-cell-money">${inspectorCost != null ? fmtMoney(inspectorCost) : '—'}</span>
+        <span class="pa-cell-value pa-insp-value">—</span>
+        <span class="pa-cell-money pa-insp-money">—</span>
       </div>
       <div class="pa-cell-payapp">
         <span class="pa-cell-label">Pay App</span>
-        <span class="pac-field-input-row">${inputHtml}</span>
+        <span class="pac-field-input-row">${payAppInputMarkup(it.itemNumber, defaultMode, '', it.unit)}</span>
         <span class="pa-cell-money"><span class="payapp-contractor-money">—</span>${canToggle ? ` · <button type="button" class="pac-mode-toggle">${payAppModeToggleLabel(defaultMode, isLump)}</button>` : ''}</span>
+        <span class="pa-other-basis"></span>
       </div>
       <div class="pa-cell-diff">
         <span class="pa-cell-label">Difference</span>
@@ -391,58 +490,75 @@ function renderPayAppItemsTable() {
       </div>
     </div>`;
   }).join('');
+  // Fill each input from its to-date starting figure in the current basis.
+  $$('.pa-row:not(.pa-row-head)', list).forEach((row) => {
+    const input = row.querySelector('.payapp-qty-input');
+    const toDate = Number(row.dataset.start);
+    const shown = entryBasis === 'period' ? toDate - Number(row.dataset.prev) : toDate;
+    input.value = storedToInputValue(row, input.dataset.mode, shown);
+  });
   updatePayAppDiffs();
   applyItemFilter();
 }
 
-// Any edit to a Pay App field: recompute the diffs and mark unsaved.
+// A row's figures in stored units: what's entered, and what that means to
+// date and for this Pay App alone. A blank field in "this Pay App only"
+// means nothing added (to date stays at the previous Pay App's figure); a
+// blank to-date field means the item isn't billed at all.
+function rowFigures(row) {
+  const input = row.querySelector('.payapp-qty-input');
+  const entered = inputToStored(input);
+  const prev = Number(row.dataset.prev) || 0;
+  const insp = Number(row.dataset.insp) || 0;
+  let toDate;
+  if (entryBasis === 'period') toDate = prev + (entered == null ? 0 : entered);
+  else toDate = entered;
+  return { input, entered, prev, insp, toDate, period: toDate == null ? null : toDate - prev, inspPeriod: insp - prev };
+}
+
+// Any edit to a Pay App field: recompute and mark unsaved.
 $('#payapp-items-list').addEventListener('input', (e) => {
   if (!e.target.classList.contains('payapp-qty-input')) return;
   markDirty();
   updatePayAppDiffs();
 });
 
-// Swaps one item's Pay App field between its default mode (qty, or % for
-// Lump Sum) and a raw $ entry -- for the item whose billed dollar figure
-// just doesn't divide back into a clean quantity or percent. Converts the
-// current value across the switch via its dollar equivalent, so toggling
-// never loses what's already typed.
+// Switches one item's field between its default entry (qty, or % for Lump
+// Sum) and a raw $ amount -- for the item whose billed dollar figure just
+// doesn't divide back into a clean quantity or percent. Converted through
+// stored units, so toggling never loses what's typed.
 $('#payapp-items-list').addEventListener('click', (e) => {
   const btn = e.target.closest('.pac-mode-toggle');
   if (!btn) return;
   const row = btn.closest('.pa-row');
   const input = row.querySelector('.payapp-qty-input');
-  const isLump = input.dataset.lumpPrice != null;
-  const unitPrice = Number(isLump ? input.dataset.lumpPrice : input.dataset.unitPrice);
-  const currentCost = payAppRowContractorCost(input);
+  const stored = inputToStored(input);
+  const isLump = rowIsLump(row);
   const nextMode = input.dataset.mode === 'cost' ? (isLump ? 'pct' : 'qty') : 'cost';
-  let nextValue = '';
-  if (currentCost != null && unitPrice > 0) {
-    if (nextMode === 'cost') nextValue = currentCost.toFixed(2);
-    else if (nextMode === 'pct') nextValue = ((currentCost / unitPrice) * 100).toFixed(1);
-    else nextValue = String(Math.round((currentCost / unitPrice) * 1e6) / 1e6);
-  }
-  const inspectorCost = input.dataset.inspectorCost !== '' ? Number(input.dataset.inspectorCost) : null;
-  row.querySelector('.pac-field-input-row').innerHTML = payAppInputMarkup(input.dataset.item, isLump, unitPrice, inspectorCost, nextMode, nextValue, input.dataset.unit);
+  row.querySelector('.pac-field-input-row').innerHTML = payAppInputMarkup(row.dataset.item, nextMode, storedToInputValue(row, nextMode, stored), row.dataset.unit);
   btn.textContent = payAppModeToggleLabel(nextMode, isLump);
   updatePayAppDiffs();
   row.querySelector('.payapp-qty-input').focus();
 });
 
-// An item's Pay App dollar figure from its field's current value -- null
-// when there's nothing to compute it from (no Unit Price on file, or not a
-// valid number). $ mode needs no conversion: the typed value is the cost.
-function payAppRowContractorCost(input) {
-  const v = Number(input.value);
-  if (!isFinite(v) || input.value.trim() === '') return null;
-  if (input.dataset.mode === 'cost') return v;
-  if (input.dataset.lumpPrice != null) return (v / 100) * Number(input.dataset.lumpPrice);
-  const unitPrice = input.dataset.unitPrice;
-  return unitPrice ? v * Number(unitPrice) : null;
-}
+// Totals to date <-> this Pay App only. Converts every field's value
+// across, so what's typed means the same thing afterward. Not an edit.
+$('#pa-basis').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-basis]');
+  if (!btn || btn.dataset.basis === entryBasis) return;
+  const figures = $$('#payapp-items-list .pa-row:not(.pa-row-head)').map((row) => [row, rowFigures(row)]);
+  entryBasis = btn.dataset.basis;
+  saveSetting(ENTRY_BASIS_SETTING, entryBasis).catch(() => {});
+  figures.forEach(([row, f]) => {
+    const value = entryBasis === 'period' ? f.period : f.toDate;
+    f.input.value = f.entered == null && entryBasis === 'total' ? '' : storedToInputValue(row, f.input.dataset.mode, value);
+  });
+  renderBasisHint(previousEstimate(selectedEstimate()));
+  updatePayAppDiffs();
+});
 
 // Which severity band a % diff falls into -- not a claim about direction
-// (over- vs under-billed), just how far apart the two totals are.
+// (over- vs under-billed), just how far apart the two figures are.
 function payAppDiffSeverity(pctDiff) {
   if (pctDiff === 0) return 'match';
   if (pctDiff <= 0.01) return 'ok';
@@ -450,46 +566,80 @@ function payAppDiffSeverity(pctDiff) {
   return 'over';
 }
 
-// $ Diff = Inspector - Pay App, % Diff = that difference's size relative to
-// Inspector. Recomputed on every keystroke so it reads as live.
+function fmtDiff(n) {
+  if (n == null) return '—';
+  if (Math.round(n) === 0) return '$0';
+  return fmtMoney(n);
+}
+
+// $ Diff = Inspector - Pay App. The same dollar figure whether it's read
+// to date or for this Pay App alone (both sides share the previous Pay
+// App); the % is measured against whichever the fields are entered in.
+// Recomputed on every keystroke so it reads as live.
 function updatePayAppDiffs() {
-  const list = $('#payapp-items-list');
-  let totalContractor = 0, totalInspector = 0, hasAny = false, diffCount = 0, itemCount = 0;
-  $$('.payapp-qty-input', list).forEach((input) => {
-    const row = input.closest('.pa-row');
+  const sums = { payTotal: 0, inspTotal: 0, payPeriod: 0, inspPeriod: 0, contract: 0, anyCost: false, anyContract: false };
+  let diffCount = 0, itemCount = 0;
+  $$('#payapp-items-list .pa-row:not(.pa-row-head)').forEach((row) => {
     itemCount++;
-    const contractorCost = payAppRowContractorCost(input);
-    const inspectorCostRaw = input.dataset.inspectorCost;
-    const inspectorCost = inspectorCostRaw !== '' ? Number(inspectorCostRaw) : null;
+    const f = rowFigures(row);
+    const inspShown = entryBasis === 'period' ? f.inspPeriod : f.insp;
+    row.querySelector('.pa-insp-value').textContent = storedToText(row, inspShown, entryBasis === 'period');
+    const inspCostShown = storedToCost(row, inspShown);
+    row.querySelector('.pa-insp-money').textContent = inspCostShown != null ? fmtMoney(inspCostShown) : '';
+    const enteredCost = storedToCost(row, entryBasis === 'period' ? f.period : f.toDate);
+    row.querySelector('.payapp-contractor-money').textContent = enteredCost != null ? fmtMoney(enteredCost) : '—';
+    // The other way of reading the same entry, so it's clear what was typed.
+    const other = row.querySelector('.pa-other-basis');
+    if (f.toDate == null) other.textContent = '';
+    else if (entryBasis === 'period') other.textContent = `To date: ${storedToText(row, f.toDate)}`;
+    else other.textContent = `Adds: ${storedToText(row, f.period, true)}`;
+
+    const price = rowPrice(row);
+    if (price != null) {
+      const contract = rowIsLump(row) ? price : null; // planned x price for the rest, below
+      if (contract != null) { sums.contract += contract; sums.anyContract = true; }
+    }
+    const planned = Number(row.dataset.planned);
+    if (!rowIsLump(row) && price != null && planned > 0) { sums.contract += planned * price; sums.anyContract = true; }
+
     const pillEl = row.querySelector('.payapp-diff-pill');
     const costEl = row.querySelector('.payapp-diff-cost');
-    row.querySelector('.payapp-contractor-money').textContent = contractorCost != null ? fmtMoney(contractorCost) : '—';
     row.dataset.differs = '';
     row.classList.remove('pa-row-warn', 'pa-row-over');
-    if (contractorCost == null || inspectorCost == null) {
+    const payToDateCost = storedToCost(row, f.toDate == null ? 0 : f.toDate);
+    const inspToDateCost = storedToCost(row, f.insp);
+    const prevCost = storedToCost(row, f.prev) || 0;
+    if (payToDateCost == null || inspToDateCost == null || (f.toDate == null && entryBasis === 'total')) {
       pillEl.textContent = '—';
       pillEl.className = 'pill payapp-diff-pill payapp-diff-match';
       costEl.textContent = '';
+      if (f.toDate == null && inspToDateCost) { row.dataset.differs = '1'; diffCount++; }
       return;
     }
-    const costDiff = inspectorCost - contractorCost;
-    const pctDiff = inspectorCost !== 0 ? Math.abs(costDiff) / inspectorCost : (costDiff === 0 ? 0 : null);
-    const severity = pctDiff != null ? payAppDiffSeverity(pctDiff) : 'over';
-    pillEl.textContent = pctDiff == null ? 'n/a' : (severity === 'match' ? 'Match' : (pctDiff * 100).toFixed(1) + '%');
+    const costDiff = inspToDateCost - payToDateCost;
+    const base = entryBasis === 'period' ? inspToDateCost - prevCost : inspToDateCost;
+    const pctDiff = base !== 0 ? Math.abs(costDiff) / Math.abs(base) : (Math.round(costDiff) === 0 ? 0 : null);
+    const severity = Math.round(costDiff) === 0 ? 'match' : (pctDiff != null ? payAppDiffSeverity(pctDiff) : 'over');
+    pillEl.textContent = severity === 'match' ? 'Match' : (pctDiff == null ? 'n/a' : (pctDiff * 100).toFixed(1) + '%');
     pillEl.className = 'pill payapp-diff-pill payapp-diff-' + severity;
-    costEl.textContent = Math.round(costDiff) === 0 ? '' : fmtMoney(costDiff);
-    if (Math.round(costDiff) !== 0) { row.dataset.differs = '1'; diffCount++; }
+    costEl.textContent = severity === 'match' ? '' : fmtMoney(costDiff);
+    if (severity !== 'match') { row.dataset.differs = '1'; diffCount++; }
     if (severity === 'warn' || severity === 'over') row.classList.add(`pa-row-${severity}`);
-    totalContractor += contractorCost;
-    totalInspector += inspectorCost;
-    hasAny = true;
+    sums.payTotal += payToDateCost;
+    sums.inspTotal += inspToDateCost;
+    sums.payPeriod += payToDateCost - prevCost;
+    sums.inspPeriod += inspToDateCost - prevCost;
+    sums.anyCost = true;
   });
-  const totalCostDiff = totalInspector - totalContractor;
-  const totalPctDiff = totalInspector !== 0 ? Math.abs(totalCostDiff) / totalInspector : null;
-  $('#payapp-total-inspector').textContent = hasAny ? fmtMoney(totalInspector) : '—';
-  $('#payapp-total-contractor').textContent = hasAny ? fmtMoney(totalContractor) : '—';
-  $('#payapp-total-costdiff').textContent = hasAny ? fmtMoney(totalCostDiff) : '—';
-  $('#payapp-total-pctdiff').textContent = totalPctDiff != null ? `(${(totalPctDiff * 100).toFixed(1)}%)` : '';
+  const show = (id, n, diff) => { $(id).textContent = sums.anyCost ? (diff ? fmtDiff(n) : fmtMoney(n)) : '—'; };
+  show('#pt-period-payapp', sums.payPeriod);
+  show('#pt-period-insp', sums.inspPeriod);
+  show('#pt-period-diff', sums.inspPeriod - sums.payPeriod, true);
+  show('#pt-total-payapp', sums.payTotal);
+  show('#pt-total-insp', sums.inspTotal);
+  show('#pt-total-diff', sums.inspTotal - sums.payTotal, true);
+  $('#pt-contract').textContent = sums.anyCost && sums.anyContract && sums.contract > 0
+    ? `${Math.round((sums.payTotal / sums.contract) * 1000) / 10}% of contract` : '';
   $('#pa-count-all').textContent = `(${itemCount})`;
   $('#pa-count-diff').textContent = `(${diffCount})`;
 }
@@ -594,25 +744,15 @@ $('#btn-record-estimate').addEventListener('click', async () => {
     );
     if (!ok) return;
   }
+  // Always saved as to-date totals in stored units (a dollar figure for
+  // Lump Sum, a quantity for everything else), however it was entered --
+  // see rowFigures.
   const itemTotals = {};
-  $$('.payapp-qty-input').forEach((input) => {
-    const v = input.value.trim();
-    if (v === '') return;
-    // itemTotals always stores the same convention regardless of which
-    // mode a row was entered in -- a dollar figure for Lump Sum (see
-    // earnedTotalFor), a plain quantity for everything else.
-    const isLump = input.dataset.lumpPrice != null;
-    const unitPrice = Number(isLump ? input.dataset.lumpPrice : input.dataset.unitPrice);
-    let stored;
-    if (input.dataset.mode === 'cost') {
-      const cost = Number(v);
-      stored = isLump ? cost : (unitPrice > 0 ? cost / unitPrice : null);
-    } else if (isLump) {
-      stored = (Number(v) / 100) * unitPrice; // pct mode
-    } else {
-      stored = Number(v); // qty mode
-    }
-    if (stored != null && isFinite(stored)) itemTotals[input.dataset.item] = stored;
+  $$('#payapp-items-list .pa-row:not(.pa-row-head)').forEach((row) => {
+    const f = rowFigures(row);
+    if (f.toDate == null || !isFinite(f.toDate)) return;
+    if (entryBasis === 'period' && f.entered == null && !f.prev) return; // nothing billed, before or now
+    itemTotals[row.dataset.item] = Math.round(f.toDate * 1e6) / 1e6;
   });
   if (!project.billingEstimates) project.billingEstimates = [];
   let savedEstimate;

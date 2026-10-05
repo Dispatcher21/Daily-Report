@@ -148,6 +148,7 @@ const TOUR_TARGETS = {
     'first pay app': { selector: '.pa-list-item' },
     'new pay app button': { selector: '#pa-new-btn' },
     'status': { selector: '#pa-status-line', before: tourOpenFirstPayApp },
+    'entry mode': { selector: '#pa-basis', before: tourOpenFirstPayApp },
     'items': { selector: '#payapp-items-list', before: tourOpenFirstPayApp },
     'differences filter': { selector: '#pa-filter', before: tourOpenFirstPayApp },
     'enter by button': { selector: '#payapp-items-list .pac-mode-toggle', before: tourOpenFirstPayApp },

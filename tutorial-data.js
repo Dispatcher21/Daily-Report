@@ -189,8 +189,10 @@ async function seedTutorialData(onProgress) {
   }, {
     // Sent back by the engineer, with a comment -- so the tutorial's Pay
     // Apps page and Manager page have a review in progress to show.
-    id: crypto.randomUUID(), estimateNo: '2', date: dates[14], note: 'Pay Application 2',
-    itemTotals: { '201-01': 15000, '202-01': 1230, '502-01': 300, '701-03': 700, '702-01': 4, '713-01': 15200 },
+    // Matches what was logged through its date, except asphalt: 300 TON
+    // billed against 244 logged -- what the engineer's comment questions.
+    id: crypto.randomUUID(), estimateNo: '2', date: dates[16], note: 'Pay Application 2',
+    itemTotals: { '201-01': 15000, '202-01': 1230, '502-01': 300, '701-03': 746, '702-01': 4, '713-01': 19500 },
     approvalStatus: 'changes_requested', updatedAt: Date.now(),
     comments: [{ id: crypto.randomUUID(), author: 'Jordan Lee, P.E.', text: 'Asphalt (502-01) is higher than the tickets I have. Can you double check it?', createdAt: Date.now() - 7200000 }],
   }];
