@@ -948,7 +948,8 @@ async function replaceAllCompanyThemes(themes) {
       } else if (theme.backgroundImageFetched && theme.backgroundImage) {
         merged.backgroundImage = theme.backgroundImage;
         merged.backgroundImageFetched = true;
-      } else if (existing && existing.backgroundImageFetched && existing.backgroundImage) {
+      } else if (existing && existing.backgroundImageFetched && existing.backgroundImage
+        && (existing.backgroundImageVersion || 0) === (theme.backgroundImageVersion || 0)) {
         merged.backgroundImage = existing.backgroundImage;
         merged.backgroundImageFetched = true;
       } else {
@@ -961,7 +962,8 @@ async function replaceAllCompanyThemes(themes) {
       } else if (theme.decalImageFetched && theme.decalImage) {
         merged.decalImage = theme.decalImage;
         merged.decalImageFetched = true;
-      } else if (existing && existing.decalImageFetched && existing.decalImage) {
+      } else if (existing && existing.decalImageFetched && existing.decalImage
+        && (existing.decalImageVersion || 0) === (theme.decalImageVersion || 0)) {
         merged.decalImage = existing.decalImage;
         merged.decalImageFetched = true;
       } else {

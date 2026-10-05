@@ -1080,6 +1080,7 @@ $('#pa-bg-upload').addEventListener('change', async (e) => {
   try {
     project.backgroundImage = await compressImage(await convertHeicIfNeeded(file), { maxDim: 1600, quality: 0.75 });
     project.backgroundImageFetched = true;
+    project.backgroundImageVersion = Date.now(); // tells other devices it's a new photo (see pushProjectToCompany)
     await saveProject(project);
     $('#pa-bg-label').textContent = 'Replace Background';
     $('#pa-bg-remove').hidden = false;
@@ -1093,6 +1094,7 @@ $('#pa-bg-upload').addEventListener('change', async (e) => {
 $('#pa-bg-remove').addEventListener('click', async () => {
   project.backgroundImage = null;
   project.backgroundImageFetched = true;
+  project.backgroundImageVersion = Date.now(); // tells other devices it's a new photo (see pushProjectToCompany)
   await saveProject(project);
   $('#pa-bg-label').textContent = 'Add Background';
   $('#pa-bg-remove').hidden = true;

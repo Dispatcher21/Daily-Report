@@ -3,6 +3,13 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.044 -- 2026-10-05
+  - Fixed a replaced project background photo not showing up on your
+    other devices: they kept the old photo. Saving anything else about
+    the project from a device that still had the old photo could also
+    put the old photo back for everyone. Company theme backgrounds and
+    decals had the same problem and are fixed too.
+
 0.043 -- 2026-09-25
   - Report viewer: the report is now plain page content instead of a box
     with its own scrollbar, so the whole report -- including the last

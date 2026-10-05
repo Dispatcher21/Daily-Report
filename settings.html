@@ -1996,6 +1996,7 @@ $('#cm-project-list').addEventListener('click', async (e) => {
     if (!project) return;
     project.backgroundImage = null;
     project.backgroundImageFetched = true;
+    project.backgroundImageVersion = Date.now(); // tells other devices it's a new photo (see pushProjectToCompany)
     await saveProject(project);
     await renderCmProjects();
   }
@@ -2017,6 +2018,7 @@ $('#cm-project-list').addEventListener('change', async (e) => {
   try {
     project.backgroundImage = await compressImage(await convertHeicIfNeeded(file), { maxDim: 1600, quality: 0.75 });
     project.backgroundImageFetched = true;
+    project.backgroundImageVersion = Date.now(); // tells other devices it's a new photo (see pushProjectToCompany)
     await saveProject(project);
     await renderCmProjects();
   } catch (err) {
