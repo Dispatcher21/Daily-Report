@@ -86,6 +86,42 @@
     </div>
   </div>
 
+  <!-- Joined with the company password, but the company approves new
+       members first. -->
+  <div class="step" id="view-pending" hidden>
+    <div class="step-header">
+      <span class="step-num">ALMOST THERE</span>
+      <h2>Waiting for Approval</h2>
+    </div>
+    <div class="step-body">
+      <p id="pending-text" style="margin-top:0;"></p>
+      <button type="button" class="btn-primary" id="btn-pending-check">Check Again</button>
+      <div style="display:flex; gap:0.75rem; flex-wrap:wrap; margin-top:0.25rem;">
+        <button type="button" class="text-btn" id="btn-pending-other">Use a different company password</button>
+        <button type="button" class="text-btn" id="btn-pending-signout">Sign out</button>
+      </div>
+      <div class="err" id="pending-error" hidden></div>
+    </div>
+  </div>
+
+  <!-- This account's email was pre-approved by a company. -->
+  <div class="step" id="view-invite" hidden>
+    <div class="step-header">
+      <span class="step-num">YOU'RE INVITED</span>
+      <h2 id="invite-title">Join Your Company</h2>
+    </div>
+    <div class="step-body">
+      <p id="invite-text" style="margin-top:0;"></p>
+      <button type="button" class="btn-primary" id="btn-invite-accept">I've Verified My Email</button>
+      <div style="display:flex; gap:0.75rem; flex-wrap:wrap; margin-top:0.25rem;">
+        <button type="button" class="text-btn" id="btn-invite-resend">Resend the email</button>
+        <button type="button" class="text-btn" id="btn-invite-skip">Skip for now</button>
+      </div>
+      <div class="success" id="invite-notice" hidden style="margin-top:0.75rem;"></div>
+      <div class="err" id="invite-error" hidden></div>
+    </div>
+  </div>
+
   <!-- The original setup: a name on this device, and optionally the company
        password -- no account. -->
   <div class="step" id="view-legacy" hidden>
@@ -127,7 +163,7 @@ const loginMode = queryParam('mode');
 const nextPage = /^[a-z-]+\.html$/.test(queryParam('next') || '') ? queryParam('next') : 'index.html';
 
 function showView(id) {
-  ['view-account', 'view-company', 'view-legacy'].forEach((v) => { $('#' + v).hidden = v !== id; });
+  ['view-account', 'view-company', 'view-pending', 'view-invite', 'view-legacy'].forEach((v) => { $('#' + v).hidden = v !== id; });
   $('#legacy-link-row').hidden = id !== 'view-account';
   $('#account-link-row').hidden = id !== 'view-legacy';
 }
@@ -158,15 +194,53 @@ function finish() {
   location.href = nextPage;
 }
 
-// Signed in or just created, but not in a company yet: ask for the company
-// password once (or skip).
+// Signed in or just created, but not in a company yet: waiting on an
+// approval, invited by email, or asked for the company password once.
 async function afterAccount() {
-  const room = await getCompanyRoom();
-  if (room) { finish(); return; }
+  if (await getCompanyRoom()) { finish(); return; }
+  const pending = await checkPendingApproval(reportCompanyProgress).catch(() => null);
+  if (pending && pending.status === 'active') { finish(); return; }
+  if (pending && pending.status === 'pending') { showPending(pending.companyName); return; }
+  const invite = await getMyInvite().catch(() => null);
+  if (invite) { await showInvite(invite); return; }
   const name = await getUserName();
-  $('#company-intro').textContent = `${name ? `Welcome, ${name}. ` : ''}Join your company to see its projects and reports.`;
+  $('#company-intro').textContent = `${name ? `Welcome, ${name}. ` : ''}${pending && pending.status === 'declined' ? 'Your request to join wasn\u2019t approved. ' : ''}Join your company to see its projects and reports.`;
   showView('view-company');
   $('#jc-password').focus();
+}
+
+function showPending(companyName) {
+  $('#pending-text').textContent = `You've asked to join ${companyName || 'your company'}. An admin needs to approve you before you can see its projects. Once they do, tap Check Again (or just sign in later).`;
+  showView('view-pending');
+}
+
+async function showInvite(invite) {
+  const account = await getAccount();
+  $('#invite-title').textContent = `Join ${invite.companyName || 'Your Company'}`;
+  if (account && account.emailVerified) {
+    // Verified already: join straight away.
+    await joinByInvite();
+    return;
+  }
+  $('#invite-text').textContent = `${invite.companyName || 'A company'} has invited ${account ? account.email : 'you'}. To join, verify your email: open the message we just sent you and click the link, then come back and tap below.`;
+  showView('view-invite');
+}
+
+async function joinByInvite() {
+  const errorEl = $('#invite-error');
+  errorEl.hidden = true;
+  startProgressBanner();
+  progressStep('joining', 'Joining your company');
+  try {
+    await acceptMyInvite(reportCompanyProgress);
+    finishProgressBanner("You're all set!");
+    finish();
+  } catch (err) {
+    console.error(err);
+    progressBannerError(err.message);
+    showView('view-invite');
+    showError(errorEl, err.message);
+  }
 }
 
 onEnterSubmit($('#form-signin'), $('#btn-signin'));
@@ -241,6 +315,14 @@ $('#btn-join').addEventListener('click', async () => {
     finishProgressBanner("You're all set!");
     finish();
   } catch (err) {
+    if (err.code === 'pending-approval') {
+      // The password was right; the company just approves new members.
+      loginThrottleReset('join-company');
+      finishProgressBanner('Request sent.');
+      btn.disabled = false;
+      showPending(err.companyName);
+      return;
+    }
     console.error(err);
     loginThrottleRecordFailure('join-company');
     progressBannerError(userError("Couldn't join: " + err.message, 'JOIN_COMPANY'));
@@ -249,6 +331,39 @@ $('#btn-join').addEventListener('click', async () => {
   }
 });
 $('#btn-skip-company').addEventListener('click', finish);
+
+$('#btn-pending-check').addEventListener('click', async () => {
+  const errorEl = $('#pending-error');
+  errorEl.hidden = true;
+  try {
+    const result = await checkPendingApproval(reportCompanyProgress);
+    if (result && result.status === 'active') { finish(); return; }
+    if (!result || result.status === 'declined') { await afterAccount(); return; }
+    showError(errorEl, 'Not approved yet. Ask your admin, then check again.');
+  } catch (err) {
+    showError(errorEl, err.message);
+  }
+});
+$('#btn-pending-other').addEventListener('click', async () => {
+  await cancelPendingApproval().catch((err) => console.error(err));
+  await afterAccount();
+});
+$('#btn-pending-signout').addEventListener('click', async () => {
+  await signOutAccount().catch((err) => console.error(err));
+  location.reload();
+});
+
+$('#btn-invite-accept').addEventListener('click', joinByInvite);
+$('#btn-invite-resend').addEventListener('click', async () => {
+  try {
+    await resendAccountVerification();
+    $('#invite-notice').textContent = 'Sent. Check your spam folder too.';
+    $('#invite-notice').hidden = false;
+  } catch (err) {
+    showError($('#invite-error'), err.message);
+  }
+});
+$('#btn-invite-skip').addEventListener('click', finish);
 
 // The original, account-free setup.
 onEnterSubmit($('#view-legacy .step-body'), $('#btn-continue'));

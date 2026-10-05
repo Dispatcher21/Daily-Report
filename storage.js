@@ -340,6 +340,14 @@ async function deleteReportLocalOnly(id) {
 // and so this file never needs to import anything sync-related itself.
 // Fired without awaiting: a company push shouldn't make the caller wait for
 // a save that's already durable in IndexedDB by this point.
+// The signed-in account's Firebase user id (see firebase-sync.js's
+// Accounts section), or null on a device without an account. Read straight
+// off the Firebase bridge so this file still needs nothing sync-related.
+function currentAccountUid() {
+  const user = window.FirebaseCore && window.FirebaseCore.auth && window.FirebaseCore.auth.currentUser;
+  return user && !user.isAnonymous ? user.uid : null;
+}
+
 async function saveReport(report) {
   // Needed before the write for the audit hook to diff against -- a no-op
   // extra read when nothing's listening (logAuditableChange undefined).
@@ -348,6 +356,12 @@ async function saveReport(report) {
   if (userName) {
     if (!report.createdBy) report.createdBy = userName; // set once, never overwritten by a later editor
     report.lastEditedBy = userName;
+  }
+  // The same, by account -- unlike a typed name, unique to one person.
+  const uid = currentAccountUid();
+  if (uid) {
+    if (!report.createdByUid && (!report.createdBy || report.createdBy === userName)) report.createdByUid = uid;
+    report.lastEditedByUid = uid;
   }
   report.updatedAt = Date.now();
   await putReportRaw(report);

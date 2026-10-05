@@ -340,6 +340,11 @@ async function joinCompanyRoom(password, onProgress) {
     companyDoc = realSnap.data();
   }
 
+  // A signed-in account joining with the company password: if the company
+  // wants new members approved, it's recorded as waiting and doesn't get
+  // in until an admin approves it (see checkPendingApproval).
+  if (!roleId) await checkJoinAllowed(code, companyDoc);
+
   const result = await enterCompany(code, companyDoc, { roleId, scopedPermissions, projectIds }, onProgress);
   if (typeof logCompanyAuditEvent === 'function') {
     const changes = roleId ? [{ label: 'Via Custom Setup', from: '', to: data.name || 'Custom Setup' }] : [];
@@ -622,6 +627,7 @@ async function rejoinAccountCompany(code, onProgress) {
   const memberSnap = await getDoc(doc(db, 'companies', code, 'members', account.uid));
   if (!memberSnap.exists()) throw new Error('You’re no longer a member of your company. Ask your admin.');
   if (memberSnap.data().status === 'disabled') throw new Error('Your access to this company has been turned off. Ask your admin.');
+  if (memberSnap.data().status === 'pending') throw new PendingApprovalError(companySnap.data().name);
   return enterCompany(code, companySnap.data(), {}, onProgress);
 }
 
@@ -630,10 +636,48 @@ async function rejoinAccountCompany(code, onProgress) {
 // screen.
 async function signOutAccount() {
   const { auth, authApi, resetSignIn } = await waitForFirebaseCore();
-  if (await getCompanyRoom()) await leaveCompanyRoom();
+  if (await getCompanyRoom()) await disconnectCompanyKeepingUnsynced();
   await authApi.signOut(auth);
   resetSignIn();
   await saveUserName('');
+}
+
+// Disconnects this device from its company and removes the company's
+// projects and reports from it -- everything already safely in the cloud,
+// which signing back in brings straight back down. Kept: any report that
+// hasn't finished uploading or has an unsaved draft, and the project it
+// belongs to, so nothing that exists only on this device is ever lost.
+// (Leave Company, for a device without an account, keeps instead whatever
+// the device's typed name created -- see leaveCompanyRoom.)
+async function disconnectCompanyKeepingUnsynced() {
+  const room = await getCompanyRoom();
+  if (!room) return;
+  const code = room.code;
+  // Cleared first, so the local deletions below can't push anything to the
+  // company (same reasoning as leaveCompanyRoom).
+  await deleteSetting(COMPANY_CODE_SETTING);
+  await deleteSetting(COMPANY_NAME_SETTING);
+  await deleteSetting(COMPANY_ADMIN_SETTING);
+  await deleteSetting(COMPANY_PERMISSIONS_SETTING);
+  await deleteSetting(COMPANY_PROJECT_SCOPE_SETTING);
+  await deleteSetting(COMPANY_ROLE_ID_SETTING);
+  await deleteSetting(LOGO_SYNCED_AT_SETTING);
+
+  const inCompany = { code };
+  const reports = (await getAllReports({ includeDeleted: true })).filter((r) => reportInScope(r, inCompany) && r.companyCode === code);
+  const keepProjectIds = new Set();
+  for (const r of reports) {
+    if (r.pendingPush || (await getReportDraft(r.id))) {
+      keepProjectIds.add(r.projectId);
+      continue;
+    }
+    await deleteReportLocalOnly(r.id);
+  }
+  const projects = (await getAllProjects()).filter((p) => p.companyCode === code);
+  for (const p of projects) {
+    if (p.pendingPush || keepProjectIds.has(p.id)) continue;
+    await deleteProjectLocalOnly(p.id);
+  }
 }
 
 async function sendAccountPasswordReset(email) {
@@ -677,7 +721,7 @@ async function updateAccountName(name) {
 // Reads (creating if needed) this account's member record in the connected
 // company and applies its role and project access to this device. A no-op
 // for an anonymous device or one with no company.
-async function refreshMembership() {
+async function refreshMembership({ joined = false } = {}) {
   const account = await getAccount();
   const room = await getCompanyRoom();
   if (!account || !room) return null;
@@ -687,6 +731,17 @@ async function refreshMembership() {
   const snap = await getDoc(ref);
   const name = (await getUserName()) || account.displayName || '';
   let member;
+  if (!snap.exists() && !joined) {
+    // Already a member here before and the record is gone: an admin removed
+    // this person. (Not just joining -- that always brings a fresh record.)
+    const profile = await readAccountProfile(account.uid).catch(() => null);
+    if (profile && profile.companyCode === room.code) {
+      await disconnectCompanyKeepingUnsynced();
+      await writeAccountProfile(account.uid, { companyCode: null, companyName: null });
+      window.dispatchEvent(new CustomEvent('company-access-ended', { detail: { company: room.name || '', status: 'removed' } }));
+      return null;
+    }
+  }
   if (snap.exists()) {
     member = snap.data();
     if (member.email !== account.email || member.displayName !== name) {
@@ -708,9 +763,230 @@ async function refreshMembership() {
     };
     await setDoc(ref, member);
   }
-  await writeAccountProfile(account.uid, { email: account.email, displayName: name, companyCode: room.code, companyName: room.name || '' });
+  // Turned off (or never approved) by an admin: this device disconnects,
+  // keeping only what hasn't uploaded yet, and the page says why.
+  if (member.status === 'disabled' || member.status === 'pending') {
+    await disconnectCompanyKeepingUnsynced();
+    window.dispatchEvent(new CustomEvent('company-access-ended', { detail: { company: room.name || '', status: member.status } }));
+    return member;
+  }
+  await writeAccountProfile(account.uid, { email: account.email, displayName: name, companyCode: room.code, companyName: room.name || '', pendingCompanyCode: null });
   await applyMembership(member);
   return member;
+}
+
+// ---------- Approvals and pre-approved emails ----------
+
+class PendingApprovalError extends Error {
+  constructor(companyName) {
+    super(`You're waiting for ${companyName || 'the company'}'s admin to approve you.`);
+    this.code = 'pending-approval';
+    this.companyName = companyName || '';
+  }
+}
+
+// Before a signed-in account joins with the company password: refuses a
+// turned-off member, and puts a new one on the waiting list when the
+// company requires approval.
+async function checkJoinAllowed(code, companyDoc) {
+  const account = await getAccount();
+  if (!account) return;
+  const { db } = await waitForFirebaseCore();
+  const { doc, getDoc, setDoc, serverTimestamp } = await import(FIRESTORE_SDK);
+  const ref = doc(db, 'companies', code, 'members', account.uid);
+  const snap = await getDoc(ref);
+  const existing = snap.exists() ? snap.data() : null;
+  if (existing && existing.status === 'disabled') throw new Error('Your access to this company has been turned off. Ask your admin.');
+  if (existing && existing.status === 'active') return;
+  if (!existing && !companyDoc.requireApproval) return;
+  if (!existing) {
+    const name = (await getUserName()) || account.displayName || '';
+    await setDoc(ref, {
+      uid: account.uid, email: account.email, displayName: name,
+      role: 'inspector', status: 'pending', projectIds: null,
+      createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+    });
+  }
+  await writeAccountProfile(account.uid, { pendingCompanyCode: code, pendingCompanyName: companyDoc.name || '' });
+  throw new PendingApprovalError(companyDoc.name);
+}
+
+// For an account waiting on approval: { status: 'pending'|'active'|'declined', companyName }
+// -- and when it's been approved, connects this device right away.
+async function checkPendingApproval(onProgress) {
+  const account = await getAccount();
+  if (!account) return null;
+  const profile = await readAccountProfile(account.uid);
+  if (!profile || !profile.pendingCompanyCode) return null;
+  const code = profile.pendingCompanyCode;
+  const { db } = await waitForFirebaseCore();
+  const { doc, getDoc } = await import(FIRESTORE_SDK);
+  const memberSnap = await getDoc(doc(db, 'companies', code, 'members', account.uid));
+  const companyName = profile.pendingCompanyName || '';
+  if (!memberSnap.exists() || memberSnap.data().status === 'disabled') {
+    await writeAccountProfile(account.uid, { pendingCompanyCode: null, pendingCompanyName: null });
+    return { status: 'declined', companyName };
+  }
+  if (memberSnap.data().status === 'pending') return { status: 'pending', companyName };
+  const companySnap = await getDoc(doc(db, 'companies', code));
+  await enterCompany(code, companySnap.data(), {}, onProgress);
+  return { status: 'active', companyName };
+}
+
+// Stops waiting (e.g. to try a different company password instead).
+async function cancelPendingApproval() {
+  const account = await getAccount();
+  if (!account) return;
+  const profile = await readAccountProfile(account.uid);
+  if (profile && profile.pendingCompanyCode) {
+    const { db } = await waitForFirebaseCore();
+    const { doc, deleteDoc } = await import(FIRESTORE_SDK);
+    await deleteDoc(doc(db, 'companies', profile.pendingCompanyCode, 'members', account.uid)).catch(() => {});
+  }
+  await writeAccountProfile(account.uid, { pendingCompanyCode: null, pendingCompanyName: null });
+}
+
+function inviteDocId(email) {
+  return String(email || '').trim().toLowerCase();
+}
+
+// The invite waiting for this account's email, if any (readable whether or
+// not the email is verified yet -- accepting it needs verification).
+async function getMyInvite() {
+  const account = await getAccount();
+  if (!account || !account.email) return null;
+  const { db } = await waitForFirebaseCore();
+  const { doc, getDoc } = await import(FIRESTORE_SDK);
+  const snap = await getDoc(doc(db, 'invites', inviteDocId(account.email))).catch(() => null);
+  return snap && snap.exists() ? snap.data() : null;
+}
+
+// Joins the company this account's email was pre-approved for -- only once
+// the email is verified, so nobody can claim an invite by signing up with
+// someone else's address.
+async function acceptMyInvite(onProgress) {
+  const account = await reloadAccount();
+  if (!account) throw new Error('Sign in first.');
+  if (!account.emailVerified) throw new Error('Verify your email first: click the link we sent you, then try again.');
+  const invite = await getMyInvite();
+  if (!invite) throw new Error('No invitation was found for your email.');
+  const { db } = await waitForFirebaseCore();
+  const { doc, getDoc, setDoc, deleteDoc, serverTimestamp } = await import(FIRESTORE_SDK);
+  const companySnap = await getDoc(doc(db, 'companies', invite.companyCode));
+  if (!companySnap.exists()) throw new Error('The company that invited you could not be found.');
+  const name = (await getUserName()) || account.displayName || '';
+  await setDoc(doc(db, 'companies', invite.companyCode, 'members', account.uid), {
+    uid: account.uid, email: account.email, displayName: name,
+    role: MEMBER_ROLES.includes(invite.role) ? invite.role : 'inspector',
+    status: 'active',
+    projectIds: Array.isArray(invite.projectIds) ? invite.projectIds : null,
+    invitedBy: invite.invitedBy || '',
+    createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+  });
+  await deleteDoc(doc(db, 'invites', inviteDocId(account.email))).catch((err) => console.error('invite cleanup:', err));
+  return enterCompany(invite.companyCode, companySnap.data(), {}, onProgress);
+}
+
+// ---------- Team (admins) ----------
+//
+// Everything here needs this device to be an admin with an account -- the
+// member records are what the server will check once accounts are required.
+
+async function requireTeamAdmin() {
+  const room = await getCompanyRoom();
+  if (!room || !room.isAdmin) throw new Error('Only an admin can manage the team.');
+  const account = await getAccount();
+  if (!account) throw new Error('Sign in with an account to manage the team.');
+  const { db } = await waitForFirebaseCore();
+  return { room, account, db };
+}
+
+async function listTeam() {
+  const { room, db } = await requireTeamAdmin();
+  const { collection, getDocs, query, where, doc, getDoc } = await import(FIRESTORE_SDK);
+  const [membersSnap, invitesSnap, companySnap] = await Promise.all([
+    getDocs(collection(db, 'companies', room.code, 'members')),
+    getDocs(query(collection(db, 'invites'), where('companyCode', '==', room.code))),
+    getDoc(doc(db, 'companies', room.code)),
+  ]);
+  return {
+    members: membersSnap.docs.map((d) => ({ ...d.data(), uid: d.id })),
+    invites: invitesSnap.docs.map((d) => ({ ...d.data(), email: d.id })),
+    requireApproval: !!(companySnap.exists() && companySnap.data().requireApproval),
+  };
+}
+
+// patch: any of { role, status, projectIds } (projectIds null = all projects).
+async function updateTeamMember(uid, patch) {
+  const { room, account, db } = await requireTeamAdmin();
+  const { doc, setDoc, collection, getDocs, serverTimestamp } = await import(FIRESTORE_SDK);
+  const clean = {};
+  if (patch.role !== undefined) {
+    if (!MEMBER_ROLES.includes(patch.role)) throw new Error('Unknown role.');
+    clean.role = patch.role;
+  }
+  if (patch.status !== undefined) {
+    if (!['active', 'disabled'].includes(patch.status)) throw new Error('Unknown status.');
+    clean.status = patch.status;
+  }
+  if (patch.projectIds !== undefined) clean.projectIds = Array.isArray(patch.projectIds) ? patch.projectIds : null;
+  // Never leave a company with no active admin who can sign in.
+  if (uid === account.uid && ((clean.role && clean.role !== 'admin') || clean.status === 'disabled')) {
+    const members = (await getDocs(collection(db, 'companies', room.code, 'members'))).docs.map((d) => d.data());
+    const otherAdmins = members.filter((m) => m.uid !== uid && m.role === 'admin' && m.status === 'active');
+    if (!otherAdmins.length) throw new Error("You're the only admin -- make someone else an admin first.");
+  }
+  await setDoc(doc(db, 'companies', room.code, 'members', uid), { ...clean, updatedAt: serverTimestamp() }, { merge: true });
+  if (typeof logCompanyAuditEvent === 'function') {
+    const changes = Object.entries(clean).map(([k, v]) => ({ label: k === 'projectIds' ? 'Project Access' : k[0].toUpperCase() + k.slice(1), from: '', to: v == null ? 'All projects' : (Array.isArray(v) ? `${v.length} project(s)` : String(v)) }));
+    logCompanyAuditEvent(uid, 'Team Member', 'edited', changes).catch((err) => console.error('audit log:', err));
+  }
+  if (uid === account.uid) await refreshMembership();
+}
+
+async function approveTeamMember(uid) {
+  await updateTeamMember(uid, { status: 'active' });
+}
+
+// Removes someone from the team (their account itself stays; they can be
+// re-invited). Also declines a waiting request.
+async function removeTeamMember(uid) {
+  const { room, account, db } = await requireTeamAdmin();
+  if (uid === account.uid) throw new Error("You can't remove yourself.");
+  const { doc, deleteDoc } = await import(FIRESTORE_SDK);
+  await deleteDoc(doc(db, 'companies', room.code, 'members', uid));
+  if (typeof logCompanyAuditEvent === 'function') {
+    logCompanyAuditEvent(uid, 'Team Member', 'deleted', []).catch((err) => console.error('audit log:', err));
+  }
+}
+
+async function setRequireApproval(on) {
+  const { room, db } = await requireTeamAdmin();
+  const { doc, updateDoc } = await import(FIRESTORE_SDK);
+  await updateDoc(doc(db, 'companies', room.code), { requireApproval: !!on });
+}
+
+async function inviteTeamMember({ email, role, projectIds }) {
+  const { room, account, db } = await requireTeamAdmin();
+  const id = inviteDocId(email);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(id)) throw new Error('Enter a valid email address.');
+  const { doc, getDoc, setDoc, serverTimestamp } = await import(FIRESTORE_SDK);
+  const existing = await getDoc(doc(db, 'invites', id)).catch(() => null);
+  if (existing && existing.exists() && existing.data().companyCode !== room.code) throw new Error('That email has already been invited by another company.');
+  await setDoc(doc(db, 'invites', id), {
+    companyCode: room.code,
+    companyName: room.name || '',
+    role: MEMBER_ROLES.includes(role) ? role : 'inspector',
+    projectIds: Array.isArray(projectIds) ? projectIds : null,
+    invitedBy: (await getUserName()) || account.email,
+    createdAt: serverTimestamp(),
+  });
+}
+
+async function cancelTeamInvite(email) {
+  const { db } = await requireTeamAdmin();
+  const { doc, deleteDoc } = await import(FIRESTORE_SDK);
+  await deleteDoc(doc(db, 'invites', inviteDocId(email)));
 }
 
 // A member record's role and project access, as this device's settings
@@ -822,19 +1098,26 @@ async function companyCan(action) {
 async function getReportPermissionContext() {
   const room = await getCompanyRoom();
   const userName = await getUserName();
-  if (!room || room.isAdmin) return { isAdmin: true, canEditAny: true, canEditOwn: true, userName };
+  const uid = currentAccountUid();
+  if (!room || room.isAdmin) return { isAdmin: true, canEditAny: true, canEditOwn: true, userName, uid };
   const perms = await getCompanyPermissions();
   return {
     isAdmin: false,
     canEditAny: !!perms.membersCanEditAnyReport,
     canEditOwn: !!perms.membersCanEditOwnReports,
     userName,
+    uid,
   };
 }
 
 function canEditReportWithContext(report, ctx) {
   if (ctx.isAdmin || ctx.canEditAny) return true;
-  if (ctx.canEditOwn) return !!ctx.userName && report.createdBy === ctx.userName;
+  // "Own" is decided by account where the report has one (a typed name
+  // isn't unique), by name otherwise.
+  if (ctx.canEditOwn) {
+    if (report.createdByUid) return !!ctx.uid && report.createdByUid === ctx.uid;
+    return !!ctx.userName && report.createdBy === ctx.userName;
+  }
   return false;
 }
 
@@ -2460,3 +2743,22 @@ async function confirmReportSyncStatus(report) {
     return 'failed';
   }
 }
+
+// When an admin turns someone off, removes them, or (re)sets them to
+// waiting for approval, the next sync on their device disconnects it (see
+// refreshMembership) and this tells them why. The sign-in page shows its
+// own messages instead.
+let companyAccessEndedShown = false;
+window.addEventListener('company-access-ended', (e) => {
+  if (/login\.html$/.test(location.pathname) || companyAccessEndedShown) return;
+  companyAccessEndedShown = true;
+  const company = (e.detail && e.detail.company) || 'your company';
+  const status = e.detail && e.detail.status;
+  const why = status === 'pending'
+    ? `Your access to ${company} is waiting for an admin's approval.`
+    : status === 'removed'
+      ? `An admin removed you from ${company}.`
+      : `An admin turned off your access to ${company}.`;
+  alert(`${why} This device has left the company. Anything that hadn't uploaded yet is still saved here.`);
+  location.href = 'index.html';
+});
