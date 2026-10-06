@@ -11,7 +11,10 @@ for the developer and whoever they show it to (an IT contact, a future
 maintainer). Nothing here is read by the app at runtime.
 
 It reflects the code as of 2026-09-16 (repo state at the time this was
-written). It will drift out of date as the app changes -- there's no
+written), plus the section "ACCOUNTS, ROLES AND THE SERVER", added
+2026-10-06 (version 0.0511), which covers what was built after that.
+Where the older sections disagree with that one (anything about Custom
+Setups or "Access & Members", for example), the newer section wins. It will drift out of date as the app changes -- there's no
 mechanism keeping it in sync -- so treat it as a snapshot, not a live
 source of truth, and re-generate or hand-edit it whenever the app changes
 in a way that would make this wrong. If you add a file, add a function that
@@ -37,8 +40,10 @@ nothing but its own definition line, anywhere in the repo.
 
 THE BIG PICTURE
 
-Daily Work Reports is a client-only Progressive Web App -- there is no
-application server. It's a set of static HTML/CSS/JS files (hostable
+Daily Work Reports is a Progressive Web App that runs in the browser. The
+app itself has no application server; since 0.049 a handful of Firebase
+Cloud Functions send email and enforce password resets (see "ACCOUNTS,
+ROLES AND THE SERVER" below). It's a set of static HTML/CSS/JS files (hostable
 anywhere, including GitHub Pages per the CNAME file) that runs entirely in
 the browser. It works fully offline once installed/cached.
 
@@ -86,6 +91,70 @@ quantity-calc.js) by simply loading the same <script src> files in the
 same order -- there is no module system for app code (only firebase-init.js
 is a real ES module, because the Firebase SDK requires it; everything else
 is a classic script and a plain global function/variable).
+
+
+ACCOUNTS, ROLES AND THE SERVER (added 2026-10-06)
+
+Accounts. A device starts anonymous (Firebase anonymous auth). Creating
+an account links an email and password onto that same user id, so nothing
+moves. Each account has users/{uid} (its profile: email, name, current
+companyCode, timeZone, email preferences) and, per company, a member
+record at companies/{code}/members/{uid} (role, status, projectIds).
+firebase-sync.js owns all of it: createAccount/signIn,
+refreshMembership (reads or creates the member record on every load and
+applies its role and project limits to the device via applyMembership),
+the Team list functions (updateTeamMember, removeTeamMember,
+inviteTeamMember, approvals), and password changes.
+
+Roles. admin, manager, inspector. Admins can do everything. What managers
+and inspectors may do comes from the Roles table in Settings > Company
+(rolePermissions on the company doc, falling back to built-in defaults;
+rolePermissionsFor in firebase-sync.js, defaultPerm in the rules). Members
+can also be limited to certain projects (member.projectIds; null = all).
+
+Enforcement. The company doc's accountsRequired switch ("Require everyone
+to sign in"). Off: the old behavior, anyone signed in who knows the
+company password. On: firestore.rules (repo root, the official copy) only
+let active members in, apply project limits, and check the role table for
+creating projects, editing reports, approving, and so on. requireApproval
+makes new joiners wait for an admin. Pre-approved emails (invites/{email})
+join straight in with the role the admin chose.
+
+Comments and approvals. Reports and Pay Apps carry approvalStatus,
+approvalBy/approvalByUid and a comments[] thread (storage.js:
+saveReportApproval, saveBillingEstimateApproval). A comment with parentId
+is a reply. The report's author may always reply on their own report.
+
+Cloud Functions (functions/, Node 20, us-central1). Email goes through
+Resend (sendEmail; sender in functions/.env, key in the RESEND_API_KEY
+secret). Emails never contain links. In the emulator, sendEmail writes to
+a devOutbox collection instead.
+  - onReportComment / onPayAppComment: comment, reply and approval emails
+    to the author, earlier commenters, and the person being replied to.
+  - sendResetCode / adminSendResetCode / resetPasswordWithCode: 6-digit
+    reset codes (hashed in emailCodes, 15 minutes, 5 tries, rate limited),
+    used by login.html's "Forgot password?" and the Team list.
+  - weeklyRoundup (hourly; sends at 6:30 AM Tuesday in each person's own
+    time zone) and sendRoundupPreview: functions/roundup.js builds last
+    week's summary of a person's managed projects (or, for admins who ask,
+    every project), using functions/lib/quantity-calc.js, a copy of the
+    app's quantity-calc.js that must be re-copied when that file changes.
+  - onMemberWritten: join requests to admins, "you're approved" emails,
+    and security alerts for new admins and removed or disabled members.
+  - onInviteCreated: invite emails. passwordChangedNotice: "your password
+    was changed" emails.
+  - onCompanyUpdated, onProjectDeleted, onProblemReported,
+    adminAlertDigest (every 15 minutes): admin security and problem
+    emails, queued in adminAlerts and grouped per company. The app writes
+    companies/{code}/problems when an upload keeps being refused
+    (reportSyncProblem in firebase-sync.js).
+
+Email preferences live on users/{uid}: emailComments, weeklyRoundup,
+roundupAllProjects, emailJoinRequests, emailSecurityAlerts,
+emailProblemAlerts (Settings > Account > "Email Me About").
+
+Tests. tests/ runs the real site against local emulators; see
+tests/README.md. Releases: docs/RELEASING.md.
 
 
 DATA MODEL

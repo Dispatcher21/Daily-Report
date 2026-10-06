@@ -1,0 +1,11 @@
+rules_version = '2';
+// Emulator only: a simple stand-in for the live Storage rules. (The Storage
+// emulator's cross-service rule checks stall now and then, so the suites
+// test photo access through Firestore instead.) Never deployed.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /companies/{code}/{allPaths=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

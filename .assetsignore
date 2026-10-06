@@ -12,3 +12,8 @@ node_modules
 cloudflare-worker.js
 functions
 firebase.json
+tests
+docs
+AGENTS.md
+CLAUDE.md
+firestore.rules

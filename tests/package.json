@@ -1,0 +1,11 @@
+{
+  "name": "daily-reports-tests",
+  "private": true,
+  "description": "Runs the real site against local Firebase emulators. See tests/README.md.",
+  "scripts": { "test": "./run.sh" },
+  "devDependencies": {
+    "firebase": "10.14.1",
+    "firebase-tools": "^14.0.0",
+    "playwright": "^1.47.0"
+  }
+}
