@@ -41,6 +41,11 @@
   --shadow: 0 1px 2px rgba(16, 23, 29, 0.06), 0 2px 8px rgba(16, 23, 29, 0.06);
   --shadow-lg: 0 6px 20px rgba(16, 23, 29, 0.18);
   --focus: #2b7bbf;
+  /* Logged (inspectors' daily reports) vs Billed (Pay Apps), see quantities-ui.js. */
+  --logged: #1f63a8;
+  --logged-bg: rgba(31, 99, 168, 0.1);
+  --billed: #0b7a6c;
+  --billed-bg: rgba(11, 122, 108, 0.1);
 
   --radius: 12px;
   --radius-sm: 8px;
@@ -85,6 +90,10 @@
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.35);
     --shadow-lg: 0 6px 20px rgba(0, 0, 0, 0.55);
     --focus: #6db2ea;
+    --logged: #7db8ef;
+    --logged-bg: rgba(125, 184, 239, 0.14);
+    --billed: #4fd1bf;
+    --billed-bg: rgba(79, 209, 191, 0.13);
   }
 }
 
@@ -121,6 +130,10 @@
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.35);
   --shadow-lg: 0 6px 20px rgba(0, 0, 0, 0.55);
   --focus: #6db2ea;
+  --logged: #7db8ef;
+  --logged-bg: rgba(125, 184, 239, 0.14);
+  --billed: #4fd1bf;
+  --billed-bg: rgba(79, 209, 191, 0.13);
 }
 
 * { box-sizing: border-box; }
@@ -3334,7 +3347,17 @@ input[type="date"] { min-width: 0; }
 .pa-callouts .pa-callout-warn { background: var(--warn-bg); color: var(--text); border: 1px solid var(--warn-border); }
 .pa-callouts .pa-callout-ok { background: var(--ok-bg); color: var(--ok); }
 .pa-callouts .text-btn { padding: 0 0.2rem; min-height: 0; font-size: 0.88rem; }
-.pa-bd-row { grid-template-columns: minmax(0, 1.5fr) repeat(3, minmax(0, 1fr)) minmax(0, 0.9fr); align-items: start; }
+.pa-bd-row { grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.9fr) minmax(0, 2fr) 10rem; align-items: center; }
+.pa-bd-cell.pa-bd-prog { align-items: stretch; }
+.pa-excel { display: grid; gap: 0.45rem; margin-top: 1rem; padding-top: 0.9rem; border-top: 1px solid var(--border); }
+.pa-excel-title { font-weight: 700; }
+.pa-excel-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+.pa-excel-actions .btn-sm { margin: 0; }
+.pa-excel-upload { position: relative; overflow: hidden; }
+.pa-excel-upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.pa-view-meta-row { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: baseline; justify-content: space-between; }
+.pa-view-meta-row .pa-view-meta { margin: 0; }
+#pa-cbar { margin: 0.9rem 0 0.25rem; }
 .pa-bd-row.pa-row-head { align-items: center; }
 .pa-bd-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 0.1rem; min-width: 0; }
 .pa-bd-billed { font-weight: 700; }
@@ -3347,7 +3370,8 @@ input[type="date"] { min-width: 0; }
 }
 @media (max-width: 699px) {
   .pa-edit-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); }
-  .pa-bd-row { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem 0.75rem; }
+  .pa-bd-row { grid-template-columns: minmax(0, 1fr) auto; gap: 0.4rem 0.75rem; }
+  .pa-bd-row > .pa-bd-prog { grid-column: 1 / -1; order: 3; }
   .pa-sum-value { font-size: 1.05rem; }
 }
 
@@ -3611,3 +3635,37 @@ input[type="date"] { min-width: 0; }
   font-size: 0.72rem; color: var(--text-dim); opacity: 0.7; text-decoration: none;
 }
 .app-version:hover { text-decoration: underline; opacity: 1; }
+
+
+/* ---------- Quantities and Pay Apps (quantities-ui.js) ----------
+   Logged = inspectors' daily reports (blue). Billed = Pay Apps (teal). */
+.qp-tabs { display: grid; grid-template-columns: 1fr 1fr; background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 1rem; }
+.qp-tab { display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.7rem 0.5rem; font-weight: 700; color: var(--text); text-decoration: none; }
+.qp-tab:hover { background: var(--surface-2); }
+.qp-tab-active, .qp-tab-active:hover { background: var(--brand); color: var(--on-brand); }
+.qp-tab-count { font-size: 0.75rem; font-weight: 700; padding: 0.05rem 0.5rem; border-radius: 999px; background: var(--brand-dim); white-space: nowrap; }
+.qp-tab-active .qp-tab-count { background: rgba(255, 255, 255, 0.18); }
+@media (max-width: 560px) { .qp-tab { flex-direction: column; gap: 0.15rem; padding-block: 0.5rem; } }
+
+.qp-stack { display: flex; height: 10px; border-radius: 5px; background: var(--surface-3); overflow: hidden; margin: 0.25rem 0 0.3rem; }
+.qp-stack i { display: block; height: 100%; }
+.qp-stack-lg { height: 16px; border-radius: 8px; margin: 0; }
+.qp-seg-billed { background: var(--billed); }
+.qp-seg-ready { background: var(--logged); }
+.qp-seg-ahead { background: var(--danger); }
+.qp-seg-rest { background: var(--surface-3); border: 1px solid var(--border); }
+.qp-cbar { display: grid; gap: 0.35rem; }
+.qp-cbar-top { display: flex; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; align-items: baseline; }
+.qp-cbar-title { font-weight: 800; font-size: 1.05rem; }
+.qp-cbar-note, .qp-dim { font-size: 0.82rem; color: var(--text-dim); }
+.qp-cbar-key { display: flex; flex-wrap: wrap; gap: 0.3rem 1.2rem; font-size: 0.88rem; font-variant-numeric: tabular-nums; }
+.qp-cbar-key > span { display: inline-flex; align-items: center; gap: 0.35rem; }
+.qp-cbar-help { margin: 0; font-size: 0.82rem; color: var(--text-dim); }
+.qp-dot { width: 11px; height: 11px; border-radius: 3px; display: inline-block; flex: none; }
+.qp-noprice { margin: 0; }
+.qp-chk { display: inline-block; font-size: 0.78rem; font-weight: 800; padding: 0.2rem 0.6rem; border-radius: 999px; white-space: nowrap; }
+.qp-chk-ok { background: var(--surface-3); color: var(--text-dim); }
+.qp-chk-ready { background: var(--logged-bg); color: var(--logged); }
+.qp-chk-ahead { background: var(--danger-bg); color: var(--danger); }
+.qp-prog-text { font-size: 0.8rem; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+@media (min-width: 1100px) { .qp-prog-text { white-space: nowrap; } }

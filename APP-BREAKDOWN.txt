@@ -156,6 +156,22 @@ emailProblemAlerts (Settings > Account > "Email Me About").
 Tests. tests/ runs the real site against local emulators; see
 tests/README.md. Releases: docs/RELEASING.md.
 
+Quantities and Pay Apps (redesigned 2026-10-06). The project page's
+Quantities and Pay Apps cards lead to two pages that share a tab bar:
+quantity-sheet.html (titled "Quantities"; the file name is kept so old
+links work) and pay-apps.html. Both use quantities-ui.js, which compares
+Logged (summed from daily reports) with Billed (the latest Pay App's
+itemTotals, already totals to date): a contract bar split into billed,
+logged-not-billed, billed-ahead and remaining; one progress bar per item;
+and a check chip ("Matches", "140 TON to bill", "56 TON billed ahead").
+Quantities has range chips, an item table whose rows open a date-ordered
+history of report entries and Pay App billings, a By Day grid, and the
+Excel export (quantity-sheet-export.js). The Pay App Quantities Excel
+download/upload moved to pay-apps.html. quick-quantity.html is titled
+"Log Quantities" and shows each item's running total as you type. The
+old By Estimate, Detail Log and Excel preview views were removed from the
+screen; the Excel file still has its By Day and Detail Log sheets.
+
 
 DATA MODEL
 

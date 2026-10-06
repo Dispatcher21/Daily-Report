@@ -77,7 +77,9 @@ the emulator tests are what check rules and functions before they ship.
 - **Shared code** is classic scripts loaded with `<script src>` that define
   plain globals: `storage.js` (IndexedDB), `common.js`, `defaults.js`,
   `firebase-sync.js` (everything company and account related),
-  `audit-log.js`, `quantity-calc.js`, and others. Load order matters.
+  `audit-log.js`, `quantity-calc.js`, `quantities-ui.js` (logged vs billed,
+  shared by Quantities, Pay Apps and the project page), and others. Load
+  order matters.
 - **`firebase-init.js`** is the only ES module (the Firebase SDK needs it).
   It exposes `window.FirebaseCore`, which other code reaches through
   `waitForFirebaseCore()`.

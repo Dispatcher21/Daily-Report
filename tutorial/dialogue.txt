@@ -38,8 +38,8 @@
 #  Any page:    menu button, sync button, tutorial bar, tips button,
 #               breadcrumb, activity banner
 #  Home:        portfolio panel, activity calendar, project card
-#  Project:     new report tile, view reports tile, quick quantity tile,
-#               quantity sheet tile, dashboard overview, pay items panel,
+#  Project:     new report tile, view reports tile, quantities tile,
+#               pay apps tile, dashboard overview, pay items panel,
 #               weather panel, trend chart, project settings button
 #  Reports:     filters, search box, view toggle, report list,
 #               first report, checkbox, select all, comment badge,
@@ -51,14 +51,15 @@
 #               pay items section, weather section, fetch weather button,
 #               photos section, live preview, preview tabs, save button,
 #               generate button, duplicate button
-#  Quantity Sheet: report range, range options, manage pay apps link,
-#               pay app file, quantities, view tabs, item bars,
-#               excel preview, download button
-#  Quick Quantity: date field, item list, first quantity box,
+#  Quantities:  section tabs, pay apps tab, contract bar, range options,
+#               item list, first item, check chip, view toggle,
+#               excel button, log quantities button
+#  Log Quantities: date field, day arrows, item list,
+#               first quantity box, running total,
 #               add item not in catalog, save button
 #  Pay Apps:    pay app list, first pay app, new pay app button, status,
-#               entry mode, items, differences filter, enter by button,
-#               totals bar, review section
+#               contract bar, breakdown, differences filter, period link,
+#               excel file, review section
 #  Download:    logo warning, pdf preview, download button
 #  Photos:      photos, view report button
 #  Manager:     reports to review, first report, pay apps to review,
@@ -192,15 +193,15 @@ print, or edit any of them.
 
 [4]
 Emotion: neutral
-Points at: quick quantity tile
-Quick Quantity Add is for logging pay item quantities for a date without
-writing a whole report.
+Points at: quantities tile
+Quantities adds up what inspectors have logged on every pay item. You
+can log quantities for a day from there too.
 
 [5]
 Emotion: thinking
-Points at: quantity sheet tile
-The Quantity Sheet totals every pay item over a date range. Handy at the
-end of the month.
+Points at: pay apps tile
+Pay Apps is the billing side: what the contractor has been paid, checked
+against what was logged.
 
 [6]
 Emotion: pointing
@@ -374,67 +375,74 @@ That's the tour! Look around as much as you like. On any page, tap Tips
 and I'll pop back up.
 
 
-=== QUANTITY SHEET (quantity-sheet.html) ===
+=== QUANTITIES (quantity-sheet.html) ===
 
 [1]
 Emotion: happy
 Points at: nothing
-The Quantity Sheet adds up every pay item across a stack of reports, so
-you never have to total them by hand.
+Quantities adds up every pay item across the reports, so you never have
+to total them by hand.
 
 [2]
 Emotion: pointing
-Points at: range options
-First pick which reports count: a date range, every report on the job,
-or the reports covered by one Pay App.
+Points at: contract bar
+Two words to know. Logged is what inspectors write in their daily
+reports. Billed is what the contractor has been paid on Pay Apps.
 
 [3]
 Emotion: neutral
-Points at: quantities
-The totals update as soon as you change the range. Each bar shows how
-far along that item is.
+Points at: contract bar
+This bar shows the whole contract: teal is billed, blue is logged but
+not billed yet, and red would mean something was billed ahead of the
+logs.
 
 [4]
-Emotion: thinking
-Points at: view tabs
-Switch views to see the same quantities day by day, Pay App by Pay App,
-or as a detailed log of every entry.
+Emotion: pointing
+Points at: range options
+Pick which reports count. Since Last Pay App shows what's ready for the
+next one.
 
 [5]
-Emotion: neutral
-Points at: excel preview
-This preview is exactly what lands in the spreadsheet.
+Emotion: thinking
+Points at: check chip
+Each item gets a check: it matches, it has some left to bill, or it was
+billed ahead of what was logged.
 
 [6]
 Emotion: pointing
-Points at: download button
-When it looks right, download it as an Excel file to send off or keep.
+Points at: first item
+Tap an item to see every report entry and Pay App for it, in date order.
 
 [7]
 Emotion: neutral
-Points at: pay app file
-Doing Pay Apps in a spreadsheet? Download this file, fill in the
-quantities, and upload it back to record them.
+Points at: view toggle
+By Day lays the same quantities out day by day instead.
 
 [8]
+Emotion: neutral
+Points at: excel button
+Need a spreadsheet? Excel downloads everything in this range.
+
+[9]
 Emotion: pointing
-Points at: manage pay apps link
-Speaking of Pay Apps, tap Manage Pay Apps to see how billing works!
+Points at: pay apps tab
+Now tap Pay Apps up top to see the billing side!
 
 
-=== QUICK QUANTITY ADD (quick-quantity.html) ===
+=== LOG QUANTITIES (quick-quantity.html) ===
 
 [1]
 Emotion: happy
 Points at: nothing
-Quick Quantity Add is the fast way to log pay items when that's all you
-need to write down.
+Log Quantities is the fast way to write down pay items when that's all
+you need to record.
 
 [2]
 Emotion: neutral
-Points at: date field
-Pick the day. If there's already a report for it, the quantities go on
-that report. If not, saving starts a new one for you.
+Points at: day arrows
+Pick the day, or step through days with the arrows. If there's already
+a report for it, the quantities go on that report. If not, saving starts
+a new one.
 
 [3]
 Emotion: pointing
@@ -444,14 +452,19 @@ rest blank.
 
 [4]
 Emotion: thinking
+Points at: running total
+The total to date updates as you type, so you'll notice right away if
+an item is about to run past its plan.
+
+[5]
+Emotion: thinking
 Points at: add item not in catalog
 Something on site that isn't in the catalog? Add it here.
 
-[5]
+[6]
 Emotion: pointing
 Points at: save button
-Then save, and the totals on the dashboard and Quantity Sheet catch up
-right away.
+Then save, and the totals catch up right away.
 
 
 === PAY APPS (pay-apps.html) ===
@@ -460,67 +473,59 @@ right away.
 Emotion: happy
 Points at: nothing
 This is where Pay Apps get recorded, so you can check the contractor's
-billing against what you've logged in the field.
+billing against what was logged in the field.
 
 [2]
 Emotion: neutral
 Points at: pay app list
 Every Pay App on the project is listed here, newest first, with its
-status and how much it billed.
+status.
 
 [3]
-Emotion: pointing
-Points at: first pay app
-Tap one to open it. Let's look at Pay App 2, which the engineer sent
-back.
-
-[4]
 Emotion: surprised
 Points at: status
-Its status and comments show right at the top, so you know where it
-stands before you dig in.
+The newest one opens on its own. Pay App 2 was sent back, and its status
+and comments show right at the top.
+
+[4]
+Emotion: thinking
+Points at: contract bar
+The same contract bar as Quantities, as of this Pay App's date. The red
+piece means something was billed ahead of what inspectors logged.
 
 [5]
-Emotion: thinking
-Points at: entry mode
-Pay Apps come two ways: totals to date, or just what this one adds. Pick
-whichever matches the paperwork in front of you, and the line below
-spells out exactly what to type.
+Emotion: pointing
+Points at: breakdown
+Here's which item: the asphalt was billed 56 tons ahead of the logs.
+That's what the engineer asked about.
 
 [6]
 Emotion: neutral
-Points at: items
-Each item lines up your logged total against what the Pay App billed.
-Anything that doesn't match gets a colored edge.
-
-[7]
-Emotion: thinking
 Points at: differences filter
 Lots of items? Only differences hides the ones that already match.
 
-[8]
+[7]
 Emotion: neutral
-Points at: enter by button
-Some items are easier to enter in dollars. Tap Enter by $ to switch
-how that item is entered.
+Points at: period link
+This jumps to Quantities for just the days this Pay App covers.
 
-[9]
-Emotion: pointing
-Points at: totals bar
-Both totals stay right here while you work: what this Pay App adds, and
-the total billed to date, each next to what you logged.
-
-[10]
+[8]
 Emotion: neutral
 Points at: review section
 Approving, sending it back for changes, and comments all happen down
 here.
 
-[11]
+[9]
+Emotion: thinking
+Points at: excel file
+Doing Pay Apps in a spreadsheet? Download this file, fill it in, and
+upload it back to record them.
+
+[10]
 Emotion: happy
 Points at: new pay app button
-When the next Pay App comes in, start it here. It fills in with your
-own totals, so you only change what's different.
+When the next Pay App comes in, start it here. It fills in from the last
+one, so you only change what's different.
 
 
 === DOWNLOAD REPORT (download.html) ===

@@ -59,6 +59,7 @@ When to run what:
 | weekly-roundup | Roundup contents, alerts, week and time zone math, preview button |
 | account-emails | Join request, approved, invite and password-changed emails |
 | admin-alerts | Admin security and problem emails, and the company-wide roundup |
+| quantities | Quantities, Log Quantities and Pay Apps pages: logged vs billed, item history, Excel, phone layout (tutorial project) |
 
 ## Known quirk
 

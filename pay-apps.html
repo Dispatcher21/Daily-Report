@@ -32,6 +32,7 @@
 </div>
 
 <main>
+  <div id="qp-tabs"></div>
   <div class="pa-layout">
   <div class="step pa-list-step" id="pa-list-step">
     <div class="step-header">
@@ -42,6 +43,15 @@
     <div class="step-body">
       <button type="button" class="btn-primary" id="pa-new-btn">+ New Pay App</button>
       <div class="pa-list" id="pa-list"></div>
+      <div class="pa-excel" id="payapp-file-step">
+        <span class="pa-excel-title">Pay App Quantities (Excel) <button type="button" class="info-tip" data-tip="Download a spreadsheet with one row per Pay App and one column per pay item, fill in figures there instead of one at a time here, then upload it back. Only ever touches Pay App quantities, dates and notes. A Pay App already on file keeps its approval and comments, reset to Pending only if its figures actually changed." aria-label="What this does">i</button></span>
+        <span class="hint" style="margin:0;">Fill in several Pay Apps in Excel and upload them back.</span>
+        <span class="pa-excel-actions">
+          <button type="button" class="btn-sm" id="btn-download-payapp-file">&#8681; Download</button>
+          <label class="btn-sm pa-excel-upload">&#8679; Upload<input type="file" id="f-payapp-reupload" accept=".xlsx,.xls" aria-label="Upload filled-in Pay App Quantities"></label>
+          <span class="hint" id="fn-payapp-reupload" style="margin:0;"></span>
+        </span>
+      </div>
     </div>
   </div>
 
@@ -70,13 +80,15 @@
             <button type="button" class="btn-sm btn-sm-danger" id="btn-delete-estimate">Delete</button>
           </div>
         </div>
-        <p class="pa-view-meta" id="pa-view-meta"></p>
-
-        <div class="pa-sum-grid" id="pa-sum-grid"></div>
+        <div class="pa-view-meta-row">
+          <p class="pa-view-meta" id="pa-view-meta"></p>
+          <a class="text-btn" id="pa-period-link" href="#">What was logged in this period &rarr;</a>
+        </div>
+        <div id="pa-cbar"></div>
         <ul class="pa-callouts" id="pa-callouts"></ul>
 
         <div class="pa-items-head">
-          <div class="eyebrow">Breakdown <button type="button" class="info-tip" data-tip="Billed is what this Pay App approved. Logged is what your daily reports recorded through the Pay App's date. Plan is the planned quantity from Project Settings." aria-label="What this does">i</button></div>
+          <div class="eyebrow">Breakdown <button type="button" class="info-tip" data-tip="Billed is what Pay Apps have paid, through this one. Logged is what inspectors recorded in daily reports through this Pay App's date. Each bar is measured against the planned quantity from Project Settings." aria-label="What this does">i</button></div>
           <div class="view-toggle pa-filter" id="pa-filter" role="group" aria-label="Show">
             <button type="button" class="view-toggle-btn active" data-filter="all">All items <span id="pa-count-all"></span></button>
             <button type="button" class="view-toggle-btn" data-filter="diff">Only differences <span id="pa-count-diff"></span></button>
@@ -132,11 +144,16 @@
   </div>
 </main>
 
+<script src="lib/exceljs.min.js"></script>
+<script src="lib/xlsx.min.js"></script>
 <script src="common.js"></script>
 <script src="defaults.js"></script>
 <script src="storage.js"></script>
 <script src="audit-log.js"></script>
 <script src="quantity-calc.js"></script>
+<script src="quantities-ui.js"></script>
+<script src="quantity-sheet-export.js"></script>
+<script src="project-file.js"></script>
 <script src="local-sync.js"></script>
 <script type="module" src="firebase-init.js"></script>
 <script src="firebase-sync.js"></script>
@@ -168,7 +185,6 @@ async function init() {
   renderBreadcrumb('#bb-trail', [
     { label: 'Home', href: 'index.html' },
     { label: project.name, href: `project.html?id=${project.id}` },
-    { label: 'Quantity Sheet', href: `quantity-sheet.html?project=${project.id}` },
     { label: 'Pay Apps' },
   ]);
 
@@ -180,8 +196,9 @@ async function init() {
   // so a manager lands on that Pay App with its review section in view.
   const focusId = queryParam('estimate');
   const estimates = project.billingEstimates || [];
+  // Otherwise the newest Pay App opens straight away.
   if (focusId && estimates.some((e) => e.id === focusId)) selectedId = focusId;
-  else selectedId = estimates.length ? null : 'new';
+  else selectedId = estimates.length ? sortedEstimates(estimates).pop().id : 'new';
   renderList();
   renderDetail();
   if (focusId && selectedId === focusId) $('#pa-review').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -253,6 +270,7 @@ function select(id) {
 // ---------- The list ----------
 
 function renderList() {
+  $('#qp-tabs').innerHTML = qtySectionTabsHtml(project, qtyProjectSummary(project, allReports), 'payapps');
   const sorted = sortedEstimates(project.billingEstimates).slice().reverse(); // newest first
   // Two Pay Apps sharing a date isn't just a display quirk -- the progress
   // chart and dashboard math can only place one on that date, so whichever
@@ -608,28 +626,12 @@ $('#pa-basis').addEventListener('click', (e) => {
 
 // ---------- The breakdown ----------
 
-// How far apart billed and logged are -- not a claim about direction, just
-// a flag worth a second look.
-function payAppDiffSeverity(pctDiff) {
-  if (pctDiff === 0) return 'match';
-  if (pctDiff <= 0.01) return 'ok';
-  if (pctDiff <= 0.05) return 'warn';
-  return 'over';
-}
-
-function signedMoney(n) {
-  if (n == null) return '—';
-  if (Math.round(n) === 0) return '$0';
-  return `${n > 0 ? '+' : '−'}${fmtMoney(Math.abs(n))}`;
-}
-
 function renderBreakdown(estimate) {
   const prev = previousEstimate(estimate);
   const billedToDate = totalsMap(estimate);
   const prevTotals = totalsMap(prev);
   const loggedToDate = loggedBetween(null, estimate.date);
-  const loggedPeriod = loggedBetween(prev ? prev.date : null, estimate.date);
-  const items = payAppItems(prev, estimate);
+  const items = payAppItems(prev, estimate).map((it) => ({ ...it, contract: it.contractTotal }));
 
   // Status and comments up top; the review controls are further down.
   const status = estimate.approvalStatus || 'pending';
@@ -638,89 +640,55 @@ function renderBreakdown(estimate) {
   badge.textContent = PAYAPP_APPROVAL_LABELS[status] || 'Pending';
   const comments = (estimate.comments || []).length;
   $('#pa-jump-review').textContent = comments ? `${comments} comment${comments === 1 ? '' : 's'} ↓` : (canApprovePayApps ? 'Review ↓' : 'Comments ↓');
-  $('#pa-view-meta').textContent = [
-    `Dated ${estimate.date || '(no date)'}`,
-    estimate.note || '',
-    prev ? `follows Pay App ${prev.estimateNo} (${prev.date || 'no date'})` : 'first Pay App on this project',
-  ].filter(Boolean).join(' · ');
 
-  const sums = { billedPeriod: 0, billedTotal: 0, loggedPeriod: 0, loggedTotal: 0, contract: 0 };
-  let diffCount = 0, overPlan = [], billedItems = 0;
+  let billedPeriodCost = 0, billedItems = 0, diffCount = 0;
+  const overPlan = [];
   const rows = items.map((it) => {
-    const bTotal = billedToDate.get(it.itemNumber) || 0;
-    const bPrev = prevTotals.get(it.itemNumber) || 0;
-    const bPeriod = bTotal - bPrev;
-    const lTotal = loggedToDate.get(it.itemNumber) || 0;
-    const lPeriod = loggedPeriod.get(it.itemNumber) || 0;
-    const diff = bTotal - lTotal;
-    const cost = (n) => itemCost(it, n);
-    [['billedPeriod', bPeriod], ['billedTotal', bTotal], ['loggedPeriod', lPeriod], ['loggedTotal', lTotal]]
-      .forEach(([k, n]) => { const c = cost(n); if (c != null) sums[k] += c; });
-    if (it.contractTotal != null) sums.contract += it.contractTotal;
+    const B = billedToDate.get(it.itemNumber) || 0;
+    const bPeriod = B - (prevTotals.get(it.itemNumber) || 0);
+    const L = loggedToDate.get(it.itemNumber) || 0;
+    const c = itemCost(it, bPeriod);
+    if (c != null) billedPeriodCost += c;
     if (Math.abs(bPeriod) > 1e-9) billedItems++;
-
-    const differs = Math.abs(diff) > 1e-9;
-    const base = cost(lTotal) != null ? Math.abs(cost(lTotal)) : Math.abs(lTotal);
-    const diffSize = cost(diff) != null ? Math.abs(cost(diff)) : Math.abs(diff);
-    const pct = base > 0 ? diffSize / base : (differs ? null : 0);
-    const severity = !differs ? 'match' : (pct != null ? payAppDiffSeverity(pct) : 'over');
+    const differs = !qtyEqual(L, B);
     if (differs) diffCount++;
-
-    // Plan, from Project Settings: planned quantity for most items; a Lump
-    // Sum's plan is the whole item (100% of its value).
-    const planStored = it.isLump ? it.price : it.planned;
-    const planPct = planStored > 0 ? bTotal / planStored : null;
-    const over = planPct != null && planPct > 1 + 1e-9;
-    if (over) overPlan.push(it.itemNumber);
-
-    const pair = (billed, logged, signed) => `
-        <span class="pa-bd-billed">${itemText(it, billed, signed)}${cost(billed) != null ? ` <span class="pa-bd-money">${fmtMoney(cost(billed))}</span>` : ''}</span>
-        <span class="pa-bd-logged">Logged ${itemText(it, logged, signed)}</span>`;
+    const base = qtyPlanBase(it);
+    if (base != null && B > base * (1 + 1e-9)) overPlan.push(it.itemNumber);
     return `
-    <div class="pa-row pa-bd-row${severity === 'warn' || severity === 'over' ? ` pa-row-${severity}` : ''}" data-item="${escapeHtml(it.itemNumber)}" data-differs="${differs ? '1' : ''}">
+    <div class="pa-row pa-bd-row${differs && B > L ? ' pa-row-over' : ''}" data-item="${escapeHtml(it.itemNumber)}" data-differs="${differs ? '1' : ''}">
       <div class="pa-cell-item">
         <span class="pa-item-no">${escapeHtml(it.itemNumber)}</span>
         <span class="pa-item-desc">${escapeHtml(it.description)}</span>
       </div>
-      <div class="pa-bd-cell"><span class="pa-cell-label">This Pay App</span>${pair(bPeriod, lPeriod, true)}</div>
-      <div class="pa-bd-cell"><span class="pa-cell-label">To date</span>${pair(bTotal, lTotal)}</div>
-      <div class="pa-bd-cell">
-        <span class="pa-cell-label">Billed vs logged</span>
-        ${differs
-          ? `<span class="pa-bd-billed">${itemText(it, diff, true)} ${diff > 0 ? 'over' : 'under'}</span>
-             <span class="pa-bd-logged">${cost(diff) != null ? signedMoney(cost(diff)) : ''} <span class="pill payapp-diff-pill payapp-diff-${severity}">${pct != null ? (pct * 100).toFixed(1) + '%' : 'not logged'}</span></span>`
-          : '<span class="pill payapp-diff-pill payapp-diff-match">Matches</span>'}
-      </div>
-      <div class="pa-bd-cell">
-        <span class="pa-cell-label">Plan</span>
-        ${planStored > 0
-          ? `<span class="pa-bd-billed">${it.isLump ? 'Lump sum' : itemText(it, planStored)}</span>
-             <span class="pa-plan-bar" title="${Math.round(planPct * 1000) / 10}% of plan billed"><span style="width:${Math.min(100, planPct * 100)}%"></span></span>
-             <span class="pa-bd-logged">${Math.round(planPct * 1000) / 10}% billed${over ? ' <span class="pill payapp-diff-over">Over plan</span>' : ''}</span>`
-          : '<span class="pa-bd-logged">No plan set</span>'}
-      </div>
+      <div class="pa-bd-cell"><span class="pa-cell-label">This Pay App</span>${Math.abs(bPeriod) > 1e-9
+        ? `<span class="pa-bd-billed">${itemText(it, bPeriod, true)}</span>${c != null ? `<span class="pa-bd-money">${fmtMoney(c)}</span>` : ''}`
+        : '<span class="pa-bd-logged">None</span>'}</div>
+      <div class="pa-bd-cell pa-bd-prog">${qtyProgressHtml(it, L, B)}</div>
+      <div class="pa-bd-cell">${qtyCheckChipHtml(it, L, B)}</div>
     </div>`;
   });
   $('#pa-breakdown').innerHTML = `
     <div class="pa-row pa-bd-row pa-row-head" aria-hidden="true">
-      <span>Item</span><span>This Pay App</span><span>To date</span><span>Billed vs logged</span><span>Plan</span>
+      <span>Item</span><span>This Pay App</span><span>Progress as of ${escapeHtml(estimate.date || 'this Pay App')}</span><span>Check</span>
     </div>` + rows.join('');
 
-  const diffTotal = sums.billedTotal - sums.loggedTotal;
-  const card = (label, value, sub, cls) => `
-    <div class="pa-sum-card${cls ? ' ' + cls : ''}"><span class="pa-sum-label">${label}</span><span class="pa-sum-value">${value}</span>${sub ? `<span class="pa-sum-sub">${sub}</span>` : ''}</div>`;
-  $('#pa-sum-grid').innerHTML =
-    card('This Pay App', fmtMoney(sums.billedPeriod), `${billedItems} item${billedItems === 1 ? '' : 's'} billed · logged ${fmtMoney(sums.loggedPeriod)}`)
-    + card('Billed to date', fmtMoney(sums.billedTotal), sums.contract > 0 ? `${Math.round((sums.billedTotal / sums.contract) * 1000) / 10}% of ${fmtMoney(sums.contract)} contract` : '')
-    + card('Logged to date', fmtMoney(sums.loggedTotal), `in daily reports through ${escapeHtml(estimate.date || '')}`)
-    + card('Billed vs logged', signedMoney(diffTotal), Math.round(diffTotal) === 0 ? 'matches your reports' : (diffTotal > 0 ? 'billed more than logged' : 'billed less than logged'),
-      Math.round(diffTotal) === 0 ? 'pa-sum-ok' : 'pa-sum-warn');
+  $('#pa-view-meta').innerHTML = [
+    `Dated ${escapeHtml(estimate.date || '(no date)')}`,
+    estimate.note ? escapeHtml(estimate.note) : '',
+    prev ? `after Pay App ${escapeHtml(prev.estimateNo)} (${escapeHtml(prev.date || 'no date')})` : 'the first Pay App on this project',
+    `<strong>${fmtMoney(billedPeriodCost)}</strong> billed on this one (${billedItems} item${billedItems === 1 ? '' : 's'})`,
+  ].filter(Boolean).join(' · ');
+  // The reports this Pay App covers: the day after the one before it,
+  // through its own date.
+  const periodFrom = prev && prev.date ? nextDayIso(prev.date) : '';
+  $('#pa-period-link').href = `quantity-sheet.html?project=${project.id}${periodFrom ? `&from=${periodFrom}` : ''}&to=${estimate.date || ''}`;
+  $('#pa-cbar').innerHTML = qtyContractBarHtml(qtyContractSums(items, loggedToDate, billedToDate),
+    `billed through Pay App ${estimate.estimateNo}, logged through ${estimate.date || 'its date'}`);
 
   const callouts = [];
-  if (diffCount) callouts.push(`<li class="pa-callout-warn"><strong>${diffCount} item${diffCount === 1 ? '' : 's'}</strong> billed differently than your reports logged. <button type="button" class="text-btn pa-show-diffs">Show them</button></li>`);
-  else callouts.push('<li class="pa-callout-ok">Every item was billed exactly as your reports logged it.</li>');
   if (overPlan.length) callouts.push(`<li class="pa-callout-warn"><strong>Over plan:</strong> ${overPlan.map(escapeHtml).join(', ')} -- billed past the planned quantity in Project Settings.</li>`);
   $('#pa-callouts').innerHTML = callouts.join('');
+  $('#pa-callouts').hidden = !callouts.length;
   $('#pa-count-all').textContent = `(${items.length})`;
   $('#pa-count-diff').textContent = `(${diffCount})`;
   applyItemFilter();
@@ -899,9 +867,46 @@ $('#btn-delete-estimate').addEventListener('click', async () => {
   project.billingEstimates = (project.billingEstimates || []).filter((e) => e.id !== estimate.id);
   await saveProject(project);
   dirty = false;
-  selectedId = project.billingEstimates.length ? null : 'new';
+  selectedId = project.billingEstimates.length ? sortedEstimates(project.billingEstimates).pop().id : 'new';
   renderList();
   renderDetail();
+});
+
+// ---------- Pay App Quantities (Excel) ----------
+
+$('#btn-download-payapp-file').addEventListener('click', async () => {
+  try {
+    await downloadPayAppQuantitiesFile(project);
+  } catch (err) {
+    console.error(err);
+    alert(userError("Couldn't build the Pay App file: " + err.message, 'DOWNLOAD_PAYAPP_FILE'));
+  }
+});
+
+$('#f-payapp-reupload').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  if (!confirmDiscard()) return;
+  try {
+    const rows = await parsePayAppQuantitiesFile(file);
+    if (rows == null) {
+      alert(`Couldn't find a "${PAY_APP_QUANTITIES_SHEET}" sheet in that file. Make sure you're uploading the file downloaded from this same Download button.`);
+      return;
+    }
+    // Only ever touches billingEstimates (see mergeBillingEstimates).
+    project.billingEstimates = mergeBillingEstimates(project.billingEstimates, rows);
+    await saveProject(project);
+    dirty = false;
+    $('#fn-payapp-reupload').textContent = `Updated from ${file.name}`;
+    if (!selectedEstimate()) selectedId = project.billingEstimates.length ? sortedEstimates(project.billingEstimates).pop().id : 'new';
+    panelMode = selectedId === 'new' ? 'edit' : 'view';
+    renderList();
+    renderDetail();
+  } catch (err) {
+    console.error(err);
+    alert(userError("Couldn't read that file: " + err.message, 'PARSE_PAYAPP_EXCEL'));
+  }
 });
 
 // Leaving the page with unsaved Pay App changes.

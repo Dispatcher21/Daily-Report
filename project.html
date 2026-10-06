@@ -48,15 +48,15 @@
       <div class="hc-title">View Reports</div>
       <div class="hc-desc"><span id="report-count">0</span> saved report(s)</div>
     </a>
-    <a class="hub-card" id="card-quick-quantity" href="#">
-      <span class="hc-icon">&#9998;</span>
-      <div class="hc-title">Quick Quantity Add</div>
-      <div class="hc-desc">Log pay item quantities for any date</div>
-    </a>
-    <a class="hub-card" id="card-quantity-sheet" href="#">
+    <a class="hub-card" id="card-quantities" href="#">
       <span class="hc-icon">&#128202;</span>
-      <div class="hc-title">Quantity Sheet</div>
-      <div class="hc-desc">Pay item totals by date range</div>
+      <div class="hc-title">Quantities</div>
+      <div class="hc-desc" id="card-quantities-desc">What inspectors have logged</div>
+    </a>
+    <a class="hub-card" id="card-payapps" href="#">
+      <span class="hc-icon">&#128181;</span>
+      <div class="hc-title">Pay Apps</div>
+      <div class="hc-desc" id="card-payapps-desc">What's been billed and approved</div>
     </a>
   </div>
 
@@ -180,7 +180,7 @@
       <div class="step-header">
         <span class="step-num">DATA FILE</span>
         <h2>Project Data File</h2>
-        <button type="button" class="info-tip" data-tip="Fallback option: download this project's current data as an Excel file -- edit it, keep it as a backup, or carry it to another device. Uploading a file replaces this project's info and pay item catalog. Existing reports (and Pay App history) are not affected -- the Quantity Sheet page has its own dedicated file for Pay App figures. Project Setup (above) is the easier way to make most changes." aria-label="What this does">i</button>
+        <button type="button" class="info-tip" data-tip="Fallback option: download this project's current data as an Excel file -- edit it, keep it as a backup, or carry it to another device. Uploading a file replaces this project's info and pay item catalog. Existing reports (and Pay App history) are not affected -- the Pay Apps page has its own dedicated file for Pay App figures. Project Setup (above) is the easier way to make most changes." aria-label="What this does">i</button>
       </div>
       <div class="step-body">
         <button type="button" class="btn-secondary" id="btn-download-project-file" style="margin-bottom:0.75rem;">&#8681; Download Project File</button>
@@ -276,6 +276,7 @@
 <script src="local-sync.js"></script>
 <script src="render-report.js"></script>
 <script src="quantity-calc.js"></script>
+<script src="quantities-ui.js"></script>
 <script src="dashboard-widgets.js"></script>
 <script type="module" src="firebase-init.js"></script>
 <script src="firebase-sync.js"></script>
@@ -310,8 +311,8 @@ async function init() {
 
   $('#card-new-report').href = `report-editor.html?project=${project.id}&report=new`;
   $('#card-view-reports').href = `reports.html?project=${project.id}`;
-  $('#card-quantity-sheet').href = `quantity-sheet.html?project=${project.id}`;
-  $('#card-quick-quantity').href = `quick-quantity.html?project=${project.id}`;
+  $('#card-quantities').href = `quantity-sheet.html?project=${project.id}`;
+  $('#card-payapps').href = `pay-apps.html?project=${project.id}`;
 
   // Renaming/re-uploading/deleting the project itself may be restricted to
   // admins -- viewing the dashboard and filing reports never is.
@@ -340,6 +341,7 @@ async function init() {
 
   const reports = await getReportsForProject(project.id);
   $('#report-count').textContent = reports.length;
+  renderQuantityCards(reports, project);
   renderDashboard(reports, project);
   refreshSyncFolderStatus();
 
@@ -373,6 +375,19 @@ async function init() {
 // daysBetween/ringSvg/statCard/DASH_COUNT_FORMATS/animateDashboardFills/
 // fitDashboardValues/fmtMoney now live in dashboard-widgets.js, shared with
 // index.html's Manager Dashboard.
+
+// The Quantities and Pay Apps cards' live line: how much is logged and
+// billed, and where the latest Pay App stands.
+function renderQuantityCards(reports, project) {
+  const sum = qtyProjectSummary(project, reports);
+  if (sum.loggedPct != null) $('#card-quantities-desc').textContent = `${qtyPctText(sum.loggedPct)} logged · ${qtyMoney(sum.loggedCost)}`;
+  if (sum.latest) {
+    const status = { approved: 'Approved', changes_requested: 'Changes Requested' }[sum.latest.approvalStatus] || 'Pending';
+    $('#card-payapps-desc').textContent = `${sum.billedPct != null ? `${qtyPctText(sum.billedPct)} billed · ` : ''}Pay App ${sum.latest.estimateNo}: ${status}`;
+  } else {
+    $('#card-payapps-desc').textContent = 'No Pay Apps yet';
+  }
+}
 
 function renderDashboard(reports, project) {
   if (dashFunFactTimer) { clearInterval(dashFunFactTimer); dashFunFactTimer = null; }
@@ -427,7 +442,7 @@ function renderDashboard(reports, project) {
     ? contractValueSummary(fullPayItemCatalogOverview(payAppFlat, project.payItemCatalog)).pctByValue
     : null;
   const payAppValueTip = payAppFlat == null
-    ? 'No Pay App has been recorded for this project yet -- record one on the Quantity Sheet to track billed contract value here.'
+    ? 'No Pay App has been recorded for this project yet -- record one on the Pay Apps page to track billed contract value here.'
     : payAppPctByValue == null
       ? 'The most recently recorded Pay App has no dollar value yet to weigh against contract value.'
       : `Dollars billed in the most recently recorded Pay App, divided by total contract value. Based only on that Pay App -- doesn't include report activity filed since, since it's meant to reflect what's been formally billed rather than day-to-day progress.`;
