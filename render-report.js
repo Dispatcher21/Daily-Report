@@ -184,6 +184,10 @@ function renderSheetGrid(sheetData, coordValues, coordImages) {
           cellEl.style.fontSize = RR_NOWRAP_CELLS[coord] + 'pt';
         }
         if (RR_INDENT_CELLS[coord]) cellEl.style.paddingLeft = RR_INDENT_CELLS[coord] + 'pt';
+        if (coordValues.smallCells && coordValues.smallCells.has(coord)) {
+          cellEl.style.fontSize = RR_DETAIL_FONT_PT + 'pt';
+          cellEl.style.paddingLeft = '8pt';
+        }
         if (RR_PAY_ITEM_DESC_CELLS.has(coord)) {
           cellEl.style.whiteSpace = 'pre-wrap';
           cellEl.style.overflow = 'hidden';
@@ -331,6 +335,8 @@ const RR_WORK_SUMMARY_CELL = 'I14';
 // was rendering directly on top of them. Forced to wrap and clip to its own
 // column instead; fitWrappedText() below shrinks it further if it still
 // doesn't fit the row's fixed height.
+// A pay item's detail line (stations, sizes, remarks) under its own line.
+const RR_DETAIL_FONT_PT = 9;
 const RR_PAY_ITEM_DESC_CELLS = new Set(
   Array.from({ length: PAY_ITEM_ROW_COUNT }, (_, i) => 'K' + (RR_PAY_ITEM_FIRST_ROW + i))
 );
@@ -369,26 +375,46 @@ function buildSheet1Values(report) {
   v['K11'] = report.workSummaryHeader || '';
   v['K12'] = report.trafficControlNote || '';
 
-  // The template's table only has PAY_ITEM_ROW_COUNT physical rows. Nothing
-  // beyond that is dropped -- it's listed as extra lines at the end of the
-  // work summary box instead, same order of fields (item number,
-  // description, quantity, unit) and same dash-separated style an inspector
-  // already uses when a day's pay items don't fit in the table by hand.
+  // The template's table only has PAY_ITEM_ROW_COUNT physical rows. An
+  // item with details (stations, side, location, calculator inputs,
+  // theoretical quantity, remarks -- see payItemDetailLine in defaults.js)
+  // takes two: its own line, then the details in smaller text on the line
+  // under it. Nothing is dropped: once an item doesn't fit whole, it and
+  // everything after it are listed at the end of the work summary box,
+  // same dash-separated style an inspector uses when writing overflow pay
+  // items in by hand.
   const filledPayItems = (report.payItems || []).filter((it) => it.itemNumber || it.description);
-  const tableItems = filledPayItems.slice(0, PAY_ITEM_ROW_COUNT);
-  const overflowItems = filledPayItems.slice(PAY_ITEM_ROW_COUNT);
+  const tableLines = [];
+  const overflowLines = [];
+  filledPayItems.forEach((it) => {
+    const detail = payItemDetailLine(it);
+    if (!overflowLines.length && tableLines.length + (detail ? 2 : 1) <= PAY_ITEM_ROW_COUNT) {
+      tableLines.push({ item: it });
+      if (detail) tableLines.push({ detail });
+    } else {
+      const line = [it.itemNumber, it.description, [it.qty, it.unit].filter(Boolean).join(' ')].filter(Boolean).join(' - ');
+      overflowLines.push(detail ? `${line} (${detail})` : line);
+    }
+  });
 
   let workSummaryText = report.workSummary || '';
-  if (overflowItems.length > 0) {
-    const overflowLines = overflowItems
-      .map((it) => [it.itemNumber, it.description, [it.qty, it.unit].filter(Boolean).join(' ')].filter(Boolean).join(' - '))
-      .join('\n');
-    workSummaryText += `${workSummaryText ? '\n\n' : ''}Pay Items (did not fit in table above):\n${overflowLines}`;
+  if (overflowLines.length > 0) {
+    workSummaryText += `${workSummaryText ? '\n\n' : ''}Pay Items (did not fit in table above):\n${overflowLines.join('\n')}`;
   }
   v[RR_WORK_SUMMARY_CELL] = workSummaryText;
 
-  tableItems.forEach((item, i) => {
+  // Detail lines print smaller (see renderSheetGrid); kept off the
+  // enumerable keys so nothing that walks the values sees it as a cell.
+  const smallCells = new Set();
+  Object.defineProperty(v, 'smallCells', { value: smallCells, enumerable: false });
+  tableLines.forEach((line, i) => {
     const r = RR_PAY_ITEM_FIRST_ROW + i;
+    if (line.detail) {
+      v['K' + r] = line.detail;
+      smallCells.add('K' + r);
+      return;
+    }
+    const item = line.item;
     v['I' + r] = item.itemNumber || '';
     v['K' + r] = item.description || '';
     v['P' + r] = item.qty != null && item.qty !== '' ? String(item.qty) : '';

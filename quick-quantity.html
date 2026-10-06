@@ -398,6 +398,8 @@ function prefillFromReport(report) {
         multiEntries[pi.itemNumber].push({
           qty: pi.qty || '', startStation: pi.startStation || '', endStation: pi.endStation || '', location: pi.location || '', side: pi.side || '',
           length: pi.length || '', width: pi.width || '', theoreticalQty: pi.theoreticalQty || '',
+          // Not edited here, just carried through so saving doesn't drop them.
+          remarks: pi.remarks || '', calc: pi.calc || null, origQty: pi.qty || '',
         });
       } else if (cat) {
         const input = document.querySelector(`.qq-qty[data-item-number="${CSS.escape(pi.itemNumber)}"]`);
@@ -525,6 +527,9 @@ function collectEntries() {
         itemNumber, description: cat.description, unit: cat.unit, qty: e.qty,
         startStation: e.startStation || '', endStation: e.endStation || '', location: e.location || '', side: e.side || '',
         length: e.length || '', width: e.width || '', theoreticalQty: e.theoreticalQty || '',
+        remarks: e.remarks || '',
+        // A calculator only still applies while the quantity is the one it worked out.
+        ...(e.calc && e.qty === e.origQty ? { calc: e.calc } : {}),
       }));
     multiByItem[itemNumber] = filled;
   });
@@ -557,7 +562,12 @@ $('#btn-save-quantities').addEventListener('click', async () => {
       for (const entry of entries) {
         const idx = report.payItems.findIndex((pi) => pi.itemNumber === entry.itemNumber);
         if (idx === -1) report.payItems.push({ ...entry });
-        else report.payItems[idx] = { ...report.payItems[idx], ...entry };
+        else {
+          const before = report.payItems[idx];
+          report.payItems[idx] = { ...before, ...entry };
+          // A calculator only still applies while the quantity is the one it worked out.
+          if (before.calc && String(before.qty) !== String(entry.qty)) delete report.payItems[idx].calc;
+        }
       }
       // Stations/Locations items: wholesale-replace that item's entries with
       // whatever's currently in the multi-entry list (additions, edits, and

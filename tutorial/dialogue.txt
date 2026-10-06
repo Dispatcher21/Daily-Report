@@ -347,8 +347,9 @@ contractor on site.
 [6]
 Emotion: thinking
 Points at: pay items section
-Pay Items is where quantities get logged. They feed the project
-dashboard and the Quantity Sheet.
+Pay Items comes first: add what was worked on and how much. Calculate
+works out tons, yards or feet for you, and stations, sizes and remarks
+print on the line under each item.
 
 [7]
 Emotion: surprised

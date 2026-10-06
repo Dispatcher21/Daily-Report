@@ -1633,6 +1633,78 @@ html:has(.rv-carousel), body:has(.rv-carousel) { overflow-x: clip; }
   padding-top: 0.85rem; grid-template-columns: 1fr 1fr; gap: 0.85rem 0.7rem;
 }
 .rb-group.open .rb-group-bd { display: grid; }
+
+/* ---------- Report editor: Pay Items (report-editor.html) ---------- */
+.rb-group-feature { border: 2px solid var(--brand-light); }
+.rb-group-feature > .rb-group-hd { background: var(--brand); color: var(--on-brand); }
+.rb-group-feature > .rb-group-hd:hover { background: var(--brand-light); }
+.rb-group-feature > .rb-group-hd .rb-icon { background: rgba(255, 255, 255, 0.15); }
+.rb-group-feature > .rb-group-hd .rb-chev { color: var(--on-brand-dim); }
+.rb-group-feature > .rb-group-hd .info-tip { color: var(--on-brand); border-color: var(--on-brand-dim); }
+.rpi-hd-sum { font-size: 0.8rem; font-weight: 600; color: var(--on-brand-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.rpi-hd-sum.rpi-tag-warn { color: #ffd38a; font-weight: 800; }
+.rpi { display: grid; gap: 0.6rem; }
+.rpi [hidden] { display: none !important; }
+.rpi-list { display: grid; gap: 0.5rem; }
+.rpi-empty { margin: 0; font-size: 0.88rem; color: var(--text-dim); padding: 0.4rem 0.2rem; }
+.rpi-item { border: 1.5px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); min-width: 0; }
+.rpi-item.rpi-open { border-color: var(--brand-light); }
+.rpi-item.rpi-missing { border-color: var(--warn-border); background: var(--warn-bg); }
+.rpi-line { display: flex; align-items: center; gap: 0.6rem; padding: 0.4rem 0.5rem 0.4rem 0.75rem; }
+.rpi-name { flex: 1; min-width: 0; border: 0; background: none; text-align: left; padding: 0.2rem 0; display: grid; gap: 0.1rem; font: inherit; color: var(--text); cursor: pointer; }
+.rpi-num { font-weight: 800; }
+.rpi-desc { color: var(--text-dim); font-size: 0.9rem; }
+.rpi-sum { font-size: 0.78rem; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rpi-sum.rpi-need { color: var(--warn); font-weight: 700; }
+label.rpi-qty { display: flex; flex-direction: row; align-items: stretch; gap: 0; margin: 0; border: 1.5px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; background: var(--surface); width: 9.5rem; flex: none; }
+.rpi-qty:focus-within { border-color: var(--focus); }
+.rpi-qty input { border: 0; border-radius: 0; min-height: 2.5rem; width: 100%; min-width: 0; padding: 0.4rem 0.55rem; font-weight: 800; text-align: right; background: transparent; }
+.rpi-qty input[readonly] { color: var(--text-dim); }
+.rpi-qty span { padding: 0 0.55rem; background: var(--surface-2); display: grid; place-items: center; font-size: 0.8rem; font-weight: 800; color: var(--text-dim); white-space: nowrap; }
+.rpi-body { display: grid; gap: 0.55rem; padding: 0.15rem 0.75rem 0.7rem; }
+.rpi-left { font-size: 0.82rem; color: var(--text-dim); }
+.rpi-over { color: var(--danger); }
+.rpi-row { display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: center; }
+.rpi-label { width: 6.5rem; font-size: 0.82rem; font-weight: 700; color: var(--text-dim); flex: none; }
+.rpi-row input, .rpi-row select { min-height: 2.4rem; padding: 0.4rem 0.55rem; width: 7.5rem; }
+.rpi-row input.rpi-sm { width: 5.5rem; }
+.rpi-row input.rpi-md { width: 8.5rem; }
+.rpi-row select { width: auto; min-width: 9rem; }
+.rpi-row input.rpi-wide { flex: 1 1 14rem; width: auto; min-width: 0; max-width: none; }
+.rpi-seg { display: inline-flex; border: 1.5px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+.rpi-seg button { border: 0; background: var(--surface); color: var(--text); padding: 0.4rem 0.85rem; font: inherit; font-weight: 700; font-size: 0.88rem; cursor: pointer; }
+.rpi-seg button + button { border-left: 1px solid var(--border); }
+.rpi-seg button[aria-pressed="true"] { background: var(--brand); color: var(--on-brand); }
+.rpi-calc { font-size: 0.82rem; color: var(--text-dim); }
+.rpi-calcbox { display: grid; gap: 0.35rem; background: var(--surface-2); border-radius: var(--radius-sm); padding: 0.55rem 0.6rem; }
+.rpi-calcbox [data-calcmath] { color: var(--text); font-weight: 700; margin-right: 0.3rem; }
+.rpi-links { display: flex; flex-wrap: wrap; gap: 0.2rem 0.9rem; }
+.rpi-textbtn { border: 0; background: none; color: var(--link); font: inherit; font-weight: 700; font-size: 0.86rem; padding: 0.2rem 0; cursor: pointer; justify-self: start; }
+.rpi-textbtn:hover { text-decoration: underline; }
+.rpi-textbtn.rpi-danger { color: var(--danger); }
+.rpi-chip { border: 1.5px solid var(--border); background: var(--surface); color: var(--text); border-radius: 999px; padding: 0.25rem 0.7rem; font: inherit; font-weight: 700; font-size: 0.82rem; cursor: pointer; }
+.rpi-chip:hover { border-color: var(--brand-light); }
+.rpi-add { display: block; width: 100%; border: 2px dashed var(--brand-light); background: var(--brand-dim); color: var(--text); border-radius: var(--radius-sm); padding: 0.75rem; font: inherit; font-weight: 800; font-size: 1rem; cursor: pointer; }
+.rpi-picker { border: 1.5px solid var(--brand-light); border-radius: var(--radius-sm); overflow: hidden; }
+.rpi-picker-top { padding: 0.6rem; background: var(--surface-2); display: grid; gap: 0.5rem; }
+.rpi-picker-top input { max-width: none; }
+.rpi-recent { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; font-size: 0.8rem; color: var(--text-dim); }
+.rpi-plist { max-height: 16rem; overflow: auto; }
+.rpi-plist .rpi-empty { padding: 0.6rem 0.75rem; }
+.rpi-prow { display: flex; gap: 0.6rem; align-items: center; width: 100%; padding: 0.55rem 0.75rem; border: 0; border-top: 1px solid var(--border); background: var(--surface); color: var(--text); text-align: left; font: inherit; cursor: pointer; }
+.rpi-prow:hover { background: var(--surface-2); }
+.rpi-pn { font-weight: 800; flex: none; min-width: 4.5rem; }
+.rpi-pd { flex: 1; min-width: 0; }
+.rpi-pu { font-size: 0.8rem; color: var(--text-dim); font-weight: 700; }
+.rpi-on { font-size: 0.72rem; color: var(--ok); font-weight: 800; }
+.rpi-manual { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; align-items: center; padding: 0.5rem 0.75rem; border-top: 1px solid var(--border); }
+.rpi-manual-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; gap: 0.5rem; align-items: end; width: 100%; }
+.rpi-manual-fields label { margin: 0; }
+@media (max-width: 520px) {
+  label.rpi-qty { width: 7.5rem; }
+  .rpi-label { width: 100%; }
+  .rpi-manual-fields { grid-template-columns: 1fr; }
+}
 .rb-field { min-width: 0; }
 .rb-field:has(textarea) { grid-column: 1 / -1; }
 .rb-field-block { grid-column: 1 / -1; }
@@ -2095,6 +2167,7 @@ input[type="date"] { min-width: 0; }
   border-radius: var(--radius-sm); padding: 0.6rem 0.75rem; font-size: 0.82rem;
   color: var(--warn); margin-top: -0.35rem; display: flex; flex-direction: column; gap: 0.3rem;
 }
+.rb-dupe-warn[hidden] { display: none; }
 
 /* One compact row for both buttons (used to be two separate dashed boxes,
    each with a button plus a permanently-visible paragraph of explanation --

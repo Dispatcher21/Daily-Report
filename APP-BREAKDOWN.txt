@@ -346,6 +346,13 @@ report-editor.html
   annotator/markup tool (the pa* functions -- freehand draw, arrows, undo,
   color/tool picker, drawn onto a <canvas> then flattened back into the
   stored photo Blob) plus a signature pad (setupSignaturePad).
+  Pay Items is the first section and starts open (the pi* functions,
+  bindPayItems): one line per item, only the one being worked on open;
+  a search picker with "Used recently" chips and an add-by-hand form;
+  "Same items as Report #N"; per item stations/side/location, a
+  calculator (payItemCalcOptions/runPayItemCalc in defaults.js, stored
+  as payItem.calc), theoretical quantity and remarks (payItem.remarks);
+  "X left of plan" counts every other report on the project.
 
 report-viewer.html
   Read-only printed-page preview of one report (renderPreview, reusing
@@ -497,7 +504,15 @@ defaults.js
   calendar/day-detail modal, and index.html's Manager Dashboard day-detail
   modal all share this one lookup rather than each reading report.activity
   directly), payItemNeedsMultiple, computeOverrun/overrunLabel,
-  parseStation, computeAreaQty.
+  parseStation, computeAreaQty, and the pay item calculators:
+  payItemUnitKind, payItemCalcOptions (which calculators an item's unit
+  allows: length from stations for LF, Length x Width for SY/SF,
+  x Depth for CY, truck tickets and paving for TON, percent complete for
+  a priced Lump Sum), runPayItemCalc, and payItemDetailLine (the line
+  printed under an item: stations, side, location, calculator inputs,
+  theoretical, then remarks; render-report.js's buildSheet1Values puts it
+  on the table row under its item in smaller text, and an item that
+  doesn't fit whole goes to the Work Summary overflow).
 
 theme.js
   Light/dark theming + accent color derivation (deriveAccentVars,
