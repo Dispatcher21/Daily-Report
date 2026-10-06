@@ -305,6 +305,11 @@
             <input type="checkbox" id="account-email-comments">
             <span>Email me when someone comments on, approves or asks for changes on my reports or Pay Apps</span>
           </label>
+          <label class="toggle-row" for="account-roundup" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-top:0.5rem;">
+            <input type="checkbox" id="account-roundup">
+            <span>Weekly roundup email of the projects I manage (Tuesdays, 6:30 AM my time)</span>
+          </label>
+          <button type="button" class="btn-secondary" id="btn-account-roundup-preview" style="margin-top:0.5rem;">Send Me a Roundup Now</button>
           <div class="account-pw" id="account-pw" hidden>
             <label>Current Password <input type="password" id="account-pw-current" autocomplete="current-password"></label>
             <label>New Password <input type="password" id="account-pw-new" autocomplete="new-password"><span class="hint">At least 8 characters.</span></label>
@@ -2894,6 +2899,7 @@ async function renderAccount() {
   roleEl.hidden = !(member && room);
   const profile = await readAccountProfile(account.uid).catch(() => null);
   $('#account-email-comments').checked = !(profile && profile.emailComments === false);
+  $('#account-roundup').checked = !(profile && profile.weeklyRoundup === false);
   if (member && room) {
     const projects = Array.isArray(member.projectIds)
       ? `${member.projectIds.length} project${member.projectIds.length === 1 ? '' : 's'}`
@@ -2917,6 +2923,28 @@ $('#account-email-comments').addEventListener('change', async (e) => {
   } catch (err) {
     e.target.checked = !e.target.checked;
     alert("Couldn't save that: " + err.message);
+  }
+});
+$('#account-roundup').addEventListener('change', async (e) => {
+  const account = await getAccount();
+  if (!account) return;
+  try {
+    await writeAccountProfile(account.uid, { weeklyRoundup: e.target.checked });
+    accountNotice(e.target.checked ? "You'll get a roundup of your managed projects every Tuesday morning." : 'Weekly roundup emails are off.');
+  } catch (err) {
+    e.target.checked = !e.target.checked;
+    alert("Couldn't save that: " + err.message);
+  }
+});
+$('#btn-account-roundup-preview').addEventListener('click', async (e) => {
+  e.target.disabled = true;
+  try {
+    const result = await sendRoundupPreview();
+    accountNotice(`Sent last week's roundup to ${result.email}.`);
+  } catch (err) {
+    alert(err.message || "Couldn't send the roundup.");
+  } finally {
+    e.target.disabled = false;
   }
 });
 $('#btn-account-reset').addEventListener('click', () => {

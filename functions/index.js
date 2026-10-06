@@ -267,3 +267,54 @@ exports.resetPasswordWithCode = onCall(async (request) => {
   await admin.auth().updateUser(user.uid, { password });
   return { ok: true };
 });
+
+// ---------- weekly roundup ----------
+
+const { onSchedule } = require('firebase-functions/v2/scheduler');
+const roundup = require('./roundup');
+
+async function sendRoundup(uid, week, today) {
+  const built = await roundup.buildRoundup(db(), uid, week, today);
+  if (built.skip) return built;
+  await sendEmail(built.to, roundup.composeRoundup(built.msg, escapeHtml));
+  return built;
+}
+
+// Runs every hour; whoever it is Tuesday 6 AM-ish for (6:30 local) gets
+// last week's roundup, once.
+exports.weeklyRoundup = onSchedule({ schedule: '30 * * * *', timeZone: 'UTC', secrets: [RESEND_API_KEY] }, async () => {
+  const now = new Date();
+  const users = await db().collection('users').get();
+  for (const doc of users.docs) {
+    const profile = doc.data() || {};
+    if (!profile.companyCode || profile.weeklyRoundup === false) continue;
+    let local;
+    try { local = roundup.localParts(now, profile.timeZone || roundup.DEFAULT_TZ); } catch { local = roundup.localParts(now, roundup.DEFAULT_TZ); }
+    if (local.weekday !== 'Tue' || local.hour !== 6) continue;
+    const week = roundup.lastWeek(local.iso, local.weekday);
+    if (profile.roundupSentFor === week.start) continue;
+    try {
+      const result = await sendRoundup(doc.id, week, local.iso);
+      if (result.skip) continue;
+      await doc.ref.set({ roundupSentFor: week.start }, { merge: true });
+      console.log(`roundup sent to ${result.to} (${result.projectCount} projects)`);
+    } catch (err) {
+      console.error(`roundup for ${doc.id} failed:`, err);
+    }
+  }
+});
+
+// "Send me a preview now" from Settings: last full week, to yourself.
+exports.sendRoundupPreview = onCall({ secrets: [RESEND_API_KEY] }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in first.');
+  const profile = (await db().collection('users').doc(request.auth.uid).get()).data() || {};
+  let local;
+  try { local = roundup.localParts(new Date(), profile.timeZone || roundup.DEFAULT_TZ); } catch { local = roundup.localParts(new Date(), roundup.DEFAULT_TZ); }
+  const week = roundup.lastWeek(local.iso, local.weekday);
+  const result = await sendRoundup(request.auth.uid, week, local.iso);
+  if (result.skip === 'no managed projects' || result.skip === 'managed projects not found') {
+    throw new HttpsError('failed-precondition', "You aren't managing any projects yet. Choose some on the Manager Dashboard first.");
+  }
+  if (result.skip) throw new HttpsError('failed-precondition', 'Only active members with an account email get the roundup.');
+  return { ok: true, email: result.to, projectCount: result.projectCount };
+});

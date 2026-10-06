@@ -771,6 +771,11 @@ async function adminSendResetCode(uid) {
   return email;
 }
 
+// Emails this account last week's roundup of its managed projects right now.
+async function sendRoundupPreview() {
+  return callAccountFunction('sendRoundupPreview', {});
+}
+
 // Changes the password while signed in -- no email needed, just the
 // current password.
 async function changeAccountPassword(current, next) {
@@ -890,7 +895,10 @@ async function refreshMembership({ joined = false } = {}) {
     window.dispatchEvent(new CustomEvent('company-access-ended', { detail: { company: room.name || '', status: member.status } }));
     return member;
   }
-  await writeAccountProfile(account.uid, { email: account.email, displayName: name, companyCode: room.code, companyName: room.name || '', pendingCompanyCode: null });
+  // The device's time zone, so the weekly roundup arrives at 6:30 AM their time.
+  let timeZone = null;
+  try { timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch { /* older browsers */ }
+  await writeAccountProfile(account.uid, { email: account.email, displayName: name, companyCode: room.code, companyName: room.name || '', pendingCompanyCode: null, ...(timeZone ? { timeZone } : {}) });
   const companyData = ((await getDoc(doc(db, 'companies', room.code)).catch(() => null)) || { data: () => ({}) }).data() || {};
   await applyMembership(member, companyData);
   return member;
