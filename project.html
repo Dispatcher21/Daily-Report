@@ -80,6 +80,7 @@
         <h2>Pay Item Completion</h2>
       </div>
       <div class="step-body">
+        <p class="dash-basis" id="dash-pi-basis" hidden></p>
         <div id="dash-status-summary"></div>
         <div class="pi-controls" id="pi-controls" hidden>
           <input type="text" id="pi-search" placeholder="Search item # or description...">
@@ -422,6 +423,14 @@ function renderDashboard(reports, project) {
   // superseding reports through its date rather than just summing every
   // report ever filed -- see that function's own comment.
   const flatItems = effectivePayItemFlatEntries(reports, project.billingEstimates);
+  // Where these figures come from, in one quiet line, once a Pay App is
+  // part of them.
+  const basis = latestAgreedEstimate(project.billingEstimates);
+  $('#dash-pi-basis').hidden = !basis;
+  if (basis) {
+    const when = basis.date ? new Date(basis.date + 'T12:00:00Z').toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' }) : '';
+    $('#dash-pi-basis').textContent = `Pay App ${basis.estimateNo}${when ? ` (${when})` : ''} plus daily reports since`;
+  }
   const items = fullPayItemCatalogOverview(flatItems, project.payItemCatalog);
   const overall = overallPercentComplete(items);
   const { totalContract } = contractValueSummary(items);

@@ -196,7 +196,7 @@ function progressOverTime(datedReports, payItemCatalog, billingEstimates) {
     byDate.get(r.date).push(...items);
   }
   const payAppByDate = new Map(
-    sortedEstimates(billingEstimates)
+    sortedEstimates(agreedEstimates(billingEstimates))
       .filter((e) => e.itemTotals && Object.keys(e.itemTotals).length > 0)
       .map((e) => [e.date, e])
   );
@@ -268,7 +268,20 @@ function sortedEstimates(billingEstimates) {
   return (billingEstimates || []).slice().sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 }
 
-// Once a Pay App is on file, it's the new floor everything else builds on:
+// The Pay Apps whose figures count as agreed: everything except one sent
+// back with Changes Requested. A disputed Pay App doesn't overrule what
+// inspectors logged; the last undisputed one (plus reports since) stands
+// until it's fixed. Pending ones still count, so a company that never
+// uses approvals sees no difference.
+function agreedEstimates(billingEstimates) {
+  return (billingEstimates || []).filter((e) => e.approvalStatus !== 'changes_requested');
+}
+function latestAgreedEstimate(billingEstimates) {
+  return sortedEstimates(agreedEstimates(billingEstimates)).pop() || null;
+}
+
+// Once a Pay App is on file (an agreed one, see agreedEstimates above),
+// it's the new floor everything else builds on:
 // its own itemTotals (an engineer's approved figures, entered on the
 // Quantity Sheet's Pay App section -- not a report total) replace whatever
 // inspectors had logged up through its date, and only reports dated after
@@ -290,9 +303,7 @@ function sortedEstimates(billingEstimates) {
 // it was approved against (the Pay App before it, if any, plus reports
 // since) rather than circularly including its own not-yet-resaved figures.
 function effectivePayItemFlatEntries(reports, billingEstimates, excludeEstimateId) {
-  const candidates = excludeEstimateId
-    ? (billingEstimates || []).filter((e) => e.id !== excludeEstimateId)
-    : billingEstimates;
+  const candidates = agreedEstimates(billingEstimates).filter((e) => !excludeEstimateId || e.id !== excludeEstimateId);
   const latest = sortedEstimates(candidates).pop() || null;
   const reportEntries = (reports || [])
     .filter((r) => !latest || !r.date || r.date > latest.date)

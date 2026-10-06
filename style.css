@@ -3663,6 +3663,8 @@ input[type="date"] { min-width: 0; }
 .qp-cbar-help { margin: 0; font-size: 0.82rem; color: var(--text-dim); }
 .qp-dot { width: 11px; height: 11px; border-radius: 3px; display: inline-block; flex: none; }
 .qp-noprice { margin: 0; }
+/* The project dashboard's quiet note on where its pay item figures come from. */
+.dash-basis { margin: -0.35rem 0 0.5rem; font-size: 0.75rem; color: var(--text-dim); }
 .qp-chk { display: inline-block; font-size: 0.78rem; font-weight: 800; padding: 0.2rem 0.6rem; border-radius: 999px; white-space: nowrap; }
 .qp-chk-ok { background: var(--surface-3); color: var(--text-dim); }
 .qp-chk-ready { background: var(--logged-bg); color: var(--logged); }

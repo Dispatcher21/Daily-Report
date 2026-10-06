@@ -24,6 +24,10 @@ const text = (p, sel) => p.textContent(sel).then((t) => t.replace(/\s+/g, ' ').t
   await p.goto(`${B}/project.html?id=${pid}`); await settle();
   check('Quantities card', await text(p, '#card-quantities-desc'), '49.5% logged · $201,345');
   check('Pay Apps card', await text(p, '#card-payapps-desc'), '44.5% billed · Pay App 2: Changes Requested');
+  // Dashboard: Pay App 2 has Changes Requested, so Pay App 1 plus the
+  // reports since stand (asphalt shows the 440 logged, not Pay App 2's 300).
+  check('dashboard says where its figures come from', (await text(p, '#dash-pi-basis')).startsWith('Pay App 1 ('), true);
+  check('disputed Pay App does not overrule the logs', await p.$$eval('#dash-pi-bars .bar-row, .bar-row', (rows) => rows.map((r) => r.textContent.replace(/\s+/g, ' ')).find((t) => t.includes('502-01')) || '').then((t) => t.includes('440 of 650 TON')), true);
   check('cards link to the pages', [await p.getAttribute('#card-quantities', 'href'), await p.getAttribute('#card-payapps', 'href')], [`quantity-sheet.html?project=${pid}`, `pay-apps.html?project=${pid}`]);
 
   // Quantities.
