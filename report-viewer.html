@@ -567,7 +567,8 @@ async function renderReportDetails(report) {
 }
 
 let rvCanApprove = false;
-let rvCanReply = false; // approvers, and the report's own author
+let rvCanComment = false;
+let rvCanReply = false; // commenters, and the report's own author
 
 // ---------- Pin-drop comments ----------
 //
@@ -763,7 +764,7 @@ function renderReviewPanel(report) {
     text.textContent = c.text || '';
     item.appendChild(head);
     item.appendChild(text);
-    if (rvCanApprove) {
+    if (rvCanApprove && rvCanComment) {
       const del = document.createElement('button');
       del.type = 'button';
       del.className = 'rv-comment-delete';
@@ -846,17 +847,19 @@ async function initReviewPanel(report) {
   updatePinToggleUI();
   // Needs to be known before the first renderReviewPanel call -- it decides
   // whether each comment gets a delete button.
+  // Approving (and asking for changes) and commenting are separate
+  // permissions on Settings > Roles.
   rvCanApprove = await companyCan('approveReports');
+  rvCanComment = await companyCan('commentReports');
   // The report's own author can always answer comments on it.
   const uid = currentAccountUid();
   const me = await getUserName();
-  rvCanReply = rvCanApprove || (uid ? report.createdByUid === uid : false) || (!report.createdByUid && !!me && report.createdBy === me);
+  rvCanReply = rvCanComment || (uid ? report.createdByUid === uid : false) || (!report.createdByUid && !!me && report.createdBy === me);
   renderReviewPanel(report);
 
-  const canApprove = rvCanApprove;
-  $('#rv-approval-actions').hidden = !canApprove;
-  $('#rv-comment-form').hidden = !canApprove;
-  if (!canApprove) return;
+  $('#rv-approval-actions').hidden = !rvCanApprove;
+  $('#rv-comment-form').hidden = !rvCanComment;
+  if (!rvCanApprove && !rvCanComment) return;
 
   async function applyApproval(patch) {
     report = await saveReportApproval(report.id, patch);

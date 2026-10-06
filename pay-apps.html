@@ -172,7 +172,8 @@ let itemFilter = 'all'; // 'all' or 'diff' (only items where the Pay App differs
 // (itemTotals), whichever way it was entered. Remembered per device.
 const ENTRY_BASIS_SETTING = 'payAppEntryBasis';
 let entryBasis = 'total';
-let canApprovePayApps = false; // same companyCan gate as report-viewer.html's review panel, checked once at load
+let canApprovePayApps = false; // same companyCan gates as report-viewer.html's review panel, checked once at load
+let canCommentPayApps = false;
 
 async function init() {
   project = projectId ? await getProject(projectId) : null;
@@ -190,6 +191,7 @@ async function init() {
 
   allReports = (await getReportsForProject(project.id)).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
   canApprovePayApps = await companyCan('approvePayApps');
+  canCommentPayApps = await companyCan('commentPayApps');
   entryBasis = (await getSetting(ENTRY_BASIS_SETTING)) === 'period' ? 'period' : 'total';
 
   // manager.html's Needs Your Review list links straight in with ?estimate=
@@ -639,7 +641,7 @@ function renderBreakdown(estimate) {
   badge.className = `rv-approval-badge rv-${status}`;
   badge.textContent = PAYAPP_APPROVAL_LABELS[status] || 'Pending';
   const comments = (estimate.comments || []).length;
-  $('#pa-jump-review').textContent = comments ? `${comments} comment${comments === 1 ? '' : 's'} ↓` : (canApprovePayApps ? 'Review ↓' : 'Comments ↓');
+  $('#pa-jump-review').textContent = comments ? `${comments} comment${comments === 1 ? '' : 's'} ↓` : (canApprovePayApps || canCommentPayApps ? 'Review ↓' : 'Comments ↓');
 
   let billedPeriodCost = 0, billedItems = 0, diffCount = 0;
   const overPlan = [];
@@ -726,7 +728,8 @@ $('#pa-filter').addEventListener('click', (e) => {
 // Same shape and classes (.rv-approval-badge/.rv-comment*) as
 // report-viewer.html's review panel -- status + comment thread, visible to
 // everyone who can see this project; only the Approve/Request
-// Changes/Post Comment controls are gated on canApprovePayApps.
+// Changes controls are gated on canApprovePayApps, Post Comment on
+// canCommentPayApps (separate rows on Settings > Roles).
 function renderReview() {
   const estimate = selectedEstimate();
   if (!estimate) return;
@@ -737,7 +740,7 @@ function renderReview() {
   const isReply = (c) => !!(c.parentId && ids.has(c.parentId));
   const ordered = [];
   comments.filter((c) => !isReply(c)).forEach((c) => { ordered.push(c); comments.filter((r) => r.parentId === c.id).forEach((r) => ordered.push(r)); });
-  const canReply = canApprovePayApps || (!!estimate.createdByUid && estimate.createdByUid === currentAccountUid());
+  const canReply = canCommentPayApps || (!!estimate.createdByUid && estimate.createdByUid === currentAccountUid());
   const commentsHtml = comments.length
     ? ordered.map((c) => `
       <div class="rv-comment${isReply(c) ? ' rv-reply' : ''}" data-comment-id="${escapeHtml(c.id)}">
@@ -755,7 +758,7 @@ function renderReview() {
       </span>` : ''}
     </div>
     <div class="pa-comments">${commentsHtml}</div>
-    ${canApprovePayApps ? `
+    ${canCommentPayApps ? `
     <label class="pa-comment-form">Add a comment
       <textarea id="pa-comment-text" rows="2" placeholder="Visible to everyone who can see this project"></textarea>
     </label>

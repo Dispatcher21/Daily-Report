@@ -86,7 +86,19 @@ const DEFAULT_PERMISSIONS = {
   membersCanViewManagerDashboard: false,
   membersCanApproveReports: false,
   membersCanApprovePayApps: false,
+  membersCanCommentReports: false,
+  membersCanCommentPayApps: false,
 };
+// Commenting used to come with approving. A company (or role) that hasn't
+// set a comment permission yet keeps whatever its approve setting says.
+const COMMENT_PERMISSION_FALLBACK = { membersCanCommentReports: 'membersCanApproveReports', membersCanCommentPayApps: 'membersCanApprovePayApps' };
+function fillPermissions(stored) {
+  const merged = { ...DEFAULT_PERMISSIONS, ...(stored || {}) };
+  Object.entries(COMMENT_PERMISSION_FALLBACK).forEach(([key, from]) => {
+    if (typeof (stored || {})[key] !== 'boolean') merged[key] = !!merged[from];
+  });
+  return merged;
+}
 
 async function hashText(text) {
   const bytes = new TextEncoder().encode(text);
@@ -284,7 +296,7 @@ async function createCompanyRoom({ name, password, adminPassword }, onProgress) 
   await saveSetting(COMPANY_CODE_SETTING, code);
   await saveSetting(COMPANY_NAME_SETTING, name || '');
   await saveSetting(COMPANY_ADMIN_SETTING, true);
-  await saveSetting(COMPANY_PERMISSIONS_SETTING, DEFAULT_PERMISSIONS);
+  await saveSetting(COMPANY_PERMISSIONS_SETTING, fillPermissions(null));
   await refreshMembership(); // a signed-in creator is the company's first admin member
 
   if (await getReportLogo()) {
@@ -376,7 +388,7 @@ async function enterCompany(code, companyDoc, { roleId = null, scopedPermissions
   await saveSetting(COMPANY_PROJECT_SCOPE_SETTING, projectIds);
   await saveSetting(
     COMPANY_PERMISSIONS_SETTING,
-    scopedPermissions ? { ...DEFAULT_PERMISSIONS, ...scopedPermissions } : { ...DEFAULT_PERMISSIONS, ...(companyDoc.permissions || {}) }
+    scopedPermissions ? fillPermissions(scopedPermissions) : fillPermissions(companyDoc.permissions)
   );
   await clearCompanyBranding();
   // A signed-in account becomes (or stays) a member, and its role and
@@ -540,6 +552,8 @@ const ROLE_PERMISSIONS = {
     membersCanViewManagerDashboard: true,
     membersCanApproveReports: true,
     membersCanApprovePayApps: true,
+    membersCanCommentReports: true,
+    membersCanCommentPayApps: true,
   },
 };
 const ACCOUNT_MIN_PASSWORD = 8;
@@ -551,6 +565,9 @@ function rolePermissionsFor(companyData, role) {
   const custom = (companyData && companyData.rolePermissions && companyData.rolePermissions[role]) || {};
   const merged = { ...base };
   Object.keys(DEFAULT_PERMISSIONS).forEach((key) => { if (typeof custom[key] === 'boolean') merged[key] = custom[key]; });
+  Object.entries(COMMENT_PERMISSION_FALLBACK).forEach(([key, from]) => {
+    if (typeof custom[key] !== 'boolean' && typeof custom[from] === 'boolean') merged[key] = custom[from];
+  });
   return merged;
 }
 
@@ -1234,11 +1251,11 @@ async function syncCompanyRoomNow(onProgress) {
         const roleSnap = await getDoc(doc(db, 'companies', room.code, 'roles', roleId));
         if (roleSnap.exists()) {
           const role = roleSnap.data();
-          await saveSetting(COMPANY_PERMISSIONS_SETTING, { ...DEFAULT_PERMISSIONS, ...(role.permissions || {}) });
+          await saveSetting(COMPANY_PERMISSIONS_SETTING, fillPermissions(role.permissions));
           await saveSetting(COMPANY_PROJECT_SCOPE_SETTING, role.projectIds || []);
         }
       } else {
-        await saveSetting(COMPANY_PERMISSIONS_SETTING, { ...DEFAULT_PERMISSIONS, ...(data.permissions || {}) });
+        await saveSetting(COMPANY_PERMISSIONS_SETTING, fillPermissions(data.permissions));
       }
     }
   }
@@ -1265,7 +1282,7 @@ async function syncCompanyRoomNow(onProgress) {
 // ---------- Company Management -- admin-only actions ----------
 
 async function getCompanyPermissions() {
-  return { ...DEFAULT_PERMISSIONS, ...((await getSetting(COMPANY_PERMISSIONS_SETTING)) || {}) };
+  return fillPermissions(await getSetting(COMPANY_PERMISSIONS_SETTING));
 }
 
 // True if this device may perform `action` in its current company context.
@@ -1282,6 +1299,8 @@ async function companyCan(action) {
   if (action === 'viewManagerDashboard') return !!perms.membersCanViewManagerDashboard;
   if (action === 'approveReports') return !!perms.membersCanApproveReports;
   if (action === 'approvePayApps') return !!perms.membersCanApprovePayApps;
+  if (action === 'commentReports') return !!perms.membersCanCommentReports;
+  if (action === 'commentPayApps') return !!perms.membersCanCommentPayApps;
   return !!perms.membersCanEditProjects; // 'editProjects'
 }
 
@@ -1322,8 +1341,10 @@ const COMPANY_PERMISSION_LABELS = {
   membersCanEditProjects: 'Members can edit projects',
   membersCanCreateProjects: 'Members can create projects',
   membersCanViewManagerDashboard: 'Members can view the Manager Dashboard',
-  membersCanApproveReports: 'Members can approve/comment on reports (Manager)',
-  membersCanApprovePayApps: 'Members can approve/comment on Pay Apps (Manager)',
+  membersCanApproveReports: 'Members can approve/request changes on reports',
+  membersCanApprovePayApps: 'Members can approve/request changes on Pay Apps',
+  membersCanCommentReports: 'Members can comment on reports',
+  membersCanCommentPayApps: 'Members can comment on Pay Apps',
 };
 async function updateCompanyPermissions(patch) {
   const room = await getCompanyRoom();
