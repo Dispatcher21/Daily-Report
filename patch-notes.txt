@@ -3,6 +3,14 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.050 -- 2026-10-06
+  - Settings > Company > Roles (replaces Access & Members): one table of
+    what people without an account, Inspectors and Managers can each do.
+    Admins can always do everything. Once "Require everyone to sign in"
+    is on, the server enforces it too.
+  - Custom Setups are retired: limit someone's projects on the Team list
+    instead. Existing setups keep working until accounts are required.
+
 0.049 -- 2026-10-06
   - Comment emails: when someone comments on your daily report or Pay
     App, approves it, or asks for changes, you get a short email (plain

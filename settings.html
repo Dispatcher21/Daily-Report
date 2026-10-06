@@ -142,6 +142,21 @@
 
   .team-enforce { border: 1.5px solid var(--border); border-radius: 12px; padding: 0.75rem 0.85rem; margin-bottom: 1rem; background: var(--surface-2); }
   .team-enforce.is-on { border-color: var(--brand-light); }
+  .roles-table-wrap { overflow-x: auto; margin: 0.5rem 0; }
+  .roles-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  .roles-table th, .roles-table td { padding: 0.45rem 0.35rem; border-bottom: 1px solid var(--border); text-align: center; }
+  .roles-table thead th { font-size: 0.78rem; color: var(--text-dim); font-weight: 700; white-space: nowrap; }
+  .roles-table tbody th { text-align: left; font-weight: 600; }
+  .roles-table input[type="checkbox"] { width: 1.15rem; height: 1.15rem; margin: 0; }
+  .roles-table .roles-all { color: var(--text-dim); font-size: 0.8rem; }
+  .roles-table .rt-short { display: none; }
+  @media (max-width: 560px) {
+    .roles-table .rt-full { display: none; }
+    .roles-table .rt-short { display: inline; }
+    .roles-table .roles-all, .roles-table .roles-admin-col { display: none; }
+    .roles-table tbody th { font-size: 0.82rem; }
+    .roles-table th, .roles-table td { padding: 0.45rem 0.2rem; }
+  }
   .team-row-sub { font-size: 0.8rem; color: var(--text-dim); overflow-wrap: anywhere; }
   .team-badge { display: inline-block; font-size: 0.72rem; font-weight: 700; padding: 0.05rem 0.45rem; border-radius: 999px; background: var(--surface-3); color: var(--text-dim); margin-left: 0.3rem; vertical-align: 1px; }
   .team-badge-off { background: var(--danger-bg); color: var(--danger); }
@@ -704,39 +719,72 @@
         </details>
 
         <details class="settings-section">
-          <summary>Access &amp; Members<span class="settings-section-chevron">&#9656;</span></summary>
+          <summary>Roles<span class="settings-section-chevron">&#9656;</span><span class="settings-section-sub">What each role can do</span></summary>
           <div class="settings-section-body">
-            <p class="settings-subhead" style="margin-top:0;">Member Permissions</p>
-            <p class="hint">Off means admin-only. On lets any member (not just admins) do this.</p>
-            <label class="toggle-row" for="cm-perm-reports-own" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-bottom:0.75rem;">
-              <input type="checkbox" id="cm-perm-reports-own">
-              <span>Members can edit/delete their own reports</span>
-            </label>
-            <label class="toggle-row" for="cm-perm-reports-any" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-bottom:0.75rem;">
-              <input type="checkbox" id="cm-perm-reports-any">
-              <span>Members can edit/delete ANY reports</span>
-            </label>
-            <label class="toggle-row" for="cm-perm-projects" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-bottom:0.75rem;">
-              <input type="checkbox" id="cm-perm-projects">
-              <span>Members can edit/delete projects</span>
-            </label>
-            <label class="toggle-row" for="cm-perm-create-projects" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-bottom:0.75rem;">
-              <input type="checkbox" id="cm-perm-create-projects">
-              <span>Members can create new projects</span>
-            </label>
-            <label class="toggle-row" for="cm-perm-view-manager-dashboard" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-bottom:0.75rem;">
-              <input type="checkbox" id="cm-perm-view-manager-dashboard">
-              <span>Members can view the Manager Dashboard</span>
-            </label>
-            <label class="toggle-row" for="cm-perm-approve-reports" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-bottom:0.75rem;">
-              <input type="checkbox" id="cm-perm-approve-reports">
-              <span>Members can approve/comment on reports (Manager)</span>
-            </label>
-            <label class="toggle-row" for="cm-perm-approve-payapps" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;">
-              <input type="checkbox" id="cm-perm-approve-payapps">
-              <span>Members can approve/comment on Pay Apps (Manager)</span>
-            </label>
+            <p class="hint" style="margin-top:0;">Pick what each role can do. Give people their role, and limit their projects, on the Team list. <strong>No account</strong> is anyone still using just the company password. Admins can always do everything.</p>
+            <div class="roles-table-wrap">
+              <table class="roles-table" id="roles-table">
+                <thead><tr><th scope="col"></th><th scope="col"><span class="rt-full">No account</span><span class="rt-short">No acct</span></th><th scope="col"><span class="rt-full">Inspector</span><span class="rt-short">Insp.</span></th><th scope="col"><span class="rt-full">Manager</span><span class="rt-short">Mgr</span></th><th scope="col" class="roles-admin-col">Admin</th></tr></thead>
+                <tbody>
+                  <tr>
+                    <th scope="row">Edit/delete their own reports</th>
+                    <td><input type="checkbox" id="cm-perm-reports-own" aria-label="Edit/delete their own reports: people without an account"></td>
+                    <td><input type="checkbox" data-role="inspector" data-key="membersCanEditOwnReports" aria-label="Edit/delete their own reports: Inspector"></td>
+                    <td><input type="checkbox" data-role="manager" data-key="membersCanEditOwnReports" aria-label="Edit/delete their own reports: Manager"></td>
+                    <td class="roles-all">All</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Edit/delete ANY report</th>
+                    <td><input type="checkbox" id="cm-perm-reports-any" aria-label="Edit/delete ANY report: people without an account"></td>
+                    <td><input type="checkbox" data-role="inspector" data-key="membersCanEditAnyReport" aria-label="Edit/delete ANY report: Inspector"></td>
+                    <td><input type="checkbox" data-role="manager" data-key="membersCanEditAnyReport" aria-label="Edit/delete ANY report: Manager"></td>
+                    <td class="roles-all">All</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Edit/delete projects</th>
+                    <td><input type="checkbox" id="cm-perm-projects" aria-label="Edit/delete projects: people without an account"></td>
+                    <td><input type="checkbox" data-role="inspector" data-key="membersCanEditProjects" aria-label="Edit/delete projects: Inspector"></td>
+                    <td><input type="checkbox" data-role="manager" data-key="membersCanEditProjects" aria-label="Edit/delete projects: Manager"></td>
+                    <td class="roles-all">All</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Create new projects</th>
+                    <td><input type="checkbox" id="cm-perm-create-projects" aria-label="Create new projects: people without an account"></td>
+                    <td><input type="checkbox" data-role="inspector" data-key="membersCanCreateProjects" aria-label="Create new projects: Inspector"></td>
+                    <td><input type="checkbox" data-role="manager" data-key="membersCanCreateProjects" aria-label="Create new projects: Manager"></td>
+                    <td class="roles-all">All</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">View the Manager Dashboard</th>
+                    <td><input type="checkbox" id="cm-perm-view-manager-dashboard" aria-label="View the Manager Dashboard: people without an account"></td>
+                    <td><input type="checkbox" data-role="inspector" data-key="membersCanViewManagerDashboard" aria-label="View the Manager Dashboard: Inspector"></td>
+                    <td><input type="checkbox" data-role="manager" data-key="membersCanViewManagerDashboard" aria-label="View the Manager Dashboard: Manager"></td>
+                    <td class="roles-all">All</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Approve/comment on reports</th>
+                    <td><input type="checkbox" id="cm-perm-approve-reports" aria-label="Approve/comment on reports: people without an account"></td>
+                    <td><input type="checkbox" data-role="inspector" data-key="membersCanApproveReports" aria-label="Approve/comment on reports: Inspector"></td>
+                    <td><input type="checkbox" data-role="manager" data-key="membersCanApproveReports" aria-label="Approve/comment on reports: Manager"></td>
+                    <td class="roles-all">All</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Approve/comment on Pay Apps</th>
+                    <td><input type="checkbox" id="cm-perm-approve-payapps" aria-label="Approve/comment on Pay Apps: people without an account"></td>
+                    <td><input type="checkbox" data-role="inspector" data-key="membersCanApprovePayApps" aria-label="Approve/comment on Pay Apps: Inspector"></td>
+                    <td><input type="checkbox" data-role="manager" data-key="membersCanApprovePayApps" aria-label="Approve/comment on Pay Apps: Manager"></td>
+                    <td class="roles-all">All</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="hint" style="margin-bottom:0;">Changes reach each person's device the next time it syncs.</p>
 
+            <!-- Custom Setups (extra project-limited passwords) are retired:
+                 per-person project limits on the Team list replace them.
+                 Kept hidden so existing setups keep working until accounts
+                 are required. -->
+            <div id="cs-area" hidden>
             <p class="settings-subhead">Custom Setups</p>
             <div class="err" id="cs-enforced-note" hidden>Your company requires everyone to sign in, so custom setup passwords don't work right now. Limit people's projects on the Team screen instead.</div>
             <p class="hint">A named, project-scoped password -- e.g. an inspector who should only ever see one project. Same permission options as above, applied only within the project(s) checked below.</p>
@@ -799,6 +847,7 @@
             </details>
 
             <div id="cs-created-box" class="success" hidden style="margin-top:0.9rem;"></div>
+            </div>
           </div>
         </details>
 
@@ -1309,6 +1358,8 @@ async function refreshCompanySection() {
     $('#cm-perm-view-manager-dashboard').checked = !!perms.membersCanViewManagerDashboard;
     $('#cm-perm-approve-reports').checked = !!perms.membersCanApproveReports;
     $('#cm-perm-approve-payapps').checked = !!perms.membersCanApprovePayApps;
+    const roles = await getRolePermissions().catch(() => null);
+    if (roles) $$('#roles-table input[data-role]').forEach((cb) => { cb.checked = !!roles[cb.dataset.role][cb.dataset.key]; });
 
     await renderCmProjects();
     await renderCmActivity();
@@ -2262,6 +2313,21 @@ $('#cm-perm-approve-payapps').addEventListener('change', async (e) => {
     console.error(err);
     e.target.checked = !e.target.checked;
     cmError(userError("Couldn't save that permission: " + err.message, 'PERMISSION_TOGGLE'));
+  }
+});
+
+// Roles: Inspector and Manager columns (the No account column is the
+// company-wide switches above).
+$('#roles-table').addEventListener('change', async (e) => {
+  const cb = e.target.closest('input[data-role]');
+  if (!cb) return;
+  try {
+    await updateRolePermission(cb.dataset.role, cb.dataset.key, cb.checked);
+    cmStatus('Roles saved.');
+  } catch (err) {
+    console.error(err);
+    cb.checked = !cb.checked;
+    cmError(userError("Couldn't save that: " + err.message, 'ROLE_TOGGLE'));
   }
 });
 
