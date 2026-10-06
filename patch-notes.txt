@@ -3,6 +3,21 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.053 -- 2026-10-06
+  - Report editor: Pay Items is now the first section and starts open.
+    Each item is one line; tap it to open just that one. Add items from a
+    search list with recently used items, or copy the items from the
+    previous report in one tap.
+  - Calculate: works out the quantity from stations (LF), length x width
+    (SY, SF), x depth (CY), truck tickets or paving (TON), or percent
+    complete (priced Lump Sum items).
+  - Remarks for each pay item, and how much is left on the plan.
+  - Printing: stations, side, sizes and remarks print in smaller text on
+    the line under each pay item. An item that doesn't fit whole in the
+    table lists at the end of the Summary of Work Performed.
+  - Fixed an empty orange strip under Report No. and Date, and a false
+    sync warning when saving in tutorial mode.
+
 0.0521 -- 2026-10-06
   - Settings > Company > Roles: approving (or requesting changes) and
     commenting are now separate permissions, for reports and for Pay
