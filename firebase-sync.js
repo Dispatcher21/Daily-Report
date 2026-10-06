@@ -1093,7 +1093,9 @@ async function updateTeamMember(uid, patch) {
     const otherAdmins = members.filter((m) => m.uid !== uid && m.role === 'admin' && m.status === 'active');
     if (!otherAdmins.length) throw new Error("You're the only admin -- make someone else an admin first.");
   }
-  await setDoc(doc(db, 'companies', room.code, 'members', uid), { ...clean, updatedAt: serverTimestamp() }, { merge: true });
+  // changedBy: who did it, for the admins' security emails.
+  const changedBy = { name: (await getUserName()) || account.email || '', at: Date.now() };
+  await setDoc(doc(db, 'companies', room.code, 'members', uid), { ...clean, changedBy, updatedAt: serverTimestamp() }, { merge: true });
   if (typeof logCompanyAuditEvent === 'function') {
     const changes = Object.entries(clean).map(([k, v]) => ({ label: k === 'projectIds' ? 'Project Access' : k[0].toUpperCase() + k.slice(1), from: '', to: v == null ? 'All projects' : (Array.isArray(v) ? `${v.length} project(s)` : String(v)) }));
     logCompanyAuditEvent(uid, 'Team Member', 'edited', changes).catch((err) => console.error('audit log:', err));
@@ -2370,8 +2372,11 @@ async function deleteProjectFromCompany(code, project) {
   // tombstone is the one thing a delta pull CAN query for by timestamp, so
   // another device's next delta pull knows to remove its own local copy
   // too, not just skip re-adding it. Kept small on purpose (no project data
-  // in it) and pruned periodically by pullAllCompanyData.
-  await setDoc(doc(db, 'companies', code, 'deletedProjects', project.id), { id: project.id, deletedAt: Date.now() });
+  // in it, beyond its name and who removed it, for the admins' security
+  // emails) and pruned periodically by pullAllCompanyData.
+  await setDoc(doc(db, 'companies', code, 'deletedProjects', project.id), {
+    id: project.id, deletedAt: Date.now(), name: project.name || (project.meta && project.meta.projectNo) || '', deletedBy: (await getUserName()) || '',
+  });
 }
 
 // ---------- Report sync ----------
@@ -2978,9 +2983,41 @@ async function pushAllLocalData(code, onProgress, { dirtyOnly = false } = {}) {
   await Promise.all(auditEntries.map((entry) => pushAuditEntryToCompany(code, entry).catch(refusedOk)));
   if (onProgress) onProgress({ phase: 'audit', count: auditEntries.length });
   if (refused) {
+    reportSyncProblem(`${refused} change${refused === 1 ? '' : 's'} (on Sync Now)`, { code: 'permission-denied' });
     throw new Error(`Everything else synced, but ${refused} change${refused === 1 ? '' : 's'} on this device ${refused === 1 ? 'was' : 'were'} refused: you don't have permission to edit ${refused === 1 ? 'it' : 'them'} (for example, someone else's report). Ask a manager or admin.`);
   }
 }
+
+// Lets the company's admins know (by email, at most once a day) when this
+// device can't upload something for a reason other than being offline --
+// the server refused it, or storage did. At most one note an hour per device.
+const PROBLEM_REPORTED_AT_SETTING = 'lastProblemReportAt';
+async function reportSyncProblem(what, err) {
+  try {
+    if (!navigator.onLine || isTutorialMode()) return;
+    const code = String((err && err.code) || '').replace(/^(firestore|storage|functions)\//, '');
+    if (['unavailable', 'deadline-exceeded', 'cancelled', 'aborted', 'retry-limit-exceeded'].includes(code)) return;
+    if (/network|offline|failed to fetch|timed? ?out/i.test(String((err && err.message) || ''))) return;
+    const last = await getSetting(PROBLEM_REPORTED_AT_SETTING);
+    if (last && Date.now() - last < 60 * 60 * 1000) return;
+    const room = await getCompanyRoom();
+    if (!room) return;
+    await saveSetting(PROBLEM_REPORTED_AT_SETTING, Date.now());
+    const { db } = await waitForFirebaseCore();
+    const { collection, addDoc } = await import(FIRESTORE_SDK);
+    const reason = code === 'permission-denied' || code === 'unauthorized'
+      ? "the server refused it (they may not have permission to change it)"
+      : `${code ? `${code}: ` : ''}${String((err && err.message) || 'unknown error').slice(0, 200)}`;
+    await addDoc(collection(db, 'companies', room.code, 'problems'), {
+      text: `${what} couldn't upload: ${reason}. It's still saved on that device.`.slice(0, 500),
+      by: ((await getUserName()) || 'Someone').slice(0, 80),
+      at: Date.now(),
+    });
+  } catch (e) {
+    console.error('problem report:', e);
+  }
+}
+const reportLabel = (r) => `Daily report${r.reportNo != null ? ` #${r.reportNo}` : ''}${r.date ? ` (${r.date})` : ''}`;
 
 // ---------- live hooks -- called from storage.js after every save/delete ----------
 //
@@ -3033,6 +3070,7 @@ async function onCompanySyncProjectChanged(project, deleted) {
     if (project.pendingPush) await putProjectRaw({ ...project, pendingPush: false });
   } catch (err) {
     await putProjectRaw({ ...project, pendingPush: true });
+    reportSyncProblem(`Project "${project.name || (project.meta && project.meta.projectNo) || project.id}"`, err);
     throw err;
   }
 }
@@ -3051,6 +3089,7 @@ async function onCompanySyncReportChanged(report) {
     if (report.pendingPush) await putReportRaw({ ...report, pendingPush: false });
   } catch (err) {
     await putReportRaw({ ...report, pendingPush: true });
+    reportSyncProblem(reportLabel(report), err);
     throw err;
   }
 }
@@ -3074,6 +3113,7 @@ async function confirmReportPushed(report) {
   } catch (err) {
     console.error('confirmReportPushed:', err);
     await putReportRaw({ ...report, pendingPush: true });
+    reportSyncProblem(reportLabel(report), err);
     return false;
   }
 }

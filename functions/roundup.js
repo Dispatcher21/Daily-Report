@@ -150,7 +150,7 @@ ${items}
 </td></tr></table>`;
 }
 
-function composeRoundup({ name, companyName, week, projects }, esc) {
+function composeRoundup({ name, companyName, week, projects, allProjects }, esc) {
   const range = `${niceDate(week.start)} to ${niceDate(week.end)}`;
   const totalReports = projects.reduce((s, p) => s + p.reportCount, 0);
   const totalHours = projects.reduce((s, p) => s + p.totalHours, 0);
@@ -160,12 +160,12 @@ function composeRoundup({ name, companyName, week, projects }, esc) {
 <tr><td style="background:${NAVY};color:#ffffff;padding:18px 20px;border-radius:10px">
 <div style="font-size:12px;opacity:.85;text-transform:uppercase;letter-spacing:1px">Weekly Roundup${companyName ? ` &middot; ${esc(companyName)}` : ''}</div>
 <div style="font-size:22px;font-weight:bold;margin-top:2px">${range}</div>
-<div style="font-size:14px;opacity:.9;margin-top:6px">${totalReports} report${totalReports === 1 ? '' : 's'} &middot; ${fmt(totalHours)} hours &middot; ${projects.length} project${projects.length === 1 ? '' : 's'} you manage</div>
+<div style="font-size:14px;opacity:.9;margin-top:6px">${totalReports} report${totalReports === 1 ? '' : 's'} &middot; ${fmt(totalHours)} hours &middot; ${projects.length} ${allProjects ? 'company ' : ''}project${projects.length === 1 ? '' : 's'}${allProjects ? '' : ' you manage'}</div>
 </td></tr>
 <tr><td style="padding:16px 0 0">${projects.map((p) => projectCard(p, esc)).join('')}</td></tr>
-<tr><td style="font-size:12px;color:#5b6b7a;padding:4px 6px 0">Hi ${esc(name || '')}, this covers the projects you've chosen to manage in Daily Work Reports. Change which ones, or turn this email off, in the app under Settings.<br><br>Inspector Manager</td></tr>
+<tr><td style="font-size:12px;color:#5b6b7a;padding:4px 6px 0">Hi ${esc(name || '')}, this covers ${allProjects ? 'every project in your company' : "the projects you've chosen to manage"} in Daily Work Reports. ${allProjects ? 'Switch back to just your managed projects' : 'Change which ones'}, or turn this email off, in the app under Settings.<br><br>Inspector Manager</td></tr>
 </table></td></tr></table></div>`;
-  const text = [`Weekly Roundup: ${range}${companyName ? ` (${companyName})` : ''}`, `${totalReports} reports, ${fmt(totalHours)} hours, ${projects.length} projects`, '',
+  const text = [`Weekly Roundup: ${range}${companyName ? ` (${companyName})` : ''}`, `${totalReports} report${totalReports === 1 ? '' : 's'}, ${fmt(totalHours)} hours, ${projects.length} ${allProjects ? 'company ' : ''}project${projects.length === 1 ? '' : 's'}${allProjects ? '' : ' you manage'}`, '',
     ...projects.flatMap((p) => [
       `${p.name}${p.projectNo ? ` (${p.projectNo})` : ''}`,
       `  Reports: ${p.reportCount}   Hours: ${fmt(p.totalHours)}   Complete: ${p.overall == null ? '-' : `${Math.round(p.overall * 100)}%`}   Days left: ${p.daysLeft == null ? '-' : p.daysLeft}${p.schedule ? `   (${p.schedule})` : ''}`,
@@ -192,9 +192,13 @@ async function buildRoundup(db, uid, week, today) {
   if (!member || member.status !== 'active' || !member.email) return { skip: 'not an active member' };
   const name = member.displayName || profile.displayName || '';
   const layout = name ? (await company.collection('userLayouts').doc(layoutDocId(name)).get()).data() : null;
-  let projectIds = (layout && Array.isArray(layout.managedProjectIds)) ? layout.managedProjectIds : [];
+  // Admins can ask for every project in the company instead.
+  const allProjects = member.role === 'admin' && profile.roundupAllProjects === true;
+  let projectIds = allProjects
+    ? (await company.collection('projects').get()).docs.map((d) => d.id)
+    : (layout && Array.isArray(layout.managedProjectIds)) ? layout.managedProjectIds : [];
   if (member.role !== 'admin' && Array.isArray(member.projectIds)) projectIds = projectIds.filter((id) => member.projectIds.includes(id));
-  if (!projectIds.length) return { skip: 'no managed projects' };
+  if (!projectIds.length) return { skip: allProjects ? 'managed projects not found' : 'no managed projects' };
   const companyData = (await company.get()).data() || {};
   const projects = [];
   for (const id of projectIds) {
@@ -205,7 +209,7 @@ async function buildRoundup(db, uid, week, today) {
   }
   if (!projects.length) return { skip: 'managed projects not found' };
   projects.sort((a, b) => b.reportCount - a.reportCount || a.name.localeCompare(b.name));
-  return { to: member.email, projectCount: projects.length, msg: { name, companyName: companyData.name || '', week, projects } };
+  return { to: member.email, projectCount: projects.length, msg: { name, companyName: companyData.name || '', week, projects, allProjects } };
 }
 
 module.exports = { localParts, lastWeek, buildRoundup, composeRoundup, DEFAULT_TZ };
