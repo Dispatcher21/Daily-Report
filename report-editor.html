@@ -165,8 +165,6 @@ let activeContractorTab = 0;
 let contractorVisibleCount = 1;
 let equipVisibleCount = 0;
 let saveTimer = null;
-let payItemSearch = '';
-let manualPayOpen = false;
 let editable = true;
 let hasRestoredDraft = false;
 
@@ -423,26 +421,29 @@ function blockFieldBodyHtml(key, def) {
       <div id="contractor-tabs" class="tab-row"></div>
       <div id="contractor-panel"></div>`;
   } else if (key === 'payItems') {
-    tag = `<span class="step-tag" id="pay-items-tag">0 / ${PAY_ITEM_ROW_COUNT}</span>`;
     inner = `
-      <label>Search Catalog <input type="text" id="pi-search" placeholder="Search by item # or description..."></label>
-      <div id="pay-catalog-list" class="check-list"></div>
-
-      <div class="add-manual" id="add-manual-section">
-        <div class="add-manual-header" id="toggle-manual-pay-item">
-          <span id="manual-pay-toggle-icon">&#9656;</span>
-          <span>ADD ITEM NOT IN CATALOG</span>
+      <div class="rpi" id="rpi">
+        <div class="rpi-list" id="rpi-list"></div>
+        <button type="button" class="rpi-add" id="rpi-add">+ Add a pay item</button>
+        <div class="rpi-picker" id="rpi-picker" hidden>
+          <div class="rpi-picker-top">
+            <input type="search" id="rpi-search" placeholder="Search item # or description" aria-label="Search pay items">
+            <div class="rpi-recent" id="rpi-recent"></div>
+          </div>
+          <div class="rpi-plist" id="rpi-plist"></div>
+          <div class="rpi-manual">
+            <button type="button" class="rpi-textbtn" id="rpi-manual-toggle">Item not listed? Add it by hand</button>
+            <div class="rpi-manual-fields" id="rpi-manual-fields" hidden>
+              <label>Item # <input type="text" id="mp-num"></label>
+              <label>Description <input type="text" id="mp-desc"></label>
+              <label>Unit <input type="text" id="mp-unit"></label>
+              <button type="button" class="btn-sm" id="btn-add-manual-pay">+ Add</button>
+            </div>
+            <button type="button" class="rpi-textbtn" id="rpi-picker-close">Cancel</button>
+          </div>
         </div>
-        <div class="add-manual-fields" id="manual-pay-fields">
-          <label>Item # <input type="text" id="mp-num"></label>
-          <label>Description <input type="text" id="mp-desc"></label>
-          <label>Unit <input type="text" id="mp-unit"></label>
-          <button type="button" class="btn-sm" id="btn-add-manual-pay">+ Add</button>
-        </div>
-      </div>
-
-      <div class="eyebrow" style="margin-top:1rem;">Today's Pay Items</div>
-      <div id="selected-pay-items" class="selected-items"></div>`;
+        <button type="button" class="rpi-textbtn" id="rpi-copy-prev" hidden></button>
+      </div>`;
   } else if (key === 'trafficControlSelect') {
     inner = `
       <div class="radio-row">
@@ -602,10 +603,11 @@ function renderGroups() {
           <span class="hint" id="fetch-weather-status" style="margin:0.4rem 0 0;"></span>
         </div>` : '';
       return `
-        <div class="rb-group" id="rb-group-${group.id}" data-group="${group.id}">
+        <div class="rb-group${group.id === 'payItems' ? ' rb-group-feature' : ''}" id="rb-group-${group.id}" data-group="${group.id}">
           <div class="rb-group-hd" data-toggle-group="${group.id}">
             <span class="rb-icon">${group.icon}</span>
             <div class="rb-titles"><div class="t">${escapeHtml(group.label)}</div></div>
+            ${group.id === 'payItems' ? '<span class="rpi-hd-sum" id="pay-items-tag"></span>' : ''}
             ${group.hint ? `<button type="button" class="info-tip" data-tip="${escapeHtml(group.hint)}" aria-label="What this does">i</button>` : ''}
             <span class="rb-chev">&#9656;</span>
           </div>
@@ -841,39 +843,7 @@ function bindDynamicFields() {
     renderContractorTabs();
   }
 
-  if ($('#pay-catalog-list')) {
-    renderPayItemsStep();
-    $('#pi-search').addEventListener('input', (e) => {
-      payItemSearch = e.target.value;
-      renderPayItemsStep();
-    });
-    $('#toggle-manual-pay-item').addEventListener('click', () => {
-      manualPayOpen = !manualPayOpen;
-      $('#manual-pay-fields').classList.toggle('show', manualPayOpen);
-      $('#manual-pay-toggle-icon').textContent = manualPayOpen ? '▾' : '▸';
-    });
-    onEnterSubmit($('#manual-pay-fields'), $('#btn-add-manual-pay'));
-    $('#btn-add-manual-pay').addEventListener('click', () => {
-      const itemNumber = $('#mp-num').value.trim();
-      const description = $('#mp-desc').value.trim();
-      const unit = $('#mp-unit').value.trim();
-      if (!itemNumber && !description) {
-        alert('Enter at least an item number or description.');
-        return;
-      }
-      const emptyIdx = report.payItems.findIndex((pi) => !pi.itemNumber && !pi.description);
-      if (emptyIdx === -1) {
-        report.payItems.push({ itemNumber, description, qty: '', unit });
-      } else {
-        report.payItems[emptyIdx] = { itemNumber, description, qty: '', unit };
-      }
-      $('#mp-num').value = '';
-      $('#mp-desc').value = '';
-      $('#mp-unit').value = '';
-      scheduleSave();
-      renderPayItemsStep();
-    });
-  }
+  if ($('#rpi')) bindPayItems();
 
   if ($('#photo-grid')) renderPhotoGrid();
   if ($('#sig-rep')) setupSignaturePad('#sig-rep', 'repSignatureImage');
@@ -920,6 +890,8 @@ function renderEditor() {
   renderInspectors();
 
   renderGroups();
+  // Pay Items is the part most worth getting right, so it starts open.
+  setGroupOpen('payItems', true);
   bindDynamicFields();
   applyRequiredFieldHighlights();
   setupLivePreview();
@@ -1427,262 +1399,531 @@ function renderContractorPanel() {
   }
 }
 
-// ---------- Pay items (rich catalog selector) ----------
+// ---------- Pay items ----------
+//
+// One line per item (number, description, a short summary, quantity box);
+// only the item being worked on is open, showing its stations/side/
+// location, a calculator, theoretical quantity and remarks. Items are added
+// from a search picker (with recently used items as chips). No cap on how
+// many: what doesn't fit the printed table lists at the end of the Summary
+// of Work Performed instead (see buildSheet1Values in render-report.js).
+
+let piOpenIdx = null; // index into report.payItems of the open item, if any
+let piCalcMenuIdx = null; // the open item's "Calculate" chooser is showing
+let piPickerOpen = false;
+let piManualOpen = false;
+let piRemarksOpenIdx = null; // "+ Remarks" was just tapped on this item
 
 function payItemFilledCount() {
   return report.payItems.filter((pi) => pi.itemNumber || pi.description).length;
 }
 
-function renderPayItemsStep() {
-  // Pay App only items are the engineer's to set (Quantity Sheet's Pay App
-  // section), never the inspector's -- left out of the picker entirely so
-  // there's nothing here to select. An entry from before the item was
-  // flagged this way, if any, is untouched: it still shows in Today's Pay
-  // Items below like any other, just can't be freshly added anymore.
-  const catalog = (project.payItemCatalog || []).filter((item) => !item.payAppOnly);
-  const q = payItemSearch.trim().toLowerCase();
-  const filtered = q
-    ? catalog.filter((item) => `${item.itemNumber} ${item.description}`.toLowerCase().includes(q))
-    : catalog;
-
-  const selectedNumbers = new Set(report.payItems.filter((pi) => pi.itemNumber).map((pi) => pi.itemNumber));
-  const countByNumber = new Map();
-  report.payItems.forEach((pi) => {
-    if (!pi.itemNumber) return;
-    countByNumber.set(pi.itemNumber, (countByNumber.get(pi.itemNumber) || 0) + 1);
-  });
-
-  const list = $('#pay-catalog-list');
-  if (catalog.length === 0) {
-    list.innerHTML = '<div class="empty-list">This project has no pay item catalog. Use "Add item not in catalog" below, or upload a project data file with a PAY ITEMS sheet.</div>';
-  } else if (filtered.length === 0) {
-    list.innerHTML = '<div class="empty-list">No catalog items match your search.</div>';
-  } else {
-    list.innerHTML = filtered
-      .map((item) => {
-        if (payItemNeedsMultiple(item)) {
-          const count = countByNumber.get(item.itemNumber) || 0;
-          const flags = [
-            item.stations ? '<span class="ci-flag" title="Tracks Start/Stop Station">STA</span>' : '',
-            item.side ? '<span class="ci-flag" title="Tracks Side (Lt/Rt/Ctr)">SIDE</span>' : '',
-            (item.locations || []).length ? '<span class="ci-flag" title="Has Location options">LOC</span>' : '',
-            item.computed ? '<span class="ci-flag" title="Qty computed from Length x Width">CALC</span>' : '',
-            item.theoretical ? '<span class="ci-flag" title="Tracks Theoretical Qty / Overrun">THEO</span>' : '',
-          ].join(' ');
-          return `
-            <div class="check-item check-item-multi" data-num="${escapeHtml(item.itemNumber)}" title="Tap to add another entry -- this item can be logged more than once per report">
-              <span class="ci-add-icon">+</span>
-              <div class="ci-main">
-                <div class="ci-num">${escapeHtml(item.itemNumber)} ${flags}</div>
-                <div class="ci-desc">${escapeHtml(item.description)}</div>
-              </div>
-              <span class="ci-unit">${count > 0 ? count + ' added' : escapeHtml(item.unit)}</span>
-            </div>`;
-        }
-        return `
-          <div class="check-item ${selectedNumbers.has(item.itemNumber) ? 'selected' : ''}" data-num="${escapeHtml(item.itemNumber)}">
-            <input type="checkbox" ${selectedNumbers.has(item.itemNumber) ? 'checked' : ''}>
-            <div class="ci-main">
-              <div class="ci-num">${escapeHtml(item.itemNumber)}</div>
-              <div class="ci-desc">${escapeHtml(item.description)}</div>
-            </div>
-            <span class="ci-unit">${escapeHtml(item.unit)}</span>
-          </div>`;
-      })
-      .join('');
-    $$('.check-item', list).forEach((row) => {
-      row.addEventListener('click', (e) => {
-        e.preventDefault();
-        const num = row.dataset.num;
-        const catalogItem = catalog.find((c) => c.itemNumber === num);
-        togglePayItem(catalogItem);
-      });
-    });
-  }
-
-  renderSelectedPayItems();
-  const filled = payItemFilledCount();
-  $('#pay-items-tag').textContent = filled > PAY_ITEM_ROW_COUNT
-    ? `${PAY_ITEM_ROW_COUNT} in table + ${filled - PAY_ITEM_ROW_COUNT} in summary`
-    : `${filled} / ${PAY_ITEM_ROW_COUNT}`;
+function piCatalog() {
+  return project.payItemCatalog || [];
 }
 
-// No cap: the printed template only has room for PAY_ITEM_ROW_COUNT rows in
-// the table itself, but anything beyond that isn't rejected -- render-report.js
-// lists it as extra lines in the Summary of Work Performed box instead, the
-// same way an inspector already writes overflow pay items by hand when a
-// day's list doesn't fit.
-function togglePayItem(catalogItem) {
+function piCatalogItem(itemNumber) {
+  return itemNumber ? piCatalog().find((c) => c.itemNumber === itemNumber) || null : null;
+}
+
+function piIsFilled(pi) {
+  return !!(pi && (pi.itemNumber || pi.description));
+}
+
+function piMissingQty(pi) {
+  return !String(pi.qty ?? '').trim();
+}
+
+// Item numbers from the latest few reports, newest first: the "Used
+// recently" chips in the picker.
+function piRecentItemNumbers() {
+  const usable = new Set(piCatalog().filter((c) => !c.payAppOnly).map((c) => c.itemNumber));
+  const seen = [];
+  otherProjectReports
+    .filter((r) => !r.deleted)
+    .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
+    .slice(0, 5)
+    .forEach((r) => (r.payItems || []).forEach((pi) => {
+      if (pi.itemNumber && usable.has(pi.itemNumber) && !seen.includes(pi.itemNumber)) seen.push(pi.itemNumber);
+    }));
+  return seen.slice(0, 6);
+}
+
+// The report just before this one (by date, then number), for "Same items
+// as Report #N".
+function piPreviousReport() {
+  const myDate = report.date || '';
+  const myNo = Number(report.reportNo) || 0;
+  const before = otherProjectReports.filter((r) => !r.deleted && (r.payItems || []).some(piIsFilled) && (
+    myDate && r.date ? r.date < myDate || (r.date === myDate && (Number(r.reportNo) || 0) < myNo) : (Number(r.reportNo) || 0) < myNo
+  ));
+  before.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || (Number(b.reportNo) || 0) - (Number(a.reportNo) || 0));
+  return before[0] || null;
+}
+
+// How much is left on the item's plan (or Lump Sum total), counting every
+// other report plus today's.
+function piLeftText(pi, cat) {
+  if (!cat) return '';
+  const isLS = payItemUnitKind(cat.unit) === 'LS';
+  const base = isLS ? Number(cat.unitPrice) : Number(cat.plannedQty);
+  if (!(base > 0)) return '';
+  let logged = Number(pi.qty) || 0;
+  otherProjectReports.forEach((r) => {
+    if (r.deleted) return;
+    (r.payItems || []).forEach((p) => { if (p.itemNumber === cat.itemNumber) logged += Number(p.qty) || 0; });
+  });
+  const show = (n) => (isLS
+    ? n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
+    : `${pcFmt(n)} ${cat.unit || ''}`.trim());
+  return logged <= base
+    ? `${show(base - logged)} left of ${show(base)}`
+    : `<b class="rpi-over">${show(logged - base)} over plan</b>`;
+}
+
+function piEntryFor(cat) {
+  return {
+    itemNumber: cat.itemNumber, description: cat.description, qty: '', unit: cat.unit,
+    startStation: '', endStation: '', location: '', side: '', length: '', width: '', theoreticalQty: '', remarks: '',
+    // Computed items always worked out their quantity from Length x Width;
+    // they start out on that calculator.
+    calc: cat.computed ? { type: 'area', l: '', w: '' } : null,
+  };
+}
+
+// Puts an entry in the first blank slot (new reports start with a few), or
+// on the end. Returns its index.
+function piInsert(entry, atIdx) {
   const items = report.payItems;
-  if (payItemNeedsMultiple(catalogItem)) {
-    // Always adds a fresh entry -- removal only happens via that entry's
-    // own X button in the list below, since tapping the catalog row again
-    // is how you log a second segment, not how you undo the first one.
-    const entry = {
-      itemNumber: catalogItem.itemNumber, description: catalogItem.description, qty: '', unit: catalogItem.unit,
-      startStation: '', endStation: '', location: '', side: '', length: '', width: '', theoreticalQty: '',
-    };
-    const emptyIdx = items.findIndex((pi) => !pi.itemNumber && !pi.description);
-    if (emptyIdx === -1) items.push(entry);
-    else items[emptyIdx] = entry;
+  if (atIdx != null) {
+    items.splice(atIdx, 0, entry);
+    return atIdx;
+  }
+  const emptyIdx = items.findIndex((pi) => !piIsFilled(pi));
+  if (emptyIdx === -1) { items.push(entry); return items.length - 1; }
+  items[emptyIdx] = entry;
+  return emptyIdx;
+}
+
+function piAddFromCatalog(itemNumber) {
+  const cat = piCatalogItem(itemNumber);
+  if (!cat) return;
+  // An item that can show up once per report just opens if it's already on.
+  const existing = report.payItems.findIndex((pi) => pi.itemNumber === itemNumber);
+  if (existing !== -1 && !payItemNeedsMultiple(cat)) {
+    piOpenIdx = existing;
   } else {
-    const existingIdx = items.findIndex((pi) => pi.itemNumber && pi.itemNumber === catalogItem.itemNumber);
-    if (existingIdx !== -1) {
-      items.splice(existingIdx, 1);
-    } else {
-      const emptyIdx = items.findIndex((pi) => !pi.itemNumber && !pi.description);
-      if (emptyIdx === -1) {
-        items.push({ itemNumber: catalogItem.itemNumber, description: catalogItem.description, qty: '', unit: catalogItem.unit });
-      } else {
-        items[emptyIdx] = { itemNumber: catalogItem.itemNumber, description: catalogItem.description, qty: '', unit: catalogItem.unit };
-      }
+    piOpenIdx = piInsert(piEntryFor(cat));
+    scheduleSave();
+  }
+  piCalcMenuIdx = null;
+  piClosePicker();
+  renderPayItemsStep();
+  piFocusQty(piOpenIdx);
+}
+
+function piFocusQty(idx) {
+  const el = document.querySelector(`#rpi-list [data-i="${idx}"][data-f="qty"]`);
+  if (el && !el.readOnly) el.focus();
+}
+
+function piClosePicker() {
+  piPickerOpen = false;
+  piManualOpen = false;
+  const search = $('#rpi-search');
+  if (search) search.value = '';
+}
+
+// Re-runs the open item's calculator after one of its inputs changed.
+function piRecalc(pi) {
+  const cat = piCatalogItem(pi.itemNumber);
+  const r = runPayItemCalc(pi, cat && cat.unitPrice);
+  if (r && r.qty != null) pi.qty = r.qty;
+  // Keep Length/Width on the item too for the area calculator, as they
+  // were before the calculators (the audit log and older code read them).
+  if (pi.calc && pi.calc.type === 'area') {
+    const span = Math.abs((parseStation(pi.endStation) ?? NaN) - (parseStation(pi.startStation) ?? NaN));
+    pi.length = String(pi.calc.l ?? '').trim() ? pi.calc.l : (Number.isFinite(span) ? pcRound(span, 3) : '');
+    pi.width = pi.calc.w || '';
+  }
+}
+
+// A report from before the calculators: a Computed item with Length/Width
+// on its own opens on the area calculator with those filled in.
+function piUpgradeLegacy(pi) {
+  if (pi.calc !== undefined) return;
+  const cat = piCatalogItem(pi.itemNumber);
+  if (cat && cat.computed && (String(pi.length || '').trim() || String(pi.width || '').trim())) {
+    pi.calc = { type: 'area', l: pi.length || '', w: pi.width || '' };
+  }
+}
+
+function piCalcHtml(pi, i, cat) {
+  const opts = payItemCalcOptions(cat, pi.unit);
+  const k = pi.calc;
+  if (!k) return '';
+  const r = runPayItemCalc(pi, cat && cat.unitPrice);
+  const stationSpan = parseStation(pi.startStation) != null && parseStation(pi.endStation) != null;
+  const inp = (f, ph, cls, val) => `<input type="text" inputmode="decimal" class="${cls || 'rpi-sm'}" data-i="${i}" data-c="${f}" value="${escapeHtml(val != null ? val : (k[f] ?? ''))}" placeholder="${ph}" aria-label="${ph}">`;
+  const unitTxt = (t) => `<span class="rpi-calc">${t}</span>`;
+  let body = '';
+  if (k.type === 'stations') body = unitTxt('Uses the stations above.');
+  if (k.type === 'area') body = `${inp('l', stationSpan ? 'From stations' : 'Length')} ${unitTxt('ft ×')} ${inp('w', 'Width')} ${unitTxt('ft')}`;
+  if (k.type === 'volume') body = `${inp('l', stationSpan ? 'From stations' : 'Length')} ${unitTxt('ft ×')} ${inp('w', 'Width')} ${unitTxt('ft ×')} ${inp('d', 'Depth')} ${unitTxt('ft')}`;
+  if (k.type === 'tickets') {
+    const tickets = k.tickets && k.tickets.length ? k.tickets : [''];
+    body = `${tickets.map((t, ti) => `<input type="text" inputmode="decimal" class="rpi-sm" data-i="${i}" data-ticket="${ti}" value="${escapeHtml(t)}" placeholder="Ticket ${ti + 1}" aria-label="Ticket ${ti + 1} tons">`).join(' ')} <button type="button" class="rpi-chip" data-addticket="${i}">+ Ticket</button>`;
+  }
+  if (k.type === 'paving') body = `${inp('area', 'Area', 'rpi-md')} ${unitTxt('SY ×')} ${inp('thick', 'Thickness')} ${unitTxt('in ×')} ${inp('rate', '110', 'rpi-sm', k.rate == null ? '110' : k.rate)} ${unitTxt('lb/SY-in')}`;
+  if (k.type === 'percent') {
+    const price = Number(cat && cat.unitPrice);
+    body = `${inp('pct', 'Percent')} ${unitTxt(`% of ${price.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })}`)}`;
+  }
+  const label = (opts.find(([t]) => t === k.type) || [k.type, 'Calculator'])[1];
+  const other = opts.find(([t]) => t !== k.type);
+  return `<div class="rpi-calcbox">
+    <div class="rpi-row"><span class="rpi-label">${escapeHtml(label)}</span>${body}</div>
+    <div class="rpi-calc"><span data-calcmath="${i}">${r && r.math ? escapeHtml(r.math) : 'Fill these in and the quantity is worked out for you.'}</span>
+      <button type="button" class="rpi-textbtn" data-calcoff="${i}">Type the quantity myself</button>${other ? ` <button type="button" class="rpi-textbtn" data-calc="${other[0]}" data-i="${i}">Use ${escapeHtml(other[1])} instead</button>` : ''}</div>
+  </div>`;
+}
+
+function piTheoText(pi) {
+  const t = pcNum(pi.theoreticalQty);
+  const q = pcNum(pi.qty);
+  if (t == null || q == null || q === t) return '';
+  return ` &middot; ${q > t ? 'over' : 'under'} by ${pcFmt(Math.abs(q - t))}`;
+}
+
+function piCardHtml(pi, i) {
+  const cat = piCatalogItem(pi.itemNumber);
+  const missing = piMissingQty(pi);
+  const isOpen = piOpenIdx === i;
+  const unit = pi.unit || (cat && cat.unit) || '';
+  const isLS = payItemUnitKind(unit) === 'LS';
+  const calculated = !!(pi.calc && runPayItemCalc(pi, cat && cat.unitPrice));
+  const summary = payItemDetailLine(pi);
+  const qtyBox = `<label class="rpi-qty">${isLS ? '<span>$</span>' : ''}<input type="text" inputmode="decimal" data-i="${i}" data-f="qty" value="${escapeHtml(pi.qty ?? '')}" placeholder="0" aria-label="${escapeHtml(pi.itemNumber || pi.description)} quantity"${calculated ? ' readonly title="Worked out by the calculator"' : ''}>${unit ? `<span>${escapeHtml(unit)}</span>` : ''}</label>`;
+
+  let body = '';
+  if (isOpen) {
+    const rows = [];
+    const left = piLeftText(pi, cat);
+    if (left) rows.push(`<span class="rpi-left" data-left="${i}">${left}</span>`);
+    const tracksStations = (cat && cat.stations) || pi.startStation || pi.endStation;
+    if (tracksStations) {
+      rows.push(`<div class="rpi-row"><span class="rpi-label">Stations</span><input type="text" class="rpi-md" data-i="${i}" data-f="startStation" value="${escapeHtml(pi.startStation || '')}" placeholder="Start (120+15)" aria-label="Start station"> <span class="rpi-calc">to</span> <input type="text" class="rpi-md" data-i="${i}" data-f="endStation" value="${escapeHtml(pi.endStation || '')}" placeholder="Stop (121+40)" aria-label="Stop station"></div>`);
+    }
+    if ((cat && cat.side) || pi.side) {
+      rows.push(`<div class="rpi-row"><span class="rpi-label">Side</span><span class="rpi-seg">${PAY_ITEM_SIDE_OPTIONS.map((s) => `<button type="button" data-side="${s}" data-i="${i}" aria-pressed="${pi.side === s}">${s}</button>`).join('')}</span></div>`);
+    }
+    const locations = (cat && cat.locations) || [];
+    if (locations.length || pi.location) {
+      const opts = locations.includes(pi.location) || !pi.location ? locations : [pi.location, ...locations];
+      rows.push(`<div class="rpi-row"><span class="rpi-label">Location</span><select data-i="${i}" data-f="location" aria-label="Location"><option value="">Pick one</option>${opts.map((l) => `<option value="${escapeHtml(l)}"${pi.location === l ? ' selected' : ''}>${escapeHtml(l)}</option>`).join('')}</select></div>`);
+    }
+    if (pi.calc) rows.push(piCalcHtml(pi, i, cat));
+    if ((cat && cat.theoretical) || String(pi.theoreticalQty || '').trim()) {
+      rows.push(`<div class="rpi-row"><span class="rpi-label">Theoretical</span><input type="text" inputmode="decimal" class="rpi-md" data-i="${i}" data-f="theoreticalQty" value="${escapeHtml(pi.theoreticalQty || '')}" placeholder="From plans" aria-label="Theoretical quantity"> <span class="rpi-calc" data-theo="${i}">${escapeHtml(unit)}${piTheoText(pi)}</span></div>`);
+    }
+    const hasRemarks = !!String(pi.remarks || '').trim() || piRemarksOpenIdx === i;
+    if (hasRemarks) {
+      rows.push(`<div class="rpi-row"><span class="rpi-label">Remarks</span><input type="text" class="rpi-wide" data-i="${i}" data-f="remarks" value="${escapeHtml(pi.remarks || '')}" placeholder="Prints with this item" aria-label="Remarks" maxlength="200"></div>`);
+    }
+    const calcOpts = payItemCalcOptions(cat, unit);
+    if (piCalcMenuIdx === i && !pi.calc) {
+      rows.push(`<div class="rpi-row">${calcOpts.map(([t, l]) => `<button type="button" class="rpi-chip" data-calc="${t}" data-i="${i}">${escapeHtml(l)}</button>`).join(' ')}</div>`);
+    }
+    const links = [];
+    if (!pi.calc && calcOpts.length && piCalcMenuIdx !== i) links.push(`<button type="button" class="rpi-textbtn" data-calcmenu="${i}">Calculate</button>`);
+    if (!hasRemarks) links.push(`<button type="button" class="rpi-textbtn" data-remarks="${i}">+ Remarks</button>`);
+    if (cat && (cat.stations || cat.side || (cat.locations || []).length)) links.push(`<button type="button" class="rpi-textbtn" data-another="${i}">+ Another ${cat.stations ? 'segment' : (cat.locations || []).length ? 'location' : 'side'}</button>`);
+    links.push(`<button type="button" class="rpi-textbtn rpi-danger" data-remove="${i}">Remove</button>`);
+    body = `<div class="rpi-body">${rows.join('')}<div class="rpi-links">${links.join('')}</div></div>`;
+  }
+
+  const sumHtml = !isOpen && (summary || missing)
+    ? `<span class="rpi-sum${missing ? ' rpi-need' : ''}">${missing ? 'Needs a quantity' : escapeHtml(summary)}</span>`
+    : '';
+  return `<div class="rpi-item${missing ? ' rpi-missing' : ''}${isOpen ? ' rpi-open' : ''}" data-card="${i}">
+    <div class="rpi-line">
+      <button type="button" class="rpi-name" data-open="${i}" aria-expanded="${isOpen}"><span><span class="rpi-num">${escapeHtml(pi.itemNumber || '')}</span> <span class="rpi-desc">${escapeHtml(pi.description || '')}</span></span>${sumHtml}</button>
+      ${qtyBox}
+    </div>
+    ${body}
+  </div>`;
+}
+
+function renderPayItemsStep() {
+  const list = $('#rpi-list');
+  if (!list) return;
+  report.payItems.forEach(piUpgradeLegacy);
+  const rows = report.payItems.map((pi, i) => ({ pi, i })).filter((x) => piIsFilled(x.pi));
+  if (piOpenIdx != null && !piIsFilled(report.payItems[piOpenIdx])) piOpenIdx = null;
+  list.innerHTML = rows.length
+    ? rows.map(({ pi, i }) => piCardHtml(pi, i)).join('')
+    : '<p class="rpi-empty">No pay items yet. Add what was worked on today.</p>';
+  updatePayItemsTag();
+
+  $('#rpi-add').hidden = piPickerOpen;
+  $('#rpi-picker').hidden = !piPickerOpen;
+  if (piPickerOpen) renderPayItemPicker();
+
+  const prev = piPreviousReport();
+  const missingFromPrev = prev
+    ? (prev.payItems || []).filter((p) => p.itemNumber && piCatalogItem(p.itemNumber) && !report.payItems.some((x) => x.itemNumber === p.itemNumber))
+    : [];
+  const copy = $('#rpi-copy-prev');
+  copy.hidden = !missingFromPrev.length || piPickerOpen;
+  if (prev) copy.textContent = `Same items as Report #${prev.reportNo}`;
+}
+
+function updatePayItemsTag() {
+  const tag = $('#pay-items-tag');
+  if (!tag) return;
+  const filled = report.payItems.filter(piIsFilled);
+  const missing = filled.filter(piMissingQty).length;
+  tag.textContent = filled.length
+    ? `${filled.length} item${filled.length === 1 ? '' : 's'}${missing ? ` · ${missing} need${missing === 1 ? 's' : ''} a quantity` : ''}`
+    : 'None yet';
+  tag.classList.toggle('rpi-tag-warn', !!missing);
+}
+
+function renderPayItemPicker() {
+  const catalog = piCatalog().filter((c) => !c.payAppOnly);
+  const q = ($('#rpi-search').value || '').trim().toLowerCase();
+  const on = new Set(report.payItems.filter((pi) => pi.itemNumber).map((pi) => pi.itemNumber));
+  const recent = piRecentItemNumbers();
+  $('#rpi-recent').innerHTML = recent.length && !q
+    ? `Used recently: ${recent.map((n) => `<button type="button" class="rpi-chip" data-add="${escapeHtml(n)}">${escapeHtml(n)}</button>`).join(' ')}`
+    : '';
+  $('#rpi-recent').hidden = !recent.length || !!q;
+  const matches = catalog.filter((c) => !q || `${c.itemNumber} ${c.description}`.toLowerCase().includes(q));
+  $('#rpi-plist').innerHTML = !catalog.length
+    ? '<p class="rpi-empty">This project has no pay item list yet. Add the item by hand below, or ask your admin to upload one in Project Settings.</p>'
+    : matches.length
+      ? matches.map((c) => `<button type="button" class="rpi-prow" data-add="${escapeHtml(c.itemNumber)}"><span class="rpi-pn">${escapeHtml(c.itemNumber)}</span><span class="rpi-pd">${escapeHtml(c.description)}</span>${on.has(c.itemNumber) ? '<span class="rpi-on">ON REPORT</span>' : ''}<span class="rpi-pu">${escapeHtml(c.unit || '')}</span></button>`).join('')
+      : '<p class="rpi-empty">Nothing matches. Check the item number, or add it by hand below.</p>';
+  $('#rpi-manual-fields').hidden = !(piManualOpen || !catalog.length);
+  $('#rpi-manual-toggle').hidden = !catalog.length;
+}
+
+// Redraws one item in place, keeping the cursor where it was.
+function piRefreshCard(i, focusSel) {
+  const card = document.querySelector(`#rpi-list [data-card="${i}"]`);
+  if (!card) return;
+  const active = document.activeElement;
+  const sel = focusSel || (active && card.contains(active) ? piInputSelector(active) : null);
+  const pos = active && 'selectionStart' in active ? active.selectionStart : null;
+  card.outerHTML = piCardHtml(report.payItems[i], i);
+  updatePayItemsTag();
+  if (sel) {
+    const el = document.querySelector(sel);
+    if (el) {
+      el.focus();
+      if (pos != null) { try { el.setSelectionRange(pos, pos); } catch { /* not a text input */ } }
     }
   }
-  scheduleSave();
-  renderPayItemsStep();
 }
 
-function renderSelectedPayItems() {
-  const container = $('#selected-pay-items');
-  const rows = report.payItems.map((item, i) => ({ item, i })).filter((x) => x.item.itemNumber || x.item.description);
+function piInputSelector(el) {
+  const i = el.dataset.i;
+  if (i == null) return null;
+  if (el.dataset.f) return `#rpi-list [data-i="${i}"][data-f="${el.dataset.f}"]`;
+  if (el.dataset.c) return `#rpi-list [data-i="${i}"][data-c="${el.dataset.c}"]`;
+  if (el.dataset.ticket != null) return `#rpi-list [data-i="${i}"][data-ticket="${el.dataset.ticket}"]`;
+  return null;
+}
 
-  if (rows.length === 0) {
-    container.innerHTML = '<div class="empty-list">No pay items selected yet.</div>';
-    return;
-  }
+function bindPayItems() {
+  const root = $('#rpi');
+  // Open on the first item still missing a quantity, if any.
+  const firstMissing = report.payItems.findIndex((pi) => piIsFilled(pi) && piMissingQty(pi));
+  piOpenIdx = firstMissing === -1 ? null : firstMissing;
+  renderPayItemsStep();
 
-  const catalogByNumber = new Map((project.payItemCatalog || []).map((c) => [c.itemNumber, c]));
-
-  container.innerHTML = rows
-    .map(({ item, i }) => {
-      const cat = catalogByNumber.get(item.itemNumber);
-      const hasStations = !!(cat && cat.stations);
-      const hasLocations = !!(cat && cat.locations && cat.locations.length > 0);
-      const hasSide = !!(cat && cat.side);
-      const hasComputed = !!(cat && cat.computed);
-      const hasTheoretical = !!(cat && cat.theoretical);
-      const extra = hasStations || hasLocations || hasSide || hasComputed || hasTheoretical
-        ? `
-        <div class="si-extra">
-          ${hasStations ? `
-            <input type="text" class="si-station" data-idx="${i}" data-field="startStation" value="${escapeHtml(item.startStation || '')}" placeholder="Start Station (e.g. 120+15)">
-            <input type="text" class="si-station" data-idx="${i}" data-field="endStation" value="${escapeHtml(item.endStation || '')}" placeholder="Stop Station (e.g. 121+40)">
-          ` : ''}
-          ${hasLocations ? `
-            <select class="si-location" data-idx="${i}">
-              <option value="">Location&hellip;</option>
-              ${cat.locations.map((loc) => `<option value="${escapeHtml(loc)}"${item.location === loc ? ' selected' : ''}>${escapeHtml(loc)}</option>`).join('')}
-            </select>
-          ` : ''}
-          ${hasSide ? `
-            <select class="si-side" data-idx="${i}">
-              <option value="">Side&hellip;</option>
-              ${PAY_ITEM_SIDE_OPTIONS.map((s) => `<option value="${s}"${item.side === s ? ' selected' : ''}>${s}</option>`).join('')}
-            </select>
-          ` : ''}
-          ${hasComputed ? `
-            <input type="number" inputmode="decimal" step="0.01" class="si-length" data-idx="${i}" value="${item.length || ''}" placeholder="Length">
-            <input type="number" inputmode="decimal" step="0.01" class="si-width" data-idx="${i}" value="${item.width || ''}" placeholder="Width">
-          ` : ''}
-          ${hasTheoretical ? `
-            <input type="number" inputmode="decimal" step="0.01" class="si-theoretical" data-idx="${i}" value="${item.theoreticalQty || ''}" placeholder="Theoretical Qty">
-            <span class="si-overrun" data-idx="${i}">${overrunLabel(computeOverrun(item.qty, item.theoreticalQty))}</span>
-          ` : ''}
-        </div>`
-        : '';
-      return `
-      <div class="selected-item-row-wrap">
-        <div class="selected-item-row">
-          <div class="si-desc"><span class="si-num">${escapeHtml(item.itemNumber)}</span> ${escapeHtml(item.description)}${item.unit ? ` <span style="color:var(--text-dim);">(${escapeHtml(item.unit)})</span>` : ''}</div>
-          <input type="number" inputmode="decimal" class="si-qty" data-idx="${i}" value="${item.qty}" placeholder="Qty">
-          <button type="button" class="si-remove" data-idx="${i}" title="Remove">&times;</button>
-        </div>
-        ${extra}
-      </div>`;
-    })
-    .join('');
-
-  function updateOverrunDisplay(idx) {
-    const item = report.payItems[idx];
-    const overrunEl = container.querySelector(`.si-overrun[data-idx="${idx}"]`);
-    if (overrunEl) overrunEl.textContent = overrunLabel(computeOverrun(item.qty, item.theoreticalQty));
-  }
-
-  $$('.si-qty', container).forEach((el) => {
-    el.addEventListener('input', () => {
-      const idx = Number(el.dataset.idx);
-      report.payItems[idx].qty = el.value;
-      updateOverrunDisplay(idx);
-      scheduleSave();
-    });
+  root.addEventListener('input', (e) => {
+    const el = e.target;
+    if (el.id === 'rpi-search') { renderPayItemPicker(); return; }
+    const i = el.dataset.i;
+    if (i == null) return;
+    const pi = report.payItems[Number(i)];
+    if (!pi) return;
+    const f = el.dataset.f;
+    const cf = el.dataset.c;
+    const tk = el.dataset.ticket;
+    if (f === 'location') return; // handled on change
+    if (f) pi[f] = el.value;
+    if (cf) pi.calc[cf] = el.value;
+    if (tk != null) pi.calc.tickets[Number(tk)] = el.value;
+    if (pi.calc && (cf || tk != null || f === 'startStation' || f === 'endStation')) piRecalc(pi);
+    // Typing the quantity itself only needs the little bits around it updated.
+    if (f === 'qty' || f === 'remarks') {
+      const card = el.closest('.rpi-item');
+      if (card) card.classList.toggle('rpi-missing', piMissingQty(pi));
+      const leftEl = card && card.querySelector('[data-left]');
+      if (leftEl) leftEl.innerHTML = piLeftText(pi, piCatalogItem(pi.itemNumber));
+      const theoEl = card && card.querySelector('[data-theo]');
+      if (theoEl) theoEl.innerHTML = escapeHtml(pi.unit || '') + piTheoText(pi);
+      updatePayItemsTag();
+    } else {
+      piRefreshCard(Number(i));
+    }
+    scheduleSave();
   });
-  $$('.si-station', container).forEach((el) => {
-    el.addEventListener('input', () => {
-      const idx = Number(el.dataset.idx);
-      const item = report.payItems[idx];
-      item[el.dataset.field] = el.value;
-      const cat = catalogByNumber.get(item.itemNumber);
-      // Length starts out as the station span for a Computed item that also
-      // tracks Stations -- still just a starting point, since the field
-      // below stays hand-editable the same as the total-hours field does.
-      if (cat && cat.computed) {
-        const start = parseStation(item.startStation);
-        const end = parseStation(item.endStation);
-        if (start != null && end != null) {
-          item.length = String(Math.round(Math.abs(end - start) * 1000) / 1000);
-          item.qty = computeAreaQty(item.length, item.width, item.unit);
-          const lengthEl = container.querySelector(`.si-length[data-idx="${idx}"]`);
-          const qtyEl = container.querySelector(`.si-qty[data-idx="${idx}"]`);
-          if (lengthEl) lengthEl.value = item.length;
-          if (qtyEl) qtyEl.value = item.qty;
-          updateOverrunDisplay(idx);
-        }
+
+  root.addEventListener('change', (e) => {
+    const el = e.target;
+    if (el.tagName !== 'SELECT' || el.dataset.i == null) return;
+    report.payItems[Number(el.dataset.i)].location = el.value;
+    scheduleSave();
+  });
+
+  root.addEventListener('keydown', (e) => {
+    if (e.target.id === 'rpi-search') {
+      if (e.key === 'Escape') { piClosePicker(); renderPayItemsStep(); $('#rpi-add').focus(); }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const first = $('#rpi-plist [data-add]');
+        if (first) piAddFromCatalog(first.dataset.add);
       }
-      scheduleSave();
-    });
+    }
   });
-  $$('.si-location', container).forEach((el) => {
-    el.addEventListener('change', () => {
-      report.payItems[Number(el.dataset.idx)].location = el.value;
-      scheduleSave();
-    });
-  });
-  $$('.si-side', container).forEach((el) => {
-    el.addEventListener('change', () => {
-      report.payItems[Number(el.dataset.idx)].side = el.value;
-      scheduleSave();
-    });
-  });
-  $$('.si-length, .si-width', container).forEach((el) => {
-    el.addEventListener('input', () => {
-      const idx = Number(el.dataset.idx);
-      const item = report.payItems[idx];
-      item[el.classList.contains('si-length') ? 'length' : 'width'] = el.value;
-      const cat = catalogByNumber.get(item.itemNumber);
-      if (cat && cat.computed) {
-        item.qty = computeAreaQty(item.length, item.width, item.unit);
-        const qtyEl = container.querySelector(`.si-qty[data-idx="${idx}"]`);
-        if (qtyEl) qtyEl.value = item.qty;
-        updateOverrunDisplay(idx);
-      }
-      scheduleSave();
-    });
-  });
-  $$('.si-theoretical', container).forEach((el) => {
-    el.addEventListener('input', () => {
-      const idx = Number(el.dataset.idx);
-      report.payItems[idx].theoreticalQty = el.value;
-      updateOverrunDisplay(idx);
-      scheduleSave();
-    });
-  });
-  $$('.si-remove', container).forEach((btn) => {
-    btn.addEventListener('click', () => {
-      report.payItems.splice(Number(btn.dataset.idx), 1);
+
+  root.addEventListener('click', (e) => {
+    const t = e.target.closest('button');
+    if (!t || !root.contains(t)) return;
+    const idx = (v) => Number(v);
+    if (t.id === 'rpi-add') {
+      piPickerOpen = true;
+      renderPayItemsStep();
+      $('#rpi-search').focus();
+      return;
+    }
+    if (t.id === 'rpi-picker-close') { piClosePicker(); renderPayItemsStep(); return; }
+    if (t.id === 'rpi-manual-toggle') {
+      piManualOpen = !piManualOpen;
+      renderPayItemPicker();
+      if (piManualOpen) $('#mp-num').focus();
+      return;
+    }
+    if (t.id === 'btn-add-manual-pay') { piAddManual(); return; }
+    if (t.id === 'rpi-copy-prev') {
+      const prev = piPreviousReport();
+      if (!prev) return;
+      (prev.payItems || []).forEach((p) => {
+        const cat = p.itemNumber && piCatalogItem(p.itemNumber);
+        if (!cat || report.payItems.some((x) => x.itemNumber === p.itemNumber)) return;
+        piInsert(piEntryFor(cat));
+      });
+      const firstMissing = report.payItems.findIndex((pi) => piIsFilled(pi) && piMissingQty(pi));
+      piOpenIdx = firstMissing === -1 ? piOpenIdx : firstMissing;
       scheduleSave();
       renderPayItemsStep();
-    });
+      return;
+    }
+    if (t.dataset.add) { piAddFromCatalog(t.dataset.add); return; }
+    if (t.dataset.open != null) {
+      const n = idx(t.dataset.open);
+      piOpenIdx = piOpenIdx === n ? null : n;
+      piCalcMenuIdx = null;
+      piRemarksOpenIdx = null;
+      renderPayItemsStep();
+      if (piOpenIdx === n) piFocusQty(n);
+      return;
+    }
+    if (t.dataset.remove != null) {
+      report.payItems.splice(idx(t.dataset.remove), 1);
+      piOpenIdx = null;
+      piRemarksOpenIdx = null;
+      piCalcMenuIdx = null;
+      scheduleSave();
+      renderPayItemsStep();
+      return;
+    }
+    if (t.dataset.calcmenu != null) {
+      const n = idx(t.dataset.calcmenu);
+      const pi = report.payItems[n];
+      const opts = payItemCalcOptions(piCatalogItem(pi.itemNumber), pi.unit);
+      // Only one calculator for this unit: go straight to it.
+      if (opts.length === 1) piStartCalc(n, opts[0][0]);
+      else { piCalcMenuIdx = n; piRefreshCard(n); }
+      return;
+    }
+    if (t.dataset.calc) { piStartCalc(idx(t.dataset.i), t.dataset.calc); return; }
+    if (t.dataset.calcoff != null) {
+      const n = idx(t.dataset.calcoff);
+      report.payItems[n].calc = null;
+      scheduleSave();
+      piRefreshCard(n, `#rpi-list [data-i="${n}"][data-f="qty"]`);
+      return;
+    }
+    if (t.dataset.addticket != null) {
+      const n = idx(t.dataset.addticket);
+      report.payItems[n].calc.tickets.push('');
+      piRefreshCard(n);
+      const ins = $$(`#rpi-list [data-i="${n}"][data-ticket]`);
+      if (ins.length) ins[ins.length - 1].focus();
+      return;
+    }
+    if (t.dataset.remarks != null) {
+      const n = idx(t.dataset.remarks);
+      const pi = report.payItems[n];
+      if (pi.remarks == null) pi.remarks = '';
+      piRemarksOpenIdx = n;
+      piRefreshCard(n, `#rpi-list [data-i="${n}"][data-f="remarks"]`);
+      return;
+    }
+    if (t.dataset.side) {
+      const n = idx(t.dataset.i);
+      const pi = report.payItems[n];
+      pi.side = pi.side === t.dataset.side ? '' : t.dataset.side;
+      scheduleSave();
+      piRefreshCard(n);
+      return;
+    }
+    if (t.dataset.another != null) {
+      const n = idx(t.dataset.another);
+      const cat = piCatalogItem(report.payItems[n].itemNumber);
+      if (!cat) return;
+      piOpenIdx = piInsert(piEntryFor(cat), n + 1);
+      piCalcMenuIdx = null;
+      scheduleSave();
+      renderPayItemsStep();
+      piFocusQty(piOpenIdx);
+    }
   });
+  onEnterSubmit($('#rpi-manual-fields'), $('#btn-add-manual-pay'));
+}
+
+function piStartCalc(i, type) {
+  const pi = report.payItems[i];
+  piCalcMenuIdx = null;
+  pi.calc = { type, tickets: [''] };
+  if (type !== 'tickets') delete pi.calc.tickets;
+  piRecalc(pi);
+  scheduleSave();
+  piRefreshCard(i);
+  const first = document.querySelector(`#rpi-list [data-card="${i}"] .rpi-calcbox input`);
+  if (first) first.focus();
+}
+
+function piAddManual() {
+  const itemNumber = $('#mp-num').value.trim();
+  const description = $('#mp-desc').value.trim();
+  const unit = $('#mp-unit').value.trim();
+  if (!itemNumber && !description) {
+    alert('Enter at least an item number or description.');
+    return;
+  }
+  piOpenIdx = piInsert({ itemNumber, description, qty: '', unit, remarks: '' });
+  $('#mp-num').value = '';
+  $('#mp-desc').value = '';
+  $('#mp-unit').value = '';
+  piClosePicker();
+  scheduleSave();
+  renderPayItemsStep();
+  piFocusQty(piOpenIdx);
 }
 
 // ---------- Photos ----------

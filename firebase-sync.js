@@ -3150,6 +3150,7 @@ async function confirmReportPushed(report) {
 // fire-and-forget hook in storage.js always has). 'no-room' covers a
 // local-only device with nothing to sync to in the first place.
 async function confirmReportSyncStatus(report) {
+  if (isTutorialMode()) return 'no-room'; // nothing syncs in tutorial mode, so there's nothing to warn about
   const room = await getCompanyRoom();
   if (!room) return 'no-room';
   if (!navigator.onLine) return 'offline';

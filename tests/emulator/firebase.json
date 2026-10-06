@@ -11,6 +11,6 @@
   "firestore": { "rules": "firestore.rules" },
   "storage": { "rules": "storage.rules" },
   "functions": [
-    { "source": "fnsrc", "codebase": "default", "runtime": "nodejs20", "ignore": ["node_modules", ".git", "*.local"] }
+    { "source": "fnsrc", "codebase": "default", "runtime": "nodejs22", "ignore": ["node_modules", ".git", "*.local"] }
   ]
 }

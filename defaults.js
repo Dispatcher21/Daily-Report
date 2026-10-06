@@ -140,6 +140,149 @@ function computeAreaQty(length, width, unit) {
   return String(Math.round(qty * 1000) / 1000);
 }
 
+// ---------- Pay item calculators and the printed detail line ----------
+//
+// A report pay item can carry `calc` ({ type, ...inputs }): the helper the
+// inspector used to work out the quantity (report-editor.html). Which
+// helpers are offered depends on the item's unit. The inputs are kept so
+// the item can be reopened and adjusted, and so the printed report can say
+// how the number was reached on the line under the item.
+
+// The unit reduced to one of LF / SY / SF / CY / TON / LS, or '' when it's
+// none of those (EA and the like get no calculator).
+function payItemUnitKind(unit) {
+  const u = String(unit || '').trim().toUpperCase().replace(/\./g, '').replace(/\s+/g, ' ');
+  if (/^(LF|LIN FT|LINEAR FT|LINEAR FEET|FT)$/.test(u)) return 'LF';
+  if (/^(SY|SQ YD|SQYD|SQUARE YARDS?)$/.test(u)) return 'SY';
+  if (/^(SF|SQ FT|SQFT|SQUARE FEET)$/.test(u)) return 'SF';
+  if (/^(CY|CU YD|CUYD|CUBIC YARDS?)$/.test(u)) return 'CY';
+  if (/^(TON|TONS|TN)$/.test(u)) return 'TON';
+  if (/^(LS|LUMP SUM)$/.test(u)) return 'LS';
+  return '';
+}
+
+// [type, label] pairs, in the order offered. `catalogItem` may be null (an
+// item typed in by hand), in which case only the unit decides.
+function payItemCalcOptions(catalogItem, unit) {
+  const cat = catalogItem || {};
+  const kind = payItemUnitKind(unit || cat.unit);
+  const out = [];
+  if (kind === 'LF' && cat.stations) out.push(['stations', 'Length from stations']);
+  if (kind === 'SY' || kind === 'SF' || (cat.computed && kind !== 'CY')) out.push(['area', 'Length × Width']);
+  if (kind === 'CY') out.push(['volume', 'Length × Width × Depth']);
+  if (kind === 'TON') {
+    out.push(['tickets', 'Truck tickets']);
+    out.push(['paving', 'Paving (area × thickness)']);
+  }
+  if (kind === 'LS' && Number(cat.unitPrice) > 0) out.push(['percent', 'Percent complete']);
+  return out;
+}
+
+function pcNum(value) {
+  const s = String(value ?? '').replace(/,/g, '').trim();
+  if (!s) return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+function pcFmt(n) {
+  return (Math.round(n * 1000) / 1000).toLocaleString('en-US', { maximumFractionDigits: 3 });
+}
+function pcRound(n, places) {
+  const f = Math.pow(10, places);
+  return String(Math.round(n * f) / f);
+}
+
+// Runs an item's calculator. Returns { qty, math, print } once enough is
+// filled in, otherwise null. `qty` is the string to store; `math` is the
+// working shown in the editor; `print` is the short version for the report.
+// `unitPrice` only matters for Percent complete (a Lump Sum's total).
+function runPayItemCalc(item, unitPrice) {
+  const k = item && item.calc;
+  if (!k || !k.type) return null;
+  const kind = payItemUnitKind(item.unit);
+  const span = () => {
+    const a = parseStation(item.startStation);
+    const b = parseStation(item.endStation);
+    return a != null && b != null ? Math.abs(b - a) : null;
+  };
+  if (k.type === 'stations') {
+    const L = span();
+    if (L == null) return null;
+    return { qty: pcRound(L, 3), math: `${item.endStation} - ${item.startStation} = ${pcFmt(L)} LF`, print: '' };
+  }
+  if (k.type === 'area' || k.type === 'volume') {
+    const lengthFromStations = pcNum(k.l) == null;
+    const L = lengthFromStations ? span() : pcNum(k.l);
+    const W = pcNum(k.w);
+    const D = k.type === 'volume' ? pcNum(k.d) : 1;
+    if (L == null || W == null || D == null) return null;
+    const cubicOrSquareFt = L * W * D;
+    let q = cubicOrSquareFt;
+    let unitLabel = item.unit || '';
+    if (k.type === 'volume') { q = cubicOrSquareFt / 27; unitLabel = 'CY'; }
+    else if (kind === 'SY') { q = cubicOrSquareFt / 9; unitLabel = 'SY'; }
+    else if (kind === 'SF' || !unitLabel) unitLabel = 'SF';
+    const dims = k.type === 'volume' ? `${pcFmt(L)} × ${pcFmt(W)} × ${pcFmt(D)} ft` : `${pcFmt(L)} × ${pcFmt(W)} ft`;
+    const qty = pcRound(q, 3);
+    return { qty, math: `${dims}${lengthFromStations ? ' (length from stations)' : ''} = ${pcFmt(Number(qty))} ${unitLabel}`, print: dims };
+  }
+  if (k.type === 'tickets') {
+    const t = (k.tickets || []).map(pcNum).filter((v) => v != null);
+    if (!t.length) return null;
+    const qty = pcRound(t.reduce((a, b) => a + b, 0), 3);
+    const n = `${t.length} ticket${t.length === 1 ? '' : 's'}`;
+    return { qty, math: `${n}: ${t.map(pcFmt).join(' + ')} = ${pcFmt(Number(qty))} TON`, print: n };
+  }
+  if (k.type === 'paving') {
+    const A = pcNum(k.area);
+    const T = pcNum(k.thick);
+    const rate = pcNum(k.rate == null ? '110' : k.rate);
+    if (A == null || T == null || rate == null) return null;
+    const qty = pcRound((A * T * rate) / 2000, 3);
+    return { qty, math: `${pcFmt(A)} SY × ${pcFmt(T)} in × ${pcFmt(rate)} lb/SY-in ÷ 2,000 = ${pcFmt(Number(qty))} TON`, print: `${pcFmt(A)} SY at ${pcFmt(T)} in` };
+  }
+  if (k.type === 'percent') {
+    const p = pcNum(k.pct);
+    if (p == null) return null;
+    const price = Number(unitPrice);
+    if (!(price > 0)) return { qty: null, math: '', print: `${pcFmt(p)}% complete` };
+    const qty = pcRound((price * p) / 100, 2);
+    const money = (n) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 });
+    return { qty, math: `${pcFmt(p)}% of ${money(price)} = ${money(Number(qty))}`, print: `${pcFmt(p)}% complete` };
+  }
+  return null;
+}
+
+// The line printed under a pay item: only what was filled in (stations,
+// side, location, calculator inputs, theoretical quantity), then remarks.
+// '' when there's nothing to add.
+function payItemDetailLine(item) {
+  if (!item) return '';
+  const bits = [];
+  const start = String(item.startStation || '').trim();
+  const end = String(item.endStation || '').trim();
+  if (start || end) bits.push(start && end ? `Sta. ${start} to ${end}` : `Sta. ${start || end}`);
+  if (item.side) bits.push(item.side);
+  if (item.location) bits.push(item.location);
+  const calc = runPayItemCalc(item);
+  if (calc && calc.print) {
+    bits.push(calc.print);
+  } else if (!item.calc && (pcNum(item.length) != null || pcNum(item.width) != null)) {
+    // Reports from before the calculators kept Length/Width on their own.
+    bits.push([item.length, item.width].filter((v) => String(v ?? '').trim()).join(' × ') + ' ft');
+  }
+  const theo = pcNum(item.theoreticalQty);
+  if (theo != null) {
+    const q = pcNum(item.qty);
+    const diff = q != null ? Math.round((q - theo) * 1000) / 1000 : null;
+    bits.push(`Theoretical ${pcFmt(theo)}${item.unit ? ' ' + item.unit : ''}${diff != null && diff !== 0 ? `, ${diff > 0 ? 'over' : 'under'} by ${pcFmt(Math.abs(diff))}` : ''}`);
+  }
+  let line = bits.join(', ');
+  const remarks = String(item.remarks || '').trim();
+  if (remarks) line += `${line ? '. ' : ''}${remarks}`;
+  return line;
+}
+
 // `project` supplies the project-level starting values (from its uploaded
 // data file -- Project No./Contract Co./etc, plus optional "default" values
 // for most other fields) and `previous` is the most recent report already
@@ -244,6 +387,7 @@ async function makeBlankReport(nextReportNo, project, previous) {
       length: '',
       width: '',
       theoreticalQty: '',
+      remarks: '',
     })),
     controllingItem: meta.controllingItem || '',
     commentsOnTime: meta.commentsOnTime || '',
@@ -675,10 +819,10 @@ const DEFAULT_FIELD_ORDER = ORDERABLE_FIELD_DEFS.map((d) => d.key);
 // in whatever order the admin set. Every ORDERABLE_FIELD_DEFS key must
 // appear in exactly one group here.
 const REPORT_BUILDER_GROUPS = [
+  { id: 'payItems', icon: '\u{1F4CA}', label: 'Pay Items', keys: ['payItems'], hint: "What was worked on today and how much. Stations, sizes and remarks print on the line under each item. The printed table has 6 lines; anything that doesn't fit lists at the end of the Summary of Work Performed." },
   { id: 'overview', icon: '\u{1F4DD}', label: 'Overview', keys: ['activity', 'notes', 'representative', 'peName', 'ntpDate'] },
   { id: 'contractorsEquipment', icon: '\u{1F477}', label: 'Contractors & Equipment', keys: ['contractorsEquipment'], hint: '22 personnel/equipment rows are fixed by the template, but only ones already in use show by default -- use the "+" buttons to reveal more. You can rename any row, and quantities are per contractor tab.' },
   { id: 'workSummary', icon: '\u{270D}\u{FE0F}', label: 'Work Summary', keys: ['workSummary'] },
-  { id: 'payItems', icon: '\u{1F4CA}', label: 'Pay Items', keys: ['payItems'], hint: "No limit on how many you add. The printed template has room for 6 in the table itself; anything past that lists automatically at the end of the Summary of Work Performed, the same way it'd be written in by hand." },
   { id: 'controllingItem', icon: '\u{23F1}\u{FE0F}', label: 'Controlling Item & Time Charged', keys: ['controllingItem', 'commentsOnTime', 'controllingItemTimeFrom', 'controllingItemTimeTo'] },
   { id: 'siteConditions', icon: '\u{1F6A7}', label: 'Site Conditions', keys: ['workingConditions', 'trafficControlSelect', 'workBegin', 'workEnd'] },
   { id: 'weather', icon: '\u{1F324}\u{FE0F}', label: 'Weather', keys: ['weatherDesc', 'tempHigh', 'tempLow'] },

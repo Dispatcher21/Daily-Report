@@ -21,7 +21,7 @@ When to run what:
 
 ## What you need
 
-- Node 20 or newer, and Java 11 or newer (the Firestore emulator).
+- Node 22 or newer, and Java 11 or newer (the Firestore emulator).
 - The first run installs the tools into `tests/node_modules` and
   `functions/node_modules` (a few hundred MB), and creates a placeholder
   `functions/.secret.local`, which the emulator needs. Real emails are
@@ -59,7 +59,7 @@ When to run what:
 | weekly-roundup | Roundup contents, alerts, week and time zone math, preview button |
 | account-emails | Join request, approved, invite and password-changed emails |
 | admin-alerts | Admin security and problem emails, and the company-wide roundup |
-| quantities | Quantities, Log Quantities and Pay Apps pages: logged vs billed, item history, Excel, phone layout (tutorial project) |
+| quantities | Quantities, Log Quantities and Pay Apps pages: logged vs billed, item history, Excel, phone layout; the report editor's Pay Items (calculators, remarks, printed detail lines) (tutorial project) |
 
 ## Known quirk
 

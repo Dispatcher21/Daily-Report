@@ -89,9 +89,41 @@ const text = (p, sel) => p.textContent(sel).then((t) => t.replace(/\s+/g, ' ').t
   await p.click('#day-today');
   check('back to today', await p.inputValue('#f-date'), today);
 
+  // Report editor: Pay Items first and open, calculators, remarks, and the
+  // printed detail line under each item.
+  const rid = await p.evaluate(async (projectId) => {
+    const pr = await getProject(projectId);
+    pr.payItemCatalog.find((c) => c.itemNumber === '202-01').stations = true;
+    pr.payItemCatalog.find((c) => c.itemNumber === '202-01').side = true;
+    await saveProject(pr);
+    return (await getReportsForProject(projectId)).find((r) => String(r.reportNo) === '19').id;
+  }, pid);
+  await p.goto(`${B}/report-editor.html?project=${pid}&report=${rid}`); await settle();
+  check('Pay Items is the first section, open', await p.evaluate(() => [document.querySelector('#rb-groups .rb-group').id, document.querySelector('#rb-group-payItems').classList.contains('open')]), ['rb-group-payItems', true]);
+  check('one line per item', await p.$$eval('.rpi-item', (els) => els.map((e) => e.querySelector('.rpi-num').textContent)), ['502-01']);
+  await p.click('#rpi-add'); await p.fill('#rpi-search', 'removal'); await p.keyboard.press('Enter');
+  check('needs a quantity', await text(p, '#pay-items-tag'), '2 items · 1 needs a quantity');
+  await p.fill('.rpi-open [data-f=startStation]', '12+30'); await p.fill('.rpi-open [data-f=endStation]', '13+00');
+  await p.click('.rpi-open [data-side="Lt"]');
+  await p.click('.rpi-open [data-calcmenu]');
+  await p.fill('.rpi-open [data-c=w]', '12');
+  check('area from stations x width', await p.inputValue('.rpi-open [data-f=qty]'), '93.333');
+  await p.click('.rpi-open [data-remarks]'); await p.keyboard.type('Saw cut first');
+  await p.click('#rpi-add'); await p.fill('#rpi-search', '713'); await p.keyboard.press('Enter');
+  await p.click('.rpi-open [data-calcmenu]'); await p.keyboard.type('5');
+  check('Lump Sum percent', await p.inputValue('.rpi-open [data-f=qty]'), '1900');
+  await p.click('.rpi-open [data-open]');
+  check('closed item shows its details', await text(p, '.rpi-item:nth-child(2) .rpi-sum'), 'Sta. 12+30 to 13+00, Lt, 70 × 12 ft. Saw cut first');
+  const printed = await p.evaluate(() => { const v = buildSheet1Values(report); return { rows: [28, 29, 30, 31, 32].map((r) => [v['I' + r] || '', v['K' + r] || '', v['P' + r] || '']), small: [...v.smallCells], summary: v[RR_WORK_SUMMARY_CELL].includes('713-01') }; });
+  check('prints details on the line under the item', printed.rows.slice(0, 3), [['502-01', 'Asphalt Concrete', '104'], ['202-01', 'Removal of Existing Pavement', '93.333'], ['', 'Sta. 12+30 to 13+00, Lt, 70 × 12 ft. Saw cut first', '']]);
+  check('then the next item, details smaller', [printed.rows[3][0], printed.rows[4][1], printed.small], ['713-01', '5% complete', ['K30', 'K32']]);
+  await p.screenshot({ path: `${OUT}/report-payitems-desktop.png`, fullPage: true });
+  await Promise.all([p.waitForURL(/reports\.html/, { timeout: 30000 }), p.click('#btn-save-report')]);
+  check('saved with remarks and calculator', await p.evaluate(async (id) => { const r = await getReport(id); const it = r.payItems.find((x) => x.itemNumber === '202-01'); return [it.remarks, it.calc.type, it.calc.w, it.qty]; }, rid), ['Saw cut first', 'area', '12', '93.333']);
+
   // Phone width: nothing wider than the screen.
   await p.setViewportSize({ width: 390, height: 844 });
-  for (const page of [`quantity-sheet.html?project=${pid}`, `pay-apps.html?project=${pid}`, `quick-quantity.html?project=${pid}`, `project.html?id=${pid}`]) {
+  for (const page of [`quantity-sheet.html?project=${pid}`, `pay-apps.html?project=${pid}`, `quick-quantity.html?project=${pid}`, `project.html?id=${pid}`, `report-editor.html?project=${pid}&report=${rid}`]) {
     await p.goto(`${B}/${page}`); await settle();
     if (page.startsWith('quantity-sheet')) { await p.click('[data-range="all"]'); await p.click('button.qs-row[data-item="502-01"]'); }
     check(`phone fits: ${page.split('?')[0]}`, await p.evaluate(() => document.documentElement.scrollWidth - innerWidth), 0);

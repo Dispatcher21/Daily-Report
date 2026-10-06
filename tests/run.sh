@@ -61,7 +61,7 @@ for t in "${SUITES[@]}"; do
   [ -f "suites/$t.js" ] || { echo "No suite named $t (tests/run.sh --list)"; failed+=("$t"); continue; }
   for attempt in 1 2; do
     stop_emulators; start_emulators
-    SIMPLE_STORAGE=1 timeout 420 node "suites/$t.js" > "output/$t.log" 2>&1
+    SIMPLE_STORAGE=1 timeout 600 node "suites/$t.js" > "output/$t.log" 2>&1
     # A run that never got to a single check stalled during setup (an
     # occasional emulator hiccup, not a test result): try that once more.
     grep -qE "^(PASS|FAIL)" "output/$t.log" && break

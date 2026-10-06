@@ -176,8 +176,8 @@ function diffPayItems(before, after, out) {
     usedAfter.add(matchIdx);
     const a = realAfter[matchIdx];
     const rowLabel = `Pay Item ${b.itemNumber}${b.side ? ' (' + b.side + ')' : ''}`;
-    const fields = ['qty', 'startStation', 'endStation', 'location', 'side', 'length', 'width', 'theoreticalQty'];
-    const fieldLabels = { qty: 'Qty', startStation: 'Start Station', endStation: 'Stop Station', location: 'Location', side: 'Side', length: 'Length', width: 'Width', theoreticalQty: 'Theoretical Qty' };
+    const fields = ['qty', 'startStation', 'endStation', 'location', 'side', 'length', 'width', 'theoreticalQty', 'remarks'];
+    const fieldLabels = { qty: 'Qty', startStation: 'Start Station', endStation: 'Stop Station', location: 'Location', side: 'Side', length: 'Length', width: 'Width', theoreticalQty: 'Theoretical Qty', remarks: 'Remarks' };
     for (const f of fields) {
       if (fmtLeaf(b[f]) !== fmtLeaf(a[f])) out.push({ label: `${rowLabel} ${fieldLabels[f]}`, from: fmtLeaf(b[f]), to: fmtLeaf(a[f]) });
     }
