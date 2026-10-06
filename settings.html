@@ -57,6 +57,14 @@
     margin-left: auto; transition: transform 0.15s; flex: 0 0 auto;
   }
   details.settings-section[open] > summary .settings-section-chevron { transform: rotate(90deg); }
+  /* Account: role at the company, and the verify-your-email reminder. */
+  .account-role { margin: 0 0 0.5rem; font-size: 0.88rem; font-weight: 600; color: var(--text-dim); }
+  .account-verify {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 0.2rem 0.6rem;
+    padding: 0.5rem 0.75rem; font-size: 0.88rem;
+    background: var(--warn-bg); border: 1px solid var(--warn-border); border-radius: var(--radius-sm);
+  }
+  .account-verify .text-btn { padding: 0.1rem 0.2rem; min-height: 0; font-size: 0.88rem; }
   details.settings-section > summary .settings-section-sub {
     font-weight: 500; font-size: 0.8rem; opacity: 0.85; margin-left: 0.5rem;
   }
@@ -135,6 +143,20 @@
   .cm-project-actions label.btn-sm input[type="file"] { display: none; }
   .cm-project-row-controls[hidden] { display: none; }
   .cm-project-row-controls { width: 100%; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed var(--border); }
+
+  .team-enforce { border: 1.5px solid var(--border); border-radius: 12px; padding: 0.75rem 0.85rem; margin-bottom: 1rem; background: var(--surface-2); }
+  .team-enforce.is-on { border-color: var(--brand-light); }
+  .team-row-sub { font-size: 0.8rem; color: var(--text-dim); overflow-wrap: anywhere; }
+  .team-badge { display: inline-block; font-size: 0.72rem; font-weight: 700; padding: 0.05rem 0.45rem; border-radius: 999px; background: var(--surface-3); color: var(--text-dim); margin-left: 0.3rem; vertical-align: 1px; }
+  .team-badge-off { background: var(--danger-bg); color: var(--danger); }
+  .team-controls { width: 100%; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+  .team-controls select { width: auto; margin: 0; min-height: 2.25rem; padding: 0.3rem 0.5rem; }
+  .team-controls .btn-sm { margin-top: 0; }
+  .team-projects { margin-top: 0.4rem; }
+  .team-projects .team-project-list { margin: 0.3rem 0 0 1.6rem; }
+  .team-projects label.toggle-row { flex-direction: row; align-items: center; gap: 0.6rem; cursor: pointer; margin-bottom: 0.4rem; }
+  .team-project-panel { width: 100%; margin-top: 0.25rem; padding-top: 0.5rem; border-top: 1px dashed var(--border); }
+  .team-project-panel[hidden] { display: none; }
 
   .cm-password-grid { display: flex; flex-direction: column; gap: 1.5rem; }
   .cm-password-col h3 { font-size: 0.95rem; margin: 0 0 0.4rem; }
@@ -251,6 +273,33 @@
   <!-- =================== YOU =================== -->
   <div class="settings-panel" id="panel-you">
 
+    <details class="settings-section" id="account-section" open>
+      <summary>Account<span class="settings-section-chevron">&#9656;</span><span class="settings-section-sub" id="account-sub"></span></summary>
+      <div class="settings-section-body">
+        <div id="account-signed-out" hidden>
+          <p class="hint" style="margin-top:0;">You're using this device without an account. With one, you sign in on any phone or computer with your email and password, and your company admin can see who's who.</p>
+          <div style="display:flex; gap:0.6rem; flex-wrap:wrap;">
+            <a class="btn-primary" id="account-create-link" href="login.html?mode=create&amp;next=settings.html" style="text-align:center; text-decoration:none; width:auto; flex:1 1 12rem;">Create Account</a>
+            <a class="btn-secondary" id="account-signin-link" href="login.html?mode=signin&amp;next=settings.html" style="text-align:center; text-decoration:none; flex:1 1 12rem;">Sign In</a>
+          </div>
+        </div>
+        <div id="account-signed-in" hidden>
+          <p style="margin:0 0 0.5rem;">Signed in as <strong id="account-name"></strong> <span class="hint" style="display:inline;" id="account-email"></span></p>
+          <p class="account-role" id="account-role" hidden></p>
+          <div class="account-verify" id="account-verify" hidden>
+            <span>Check your email to verify your address.</span>
+            <button type="button" class="text-btn" id="btn-account-resend">Resend email</button>
+            <button type="button" class="text-btn" id="btn-account-recheck">I've verified it</button>
+          </div>
+          <div style="display:flex; gap:0.6rem; flex-wrap:wrap; margin-top:0.75rem;">
+            <button type="button" class="btn-secondary" id="btn-account-reset" style="margin-top:0;">Change Password</button>
+            <button type="button" class="btn-secondary" id="btn-account-signout" style="margin-top:0;">Sign Out</button>
+          </div>
+          <div class="success" id="account-notice" hidden style="margin-top:0.75rem;"></div>
+        </div>
+      </div>
+    </details>
+
     <details class="settings-section" open>
       <summary>Profile<span class="settings-section-chevron">&#9656;</span></summary>
       <div class="settings-section-body">
@@ -295,6 +344,14 @@
 
         <p class="hint" style="margin:1rem 0 0.4rem;">Stuck on an old version? An installed app can sit resumed from the background for days without ever fully reloading, so an update can be sitting ready without you actually seeing it. This clears everything cached on this device and reloads fresh -- nothing you've saved is affected.</p>
         <button type="button" class="btn-secondary" id="btn-force-update">Force Update</button>
+      </div>
+    </details>
+
+    <details class="settings-section" id="tutorial-section">
+      <summary>Tutorial<span class="settings-section-chevron">&#9656;</span><span class="settings-section-sub">Explore the app with an example project</span></summary>
+      <div class="settings-section-body">
+        <p class="hint" id="tutorial-section-text" style="margin:0 0 0.6rem;">Opens an example project with sample reports, photos, approvals, and a Pay App to explore. It's kept completely separate from your real projects and is never synced -- exit any time.</p>
+        <a class="btn-primary" id="btn-tutorial" href="tutorial.html" style="display:block; text-align:center; text-decoration:none;">Start Tutorial</a>
       </div>
     </details>
 
@@ -594,6 +651,56 @@
           </div>
         </details>
 
+        <details class="settings-section" id="team-section">
+          <summary>Team<span class="settings-section-chevron">&#9656;</span><span class="settings-section-sub" id="team-sub">Who's in, their role, and their projects</span></summary>
+          <div class="settings-section-body">
+            <div id="team-signed-out" hidden>
+              <p class="hint" style="margin-top:0;">Sign in with an account to manage your team. Only people who use an account show up here.</p>
+              <a class="btn-secondary" href="login.html?mode=signin&amp;next=settings.html" style="display:inline-block; text-align:center; text-decoration:none;">Sign In</a>
+            </div>
+            <div id="team-body" hidden>
+              <div class="team-enforce" id="team-enforce">
+                <label class="toggle-row" for="team-accounts-required" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-bottom:0.25rem;">
+                  <input type="checkbox" id="team-accounts-required">
+                  <span><strong>Require everyone to sign in</strong></span>
+                </label>
+                <p class="hint" style="margin:0;" id="team-enforce-hint"></p>
+              </div>
+              <label class="toggle-row" for="team-require-approval" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-bottom:0.25rem;">
+                <input type="checkbox" id="team-require-approval">
+                <span>New people need my approval to join</span>
+              </label>
+              <p class="hint" style="margin-top:0;">When on, someone who signs in and enters the company password waits here until you approve them. Pre-approved emails below skip the wait.</p>
+
+              <div id="team-pending-wrap" hidden>
+                <p class="settings-subhead">Waiting for Approval</p>
+                <div id="team-pending"></div>
+              </div>
+
+              <p class="settings-subhead">Members</p>
+              <div id="team-members"></div>
+              <p class="hint">People still using the company password without an account don't appear here.</p>
+
+              <p class="settings-subhead">Pre-approved Emails</p>
+              <p class="hint" style="margin-top:0;">Add someone's email and they join with the role and projects you pick as soon as they create an account and verify that email. No company password needed.</p>
+              <div id="team-invites"></div>
+              <details class="company-details" id="team-invite-details" style="margin-top:0.6rem;">
+                <summary>Add an Email</summary>
+                <label>Email
+                  <input type="email" id="team-invite-email" autocomplete="off" placeholder="name@company.com">
+                </label>
+                <label>Role
+                  <select id="team-invite-role"></select>
+                </label>
+                <div class="team-projects" id="team-invite-projects"></div>
+                <button type="button" class="btn-primary" id="btn-team-invite" style="margin-top:0.5rem;">Pre-approve Email</button>
+              </details>
+              <div class="success" id="team-status" hidden style="margin-top:0.75rem;"></div>
+              <div class="err" id="team-error" hidden style="margin-top:0.75rem;"></div>
+            </div>
+          </div>
+        </details>
+
         <details class="settings-section">
           <summary>Access &amp; Members<span class="settings-section-chevron">&#9656;</span></summary>
           <div class="settings-section-body">
@@ -629,6 +736,7 @@
             </label>
 
             <p class="settings-subhead">Custom Setups</p>
+            <div class="err" id="cs-enforced-note" hidden>Your company requires everyone to sign in, so custom setup passwords don't work right now. Limit people's projects on the Team screen instead.</div>
             <p class="hint">A named, project-scoped password -- e.g. an inspector who should only ever see one project. Same permission options as above, applied only within the project(s) checked below.</p>
 
             <div id="cs-list-empty" class="empty-state" hidden style="padding:1.25rem;">No custom setups yet.</div>
@@ -780,6 +888,14 @@ function setSettingsTab(tab) {
   try { history.replaceState(null, '', tab === 'company' ? '?tab=company' : 'settings.html'); } catch (e) {}
 }
 $$('.settings-tab').forEach((b) => b.addEventListener('click', () => setSettingsTab(b.dataset.tab)));
+
+// Tutorial section: Start, or Exit while already in tutorial mode.
+$('#tutorial-section').hidden = !TUTORIAL_AVAILABLE && !inTutorialMode();
+if (inTutorialMode()) {
+  $('#tutorial-section-text').textContent = "You're in the tutorial now. Exiting clears the example data and takes you back to your own projects.";
+  $('#btn-tutorial').textContent = 'Exit Tutorial';
+  $('#btn-tutorial').href = 'tutorial.html?exit=1';
+}
 
 // A quick edit-pencil reveals its neighbouring controls block and stays
 // revealed -- one click, no need to hide it again for something this small.
@@ -1169,9 +1285,11 @@ async function refreshCompanySection() {
     return;
   }
 
-  $('#company-line').textContent = room.isAdmin
-    ? `Connected to "${room.name || 'your company'}" — Admin`
-    : `Connected to "${room.name || 'your company'}"`;
+  // A signed-in member's role comes from their member record; otherwise
+  // it's just admin or not, as before.
+  const member = await getMyMembership().catch(() => null);
+  const roleLabel = member ? MEMBER_ROLE_LABELS[member.role] : (room.isAdmin ? 'Admin' : '');
+  $('#company-line').textContent = `Connected to "${room.name || 'your company'}"${roleLabel ? ` \u00b7 ${roleLabel}` : ''}`;
 
   $('#company-admin-only').hidden = !room.isAdmin;
   $('#company-unlock-admin').hidden = room.isAdmin;
@@ -1193,6 +1311,7 @@ async function refreshCompanySection() {
     await renderCmProjects();
     await renderCmActivity();
     await renderCsList();
+    await renderTeam();
 
     themesCache = await getAllCompanyThemes();
     resetThemeForm();
@@ -2410,10 +2529,344 @@ $('#btn-save-user-name').addEventListener('click', async () => {
     return;
   }
   await saveUserName(name);
+  // Keeps a signed-in account's name (and its company member record) the same.
+  await updateAccountName(name).catch((err) => console.error('account name:', err));
+  renderAccount();
   const el = $('#user-name-saved');
   el.hidden = false;
   clearTimeout(el._t);
   el._t = setTimeout(() => { el.hidden = true; }, 2500);
+});
+
+// ---------- Team ----------
+//
+// Signed-in admins only: everyone with an account in this company, their
+// role and project access, people waiting on approval, and pre-approved
+// emails. (Devices still on the plain company password don't have a
+// member record, so they don't appear.)
+
+let teamState = { members: [], invites: [], projects: [], myUid: null, accountsRequired: false };
+
+function teamStatus(text) {
+  const el = $('#team-status');
+  $('#team-error').hidden = true;
+  el.textContent = text;
+  el.hidden = false;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.hidden = true; }, 3000);
+}
+function teamError(text) {
+  $('#team-status').hidden = true;
+  $('#team-error').textContent = text;
+  $('#team-error').hidden = false;
+}
+
+function teamRoleOptions(selected) {
+  return MEMBER_ROLES.map((r) => `<option value="${r}"${r === selected ? ' selected' : ''}>${MEMBER_ROLE_LABELS[r]}</option>`).join('');
+}
+
+function teamProjectSummary(projectIds) {
+  if (!Array.isArray(projectIds)) return 'All projects';
+  if (!projectIds.length) return 'No projects';
+  const names = new Map(teamState.projects.map((p) => [p.id, p.name]));
+  return projectIds.map((id) => names.get(id) || '(deleted project)').join(', ');
+}
+
+// "All projects" plus one checkbox per project; selectedIds null = all.
+function teamProjectPicker(selectedIds) {
+  const all = !Array.isArray(selectedIds);
+  const chosen = new Set(all ? [] : selectedIds);
+  return `
+    <label class="toggle-row"><input type="checkbox" data-team-all${all ? ' checked' : ''}><span>All projects (including new ones)</span></label>
+    <div class="team-project-list">${teamState.projects.map((p) => `
+      <label class="toggle-row"><input type="checkbox" class="team-project-check" value="${p.id}"${chosen.has(p.id) ? ' checked' : ''}${all ? ' disabled' : ''}><span>${escapeHtml(p.name)}</span></label>`).join('')
+    || '<p class="hint" style="margin:0;">No projects yet.</p>'}
+    </div>`;
+}
+
+// null = all projects; throws if limited to nothing.
+function readTeamPicker(container) {
+  if (container.querySelector('[data-team-all]').checked) return null;
+  const ids = Array.from(container.querySelectorAll('.team-project-check:checked')).map((cb) => cb.value);
+  if (!ids.length) throw new Error('Pick at least one project, or choose All projects.');
+  return ids;
+}
+
+function teamMemberName(m) {
+  return m.displayName || m.email || 'Unnamed';
+}
+
+function renderTeamLists() {
+  const { members, invites, myUid } = teamState;
+  const pending = members.filter((m) => m.status === 'pending');
+  const roster = members
+    .filter((m) => m.status !== 'pending')
+    .sort((a, b) => MEMBER_ROLES.indexOf(b.role) - MEMBER_ROLES.indexOf(a.role) || teamMemberName(a).localeCompare(teamMemberName(b)));
+
+  $('#team-pending-wrap').hidden = !pending.length;
+  $('#team-pending').innerHTML = pending.map((m) => `
+    <div class="cm-project-row" data-uid="${m.uid}">
+      <div>
+        <div class="cm-project-name">${escapeHtml(teamMemberName(m))}</div>
+        <div class="team-row-sub">${escapeHtml(m.email || '')}</div>
+      </div>
+      <div class="cm-project-actions">
+        <button type="button" class="btn-sm" data-team-approve>Approve</button>
+        <button type="button" class="btn-sm btn-sm-danger" data-team-decline>Decline</button>
+      </div>
+    </div>`).join('');
+
+  $('#team-members').innerHTML = roster.map((m) => {
+    const me = m.uid === myUid;
+    const off = m.status === 'disabled';
+    return `
+    <div class="cm-project-row" data-uid="${m.uid}">
+      <div>
+        <div class="cm-project-name">${escapeHtml(teamMemberName(m))}${me ? ' <span class="team-badge">You</span>' : ''}${off ? ' <span class="team-badge team-badge-off">Turned off</span>' : ''}</div>
+        <div class="team-row-sub">${escapeHtml(m.email || '')} &middot; ${m.role === 'admin' ? 'All projects' : escapeHtml(teamProjectSummary(m.projectIds))}</div>
+      </div>
+      <div class="team-controls">
+        <select data-team-role aria-label="Role for ${escapeHtml(teamMemberName(m))}">${teamRoleOptions(m.role)}</select>
+        ${m.role === 'admin' ? '' : '<button type="button" class="btn-sm" data-team-projects>Projects</button>'}
+        ${me ? '' : `<button type="button" class="btn-sm" data-team-toggle>${off ? 'Turn On' : 'Turn Off'}</button>`}
+        ${me ? '' : '<button type="button" class="btn-sm btn-sm-danger" data-team-remove>Remove</button>'}
+      </div>
+      <div class="team-project-panel team-projects" hidden></div>
+    </div>`;
+  }).join('') || '<p class="hint" style="margin:0;">No one yet.</p>';
+
+  $('#team-invites').innerHTML = invites.map((inv, i) => `
+    <div class="cm-project-row" data-invite="${i}">
+      <div>
+        <div class="cm-project-name">${escapeHtml(inv.email)}</div>
+        <div class="team-row-sub">${escapeHtml(MEMBER_ROLE_LABELS[inv.role] || 'Inspector')} &middot; ${inv.role === 'admin' ? 'All projects' : escapeHtml(teamProjectSummary(inv.projectIds))}${inv.invitedBy ? ` &middot; added by ${escapeHtml(inv.invitedBy)}` : ''}</div>
+      </div>
+      <div class="cm-project-actions">
+        <button type="button" class="btn-sm btn-sm-danger" data-invite-remove>Remove</button>
+      </div>
+    </div>`).join('') || '<p class="hint" style="margin:0;">None yet.</p>';
+
+  const waiting = pending.length ? ` · ${pending.length} waiting` : '';
+  $('#team-sub').textContent = `${roster.length} member${roster.length === 1 ? '' : 's'}${waiting}`;
+}
+
+async function renderTeam() {
+  const account = await getAccount().catch(() => null);
+  $('#team-signed-out').hidden = !!account;
+  $('#team-body').hidden = !account;
+  if (!account) {
+    $('#team-sub').textContent = "Who's in, their role, and their projects";
+    return;
+  }
+  const room = await getCompanyRoom();
+  teamState.myUid = account.uid;
+  teamState.projects = (await getAllProjects()).filter((p) => projectInScope(p, room)).sort((a, b) => a.name.localeCompare(b.name));
+  $('#team-invite-role').innerHTML = teamRoleOptions('inspector');
+  $('#team-invite-projects').innerHTML = teamProjectPicker(null);
+  $('#team-invite-projects').hidden = false;
+  try {
+    const team = await listTeam();
+    teamState.members = team.members;
+    teamState.invites = team.invites;
+    $('#team-require-approval').checked = team.requireApproval;
+    teamState.accountsRequired = team.accountsRequired;
+    $('#cs-enforced-note').hidden = !team.accountsRequired;
+    renderTeamEnforce();
+    renderTeamLists();
+  } catch (err) {
+    console.error(err);
+    teamError(navigator.onLine ? "Couldn't load the team: " + err.message : "You're offline. The team list needs a connection.");
+  }
+}
+
+function renderTeamEnforce() {
+  const on = teamState.accountsRequired;
+  $('#team-accounts-required').checked = on;
+  $('#team-enforce').classList.toggle('is-on', on);
+  $('#team-enforce-hint').textContent = on
+    ? 'On: only the active members below can see company data, and project limits are enforced. Devices without an account are asked to sign in. Custom setup passwords and the admin password no longer work; manage admins here instead. Turn this off anytime to go back to password-only access.'
+    : 'Off: anyone with the company password can use company data, as before. Turn this on once everyone below has an account. You can turn it off again anytime.';
+}
+
+$('#team-accounts-required').addEventListener('change', (e) => {
+  const on = e.target.checked;
+  if (on) {
+    const active = teamState.members.filter((m) => m.status === 'active').length;
+    const ok = confirm(`Require everyone to sign in?\n\nOnly the ${active} active member${active === 1 ? '' : 's'} on this list will be able to see company data. Anyone using just the company password will be asked to sign in or create an account, and custom setup passwords stop working.\n\nYou can turn this off again anytime.`);
+    if (!ok) { e.target.checked = false; return; }
+  }
+  teamChange(() => setAccountsRequired(on), on ? 'Everyone now needs to sign in.' : 'Password-only access is back on.');
+});
+
+// Runs a change, then re-reads the team. A change to your own record can
+// change what this device is allowed to do, so the whole tab redraws.
+async function teamChange(fn, done, uid) {
+  try {
+    await fn();
+    if (uid && uid === teamState.myUid) await refreshCompanySection();
+    else await renderTeam();
+    if (done) teamStatus(done);
+  } catch (err) {
+    console.error(err);
+    teamError(err.message);
+    await renderTeam().catch(() => {});
+  }
+}
+
+// Ticking "All projects" greys out the individual boxes.
+$('#team-section').addEventListener('change', (e) => {
+  if (!e.target.matches('[data-team-all]')) return;
+  const box = e.target.closest('.team-projects');
+  box.querySelectorAll('.team-project-check').forEach((cb) => { cb.disabled = e.target.checked; });
+});
+
+$('#team-require-approval').addEventListener('change', (e) => {
+  const on = e.target.checked;
+  teamChange(() => setRequireApproval(on), on ? 'New people will wait for your approval.' : 'Anyone with the company password can join.');
+});
+
+$('#team-pending').addEventListener('click', (e) => {
+  const row = e.target.closest('[data-uid]');
+  if (!row) return;
+  const uid = row.dataset.uid;
+  const m = teamState.members.find((x) => x.uid === uid);
+  if (e.target.closest('[data-team-approve]')) {
+    teamChange(() => approveTeamMember(uid), `${teamMemberName(m)} approved as an Inspector with all projects. Change that below if needed.`);
+  } else if (e.target.closest('[data-team-decline]')) {
+    if (!confirm(`Decline ${teamMemberName(m)}'s request to join?`)) return;
+    teamChange(() => removeTeamMember(uid), 'Request declined.');
+  }
+});
+
+$('#team-members').addEventListener('change', (e) => {
+  if (!e.target.matches('[data-team-role]')) return;
+  const uid = e.target.closest('[data-uid]').dataset.uid;
+  const m = teamState.members.find((x) => x.uid === uid);
+  const role = e.target.value;
+  if (uid === teamState.myUid && role !== 'admin' && !confirm("Change your own role? You'll lose admin access on this device.")) {
+    e.target.value = m.role;
+    return;
+  }
+  teamChange(() => updateTeamMember(uid, { role }), `${teamMemberName(m)} is now ${/^[aeiou]/i.test(MEMBER_ROLE_LABELS[role]) ? 'an' : 'a'} ${MEMBER_ROLE_LABELS[role]}.`, uid);
+});
+
+$('#team-members').addEventListener('click', (e) => {
+  const row = e.target.closest('[data-uid]');
+  if (!row) return;
+  const uid = row.dataset.uid;
+  const m = teamState.members.find((x) => x.uid === uid);
+  if (!m) return;
+  if (e.target.closest('[data-team-projects]')) {
+    const panel = row.querySelector('.team-project-panel');
+    if (!panel.hidden) { panel.hidden = true; return; }
+    panel.innerHTML = teamProjectPicker(m.projectIds) +
+      '<button type="button" class="btn-sm" data-team-save-projects style="margin-top:0.3rem;">Save Projects</button>';
+    panel.hidden = false;
+  } else if (e.target.closest('[data-team-save-projects]')) {
+    let projectIds;
+    try { projectIds = readTeamPicker(row.querySelector('.team-project-panel')); } catch (err) { teamError(err.message); return; }
+    teamChange(() => updateTeamMember(uid, { projectIds }), `${teamMemberName(m)}'s projects saved. They'll see the change next time their device syncs.`, uid);
+  } else if (e.target.closest('[data-team-toggle]')) {
+    const turnOff = m.status !== 'disabled';
+    if (turnOff && !confirm(`Turn off ${teamMemberName(m)}'s access? Their device leaves the company the next time it syncs. Their reports stay.`)) return;
+    teamChange(() => updateTeamMember(uid, { status: turnOff ? 'disabled' : 'active' }), turnOff ? `${teamMemberName(m)}'s access is off.` : `${teamMemberName(m)}'s access is back on.`);
+  } else if (e.target.closest('[data-team-remove]')) {
+    if (!confirm(`Remove ${teamMemberName(m)} from the team? Their device leaves the company the next time it syncs. Their reports stay. You can pre-approve their email again later.`)) return;
+    teamChange(() => removeTeamMember(uid), `${teamMemberName(m)} removed.`);
+  }
+});
+
+$('#team-invites').addEventListener('click', (e) => {
+  if (!e.target.closest('[data-invite-remove]')) return;
+  const inv = teamState.invites[Number(e.target.closest('[data-invite]').dataset.invite)];
+  if (!inv) return;
+  teamChange(() => cancelTeamInvite(inv.email), `${inv.email} is no longer pre-approved.`);
+});
+
+$('#team-invite-role').addEventListener('change', (e) => {
+  $('#team-invite-projects').hidden = e.target.value === 'admin';
+});
+
+$('#btn-team-invite').addEventListener('click', () => {
+  const email = $('#team-invite-email').value.trim().toLowerCase();
+  const role = $('#team-invite-role').value;
+  let projectIds = null;
+  if (role !== 'admin') {
+    try { projectIds = readTeamPicker($('#team-invite-projects')); } catch (err) { teamError(err.message); return; }
+  }
+  teamChange(async () => {
+    await inviteTeamMember({ email, role, projectIds });
+    $('#team-invite-email').value = '';
+    $('#team-invite-details').open = false;
+  }, `${email} is pre-approved. They join as soon as they create an account with that email and verify it.`);
+});
+
+// ---------- Account ----------
+
+async function renderAccount() {
+  const account = await getAccount().catch(() => null);
+  const offline = !navigator.onLine;
+  $('#account-signed-out').hidden = !!account;
+  $('#account-signed-in').hidden = !account;
+  $('#account-sub').textContent = account ? account.email : (offline ? '' : 'Not signed in');
+  if (!account) return;
+  $('#account-name').textContent = (await getUserName()) || account.displayName || '';
+  $('#account-email').textContent = `(${account.email})`;
+  $('#account-verify').hidden = account.emailVerified;
+  const member = await getMyMembership().catch(() => null);
+  const room = await getCompanyRoom();
+  const roleEl = $('#account-role');
+  roleEl.hidden = !(member && room);
+  if (member && room) {
+    const projects = Array.isArray(member.projectIds)
+      ? `${member.projectIds.length} project${member.projectIds.length === 1 ? '' : 's'}`
+      : 'all projects';
+    roleEl.textContent = `${MEMBER_ROLE_LABELS[member.role] || 'Inspector'} at ${room.name || 'your company'} \u00b7 ${projects}`;
+  }
+}
+
+function accountNotice(text) {
+  const el = $('#account-notice');
+  el.textContent = text;
+  el.hidden = false;
+}
+
+$('#btn-account-resend').addEventListener('click', async () => {
+  try {
+    await resendAccountVerification();
+    accountNotice('Verification email sent. Check your spam folder too.');
+  } catch (err) {
+    alert(err.message);
+  }
+});
+$('#btn-account-recheck').addEventListener('click', async () => {
+  const account = await reloadAccount().catch(() => null);
+  await renderAccount();
+  if (account && !account.emailVerified) accountNotice("Not verified yet. Click the link in the email, then try again.");
+});
+$('#btn-account-reset').addEventListener('click', async () => {
+  const account = await getAccount();
+  if (!account) return;
+  try {
+    await sendAccountPasswordReset(account.email);
+    accountNotice(`A link to change your password was sent to ${account.email}.`);
+  } catch (err) {
+    alert(err.message);
+  }
+});
+$('#btn-account-signout').addEventListener('click', async () => {
+  const room = await getCompanyRoom();
+  const ok = confirm(room
+    ? `Sign out? This device will also leave ${room.name || 'your company'}, keeping only the reports you created or edited. Signing back in reconnects everything.`
+    : 'Sign out of your account on this device?');
+  if (!ok) return;
+  try {
+    await signOutAccount();
+    location.href = 'login.html';
+  } catch (err) {
+    console.error(err);
+    alert(userError("Couldn't sign out: " + err.message, 'ACCOUNT_SIGN_OUT'));
+  }
 });
 
 // ---------- Init ----------
@@ -2447,6 +2900,7 @@ setSettingsTab(queryParam('tab') === 'company' ? 'company' : 'you');
     $('#sync-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
   await refreshCompanySection();
+  await renderAccount();
 })();
 </script>
 </body>

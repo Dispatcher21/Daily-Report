@@ -2,6 +2,14 @@
 // photo/signature blobs) on-device. No library needed.
 
 const DB_NAME = 'daily-report-app';
+// Tutorial mode (see tutorial.html) uses its own separate database, so
+// nothing done during the tutorial can ever touch real projects/reports.
+// The flag lives in sessionStorage: it ends when this tab/window closes.
+const TUTORIAL_DB_NAME = 'daily-report-tutorial';
+const TUTORIAL_FLAG_KEY = 'dr-tutorial';
+function isTutorialMode() {
+  try { return sessionStorage.getItem(TUTORIAL_FLAG_KEY) === '1'; } catch (e) { return false; }
+}
 const DB_VERSION = 6;
 const REPORTS_STORE = 'reports';
 const PROJECTS_STORE = 'projects';
@@ -14,7 +22,9 @@ const USER_NAME_SETTING_KEY = 'userName';
 
 function openDb() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    // Checked on every open, not once at load, so tutorial.html can switch
+    // into tutorial mode and immediately write the example data.
+    const req = indexedDB.open(isTutorialMode() ? TUTORIAL_DB_NAME : DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains(REPORTS_STORE)) {
@@ -36,7 +46,13 @@ function openDb() {
         db.createObjectStore(COMPANY_THEMES_STORE, { keyPath: 'id' });
       }
     };
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => {
+      const db = req.result;
+      // Let go when something asks to delete/upgrade this database (e.g.
+      // clearing the tutorial copy) instead of blocking it indefinitely.
+      db.onversionchange = () => db.close();
+      resolve(db);
+    };
     req.onerror = () => reject(req.error);
   });
 }
@@ -324,6 +340,14 @@ async function deleteReportLocalOnly(id) {
 // and so this file never needs to import anything sync-related itself.
 // Fired without awaiting: a company push shouldn't make the caller wait for
 // a save that's already durable in IndexedDB by this point.
+// The signed-in account's Firebase user id (see firebase-sync.js's
+// Accounts section), or null on a device without an account. Read straight
+// off the Firebase bridge so this file still needs nothing sync-related.
+function currentAccountUid() {
+  const user = window.FirebaseCore && window.FirebaseCore.auth && window.FirebaseCore.auth.currentUser;
+  return user && !user.isAnonymous ? user.uid : null;
+}
+
 async function saveReport(report) {
   // Needed before the write for the audit hook to diff against -- a no-op
   // extra read when nothing's listening (logAuditableChange undefined).
@@ -332,6 +356,12 @@ async function saveReport(report) {
   if (userName) {
     if (!report.createdBy) report.createdBy = userName; // set once, never overwritten by a later editor
     report.lastEditedBy = userName;
+  }
+  // The same, by account -- unlike a typed name, unique to one person.
+  const uid = currentAccountUid();
+  if (uid) {
+    if (!report.createdByUid && (!report.createdBy || report.createdBy === userName)) report.createdByUid = uid;
+    report.lastEditedByUid = uid;
   }
   report.updatedAt = Date.now();
   await putReportRaw(report);

@@ -3,6 +3,25 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.046 -- 2026-10-06
+  - Accounts (optional). Sign in with an email and password, or keep
+    using the company password exactly as before: nothing changes for
+    anyone who doesn't create an account. Settings > You > Account.
+  - Team screen for admins (Settings > Company > Team): everyone with an
+    account, their role (Inspector, Manager, Admin) and which projects
+    they can see; turn someone off or remove them; approve new people
+    before they can join; and pre-approve emails so someone joins with
+    the right role and projects as soon as they sign up.
+  - "Require everyone to sign in" switch on the Team screen. Off (the
+    default) keeps password-only access. On, only active members can
+    see company data, project limits are enforced, and the activity log
+    can't be edited or erased. Turn it off anytime to go back.
+  - Fixed a company logo and home-screen themes carrying over from a
+    company a device used to be in.
+  - Fixed changing the company password leaving the projects behind;
+    members, pre-approved emails, themes and history now come along too.
+  - Sync Now keeps going if one change is refused and tells you which.
+
 0.045 -- 2026-10-05
   - Pay Apps page rebuilt. Recorded Pay Apps are listed on the left with
     their date, status, amount billed and comment count; picking one (or
