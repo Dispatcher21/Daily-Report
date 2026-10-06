@@ -125,7 +125,7 @@ approvalBy/approvalByUid and a comments[] thread (storage.js:
 saveReportApproval, saveBillingEstimateApproval). A comment with parentId
 is a reply. The report's author may always reply on their own report.
 
-Cloud Functions (functions/, Node 20, us-central1). Email goes through
+Cloud Functions (functions/, Node 22, us-central1). Email goes through
 Resend (sendEmail; sender in functions/.env, key in the RESEND_API_KEY
 secret). Emails never contain links. In the emulator, sendEmail writes to
 a devOutbox collection instead.

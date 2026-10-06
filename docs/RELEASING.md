@@ -9,7 +9,11 @@ Everything waiting to be applied to the live Firebase project
 (`daily-reports-53c82`). Add to this list as you go; clear it once the
 owner has applied it.
 
-_Nothing pending._ (Last applied: 0.0521, 2026-10-06: rules with
+- **Functions deploy, all of them** (step 2 below): the functions now run
+  on Node.js 22 (Node 20 stops accepting deploys on 2026-10-30). No code
+  changes; every function is redeployed on the new runtime.
+
+(Last applied: 0.0521, 2026-10-06: rules with
 separate approve and comment permissions; onCompanyUpdated redeployed.
 0.052: weeklyRoundup and sendRoundupPreview. 0.051: rules with the
 `problems` section; every email function.)

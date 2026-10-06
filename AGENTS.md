@@ -105,7 +105,7 @@ the emulator tests are what check rules and functions before they ship.
 
 ### Cloud Functions (`functions/`)
 
-Node 20, region `us-central1`. All email goes through Resend
+Node 22, region `us-central1`. All email goes through Resend
 (`sendEmail` in `functions/index.js`); the sender is `MAIL_FROM` in
 `functions/.env`.
 

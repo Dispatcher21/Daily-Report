@@ -21,7 +21,7 @@ When to run what:
 
 ## What you need
 
-- Node 20 or newer, and Java 11 or newer (the Firestore emulator).
+- Node 22 or newer, and Java 11 or newer (the Firestore emulator).
 - The first run installs the tools into `tests/node_modules` and
   `functions/node_modules` (a few hundred MB), and creates a placeholder
   `functions/.secret.local`, which the emulator needs. Real emails are
