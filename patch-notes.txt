@@ -3,6 +3,14 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.048 -- 2026-10-06
+  - No more "verify your email" emails: creating an account just works.
+  - Change your password right in Settings (enter your current one and a
+    new one). No email involved.
+  - Pre-approved emails join straight away when they sign up. They can
+    be Inspectors or Managers; make someone an Admin from the Team list
+    once they've joined.
+
 0.047 -- 2026-10-06
   - Links in account emails (verify your email, reset your password)
     now open a page on inspector-manager.com instead of a Firebase

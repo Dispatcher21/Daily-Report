@@ -599,7 +599,6 @@ async function createAccount({ name, email, password }) {
   }
   resetSignIn();
   await authApi.updateProfile(user, { displayName: name });
-  authApi.sendEmailVerification(user).catch((err) => console.error('verification email:', err));
   await saveUserName(name);
   await writeAccountProfile(user.uid, { email: user.email, displayName: name });
   await refreshMembership();
@@ -712,6 +711,25 @@ async function sendAccountPasswordReset(email) {
   const { auth, authApi } = await waitForFirebaseCore();
   try {
     await authApi.sendPasswordResetEmail(auth, email);
+  } catch (err) {
+    throw new Error(accountErrorMessage(err));
+  }
+}
+
+// Changes the password while signed in -- no email needed, just the
+// current password.
+async function changeAccountPassword(current, next) {
+  const { auth, authApi } = await waitForFirebaseCore();
+  const user = auth.currentUser;
+  if (!user || user.isAnonymous) throw new Error('Not signed in.');
+  if ((next || '').length < ACCOUNT_MIN_PASSWORD) throw new Error(`Choose a password with at least ${ACCOUNT_MIN_PASSWORD} characters.`);
+  try {
+    await authApi.reauthenticateWithCredential(user, authApi.EmailAuthProvider.credential(user.email, current || ''));
+  } catch (err) {
+    throw new Error(['auth/invalid-credential', 'auth/wrong-password', 'auth/invalid-login-credentials'].includes(err.code) ? 'Your current password isn’t right.' : accountErrorMessage(err));
+  }
+  try {
+    await authApi.updatePassword(user, next);
   } catch (err) {
     throw new Error(accountErrorMessage(err));
   }
@@ -933,14 +951,13 @@ async function getMyInvite() {
   return snap && snap.exists() ? snap.data() : null;
 }
 
-// Joins the company this account's email was pre-approved for -- only once
-// the email is verified, so nobody can claim an invite by signing up with
-// someone else's address.
+// Joins the company this account's email was pre-approved for. Emails
+// aren't verified (verification emails got flagged as phishing), so a
+// pre-approval can never make someone an admin -- see inviteTeamMember --
+// and the admin sees everyone who joins on the Team screen.
 async function acceptMyInvite(onProgress) {
-  const account = await reloadAccount();
+  const account = await getAccount();
   if (!account) throw new Error('Sign in first.');
-  if (!account.emailVerified) throw new Error('Verify your email first: click the link we sent you, then try again.');
-  await (await waitForFirebaseCore()).auth.currentUser.getIdToken(true); // the server checks "verified" on this token
   const invite = await getMyInvite();
   if (!invite) throw new Error('No invitation was found for your email.');
   const { db } = await waitForFirebaseCore();
@@ -950,7 +967,7 @@ async function acceptMyInvite(onProgress) {
   const name = (await getUserName()) || account.displayName || '';
   await setDoc(doc(db, 'companies', invite.companyCode, 'members', account.uid), {
     uid: account.uid, email: account.email, displayName: name,
-    role: MEMBER_ROLES.includes(invite.role) ? invite.role : 'inspector',
+    role: invite.role === 'manager' ? 'manager' : 'inspector',
     status: 'active',
     projectIds: Array.isArray(invite.projectIds) ? invite.projectIds : null,
     invitedBy: invite.invitedBy || '',
@@ -1056,6 +1073,7 @@ async function inviteTeamMember({ email, role, projectIds }) {
   const { room, account, db } = await requireTeamAdmin();
   const id = inviteDocId(email);
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(id)) throw new Error('Enter a valid email address.');
+  if (role === 'admin') throw new Error('A pre-approved email can be an Inspector or Manager. Make someone an Admin from the Team list once they join.');
   const { doc, getDoc, setDoc, serverTimestamp } = await import(FIRESTORE_SDK);
   const existing = await getDoc(doc(db, 'invites', id)).catch(() => null);
   if (existing && existing.exists() && existing.data().companyCode !== room.code) throw new Error('That email has already been invited by another company.');
