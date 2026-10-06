@@ -11,7 +11,7 @@ function escapeHtml(str) {
 
 // The app's version, shown at the bottom of every page as a link to the
 // patch notes. Bump it together with each new patch-notes.txt entry.
-const APP_VERSION = '0.045';
+const APP_VERSION = '0.046';
 document.addEventListener('DOMContentLoaded', () => {
   const main = document.querySelector('main');
   if (!main) return;
@@ -48,8 +48,10 @@ document.addEventListener('DOMContentLoaded', () => {
 // once, and either answer marks it 'done' so it never comes back. The
 // tutorial stays reachable from the menu and Settings afterward.
 const TUTORIAL_OFFER_KEY = 'dr-tutorial-offer';
+// The tutorial is still being finished, so only the test site offers it.
+const TUTORIAL_AVAILABLE = ['daily-report.john-sonnieriii.workers.dev', 'localhost', '127.0.0.1'].includes(location.hostname);
 document.addEventListener('DOMContentLoaded', () => {
-  if (inTutorialMode() || !document.querySelector('#index-layout')) return;
+  if (!TUTORIAL_AVAILABLE || inTutorialMode() || !document.querySelector('#index-layout')) return;
   let pending = false;
   try { pending = localStorage.getItem(TUTORIAL_OFFER_KEY) === 'pending'; } catch (e) {}
   if (!pending) return;
@@ -160,7 +162,7 @@ async function initHamburgerMenu() {
       <a class="hb-row" href="settings.html"><span class="hb-row-icon" aria-hidden="true">&#9881;&#65039;</span><span class="hb-row-label">Settings</span></a>
       ${inTutorialMode()
         ? '<a class="hb-row hb-danger" href="tutorial.html?exit=1"><span class="hb-row-icon" aria-hidden="true">&#127891;</span><span class="hb-row-label">Exit Tutorial</span></a>'
-        : `<a class="hb-row" href="tutorial.html" id="hb-tutorial"><span class="hb-row-icon" aria-hidden="true">&#127891;</span><span class="hb-row-label">Start Tutorial</span></a>
+        : `${TUTORIAL_AVAILABLE ? '<a class="hb-row" href="tutorial.html" id="hb-tutorial"><span class="hb-row-icon" aria-hidden="true">&#127891;</span><span class="hb-row-label">Start Tutorial</span></a>' : ''}
       <button type="button" class="hb-row hb-danger" id="hb-logout"><span class="hb-row-icon" aria-hidden="true">&#128682;</span><span class="hb-row-label">Log out</span></button>`}
     </div>
   `;

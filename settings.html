@@ -890,6 +890,7 @@ function setSettingsTab(tab) {
 $$('.settings-tab').forEach((b) => b.addEventListener('click', () => setSettingsTab(b.dataset.tab)));
 
 // Tutorial section: Start, or Exit while already in tutorial mode.
+$('#tutorial-section').hidden = !TUTORIAL_AVAILABLE && !inTutorialMode();
 if (inTutorialMode()) {
   $('#tutorial-section-text').textContent = "You're in the tutorial now. Exiting clears the example data and takes you back to your own projects.";
   $('#btn-tutorial').textContent = 'Exit Tutorial';

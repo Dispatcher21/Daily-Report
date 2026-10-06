@@ -147,7 +147,8 @@
 
   <p class="hint" style="text-align:center;" id="legacy-link-row"><button type="button" class="text-btn" id="btn-show-legacy" style="padding:0;">Continue without an account</button></p>
   <p class="hint" style="text-align:center;" id="account-link-row" hidden><button type="button" class="text-btn" id="btn-show-account" style="padding:0;">Sign in with an account instead</button></p>
-  <p class="hint" style="text-align:center;">New here? <a href="tutorial.html">Try the tutorial</a> &mdash; an example project to explore, kept separate from your own data.</p>
+  <p class="hint" style="text-align:center;" id="tutorial-link-row">New here? <a href="tutorial.html">Try the tutorial</a> &mdash; an example project to explore, kept separate from your own data.</p>
+  <script>if (!TUTORIAL_AVAILABLE) document.getElementById('tutorial-link-row').hidden = true;</script>
 </main>
 
 <script src="common.js"></script>
