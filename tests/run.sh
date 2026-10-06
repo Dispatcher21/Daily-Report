@@ -25,17 +25,33 @@ fi
 [ -f "$REPO/functions/.secret.local" ] || echo "RESEND_API_KEY=emulator-only" > "$REPO/functions/.secret.local"
 mkdir -p output
 
+emulator_pids() { ps aux | grep -E "emulators:start|cloud-firestore-emulator|storage_rules" | grep -v grep | awk '{print $2}'; }
 stop_emulators() {
-  for p in $(ps aux | grep -E "emulators:start|cloud-firestore-emulator|storage_rules" | grep -v grep | awk '{print $2}'); do kill "$p" 2>/dev/null; done
-  for _ in $(seq 1 20); do curl -s -o /dev/null -m 1 http://127.0.0.1:8080/ || break; sleep 1; done
-  sleep 2
+  for p in $(emulator_pids); do kill "$p" 2>/dev/null; done
+  # Wait until every emulator process is gone and its ports are free.
+  for _ in $(seq 1 60); do
+    busy=$(emulator_pids)
+    for port in 4400 4500 5001 8080 9099 9199; do curl -s -o /dev/null -m 1 "http://127.0.0.1:$port/" && busy=1; done
+    [ -z "$busy" ] && break
+    sleep 1
+  done
+  for p in $(emulator_pids); do kill -9 "$p" 2>/dev/null; done
+  sleep 1
 }
 start_emulators() {
-  # Without any HTTP proxy settings: the emulators talk to each other on localhost.
-  (cd emulator && env -u HTTPS_PROXY -u https_proxy -u HTTP_PROXY -u http_proxy -u GLOBAL_AGENT_HTTPS_PROXY \
-    nohup "$TESTS/node_modules/.bin/firebase" emulators:start --project daily-reports-test > "$TESTS/output/emulators.log" 2>&1 &)
-  for _ in $(seq 1 90); do grep -q "All emulators ready" output/emulators.log 2>/dev/null && return 0; sleep 2; done
-  echo "The emulators didn't start. See tests/output/emulators.log"; exit 1
+  for attempt in 1 2; do
+    log="output/emulators-$(date +%s).log"
+    # Without any HTTP proxy settings: the emulators talk to each other on localhost.
+    (cd emulator && env -u HTTPS_PROXY -u https_proxy -u HTTP_PROXY -u http_proxy -u GLOBAL_AGENT_HTTPS_PROXY \
+      nohup "$TESTS/node_modules/.bin/firebase" emulators:start --project daily-reports-test > "$TESTS/$log" 2>&1 &)
+    for _ in $(seq 1 90); do
+      if grep -q "All emulators ready" "$log" 2>/dev/null; then return 0; fi
+      grep -qiE "port .* (taken|in use)|Could not start" "$log" 2>/dev/null && break
+      sleep 2
+    done
+    stop_emulators
+  done
+  echo "The emulators didn't start. See the newest tests/output/emulators-*.log"; exit 1
 }
 curl -s -o /dev/null -m 2 http://127.0.0.1:8126/index.html || (nohup node site-server.js > output/site-server.log 2>&1 &)
 
@@ -60,6 +76,7 @@ for t in "${SUITES[@]}"; do
   fi
 done
 stop_emulators
+ls -t output/emulators-*.log 2>/dev/null | tail -n +4 | xargs -r rm -f  # keep the last few
 
 echo
 if [ ${#failed[@]} -eq 0 ]; then echo "All ${#SUITES[@]} suites passed."; else echo "${#failed[@]} failed: ${failed[*]}"; exit 1; fi
