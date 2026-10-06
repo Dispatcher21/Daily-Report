@@ -30,12 +30,14 @@ async function loadPeople(code) {
   const snap = await db().collection('companies').doc(code).collection('members').get();
   const byUid = new Map();
   snap.forEach((d) => { const m = d.data(); if (m.status === 'active' && m.email) byUid.set(d.id, m); });
+  // By name only when exactly one person goes by it -- two people with the
+  // same name could otherwise get each other's emails (or none).
   const resolve = (uid, name) => {
     if (uid && byUid.has(uid)) return uid;
     const wanted = String(name || '').trim().toLowerCase();
     if (!wanted) return null;
-    for (const [id, m] of byUid) if (String(m.displayName || '').trim().toLowerCase() === wanted) return id;
-    return null;
+    const matches = [...byUid].filter(([, m]) => String(m.displayName || '').trim().toLowerCase() === wanted);
+    return matches.length === 1 ? matches[0][0] : null;
   };
   return { byUid, resolve };
 }
@@ -99,6 +101,9 @@ async function sendEmail(to, msg) {
 
 // One email per person per change, grouping everything they need to hear.
 async function notify(people, author, thing, events) {
+  // One line per change in the function log: what happened and who was told.
+  const told = [...new Set(events.flatMap((e) => [...e.to]))].map((u) => people.byUid.get(u).email);
+  console.log(`${thing}: ${events.map((e) => (e.kind === 'comment' ? `comment by ${e.actorName}` : `${e.status} by ${e.actorName}`)).join(', ')}. Author: ${author ? people.byUid.get(author).email : 'not found among active members'}. Telling: ${told.join(', ') || 'nobody (no one else involved)'}`);
   const perPerson = new Map();
   for (const e of events) for (const uid of e.to) {
     if (!perPerson.has(uid)) perPerson.set(uid, []);
@@ -106,9 +111,10 @@ async function notify(people, author, thing, events) {
   }
   for (const [uid, list] of perPerson) {
     const prefs = (await db().collection('users').doc(uid).get()).data() || {};
-    if (prefs.emailComments === false) continue;
+    if (prefs.emailComments === false) { console.log(`${people.byUid.get(uid).email} has comment emails turned off`); continue; }
     try {
       await sendEmail(people.byUid.get(uid).email, compose(uid === author, thing, list));
+      console.log(`emailed ${people.byUid.get(uid).email}`);
     } catch (err) {
       console.error('notification email failed:', err);
     }
@@ -123,7 +129,7 @@ exports.onReportComment = onDocumentUpdated({ document: 'companies/{code}/report
   if ((after.comments || []).length === (before.comments || []).length && after.approvalStatus === before.approvalStatus) return;
   const people = await loadPeople(event.params.code);
   const { events, author } = whatHappened(before, after, people);
-  if (!events.length) return;
+  if (!events.length) { console.log(`report ${event.params.reportId} changed, but there was no one to tell`); return; }
   const project = after.projectId ? (await db().collection('companies').doc(event.params.code).collection('projects').doc(after.projectId).get()).data() : null;
   const thing = `daily report${after.reportNo != null ? ` #${after.reportNo}` : ''}${project && project.name ? ` for ${project.name}` : ''}${dateLabel(after.date)}`;
   await notify(people, author, thing, events);
