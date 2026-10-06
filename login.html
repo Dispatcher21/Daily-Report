@@ -112,9 +112,8 @@
     </div>
     <div class="step-body">
       <p id="invite-text" style="margin-top:0;"></p>
-      <button type="button" class="btn-primary" id="btn-invite-accept">I've Verified My Email</button>
+      <button type="button" class="btn-primary" id="btn-invite-accept">Try Again</button>
       <div style="display:flex; gap:0.75rem; flex-wrap:wrap; margin-top:0.25rem;">
-        <button type="button" class="text-btn" id="btn-invite-resend">Resend the email</button>
         <button type="button" class="text-btn" id="btn-invite-skip">Skip for now</button>
       </div>
       <div class="success" id="invite-notice" hidden style="margin-top:0.75rem;"></div>
@@ -218,13 +217,8 @@ function showPending(companyName) {
 async function showInvite(invite) {
   const account = await getAccount();
   $('#invite-title').textContent = `Join ${invite.companyName || 'Your Company'}`;
-  if (account && account.emailVerified) {
-    // Verified already: join straight away.
-    await joinByInvite();
-    return;
-  }
-  $('#invite-text').textContent = `${invite.companyName || 'A company'} has invited ${account ? account.email : 'you'}. To join, verify your email: open the message we just sent you and click the link, then come back and tap below.`;
-  showView('view-invite');
+  $('#invite-text').textContent = `${invite.companyName || 'A company'} has invited ${account ? account.email : 'you'}.`;
+  await joinByInvite();
 }
 
 async function joinByInvite() {
@@ -355,15 +349,6 @@ $('#btn-pending-signout').addEventListener('click', async () => {
 });
 
 $('#btn-invite-accept').addEventListener('click', joinByInvite);
-$('#btn-invite-resend').addEventListener('click', async () => {
-  try {
-    await resendAccountVerification();
-    $('#invite-notice').textContent = 'Sent. Check your spam folder too.';
-    $('#invite-notice').hidden = false;
-  } catch (err) {
-    showError($('#invite-error'), err.message);
-  }
-});
 $('#btn-invite-skip').addEventListener('click', finish);
 
 // The original, account-free setup.

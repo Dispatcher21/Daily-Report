@@ -25,6 +25,8 @@ import {
   checkActionCode,
   verifyPasswordResetCode,
   confirmPasswordReset,
+  reauthenticateWithCredential,
+  updatePassword,
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import { getFirestore } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import { getStorage } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js';
@@ -92,6 +94,8 @@ const authApi = {
   checkActionCode,
   verifyPasswordResetCode,
   confirmPasswordReset,
+  reauthenticateWithCredential,
+  updatePassword,
   signInWithEmailAndPassword,
   linkWithCredential,
   EmailAuthProvider,

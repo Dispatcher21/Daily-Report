@@ -57,14 +57,10 @@
     margin-left: auto; transition: transform 0.15s; flex: 0 0 auto;
   }
   details.settings-section[open] > summary .settings-section-chevron { transform: rotate(90deg); }
-  /* Account: role at the company, and the verify-your-email reminder. */
+  /* Account: role at the company. */
+  .account-pw { margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px dashed var(--border); }
+  .account-pw[hidden] { display: none; }
   .account-role { margin: 0 0 0.5rem; font-size: 0.88rem; font-weight: 600; color: var(--text-dim); }
-  .account-verify {
-    display: flex; align-items: center; flex-wrap: wrap; gap: 0.2rem 0.6rem;
-    padding: 0.5rem 0.75rem; font-size: 0.88rem;
-    background: var(--warn-bg); border: 1px solid var(--warn-border); border-radius: var(--radius-sm);
-  }
-  .account-verify .text-btn { padding: 0.1rem 0.2rem; min-height: 0; font-size: 0.88rem; }
   details.settings-section > summary .settings-section-sub {
     font-weight: 500; font-size: 0.8rem; opacity: 0.85; margin-left: 0.5rem;
   }
@@ -286,14 +282,16 @@
         <div id="account-signed-in" hidden>
           <p style="margin:0 0 0.5rem;">Signed in as <strong id="account-name"></strong> <span class="hint" style="display:inline;" id="account-email"></span></p>
           <p class="account-role" id="account-role" hidden></p>
-          <div class="account-verify" id="account-verify" hidden>
-            <span>Check your email to verify your address.</span>
-            <button type="button" class="text-btn" id="btn-account-resend">Resend email</button>
-            <button type="button" class="text-btn" id="btn-account-recheck">I've verified it</button>
-          </div>
           <div style="display:flex; gap:0.6rem; flex-wrap:wrap; margin-top:0.75rem;">
             <button type="button" class="btn-secondary" id="btn-account-reset" style="margin-top:0;">Change Password</button>
             <button type="button" class="btn-secondary" id="btn-account-signout" style="margin-top:0;">Sign Out</button>
+          </div>
+          <div class="account-pw" id="account-pw" hidden>
+            <label>Current Password <input type="password" id="account-pw-current" autocomplete="current-password"></label>
+            <label>New Password <input type="password" id="account-pw-new" autocomplete="new-password"><span class="hint">At least 8 characters.</span></label>
+            <label>Confirm New Password <input type="password" id="account-pw-confirm" autocomplete="new-password"></label>
+            <button type="button" class="btn-primary" id="btn-account-pw-save" style="margin-top:0.5rem;">Save New Password</button>
+            <p class="hint" style="margin:0.5rem 0 0;">Forgot your current password? Sign out, then use "Forgot password?" on the sign-in screen.</p>
           </div>
           <div class="success" id="account-notice" hidden style="margin-top:0.75rem;"></div>
         </div>
@@ -682,7 +680,7 @@
               <p class="hint">People still using the company password without an account don't appear here.</p>
 
               <p class="settings-subhead">Pre-approved Emails</p>
-              <p class="hint" style="margin-top:0;">Add someone's email and they join with the role and projects you pick as soon as they create an account and verify that email. No company password needed.</p>
+              <p class="hint" style="margin-top:0;">Add someone's email and they join with the role and projects you pick as soon as they create an account with that email. No company password needed. (Make someone an Admin from the list above once they've joined.)</p>
               <div id="team-invites"></div>
               <details class="company-details" id="team-invite-details" style="margin-top:0.6rem;">
                 <summary>Add an Email</summary>
@@ -2661,7 +2659,8 @@ async function renderTeam() {
   const room = await getCompanyRoom();
   teamState.myUid = account.uid;
   teamState.projects = (await getAllProjects()).filter((p) => projectInScope(p, room)).sort((a, b) => a.name.localeCompare(b.name));
-  $('#team-invite-role').innerHTML = teamRoleOptions('inspector');
+  // A pre-approved email can't be an admin (emails aren't verified).
+  $('#team-invite-role').innerHTML = teamRoleOptions('inspector').replace(/<option value="admin"[^>]*>[^<]*<\/option>/, '');
   $('#team-invite-projects').innerHTML = teamProjectPicker(null);
   $('#team-invite-projects').hidden = false;
   try {
@@ -2798,7 +2797,7 @@ $('#btn-team-invite').addEventListener('click', () => {
     await inviteTeamMember({ email, role, projectIds });
     $('#team-invite-email').value = '';
     $('#team-invite-details').open = false;
-  }, `${email} is pre-approved. They join as soon as they create an account with that email and verify it.`);
+  }, `${email} is pre-approved. They join as soon as they create an account with that email.`);
 });
 
 // ---------- Account ----------
@@ -2812,7 +2811,6 @@ async function renderAccount() {
   if (!account) return;
   $('#account-name').textContent = (await getUserName()) || account.displayName || '';
   $('#account-email').textContent = `(${account.email})`;
-  $('#account-verify').hidden = account.emailVerified;
   const member = await getMyMembership().catch(() => null);
   const room = await getCompanyRoom();
   const roleEl = $('#account-role');
@@ -2831,25 +2829,19 @@ function accountNotice(text) {
   el.hidden = false;
 }
 
-$('#btn-account-resend').addEventListener('click', async () => {
-  try {
-    await resendAccountVerification();
-    accountNotice('Verification email sent. Check your spam folder too.');
-  } catch (err) {
-    alert(err.message);
-  }
+$('#btn-account-reset').addEventListener('click', () => {
+  const panel = $('#account-pw');
+  panel.hidden = !panel.hidden;
+  if (!panel.hidden) $('#account-pw-current').focus();
 });
-$('#btn-account-recheck').addEventListener('click', async () => {
-  const account = await reloadAccount().catch(() => null);
-  await renderAccount();
-  if (account && !account.emailVerified) accountNotice("Not verified yet. Click the link in the email, then try again.");
-});
-$('#btn-account-reset').addEventListener('click', async () => {
-  const account = await getAccount();
-  if (!account) return;
+$('#btn-account-pw-save').addEventListener('click', async () => {
+  const next = $('#account-pw-new').value;
+  if (next !== $('#account-pw-confirm').value) { alert("The two new passwords don't match."); return; }
   try {
-    await sendAccountPasswordReset(account.email);
-    accountNotice(`A link to change your password was sent to ${account.email}.`);
+    await changeAccountPassword($('#account-pw-current').value, next);
+    ['#account-pw-current', '#account-pw-new', '#account-pw-confirm'].forEach((sel) => { $(sel).value = ''; });
+    $('#account-pw').hidden = true;
+    accountNotice('Password changed.');
   } catch (err) {
     alert(err.message);
   }
