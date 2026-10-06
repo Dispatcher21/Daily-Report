@@ -400,6 +400,15 @@ $('#btn-continue').addEventListener('click', async () => {
     finish();
   } catch (err) {
     console.error(err);
+    if (err.code === 'account-required') {
+      // The company wants everyone signed in: straight to creating an account.
+      hideProgressBanner();
+      btn.disabled = false;
+      showView('view-account');
+      setMode('create');
+      showError($('#account-error'), err.message);
+      return;
+    }
     if (password) loginThrottleRecordFailure('join-company');
     const msg = password
       ? "Couldn't join with that company password: " + err.message + ' Your name is saved, though -- clear the password and continue if you want to join later instead.'

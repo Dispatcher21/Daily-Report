@@ -144,6 +144,8 @@
   .cm-project-row-controls[hidden] { display: none; }
   .cm-project-row-controls { width: 100%; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed var(--border); }
 
+  .team-enforce { border: 1.5px solid var(--border); border-radius: 12px; padding: 0.75rem 0.85rem; margin-bottom: 1rem; background: var(--surface-2); }
+  .team-enforce.is-on { border-color: var(--brand-light); }
   .team-row-sub { font-size: 0.8rem; color: var(--text-dim); overflow-wrap: anywhere; }
   .team-badge { display: inline-block; font-size: 0.72rem; font-weight: 700; padding: 0.05rem 0.45rem; border-radius: 999px; background: var(--surface-3); color: var(--text-dim); margin-left: 0.3rem; vertical-align: 1px; }
   .team-badge-off { background: var(--danger-bg); color: var(--danger); }
@@ -657,6 +659,13 @@
               <a class="btn-secondary" href="login.html?mode=signin&amp;next=settings.html" style="display:inline-block; text-align:center; text-decoration:none;">Sign In</a>
             </div>
             <div id="team-body" hidden>
+              <div class="team-enforce" id="team-enforce">
+                <label class="toggle-row" for="team-accounts-required" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-bottom:0.25rem;">
+                  <input type="checkbox" id="team-accounts-required">
+                  <span><strong>Require everyone to sign in</strong></span>
+                </label>
+                <p class="hint" style="margin:0;" id="team-enforce-hint"></p>
+              </div>
               <label class="toggle-row" for="team-require-approval" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-bottom:0.25rem;">
                 <input type="checkbox" id="team-require-approval">
                 <span>New people need my approval to join</span>
@@ -727,6 +736,7 @@
             </label>
 
             <p class="settings-subhead">Custom Setups</p>
+            <div class="err" id="cs-enforced-note" hidden>Your company requires everyone to sign in, so custom setup passwords don't work right now. Limit people's projects on the Team screen instead.</div>
             <p class="hint">A named, project-scoped password -- e.g. an inspector who should only ever see one project. Same permission options as above, applied only within the project(s) checked below.</p>
 
             <div id="cs-list-empty" class="empty-state" hidden style="padding:1.25rem;">No custom setups yet.</div>
@@ -2534,7 +2544,7 @@ $('#btn-save-user-name').addEventListener('click', async () => {
 // emails. (Devices still on the plain company password don't have a
 // member record, so they don't appear.)
 
-let teamState = { members: [], invites: [], projects: [], myUid: null };
+let teamState = { members: [], invites: [], projects: [], myUid: null, accountsRequired: false };
 
 function teamStatus(text) {
   const el = $('#team-status');
@@ -2658,12 +2668,34 @@ async function renderTeam() {
     teamState.members = team.members;
     teamState.invites = team.invites;
     $('#team-require-approval').checked = team.requireApproval;
+    teamState.accountsRequired = team.accountsRequired;
+    $('#cs-enforced-note').hidden = !team.accountsRequired;
+    renderTeamEnforce();
     renderTeamLists();
   } catch (err) {
     console.error(err);
     teamError(navigator.onLine ? "Couldn't load the team: " + err.message : "You're offline. The team list needs a connection.");
   }
 }
+
+function renderTeamEnforce() {
+  const on = teamState.accountsRequired;
+  $('#team-accounts-required').checked = on;
+  $('#team-enforce').classList.toggle('is-on', on);
+  $('#team-enforce-hint').textContent = on
+    ? 'On: only the active members below can see company data, and project limits are enforced. Devices without an account are asked to sign in. Custom setup passwords and the admin password no longer work; manage admins here instead. Turn this off anytime to go back to password-only access.'
+    : 'Off: anyone with the company password can use company data, as before. Turn this on once everyone below has an account. You can turn it off again anytime.';
+}
+
+$('#team-accounts-required').addEventListener('change', (e) => {
+  const on = e.target.checked;
+  if (on) {
+    const active = teamState.members.filter((m) => m.status === 'active').length;
+    const ok = confirm(`Require everyone to sign in?\n\nOnly the ${active} active member${active === 1 ? '' : 's'} on this list will be able to see company data. Anyone using just the company password will be asked to sign in or create an account, and custom setup passwords stop working.\n\nYou can turn this off again anytime.`);
+    if (!ok) { e.target.checked = false; return; }
+  }
+  teamChange(() => setAccountsRequired(on), on ? 'Everyone now needs to sign in.' : 'Password-only access is back on.');
+});
 
 // Runs a change, then re-reads the team. A change to your own record can
 // change what this device is allowed to do, so the whole tab redraws.

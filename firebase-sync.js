@@ -269,11 +269,15 @@ async function createCompanyRoom({ name, password, adminPassword }, onProgress) 
   await ensureSignedIn();
 
   const code = await hashText(password);
+  const account = await getAccount();
   await setDoc(doc(db, 'companies', code), {
     name: name || '',
     adminPasswordHash: await hashAdminPassword(adminPassword),
     companyPasswordEnc: await encryptWithAdminPassword(adminPassword, password),
     permissions: DEFAULT_PERMISSIONS,
+    // Lets the creator record themselves as the first admin even once the
+    // company requires accounts (see the database rules).
+    ...(account ? { createdByUid: account.uid } : {}),
     createdAt: serverTimestamp(),
   });
 
@@ -324,6 +328,13 @@ async function joinCompanyRoom(password, onProgress) {
   if (!snap.exists()) throw new Error('No company found with that password.');
   const data = snap.data();
   if (data.passwordChangedAt) throw new Error('This company password has been changed. Ask your admin for the new one.');
+  const accountsRequired = data.isRoleSetup
+    ? !!((await getDoc(doc(db, 'companies', data.companyCode))).data() || {}).accountsRequired
+    : !!data.accountsRequired;
+  if (accountsRequired) {
+    if (data.isRoleSetup) throw new Error('Custom setup passwords no longer work for this company: it now requires everyone to sign in. Create an account, then use the company password or ask your admin to pre-approve your email.');
+    if (!(await getAccount())) throw new AccountRequiredError(data.name);
+  }
 
   let code = enteredHash;
   let companyDoc = data;
@@ -400,6 +411,8 @@ async function unlockCompanyAdmin(adminPassword) {
   const snap = await getDoc(companyRef);
   const { valid, legacy } = await verifyAdminPassword(adminPassword, snap.exists() ? snap.data().adminPasswordHash : null);
   if (!valid) throw new Error('Incorrect admin password.');
+  // Once accounts are required, admins are whoever the Team screen says.
+  if (snap.data().accountsRequired) throw new Error('Your company now manages admins on its Team screen. Ask an admin to make you one.');
   if (legacy) {
     // Now that the password's confirmed correct, quietly upgrade this
     // company off the old plain-SHA-256 hash -- every login after this one
@@ -714,7 +727,13 @@ async function resendAccountVerification() {
 // verification link in their email).
 async function reloadAccount() {
   const { auth } = await waitForFirebaseCore();
-  if (auth.currentUser) await auth.currentUser.reload();
+  if (auth.currentUser) {
+    const wasVerified = auth.currentUser.emailVerified;
+    await auth.currentUser.reload();
+    // The server reads "verified" from the sign-in token, which otherwise
+    // only catches up within the hour.
+    if (auth.currentUser.emailVerified && !wasVerified) await auth.currentUser.getIdToken(true);
+  }
   return getAccount();
 }
 
@@ -768,17 +787,28 @@ async function refreshMembership({ joined = false } = {}) {
     // First time this account is seen in this company: a device that's
     // already unlocked admin brings that along; anyone else starts as an
     // inspector with access to every project.
-    member = {
+    const companySnap = await getDoc(doc(db, 'companies', room.code));
+    const requireApproval = !!(companySnap.exists() && companySnap.data().requireApproval);
+    const record = (role) => ({
       uid: account.uid,
       email: account.email,
       displayName: name,
-      role: room.isAdmin ? 'admin' : 'inspector',
-      status: 'active',
+      role,
+      status: role !== 'admin' && requireApproval ? 'pending' : 'active',
       projectIds: null,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    };
-    await setDoc(ref, member);
+    });
+    member = record(room.isAdmin ? 'admin' : 'inspector');
+    try {
+      await setDoc(ref, member);
+    } catch (err) {
+      // Once accounts are required, the admin password alone no longer
+      // makes someone an admin: they start as an inspector instead.
+      if (member.role !== 'admin' || err.code !== 'permission-denied') throw err;
+      member = record('inspector');
+      await setDoc(ref, member);
+    }
   }
   // Turned off (or never approved) by an admin: this device disconnects,
   // keeping only what hasn't uploaded yet, and the page says why.
@@ -793,6 +823,31 @@ async function refreshMembership({ joined = false } = {}) {
 }
 
 // ---------- Approvals and pre-approved emails ----------
+
+class AccountRequiredError extends Error {
+  constructor(companyName) {
+    super(`${companyName || 'This company'} requires everyone to sign in. Create an account or sign in, then enter the company password.`);
+    this.code = 'account-required';
+    this.companyName = companyName || '';
+  }
+}
+
+// A device without an account, still connected to a company that has since
+// started requiring accounts: nothing syncs until someone signs in here.
+// Tells the page (see the company-access-ended handler) and returns true.
+async function blockedForAccount(room, companyData) {
+  if (await getAccount()) return false;
+  let data = companyData;
+  if (data === undefined) {
+    const { db } = await waitForFirebaseCore();
+    const { doc, getDoc } = await import(FIRESTORE_SDK);
+    const snap = await getDoc(doc(db, 'companies', room.code)).catch(() => null);
+    data = snap && snap.exists() ? snap.data() : null;
+  }
+  if (!data || !data.accountsRequired) return false;
+  window.dispatchEvent(new CustomEvent('company-access-ended', { detail: { company: room.name || data.name || '', status: 'account-required' } }));
+  return true;
+}
 
 class PendingApprovalError extends Error {
   constructor(companyName) {
@@ -885,6 +940,7 @@ async function acceptMyInvite(onProgress) {
   const account = await reloadAccount();
   if (!account) throw new Error('Sign in first.');
   if (!account.emailVerified) throw new Error('Verify your email first: click the link we sent you, then try again.');
+  await (await waitForFirebaseCore()).auth.currentUser.getIdToken(true); // the server checks "verified" on this token
   const invite = await getMyInvite();
   if (!invite) throw new Error('No invitation was found for your email.');
   const { db } = await waitForFirebaseCore();
@@ -930,6 +986,7 @@ async function listTeam() {
     members: membersSnap.docs.map((d) => ({ ...d.data(), uid: d.id })),
     invites: invitesSnap.docs.map((d) => ({ ...d.data(), email: d.id })),
     requireApproval: !!(companySnap.exists() && companySnap.data().requireApproval),
+    accountsRequired: !!(companySnap.exists() && companySnap.data().accountsRequired),
   };
 }
 
@@ -983,6 +1040,18 @@ async function setRequireApproval(on) {
   await updateDoc(doc(db, 'companies', room.code), { requireApproval: !!on });
 }
 
+// The switch that makes the server enforce all of this: only active
+// members get company data, project limits included. Off = the old
+// password-only behavior, so it's also the quick way back.
+async function setAccountsRequired(on) {
+  const { room, db } = await requireTeamAdmin();
+  const { doc, updateDoc } = await import(FIRESTORE_SDK);
+  await updateDoc(doc(db, 'companies', room.code), { accountsRequired: !!on });
+  if (typeof logCompanyAuditEvent === 'function') {
+    logCompanyAuditEvent('company', 'Company Settings', 'edited', [{ label: 'Require Accounts', from: on ? 'Off' : 'On', to: on ? 'On' : 'Off' }]).catch((err) => console.error('audit log:', err));
+  }
+}
+
 async function inviteTeamMember({ email, role, projectIds }) {
   const { room, account, db } = await requireTeamAdmin();
   const id = inviteDocId(email);
@@ -1010,15 +1079,37 @@ async function cancelTeamInvite(email) {
 // (the same ones companyCan/projectInScope already read).
 async function applyMembership(member) {
   const role = MEMBER_ROLES.includes(member.role) ? member.role : 'inspector';
+  const before = await getCompanyRoom();
+  const scopeBefore = before && !before.isAdmin ? before.projectScope : null;
+  const scope = role !== 'admin' && Array.isArray(member.projectIds) ? member.projectIds : null;
   await saveSetting(COMPANY_ROLE_ID_SETTING, null);
-  if (role === 'admin') {
-    await saveSetting(COMPANY_ADMIN_SETTING, true);
-    await saveSetting(COMPANY_PROJECT_SCOPE_SETTING, null);
-    return;
+  await saveSetting(COMPANY_ADMIN_SETTING, role === 'admin');
+  if (role !== 'admin') await saveSetting(COMPANY_PERMISSIONS_SETTING, ROLE_PERMISSIONS[role]);
+  await saveSetting(COMPANY_PROJECT_SCOPE_SETTING, scope);
+  if (JSON.stringify(scopeBefore) !== JSON.stringify(scope)) {
+    // Different projects now: the next pull reads everything allowed from
+    // scratch (newly added projects' older reports included), and projects
+    // taken away leave this device.
+    await deleteSetting(DELTA_PULL_CURSOR_SETTING);
+    if (scope && before) await pruneOutOfScope(before.code, scope);
   }
-  await saveSetting(COMPANY_ADMIN_SETTING, false);
-  await saveSetting(COMPANY_PERMISSIONS_SETTING, ROLE_PERMISSIONS[role]);
-  await saveSetting(COMPANY_PROJECT_SCOPE_SETTING, Array.isArray(member.projectIds) ? member.projectIds : null);
+}
+
+// Removes this device's copies of a company's projects (and their
+// reports) outside `projectIds` -- except anything that hasn't uploaded
+// yet, same rule as signing out.
+async function pruneOutOfScope(code, projectIds) {
+  const allowed = new Set(projectIds);
+  const keepProjectIds = new Set();
+  for (const r of await getAllReports({ includeDeleted: true })) {
+    if (r.companyCode !== code || allowed.has(r.projectId)) continue;
+    if (r.pendingPush || (await getReportDraft(r.id))) { keepProjectIds.add(r.projectId); continue; }
+    await deleteReportLocalOnly(r.id);
+  }
+  for (const p of await getAllProjects()) {
+    if (p.companyCode !== code || allowed.has(p.id) || p.pendingPush || keepProjectIds.has(p.id)) continue;
+    await deleteProjectLocalOnly(p.id);
+  }
 }
 
 // This device's member record, without changing anything (null if not
@@ -1047,6 +1138,7 @@ async function syncCompanyRoomNow(onProgress) {
   const { doc, getDoc } = await import(FIRESTORE_SDK);
   await ensureSignedIn();
   const snap = await getDoc(doc(db, 'companies', room.code));
+  if (await blockedForAccount(room, snap.exists() ? snap.data() : null)) throw new AccountRequiredError(room.name);
   if (snap.exists()) {
     const data = snap.data();
     await saveSetting(COMPANY_NAME_SETTING, data.name || '');
@@ -1259,9 +1351,11 @@ async function changeCompanyPassword(newPassword, adminPassword, onProgress) {
   if (onProgress) onProgress({ phase: 'creating' });
   // Everything else on the company doc (themes, the approval switch, ...)
   // carries over as is; the logo is re-uploaded below.
-  const { adminPasswordHash: _oldHash, companyPasswordEnc: _oldEnc, logoUpdatedAt: _oldLogo, movedTo: _oldMove, ...carried } = oldData;
+  const { adminPasswordHash: _oldHash, companyPasswordEnc: _oldEnc, logoUpdatedAt: _oldLogo, createdByUid: _oldCreator, passwordChangedAt: _oldChange, ...carried } = oldData;
+  const changer = await getAccount();
   await setDoc(doc(db, 'companies', newCode), {
     ...carried,
+    ...(changer ? { createdByUid: changer.uid } : {}),
     name: oldData.name || '',
     // Recomputed fresh rather than carried over from oldData -- the
     // password's already confirmed correct above, so this is a free
@@ -1357,8 +1451,10 @@ async function relabelLocalCompanyData(oldCode, newCode) {
 async function copyCompanyAccounts(oldCode, newCode, companyName, onProgress) {
   const { db } = await waitForFirebaseCore();
   const { doc, setDoc, collection, getDocs, query, where, serverTimestamp } = await import(FIRESTORE_SDK);
-  if (onProgress) onProgress({ phase: 'members' });
   const account = await getAccount();
+  // Only an admin with an account can write member records.
+  if (!account) return;
+  if (onProgress) onProgress({ phase: 'members' });
   const members = (await getDocs(collection(db, 'companies', oldCode, 'members'))).docs.map((d) => ({ ...d.data(), uid: d.id }));
   // This admin's own record first: the new company's rules need an admin
   // on record before anyone else can be added.
@@ -1370,7 +1466,6 @@ async function copyCompanyAccounts(oldCode, newCode, companyName, onProgress) {
     if (m.status === 'disabled') continue;
     await setDoc(doc(db, 'companies', oldCode, 'members', m.uid), { movedTo: newCode, movedToName: companyName }, { merge: true });
   }
-  if (!account) return; // pre-approved emails are only ever added (and readable) by a signed-in admin
   const invites = await getDocs(query(collection(db, 'invites'), where('companyCode', '==', oldCode)));
   for (const d of invites.docs) {
     await setDoc(doc(db, 'invites', d.id), { companyCode: newCode, companyName }, { merge: true });
@@ -2033,6 +2128,7 @@ async function autoPullCompanyData(force) {
     if (Date.now() - last < AUTO_PULL_THROTTLE_MS) return;
   }
   try {
+    if (await blockedForAccount(room)) return;
     // Picks up a role or project-access change an admin made elsewhere.
     await refreshMembership().catch((err) => console.error('membership:', err));
     await pullCompanyDataSmart(room.code, null, force);
@@ -2322,6 +2418,28 @@ function scopedReportProgressReporter(reportDocs, room, onProgress) {
   };
 }
 
+// Project limits (a member limited to some projects, or a custom setup):
+// once accounts are required the server hands over only those projects'
+// records, so pulls ask for exactly them. null = no limit.
+async function pullProjectScope() {
+  const room = await getCompanyRoom();
+  if (!room || room.isAdmin) return null;
+  return Array.isArray(room.projectScope) ? room.projectScope : null;
+}
+
+// The docs in `sub` whose `field` is one of `ids` (Firestore takes up to 30
+// values per "in", so longer lists go in batches).
+async function getScopedDocs(code, sub, field, ids, extra = []) {
+  const { db } = await waitForFirebaseCore();
+  const { collection, query, where, getDocs } = await import(FIRESTORE_SDK);
+  const docs = [];
+  for (let i = 0; i < ids.length; i += 30) {
+    const snap = await getDocs(query(collection(db, 'companies', code, sub), where(field, 'in', ids.slice(i, i + 30)), ...extra));
+    docs.push(...snap.docs);
+  }
+  return docs;
+}
+
 async function pullAllCompanyData(code, onProgress) {
   // Captured before any reading starts, not after -- a record saved by
   // someone else WHILE this pull is running must still be covered by the
@@ -2346,7 +2464,8 @@ async function pullAllCompanyData(code, onProgress) {
   // this device previously is carried forward rather than re-marked
   // unfetched, same reasoning as report photos.
   if (onProgress) onProgress({ phase: 'projects' });
-  const projectsSnap = await getDocs(collection(db, 'companies', code, 'projects'));
+  const scope = await pullProjectScope();
+  const projectDocs = scope ? await getScopedDocs(code, 'projects', 'id', scope) : (await getDocs(collection(db, 'companies', code, 'projects'))).docs;
   // getProject/getReport are each a full store.getAll() under the hood (see
   // storage.js) -- fine for a one-off lookup, but calling either inside a
   // per-document loop below turned every sync into a full local scan PER
@@ -2355,7 +2474,7 @@ async function pullAllCompanyData(code, onProgress) {
   // syncing take minutes -- not the Firestore round trip, which is a single
   // query either way. Fetched once here instead and looked up by id.
   const existingProjectsById = new Map((await getAllProjects()).map((p) => [p.id, p]));
-  for (const d of projectsSnap.docs) {
+  for (const d of projectDocs) {
     const data = d.data();
     const project = { ...data, id: d.id, companyCode: code };
     delete project.hasBackgroundImage;
@@ -2377,8 +2496,7 @@ async function pullAllCompanyData(code, onProgress) {
   // rather than re-marked as unfetched, so a report doesn't "forget" its
   // already-local photos just because some other field changed elsewhere
   // and triggered a re-pull.
-  const reportsSnap = await getDocs(collection(db, 'companies', code, 'reports'));
-  const reportDocs = reportsSnap.docs;
+  const reportDocs = scope ? await getScopedDocs(code, 'reports', 'projectId', scope) : (await getDocs(collection(db, 'companies', code, 'reports'))).docs;
   // Same fix as the projects loop above, same reason -- see that comment.
   // includeDeleted: a report this device already has trashed still needs
   // its already-fetched photos/thumbnail carried forward below, not
@@ -2455,37 +2573,45 @@ async function pullAllCompanyData(code, onProgress) {
   // saveProject/saveReport's sync hook, so this never gets pushed anywhere),
   // never deleted, since the real record is still safe wherever it
   // actually belongs.
-  const authoritativeProjectIds = new Set(projectsSnap.docs.map((d) => d.id));
+  // (A pull limited to some projects only knows about those, so it can't
+  // call anything else foreign -- it just leaves it be.)
+  const authoritativeProjectIds = new Set(projectDocs.map((d) => d.id));
   const authoritativeReportIds = new Set(reportDocs.map((d) => d.id));
   for (const p of await getAllProjects()) {
-    if (!p.companyCode) {
+    if (!p.companyCode && (!scope || authoritativeProjectIds.has(p.id))) {
       await putProjectRaw({ ...p, companyCode: authoritativeProjectIds.has(p.id) ? code : FOREIGN_COMPANY_SENTINEL });
     }
   }
   for (const r of await getAllReports({ includeDeleted: true })) {
-    if (!r.companyCode) {
+    if (!r.companyCode && (!scope || authoritativeReportIds.has(r.id))) {
       await putReportRaw({ ...r, companyCode: authoritativeReportIds.has(r.id) ? code : FOREIGN_COMPANY_SENTINEL });
     }
   }
 
-  if (onProgress) onProgress({ phase: 'audit' });
-  const auditSnap = await getDocs(collection(db, 'companies', code, 'auditLog'));
-  summary.auditEntriesPulled = 0;
-  for (const d of auditSnap.docs) {
-    const result = await mergeAuditEntry({ ...d.data(), id: d.id, companyCode: code });
-    if (result !== 'skipped') summary.auditEntriesPulled++;
-  }
-  // Same reconciliation as projects/reports above, and for the same reason:
-  // mergeAuditEntry skips the write entirely for an id already cached
-  // locally (audit entries are immutable, so "skip if present" is exactly
-  // right there), which means the companyCode stamped on the incoming copy
-  // just above never lands for an entry that was already on file --
-  // including one that's actually foreign, cached here from a different
-  // company entirely. Settle every untagged entry one way or the other.
-  const authoritativeAuditIds = new Set(auditSnap.docs.map((d) => d.id));
-  for (const e of await getAllAuditEntries()) {
-    if (!e.companyCode) {
-      await saveAuditEntry({ ...e, companyCode: authoritativeAuditIds.has(e.id) ? code : FOREIGN_COMPANY_SENTINEL });
+  // The activity log covers every project, so someone limited to some
+  // projects doesn't get it.
+  if (scope) {
+    summary.auditEntriesPulled = 0;
+  } else {
+    if (onProgress) onProgress({ phase: 'audit' });
+    const auditSnap = await getDocs(collection(db, 'companies', code, 'auditLog'));
+    summary.auditEntriesPulled = 0;
+    for (const d of auditSnap.docs) {
+      const result = await mergeAuditEntry({ ...d.data(), id: d.id, companyCode: code });
+      if (result !== 'skipped') summary.auditEntriesPulled++;
+    }
+    // Same reconciliation as projects/reports above, and for the same reason:
+    // mergeAuditEntry skips the write entirely for an id already cached
+    // locally (audit entries are immutable, so "skip if present" is exactly
+    // right there), which means the companyCode stamped on the incoming copy
+    // just above never lands for an entry that was already on file --
+    // including one that's actually foreign, cached here from a different
+    // company entirely. Settle every untagged entry one way or the other.
+    const authoritativeAuditIds = new Set(auditSnap.docs.map((d) => d.id));
+    for (const e of await getAllAuditEntries()) {
+      if (!e.companyCode) {
+        await saveAuditEntry({ ...e, companyCode: authoritativeAuditIds.has(e.id) ? code : FOREIGN_COMPANY_SENTINEL });
+      }
     }
   }
 
@@ -2529,10 +2655,12 @@ async function pullDeltaCompanyData(code, onProgress, cursor) {
   const summary = { projectsPulled: 0, reportsPulled: 0, projectsDeleted: 0, reportsDeleted: 0 };
 
   if (onProgress) onProgress({ phase: 'projects' });
-  const projectsSnap = await getDocs(
-    query(collection(db, 'companies', code, 'projects'), where('updatedAt', '>', queryCursor))
-  );
-  for (const d of projectsSnap.docs) {
+  const scope = await pullProjectScope();
+  // Limited to some projects: just re-reads those few project records.
+  const projectDocs = scope
+    ? await getScopedDocs(code, 'projects', 'id', scope)
+    : (await getDocs(query(collection(db, 'companies', code, 'projects'), where('updatedAt', '>', queryCursor)))).docs;
+  for (const d of projectDocs) {
     const data = d.data();
     const project = { ...data, id: d.id, companyCode: code };
     delete project.hasBackgroundImage;
@@ -2544,10 +2672,18 @@ async function pullDeltaCompanyData(code, onProgress, cursor) {
     if (result !== 'skipped') summary.projectsPulled++;
   }
 
-  const reportsSnap = await getDocs(
-    query(collection(db, 'companies', code, 'reports'), where('updatedAt', '>', queryCursor))
-  );
-  const reportDocs = reportsSnap.docs;
+  let reportDocs;
+  if (scope) {
+    // Needs a database index (projectId + updatedAt); without one, falls
+    // back to re-reading those projects' reports in full.
+    reportDocs = await getScopedDocs(code, 'reports', 'projectId', scope, [where('updatedAt', '>', queryCursor)]).catch((err) => {
+      if (err.code !== 'failed-precondition') throw err;
+      console.warn('Add the reports index (projectId, updatedAt) for faster syncing:', err.message);
+      return getScopedDocs(code, 'reports', 'projectId', scope);
+    });
+  } else {
+    reportDocs = (await getDocs(query(collection(db, 'companies', code, 'reports'), where('updatedAt', '>', queryCursor)))).docs;
+  }
   const reportProgress = scopedReportProgressReporter(reportDocs, await getCompanyRoom(), onProgress);
   for (let i = 0; i < reportDocs.length; i++) {
     const d = reportDocs[i];
@@ -2622,14 +2758,16 @@ async function pullDeltaCompanyData(code, onProgress, cursor) {
     }
   }
 
-  if (onProgress) onProgress({ phase: 'audit' });
-  const auditSnap = await getDocs(
-    query(collection(db, 'companies', code, 'auditLog'), where('timestamp', '>', queryCursor))
-  );
   summary.auditEntriesPulled = 0;
-  for (const d of auditSnap.docs) {
-    const result = await mergeAuditEntry({ ...d.data(), id: d.id, companyCode: code });
-    if (result !== 'skipped') summary.auditEntriesPulled++;
+  if (!scope) {
+    if (onProgress) onProgress({ phase: 'audit' });
+    const auditSnap = await getDocs(
+      query(collection(db, 'companies', code, 'auditLog'), where('timestamp', '>', queryCursor))
+    );
+    for (const d of auditSnap.docs) {
+      const result = await mergeAuditEntry({ ...d.data(), id: d.id, companyCode: code });
+      if (result !== 'skipped') summary.auditEntriesPulled++;
+    }
   }
 
   await saveSetting(DELTA_PULL_CURSOR_SETTING, pullStartedAt);
@@ -2715,10 +2853,20 @@ async function pushAllLocalData(code, onProgress, { dirtyOnly = false } = {}) {
   // same fallback as everywhere else this check is used.
   const scopedProjects = (await getAllProjects()).filter((p) => projectInScope(p, { code }));
   const projects = dirtyOnly ? scopedProjects.filter((p) => p.pendingPush) : scopedProjects;
+  // A change the server refuses (no permission once accounts are
+  // required) stays queued here but doesn't stop everything else syncing;
+  // it's reported once the rest is done.
+  let refused = 0;
+  const refusedOk = (err) => {
+    if (err && err.code === 'permission-denied') { refused++; return; }
+    throw err;
+  };
   await Promise.all(
     projects.map(async (project) => {
-      await pushProjectToCompany(code, project);
-      if (project.pendingPush) await putProjectRaw({ ...project, pendingPush: false });
+      try {
+        await pushProjectToCompany(code, project);
+        if (project.pendingPush) await putProjectRaw({ ...project, pendingPush: false });
+      } catch (err) { refusedOk(err); }
     })
   );
   if (onProgress) onProgress({ phase: 'projects', count: projects.length });
@@ -2730,8 +2878,10 @@ async function pushAllLocalData(code, onProgress, { dirtyOnly = false } = {}) {
   const scopedReports = (await getAllReports({ includeDeleted: true })).filter((r) => reportInScope(r, { code }));
   const reports = dirtyOnly ? scopedReports.filter((r) => r.pendingPush) : scopedReports;
   for (let i = 0; i < reports.length; i++) {
-    await pushReportToCompany(code, reports[i]);
-    if (reports[i].pendingPush) await putReportRaw({ ...reports[i], pendingPush: false });
+    try {
+      await pushReportToCompany(code, reports[i]);
+      if (reports[i].pendingPush) await putReportRaw({ ...reports[i], pendingPush: false });
+    } catch (err) { refusedOk(err); }
     if (onProgress) onProgress({ phase: 'reports', index: i + 1, total: reports.length });
   }
 
@@ -2741,8 +2891,11 @@ async function pushAllLocalData(code, onProgress, { dirtyOnly = false } = {}) {
   // cost this feature actually targets is re-uploading every project's/
   // report's full data (photos included) on every click, not this.
   const auditEntries = (await getAllAuditEntries()).filter((e) => auditEntryInCompany(e, { code }));
-  await Promise.all(auditEntries.map((entry) => pushAuditEntryToCompany(code, entry)));
+  await Promise.all(auditEntries.map((entry) => pushAuditEntryToCompany(code, entry).catch(refusedOk)));
   if (onProgress) onProgress({ phase: 'audit', count: auditEntries.length });
+  if (refused) {
+    throw new Error(`Everything else synced, but ${refused} change${refused === 1 ? '' : 's'} on this device ${refused === 1 ? 'was' : 'were'} refused: you don't have permission to edit ${refused === 1 ? 'it' : 'them'} (for example, someone else's report). Ask a manager or admin.`);
+  }
 }
 
 // ---------- live hooks -- called from storage.js after every save/delete ----------
@@ -2876,6 +3029,12 @@ window.addEventListener('company-access-ended', (e) => {
   companyAccessEndedShown = true;
   const company = (e.detail && e.detail.company) || 'your company';
   const status = e.detail && e.detail.status;
+  if (status === 'account-required') {
+    // Still connected, nothing removed: signing in picks up right here.
+    alert(`${company} now requires everyone to sign in. Create an account or sign in to keep syncing. Everything on this device stays put.`);
+    location.href = 'login.html?mode=signin&next=index.html';
+    return;
+  }
   const why = status === 'pending'
     ? `Your access to ${company} is waiting for an admin's approval.`
     : status === 'removed'
