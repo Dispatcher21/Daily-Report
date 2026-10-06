@@ -9,12 +9,9 @@ Everything waiting to be applied to the live Firebase project
 (`daily-reports-53c82`). Add to this list as you go; clear it once the
 owner has applied it.
 
-- **Functions deploy** (step 2 below): the weekly roundup now ignores a
-  Pay App marked Changes Requested, same as the dashboards
-  (`functions/lib/quantity-calc.js` re-copied). No rules changes.
-
-(Last applied: 0.051, 2026-10-06: rules with the `problems` section and
-the author-reply clause; every email function.)
+_Nothing pending._ (Last applied: 0.052, 2026-10-06: weeklyRoundup and
+sendRoundupPreview redeployed. 0.051: rules with the `problems` section
+and the author-reply clause; every email function.)
 
 ## The checklist
 

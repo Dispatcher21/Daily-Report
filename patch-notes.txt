@@ -3,6 +3,28 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.052 -- 2026-10-06
+  - Quantities and Pay Apps redesigned. The project page has a card for
+    each, with live numbers, and the two pages share a tab bar to switch
+    between them.
+  - Two words used everywhere: Logged (what inspectors write in daily
+    reports) and Billed (what the contractor has been paid on Pay Apps).
+    A contract bar shows billed, logged but not billed yet, billed ahead
+    of the logs, and remaining.
+  - Quantities: pick a range (This Week, Since Last Pay App, Custom...),
+    and each pay item shows its progress and a check: Matches, "140 TON
+    to bill", or "56 TON billed ahead". Tap an item to see every report
+    entry and Pay App for it in date order. By Day view and the Excel
+    download are still there.
+  - Pay Apps: the newest one opens straight away, with the same contract
+    bar and checks, and a link to what was logged in that period. The Pay
+    App Excel download and upload moved here.
+  - Quick Quantity Add is now Log Quantities: day arrows, and each item's
+    total to date updates as you type, flagging anything over plan.
+  - Dashboards no longer let a Pay App marked Changes Requested overrule
+    what inspectors logged; the last agreed Pay App stands until it's
+    fixed. Pay Item Completion notes which Pay App its figures use.
+
 0.0511 -- 2026-10-06
   - Settings > Account: "Send Me a Roundup Now" says Sending..., then
     Sent, and each email switch shows a quick "Saved" when you flip it.
