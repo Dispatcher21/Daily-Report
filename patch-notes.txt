@@ -3,6 +3,12 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.049 -- 2026-10-06
+  - Comment emails: when someone comments on your daily report or Pay
+    App, approves it, or asks for changes, you get a short email (plain
+    words, no links). People who already commented on it hear about new
+    comments too. Turn them off in Settings > Account.
+
 0.048 -- 2026-10-06
   - No more "verify your email" emails: creating an account just works.
   - Change your password right in Settings (enter your current one and a
