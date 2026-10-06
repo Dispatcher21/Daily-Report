@@ -9,16 +9,10 @@ Everything waiting to be applied to the live Firebase project
 (`daily-reports-53c82`). Add to this list as you go; clear it once the
 owner has applied it.
 
-- **Rules** (step 1 below): approving/requesting changes and commenting on
-  reports are separate permissions (`canComment`, `approvalOnly`,
-  `commentsOnly`). A role that never set the comment permission keeps
-  its approve setting, so nothing changes until an admin splits them.
-- **Functions deploy** (step 2 below), just `onCompanyUpdated`: the
-  admin security email names the new comment permissions.
-
-(Last applied: 0.052, 2026-10-06: weeklyRoundup and sendRoundupPreview
-redeployed. 0.051: rules with the `problems` section and the
-author-reply clause; every email function.)
+_Nothing pending._ (Last applied: 0.0521, 2026-10-06: rules with
+separate approve and comment permissions; onCompanyUpdated redeployed.
+0.052: weeklyRoundup and sendRoundupPreview. 0.051: rules with the
+`problems` section; every email function.)
 
 ## The checklist
 
