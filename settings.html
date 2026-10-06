@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://www.gstatic.com https://*.googleapis.com https://api.open-meteo.com https://geocoding-api.open-meteo.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://www.gstatic.com https://*.googleapis.com https://*.cloudfunctions.net https://api.open-meteo.com https://geocoding-api.open-meteo.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';">
 <title>Settings</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="manifest" href="manifest.json">
@@ -301,10 +301,6 @@
             <button type="button" class="btn-secondary" id="btn-account-reset" style="margin-top:0;">Change Password</button>
             <button type="button" class="btn-secondary" id="btn-account-signout" style="margin-top:0;">Sign Out</button>
           </div>
-          <label class="toggle-row" for="account-email-comments" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-top:0.75rem;">
-            <input type="checkbox" id="account-email-comments">
-            <span>Email me when someone comments on, approves or asks for changes on my reports or Pay Apps</span>
-          </label>
           <div class="account-pw" id="account-pw" hidden>
             <label>Current Password <input type="password" id="account-pw-current" autocomplete="current-password"></label>
             <label>New Password <input type="password" id="account-pw-new" autocomplete="new-password"><span class="hint">At least 8 characters.</span></label>
@@ -312,6 +308,34 @@
             <button type="button" class="btn-primary" id="btn-account-pw-save" style="margin-top:0.5rem;">Save New Password</button>
             <p class="hint" style="margin:0.5rem 0 0;">Forgot your current password? Sign out, then use "Forgot password?" on the sign-in screen.</p>
           </div>
+          <p class="settings-subhead" style="margin-top:1.25rem;">Email Me About</p>
+          <label class="toggle-row" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;">
+            <input type="checkbox" id="account-email-comments" data-email-pref="emailComments">
+            <span>Comments, replies, approvals and change requests on my reports and Pay Apps</span>
+          </label>
+          <label class="toggle-row" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-top:0.5rem;">
+            <input type="checkbox" id="account-roundup" data-email-pref="weeklyRoundup">
+            <span>A weekly roundup of the projects I manage (Tuesdays, 6:30 AM my time)</span>
+          </label>
+          <label class="toggle-row account-admin-only" id="account-roundup-all-row" hidden style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin:0.4rem 0 0 1.9rem;">
+            <input type="checkbox" id="account-roundup-all" data-email-pref="roundupAllProjects" data-default-off>
+            <span>Cover every company project, not just the ones I manage</span>
+          </label>
+          <p class="hint account-admin-only" hidden style="margin:0.9rem 0 0.25rem;">As an admin:</p>
+          <label class="toggle-row account-admin-only" id="account-join-requests-row" hidden style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-top:0.25rem;">
+            <input type="checkbox" id="account-join-requests" data-email-pref="emailJoinRequests">
+            <span>People asking to join the company</span>
+          </label>
+          <label class="toggle-row account-admin-only" hidden style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-top:0.5rem;">
+            <input type="checkbox" id="account-security-alerts" data-email-pref="emailSecurityAlerts">
+            <span>Security changes: new admins, people removed, password and sign-in settings, roles, deleted reports and projects</span>
+          </label>
+          <label class="toggle-row account-admin-only" hidden style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-top:0.5rem;">
+            <input type="checkbox" id="account-problem-alerts" data-email-pref="emailProblemAlerts">
+            <span>Problems: reports that won't upload, emails that couldn't be sent (at most once a day)</span>
+          </label>
+          <button type="button" class="btn-secondary" id="btn-account-roundup-preview" style="margin-top:0.75rem;">Send Me a Roundup Now</button>
+          <p class="hint" style="margin:0.5rem 0 0;">Password changes, reset codes and approvals are always emailed.</p>
           <div class="success" id="account-notice" hidden style="margin-top:0.75rem;"></div>
         </div>
       </div>
@@ -2697,6 +2721,7 @@ function renderTeamLists() {
         <select data-team-role aria-label="Role for ${escapeHtml(teamMemberName(m))}">${teamRoleOptions(m.role)}</select>
         ${m.role === 'admin' ? '' : '<button type="button" class="btn-sm" data-team-projects>Projects</button>'}
         ${me ? '' : `<button type="button" class="btn-sm" data-team-toggle>${off ? 'Turn On' : 'Turn Off'}</button>`}
+        ${me || off || !m.email ? '' : '<button type="button" class="btn-sm" data-team-resetpw>Send Reset Code</button>'}
         ${me ? '' : '<button type="button" class="btn-sm btn-sm-danger" data-team-remove>Remove</button>'}
       </div>
       <div class="team-project-panel team-projects" hidden></div>
@@ -2839,6 +2864,12 @@ $('#team-members').addEventListener('click', (e) => {
     const turnOff = m.status !== 'disabled';
     if (turnOff && !confirm(`Turn off ${teamMemberName(m)}'s access? Their device leaves the company the next time it syncs. Their reports stay.`)) return;
     teamChange(() => updateTeamMember(uid, { status: turnOff ? 'disabled' : 'active' }), turnOff ? `${teamMemberName(m)}'s access is off.` : `${teamMemberName(m)}'s access is back on.`);
+  } else if (e.target.closest('[data-team-resetpw]')) {
+    if (!confirm(`Email ${teamMemberName(m)} a code to set a new password? They enter it on the sign-in screen under "Forgot password?", then "I have a code".`)) return;
+    adminSendResetCode(uid).then(
+      (email) => teamStatus(`Reset code sent to ${email}. It works for 15 minutes.`),
+      (err) => teamError(err.message)
+    );
   } else if (e.target.closest('[data-team-remove]')) {
     if (!confirm(`Remove ${teamMemberName(m)} from the team? Their device leaves the company the next time it syncs. Their reports stay. You can pre-approve their email again later.`)) return;
     teamChange(() => removeTeamMember(uid), `${teamMemberName(m)} removed.`);
@@ -2886,7 +2917,11 @@ async function renderAccount() {
   const roleEl = $('#account-role');
   roleEl.hidden = !(member && room);
   const profile = await readAccountProfile(account.uid).catch(() => null);
-  $('#account-email-comments').checked = !(profile && profile.emailComments === false);
+  $$('[data-email-pref]').forEach((box) => {
+    const v = profile ? profile[box.dataset.emailPref] : undefined;
+    box.checked = 'defaultOff' in box.dataset ? v === true : v !== false;
+  });
+  $$('.account-admin-only').forEach((el) => { el.hidden = !(member && room && member.role === 'admin'); });
   if (member && room) {
     const projects = Array.isArray(member.projectIds)
       ? `${member.projectIds.length} project${member.projectIds.length === 1 ? '' : 's'}`
@@ -2901,15 +2936,35 @@ function accountNotice(text) {
   el.hidden = false;
 }
 
-$('#account-email-comments').addEventListener('change', async (e) => {
+const EMAIL_PREF_NOTICES = {
+  emailComments: ["You'll get an email when someone comments on your work.", 'Comment emails are off.'],
+  weeklyRoundup: ["You'll get a roundup of your managed projects every Tuesday morning.", 'Weekly roundup emails are off.'],
+  emailJoinRequests: ["You'll get an email when someone asks to join.", 'Join request emails are off.'],
+  roundupAllProjects: ['Your roundup will cover every company project.', 'Your roundup will cover just the projects you manage.'],
+  emailSecurityAlerts: ["You'll get an email when security settings or the team change.", 'Security emails are off.'],
+  emailProblemAlerts: ["You'll get an email (at most daily) when something goes wrong.", 'Problem emails are off.'],
+};
+$$('[data-email-pref]').forEach((box) => box.addEventListener('change', async (e) => {
   const account = await getAccount();
   if (!account) return;
+  const key = e.target.dataset.emailPref;
   try {
-    await writeAccountProfile(account.uid, { emailComments: e.target.checked });
-    accountNotice(e.target.checked ? "You'll get an email when someone comments on your work." : "Comment emails are off.");
+    await writeAccountProfile(account.uid, { [key]: e.target.checked });
+    accountNotice(EMAIL_PREF_NOTICES[key][e.target.checked ? 0 : 1]);
   } catch (err) {
     e.target.checked = !e.target.checked;
     alert("Couldn't save that: " + err.message);
+  }
+}));
+$('#btn-account-roundup-preview').addEventListener('click', async (e) => {
+  e.target.disabled = true;
+  try {
+    const result = await sendRoundupPreview();
+    accountNotice(`Sent last week's roundup to ${result.email}.`);
+  } catch (err) {
+    alert(err.message || "Couldn't send the roundup.");
+  } finally {
+    e.target.disabled = false;
   }
 });
 $('#btn-account-reset').addEventListener('click', () => {

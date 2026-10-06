@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://www.gstatic.com https://*.googleapis.com https://api.open-meteo.com https://geocoding-api.open-meteo.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://www.gstatic.com https://*.googleapis.com https://*.cloudfunctions.net https://api.open-meteo.com https://geocoding-api.open-meteo.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';">
 <title>Daily Work Reports</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="manifest" href="manifest.json">
@@ -49,6 +49,23 @@
         <label style="margin-top:0.75rem;">Password <input type="password" id="si-password" autocomplete="current-password"></label>
         <button type="button" class="btn-primary" id="btn-signin" style="margin-top:0.75rem;">Sign In</button>
         <button type="button" class="text-btn" id="btn-forgot" style="margin-top:0.25rem;">Forgot password?</button>
+      </div>
+
+      <!-- Forgot password: a 6-digit code by email (no link), then a new
+           password. An admin can also send the code from the Team list. -->
+      <div id="form-reset" hidden>
+        <p class="hint" style="margin:0 0 0.75rem;">We'll email you a 6-digit code to set a new password.</p>
+        <label>Email <input type="email" id="rp-email" autocomplete="username" inputmode="email"></label>
+        <button type="button" class="btn-primary" id="btn-rp-send" style="margin-top:0.75rem;">Email Me a Code</button>
+        <button type="button" class="text-btn" id="btn-rp-have" style="margin-top:0.25rem;">I have a code</button>
+        <div id="rp-step2" hidden>
+          <label style="margin-top:0.75rem;">6-Digit Code <input type="text" id="rp-code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456"></label>
+          <label style="margin-top:0.75rem;">New Password <input type="password" id="rp-password" autocomplete="new-password">
+            <span class="hint">At least 8 characters.</span>
+          </label>
+          <button type="button" class="btn-primary" id="btn-rp-save" style="margin-top:0.75rem;">Save New Password and Sign In</button>
+        </div>
+        <button type="button" class="text-btn" id="btn-rp-back" style="margin-top:0.25rem;">Back to sign in</button>
       </div>
 
       <div id="form-create" hidden>
@@ -171,6 +188,7 @@ function setMode(mode) {
   $$('#account-mode button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === mode)));
   $('#form-signin').hidden = mode !== 'signin';
   $('#form-create').hidden = mode !== 'create';
+  $('#form-reset').hidden = true;
   $('#account-error').hidden = true;
   $('#account-notice').hidden = true;
 }
@@ -263,15 +281,63 @@ $('#btn-signin').addEventListener('click', async () => {
   }
 });
 
-$('#btn-forgot').addEventListener('click', async () => {
+$('#btn-forgot').addEventListener('click', () => {
+  $('#form-signin').hidden = true;
+  $('#form-reset').hidden = false;
+  $('#rp-step2').hidden = true;
+  $('#btn-rp-have').hidden = false;
+  $('#account-error').hidden = true;
+  $('#account-notice').hidden = true;
+  $('#rp-email').value = $('#si-email').value;
+  $('#rp-email').focus();
+});
+$('#btn-rp-back').addEventListener('click', () => setMode('signin'));
+$('#btn-rp-have').addEventListener('click', () => {
+  $('#rp-step2').hidden = false;
+  $('#btn-rp-have').hidden = true;
+  $('#rp-code').focus();
+});
+$('#btn-rp-send').addEventListener('click', async () => {
+  const btn = $('#btn-rp-send');
   const errorEl = $('#account-error');
   errorEl.hidden = true;
+  btn.disabled = true;
   try {
-    await sendAccountPasswordReset($('#si-email').value);
-    $('#account-notice').textContent = 'If that email has an account, a link to reset the password is on its way. Check your spam folder too.';
+    await sendAccountPasswordReset($('#rp-email').value);
+    $('#account-notice').textContent = 'If that email has an account, a 6-digit code is on its way. It can take a minute; check your junk folder too.';
     $('#account-notice').hidden = false;
+    $('#rp-step2').hidden = false;
+    $('#btn-rp-have').hidden = true;
+    btn.textContent = 'Email Me a New Code';
+    $('#rp-code').focus();
   } catch (err) {
     showError(errorEl, err.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+onEnterSubmit($('#rp-step2'), $('#btn-rp-save'));
+$('#btn-rp-save').addEventListener('click', async () => {
+  const btn = $('#btn-rp-save');
+  const errorEl = $('#account-error');
+  errorEl.hidden = true;
+  $('#account-notice').hidden = true;
+  btn.disabled = true;
+  const email = $('#rp-email').value;
+  const password = $('#rp-password').value;
+  try {
+    await resetAccountPassword({ email, code: $('#rp-code').value, password });
+    startProgressBanner();
+    progressStep('signing-in', 'Password saved. Signing you in');
+    await signInAccount({ email, password }, reportCompanyProgress);
+    finishProgressBanner('Signed in.');
+    await afterAccount();
+  } catch (err) {
+    console.error(err);
+    hideProgressBanner();
+    showError(errorEl, err.message);
+  } finally {
+    btn.disabled = false;
   }
 });
 

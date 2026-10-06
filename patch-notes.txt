@@ -3,6 +3,30 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.051 -- 2026-10-06
+  - Reply to comments: a Reply button under each comment on daily
+    reports and Pay Apps. The person you reply to gets an email, and so
+    does the report's owner if it isn't you. Authors can always reply on
+    their own reports.
+  - Forgot your password? The sign-in screen emails you a 6-digit code
+    to set a new one. Admins can also send someone a code from the Team
+    list ("Send Reset Code"), so nothing has to be passed along by hand.
+  - Weekly roundup email, Tuesdays at 6:30 AM in your own time zone: last
+    week on the projects you manage (reports, who worked and their hours,
+    pay items used, percent complete, contract days left) with a "Heads
+    up" box for pay items over plan, contract time running out, or
+    falling behind. "Send Me a Roundup Now" sends one right away. Admins
+    can choose to cover every company project.
+  - New account emails: admins hear when someone asks to join, people
+    hear when they're approved, pre-approved emails get an invite, and
+    everyone gets a heads-up whenever their password changes.
+  - Admin emails: security changes (new admins, people removed, password
+    and sign-in settings, roles, deleted reports and projects), grouped
+    every 15 minutes, and problems (uploads that keep failing, emails that
+    couldn't be sent), at most once a day.
+  - Settings > Account > "Email Me About": turn each kind of email on or
+    off. Password and approval emails always send.
+
 0.050 -- 2026-10-06
   - Settings > Company > Roles (replaces Access & Members): one table of
     what people without an account, Inspectors and Managers can each do.

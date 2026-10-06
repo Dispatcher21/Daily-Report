@@ -1,0 +1,373 @@
+// COPY of ../../quantity-calc.js for the weekly roundup (functions/roundup.js),
+// so its numbers match the app's dashboards. Re-copy if that file changes.
+// Pay-item quantity aggregation shared by the Quantity Sheet and the project
+// dashboard, so "how much of each item has been used" and "% complete" are
+// computed exactly one way in both places.
+
+// A catalog's Unit Price cell is free text (same as Per Plans Total) --
+// blank, non-numeric, or negative all mean "no price on file", not $0.
+function parsedUnitPrice(cat) {
+  const n = cat ? Number(cat.unitPrice) : NaN;
+  return cat && cat.unitPrice !== '' && cat.unitPrice != null && isFinite(n) && n >= 0 ? n : null;
+}
+
+// A Lump Sum item has no physical quantity a daily total is ever really
+// counting toward -- "0.25 of 1 LUMP SUM" isn't a meaningful measurement the
+// way "0.664 of 12 MILE" is. These are deliberately kept out of % complete
+// (per-item band, and the project-wide weighted Overall % Complete) even
+// when a Per Plans Total happens to be on file; they still show their raw
+// used quantity and can still carry a dollar value if priced.
+function isLumpSumUnit(unit) {
+  return /^lump\s*sum$|^l\.?s\.?$/i.test(String(unit || '').trim());
+}
+
+// A Lump Sum item isn't priced per unit the way "12 MILE @ $500/MILE" is --
+// its Unit Price on file already IS the total contract value for that one
+// item, and the "quantity" an inspector logs against it on a report is
+// already a dollar amount earned that day (e.g. "$20,850" toward a
+// $430,000 lump sum), not a multiplier. Multiplying either one by price
+// the way every other unit does produces nonsense figures (a $42K running
+// total on a $430K item was coming out as $18 BILLION before this).
+function contractTotalFor(unit, planned, unitPrice) {
+  if (unitPrice == null) return null;
+  if (isLumpSumUnit(unit)) return unitPrice;
+  return planned != null ? planned * unitPrice : null;
+}
+function earnedTotalFor(unit, total, unitPrice) {
+  if (unitPrice == null) return null;
+  return isLumpSumUnit(unit) ? total : total * unitPrice;
+}
+
+// Sums each pay item's quantity across a flat list of pay-item entries
+// (first-seen order, so it's on the caller to pass them in whatever order
+// "first seen" should mean -- chronological, undated-last, whatever fits),
+// then matches each against the project's catalog to attach a planned
+// quantity, unit price, percent-complete and dollar figures -- all left null
+// when the underlying catalog data isn't on file, so callers can show a
+// blank instead of a misleading 0.
+function aggregatePayItemTotals(flatItems, payItemCatalog) {
+  const itemOrder = [];
+  const itemMeta = new Map();
+  const totalQty = new Map();
+  const totalTheoreticalQty = new Map();
+
+  for (const it of (flatItems || []).filter((it) => it && String(it.itemNumber || '').trim() !== '')) {
+    const key = String(it.itemNumber).trim();
+    if (!itemMeta.has(key)) {
+      itemMeta.set(key, { itemNumber: key, description: it.description || '', unit: it.unit || '' });
+      itemOrder.push(key);
+      totalQty.set(key, 0);
+      totalTheoreticalQty.set(key, 0);
+    }
+    totalQty.set(key, totalQty.get(key) + (Number(it.qty) || 0));
+    totalTheoreticalQty.set(key, totalTheoreticalQty.get(key) + (Number(it.theoreticalQty) || 0));
+  }
+
+  const catalogByItem = new Map((payItemCatalog || []).map((p) => [String(p.itemNumber).trim(), p]));
+
+  return itemOrder.map((key) => {
+    const meta = itemMeta.get(key);
+    const total = totalQty.get(key);
+    const cat = catalogByItem.get(key);
+    const planned = cat && Number(cat.plannedQty) > 0 ? Number(cat.plannedQty) : null;
+    const unitPrice = parsedUnitPrice(cat);
+    // The catalog's own description/unit win over whatever happened to be
+    // typed on the report entry (a catalog item is the authoritative source,
+    // and it's the only source at all for items with zero usage).
+    const unit = (cat && cat.unit) || meta.unit;
+    // Overrun only means anything for an item that actually tracks
+    // Theoretical Qty -- otherwise every entry's theoreticalQty is blank and
+    // this would show a misleading "0 overrun" for items that never use it.
+    const overrun = cat && cat.theoretical ? Math.round((total - totalTheoreticalQty.get(key)) * 1000) / 1000 : null;
+    const contractTotal = contractTotalFor(unit, planned, unitPrice);
+    const earnedTotal = earnedTotalFor(unit, total, unitPrice);
+    return {
+      itemNumber: meta.itemNumber,
+      description: (cat && cat.description) || meta.description,
+      unit,
+      total,
+      planned,
+      // A Lump Sum item's raw "quantity" was never on a physical scale worth
+      // comparing to a planned quantity (see contractTotalFor/earnedTotalFor)
+      // -- but its dollar earned-vs-contracted ratio is a perfectly real %
+      // complete, and now that a Pay App tracks Lump Sum billing precisely
+      // (percent-of-value entry, see quantity-sheet.html), there's an actual
+      // number to show here instead of leaving it permanently blank.
+      // overallPercentComplete (below) still excludes Lump Sum from the
+      // project-wide quantity-weighted average regardless of this -- that
+      // exclusion is about not mixing dollars into a physical-unit average,
+      // which this doesn't change.
+      pct: isLumpSumUnit(unit)
+        ? (contractTotal != null && contractTotal > 0 ? earnedTotal / contractTotal : null)
+        : (planned != null ? total / planned : null),
+      unitPrice,
+      contractTotal,
+      earnedTotal,
+      overrun,
+    };
+  });
+}
+
+// Every item in the project's pay item catalog, merged with usage totals
+// from reports -- unlike aggregatePayItemTotals above (usage-only, since
+// that's what the Quantity Sheet export wants), this always includes catalog
+// items that haven't shown up on any report yet, so the project dashboard
+// can show the full bid item list rather than just what's been touched so
+// far. Items used on a report but missing from the catalog entirely are
+// still real work performed, so they're appended after the catalog's own
+// order rather than dropped.
+function fullPayItemCatalogOverview(flatItems, payItemCatalog) {
+  const used = aggregatePayItemTotals(flatItems, payItemCatalog);
+  const usedByKey = new Map(used.map((it) => [it.itemNumber, it]));
+
+  const overview = (payItemCatalog || [])
+    .filter((cat) => String(cat.itemNumber || '').trim() !== '')
+    .map((cat) => {
+      const key = String(cat.itemNumber).trim();
+      const hit = usedByKey.get(key);
+      if (hit) return hit;
+      const planned = Number(cat.plannedQty) > 0 ? Number(cat.plannedQty) : null;
+      const unitPrice = parsedUnitPrice(cat);
+      const contractTotal = contractTotalFor(cat.unit, planned, unitPrice);
+      // Untouched so far -- earnedTotal is trivially 0, so a Lump Sum item's
+      // $-based pct (see aggregatePayItemTotals' own comment) is just 0 as
+      // long as there's a contract value to measure 0 against.
+      return {
+        itemNumber: key,
+        description: cat.description || '',
+        unit: cat.unit || '',
+        total: 0,
+        planned,
+        pct: isLumpSumUnit(cat.unit) ? (contractTotal != null && contractTotal > 0 ? 0 : null) : (planned != null ? 0 : null),
+        unitPrice,
+        contractTotal,
+        earnedTotal: earnedTotalFor(cat.unit, 0, unitPrice),
+        overrun: cat.theoretical ? 0 : null,
+      };
+    });
+
+  const catalogKeys = new Set(overview.map((it) => it.itemNumber));
+  const uncataloged = used.filter((it) => !catalogKeys.has(it.itemNumber));
+  return overview.concat(uncataloged);
+}
+
+// Total contract value (sum of planned qty x price, across items that have
+// both) and total earned to date (sum of used qty x price, across items
+// with a price) for a set of items from the two functions above. Either
+// comes back null rather than 0 when nothing in the set has pricing at all,
+// so callers can show a blank instead of a misleading $0.
+function contractValueSummary(items) {
+  let totalContract = 0;
+  let totalEarned = 0;
+  let hasContract = false;
+  let hasEarned = false;
+  for (const it of items || []) {
+    if (it.contractTotal != null) {
+      totalContract += it.contractTotal;
+      hasContract = true;
+    }
+    if (it.earnedTotal != null) {
+      totalEarned += it.earnedTotal;
+      hasEarned = true;
+    }
+  }
+  return {
+    totalContract: hasContract ? totalContract : null,
+    totalEarned: hasEarned ? totalEarned : null,
+    pctByValue: hasContract && hasEarned && totalContract > 0 ? totalEarned / totalContract : null,
+  };
+}
+
+// Cumulative pay-item completion by calendar date, replaying each dated
+// report's quantities in date order -- powers the dashboard's progress trend
+// chart. Reports sharing a date are combined into one point, matching how
+// the Quantity Sheet treats "day" as the unit rather than "report". Mostly
+// only grows moving forward (usage doesn't get undone), except at a Pay App
+// date: same as effectivePayItemFlatEntries, a Pay App's own approved
+// itemTotals there replace whatever had accumulated from reports through
+// that date rather than adding to it -- a real jump (up or down) instead of
+// a smooth climb, flagged on that point (payApp: true) so the chart can
+// mark it differently from an ordinary report-driven point. Reports dated
+// after the latest Pay App keep accumulating normally on top of it.
+function progressOverTime(datedReports, payItemCatalog, billingEstimates) {
+  const byDate = new Map();
+  for (const r of datedReports || []) {
+    if (!r.date) continue;
+    const items = (r.payItems || []).filter((it) => it && String(it.itemNumber || '').trim() !== '');
+    if (!byDate.has(r.date)) byDate.set(r.date, []);
+    byDate.get(r.date).push(...items);
+  }
+  const payAppByDate = new Map(
+    sortedEstimates(billingEstimates)
+      .filter((e) => e.itemTotals && Object.keys(e.itemTotals).length > 0)
+      .map((e) => [e.date, e])
+  );
+  const dates = Array.from(new Set([...byDate.keys(), ...payAppByDate.keys()])).sort();
+
+  const points = [];
+  let running = [];
+  for (const date of dates) {
+    const payApp = payAppByDate.get(date);
+    if (payApp) {
+      running = Object.entries(payApp.itemTotals)
+        .filter(([, qty]) => qty != null && qty !== '')
+        .map(([itemNumber, qty]) => ({ itemNumber, qty: Number(qty) }));
+    } else {
+      running = running.concat(byDate.get(date));
+    }
+    const items = fullPayItemCatalogOverview(running, payItemCatalog);
+    const { totalEarned } = contractValueSummary(items);
+    points.push({ date, pct: overallPercentComplete(items), earned: totalEarned, payApp: !!payApp });
+  }
+  return points;
+}
+
+// Quantity-weighted aggregate across every item that has planned data on
+// file: sum(quantity used) / sum(quantity planned), not a simple average of
+// each item's own percentage or a count of "finished" items. Items with no
+// planned quantity are excluded from both the numerator and denominator
+// rather than silently counted as 0% -- as are Lump Sum items, whose
+// "quantity" isn't on the same physical scale as everything else being
+// summed, even on the rare occasion one has a Per Plans Total on file.
+function overallPercentComplete(items) {
+  let sumTotal = 0;
+  let sumPlanned = 0;
+  for (const it of items) {
+    if (it.planned != null && !isLumpSumUnit(it.unit)) {
+      sumTotal += it.total;
+      sumPlanned += it.planned;
+    }
+  }
+  return sumPlanned > 0 ? sumTotal / sumPlanned : null;
+}
+
+// Colour-coded completion band for one pay item's percent complete -- shared
+// by project.html's Pay Item Completion list and quantity-sheet.html's own
+// totals view, so the same figure always reads the same colour/label
+// wherever it shows up. Thresholds: nothing used yet, under half, half to
+// 90%, 90% to 110% (effectively "done" either side of exactly on-target),
+// and meaningfully over -- flagged as attention-worthy (an overrun), not as
+// extra good news.
+function completionBand(pct) {
+  if (pct == null) return { cls: 'status-none', label: 'No Target' };
+  if (pct <= 0) return { cls: 'status-notstarted', label: 'Not Started' };
+  if (pct < 0.5) return { cls: 'status-early', label: 'Early' };
+  if (pct < 0.9) return { cls: 'status-progress', label: 'In Progress' };
+  if (pct < 1.1) return { cls: 'status-near', label: pct >= 1 ? 'Complete' : 'Near Complete' };
+  return { cls: 'status-over', label: 'Over Plan' };
+}
+
+const PI_BAND_ORDER = ['status-notstarted', 'status-early', 'status-progress', 'status-near', 'status-over', 'status-none'];
+const PI_BAND_LABELS = {
+  'status-notstarted': 'Not Started', 'status-early': 'Early', 'status-progress': 'In Progress',
+  'status-near': 'Near/Complete', 'status-over': 'Over Plan', 'status-none': 'No Target',
+};
+
+// Estimates in date order (oldest first) -- the order billing periods
+// actually happened in, regardless of what order they were recorded in or
+// how their Estimate No. text sorts.
+function sortedEstimates(billingEstimates) {
+  return (billingEstimates || []).slice().sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+}
+
+// Once a Pay App is on file, it's the new floor everything else builds on:
+// its own itemTotals (an engineer's approved figures, entered on the
+// Quantity Sheet's Pay App section -- not a report total) replace whatever
+// inspectors had logged up through its date, and only reports dated after
+// that keep accumulating on top. A report with no date at all can't be
+// placed relative to the cutoff, so it's kept as still-current rather than
+// silently dropped. With no Pay App recorded yet, this is exactly the flat
+// list every report would already produce on its own -- an existing
+// project with no Pay Apps sees no change in its numbers from this.
+//
+// Feeding the result into aggregatePayItemTotals/fullPayItemCatalogOverview
+// unchanged (rather than merging Pay App figures in as a separate step)
+// means a Pay App's approved quantity and an inspector's logged quantity
+// are summed by exactly the same code, the same way two reports' quantities
+// for the same item already are.
+//
+// excludeEstimateId leaves one specific Pay App out of "latest" entirely --
+// for the Quantity Sheet's own Item Quantities table while editing that
+// Pay App, so its Inspector Total reference column reflects the baseline
+// it was approved against (the Pay App before it, if any, plus reports
+// since) rather than circularly including its own not-yet-resaved figures.
+function effectivePayItemFlatEntries(reports, billingEstimates, excludeEstimateId) {
+  const candidates = excludeEstimateId
+    ? (billingEstimates || []).filter((e) => e.id !== excludeEstimateId)
+    : billingEstimates;
+  const latest = sortedEstimates(candidates).pop() || null;
+  const reportEntries = (reports || [])
+    .filter((r) => !latest || !r.date || r.date > latest.date)
+    .flatMap((r) => r.payItems || []);
+  if (!latest || !latest.itemTotals) return reportEntries;
+  const payAppEntries = Object.entries(latest.itemTotals)
+    .filter(([, qty]) => qty != null && qty !== '')
+    .map(([itemNumber, qty]) => ({ itemNumber, qty: Number(qty) }));
+  return payAppEntries.concat(reportEntries);
+}
+
+// Just the latest recorded Pay App's own item totals, with no report
+// activity filed since layered on top -- unlike effectivePayItemFlatEntries
+// above, which exists precisely to blend those in for the project's live
+// working numbers. This is for a figure that's supposed to mean "what's been
+// formally billed to date," which by definition freezes at the last Pay App
+// and shouldn't creep up between billing cycles just because inspectors kept
+// logging quantity. Returns null (not an empty array) when no Pay App has
+// ever been recorded, so a caller can tell "nothing billed yet" apart from
+// "no Pay App exists to measure at all."
+function latestPayAppFlatEntries(billingEstimates) {
+  const latest = sortedEstimates(billingEstimates).pop() || null;
+  if (!latest) return null;
+  if (!latest.itemTotals) return [];
+  return Object.entries(latest.itemTotals)
+    .filter(([, qty]) => qty != null && qty !== '')
+    .map(([itemNumber, qty]) => ({ itemNumber, qty: Number(qty) }));
+}
+
+function nextDayIso(iso) {
+  const d = new Date(`${iso}T00:00:00`);
+  d.setDate(d.getDate() + 1);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+// The two date ranges one billing checkpoint implies: "cumulative" is
+// everything up through this estimate's date (from project start), the
+// figure a contractor's running total gets checked against; "period" is
+// just what's new since the *previous* estimate -- the actual delta being
+// billed this time. The first estimate on file has no previous one, so its
+// period equals its cumulative range.
+function estimatePeriodBounds(billingEstimates, estimateId) {
+  const sorted = sortedEstimates(billingEstimates);
+  const idx = sorted.findIndex((e) => e.id === estimateId);
+  if (idx === -1) return null;
+  const estimate = sorted[idx];
+  const prevEstimate = idx > 0 ? sorted[idx - 1] : null;
+  return {
+    estimate,
+    prevEstimate,
+    cumulativeFrom: null,
+    cumulativeTo: estimate.date,
+    periodFrom: prevEstimate ? nextDayIso(prevEstimate.date) : null,
+    periodTo: estimate.date,
+  };
+}
+
+// Also shared by project.html's Pay Item Completion list and
+// quantity-sheet.html's totals view -- same sort options, same behavior,
+// wherever a list of aggregated pay items shows up.
+function sortPayItems(items, mode) {
+  const byItemNumber = (a, b) => a.itemNumber.localeCompare(b.itemNumber, undefined, { numeric: true });
+  if (mode === 'item-number') return items.slice().sort(byItemNumber);
+  if (mode === 'earned-desc') return items.slice().sort((a, b) => (b.earnedTotal ?? -1) - (a.earnedTotal ?? -1));
+  if (mode === 'remaining-desc') {
+    const remaining = (it) => (it.contractTotal != null && it.earnedTotal != null ? it.contractTotal - it.earnedTotal : -Infinity);
+    return items.slice().sort((a, b) => remaining(b) - remaining(a));
+  }
+  // 'most-complete' and the default 'least complete first' both rank items
+  // with a real target by pct, and group untargeted items (no ranking to
+  // give them) at the end by item number.
+  const withTarget = items.filter((it) => it.pct != null).sort((a, b) => (mode === 'most-complete' ? b.pct - a.pct : a.pct - b.pct));
+  const noTarget = items.filter((it) => it.pct == null).sort(byItemNumber);
+  return withTarget.concat(noTarget);
+}

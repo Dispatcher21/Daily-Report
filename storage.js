@@ -393,7 +393,7 @@ async function saveReport(report) {
 // width/height rather than absolute pixels, so the pin lands in the same
 // spot on the page no matter what width it's later rendered at (a phone
 // vs. a wide desktop window, or the page simply getting resized).
-async function saveReportApproval(reportId, { status, comment, pin } = {}) {
+async function saveReportApproval(reportId, { status, comment, pin, parentId } = {}) {
   const report = await getReport(reportId, { includeDeleted: true });
   if (!report) throw new Error('Report not found.');
 
@@ -410,6 +410,8 @@ async function saveReportApproval(reportId, { status, comment, pin } = {}) {
   let addedComment = null;
   if (comment && comment.trim()) {
     addedComment = { id: crypto.randomUUID(), author: userName || '', authorUid: currentAccountUid(), text: comment.trim(), createdAt: Date.now() };
+    // A reply: which comment it answers (shown under it; see report-viewer.html).
+    if (parentId) addedComment.parentId = parentId;
     if (pin && Number.isFinite(pin.page) && Number.isFinite(pin.x) && Number.isFinite(pin.y)) {
       addedComment.pin = { page: pin.page, x: pin.x, y: pin.y };
     }
@@ -660,7 +662,7 @@ async function saveProject(project) {
 // entry by id, and writes it back with its own audit verb rather than going
 // through saveProject's generic per-field diff (which would just log it as
 // an unremarkable "edited" project change, same as any other pay item edit).
-async function saveBillingEstimateApproval(projectId, estimateId, { status, comment } = {}) {
+async function saveBillingEstimateApproval(projectId, estimateId, { status, comment, parentId } = {}) {
   const project = await getProject(projectId);
   if (!project) throw new Error('Project not found.');
   const estimate = (project.billingEstimates || []).find((e) => e.id === estimateId);
@@ -677,6 +679,7 @@ async function saveBillingEstimateApproval(projectId, estimateId, { status, comm
   let addedComment = null;
   if (comment && comment.trim()) {
     addedComment = { id: crypto.randomUUID(), author: userName || '', authorUid: currentAccountUid(), text: comment.trim(), createdAt: Date.now() };
+    if (parentId) addedComment.parentId = parentId;
     estimate.comments = [...(estimate.comments || []), addedComment];
   }
 
