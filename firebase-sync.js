@@ -544,6 +544,38 @@ const ROLE_PERMISSIONS = {
 };
 const ACCOUNT_MIN_PASSWORD = 8;
 
+// What a role can do in this company: the role's defaults above, as
+// adjusted on Settings > Roles (company doc rolePermissions.<role>).
+function rolePermissionsFor(companyData, role) {
+  const base = ROLE_PERMISSIONS[role] || ROLE_PERMISSIONS.inspector;
+  const custom = (companyData && companyData.rolePermissions && companyData.rolePermissions[role]) || {};
+  const merged = { ...base };
+  Object.keys(DEFAULT_PERMISSIONS).forEach((key) => { if (typeof custom[key] === 'boolean') merged[key] = custom[key]; });
+  return merged;
+}
+
+async function getRolePermissions() {
+  const room = await getCompanyRoom();
+  if (!room) return { inspector: { ...ROLE_PERMISSIONS.inspector }, manager: { ...ROLE_PERMISSIONS.manager } };
+  const { db } = await waitForFirebaseCore();
+  const { doc, getDoc } = await import(FIRESTORE_SDK);
+  const data = ((await getDoc(doc(db, 'companies', room.code))).data()) || {};
+  return { inspector: rolePermissionsFor(data, 'inspector'), manager: rolePermissionsFor(data, 'manager') };
+}
+
+// Admins: turn one permission on or off for Inspectors or Managers.
+async function updateRolePermission(role, key, on) {
+  const room = await getCompanyRoom();
+  if (!room || !room.isAdmin) throw new Error('Only an admin can change roles.');
+  if (!['inspector', 'manager'].includes(role) || !(key in DEFAULT_PERMISSIONS)) throw new Error('Unknown setting.');
+  const { db } = await waitForFirebaseCore();
+  const { doc, updateDoc } = await import(FIRESTORE_SDK);
+  await updateDoc(doc(db, 'companies', room.code), { [`rolePermissions.${role}.${key}`]: !!on });
+  if (typeof logCompanyAuditEvent === 'function') {
+    logCompanyAuditEvent('company', 'Roles', 'edited', [{ label: `${MEMBER_ROLE_LABELS[role]}: ${COMPANY_PERMISSION_LABELS[key] || key}`, from: on ? 'Off' : 'On', to: on ? 'On' : 'Off' }]).catch((err) => console.error('audit log:', err));
+  }
+}
+
 function accountErrorMessage(err) {
   const code = (err && err.code) || '';
   if (code === 'auth/invalid-email') return 'That email address doesn’t look right.';
@@ -836,7 +868,8 @@ async function refreshMembership({ joined = false } = {}) {
     return member;
   }
   await writeAccountProfile(account.uid, { email: account.email, displayName: name, companyCode: room.code, companyName: room.name || '', pendingCompanyCode: null });
-  await applyMembership(member);
+  const companyData = ((await getDoc(doc(db, 'companies', room.code)).catch(() => null)) || { data: () => ({}) }).data() || {};
+  await applyMembership(member, companyData);
   return member;
 }
 
@@ -1095,14 +1128,14 @@ async function cancelTeamInvite(email) {
 
 // A member record's role and project access, as this device's settings
 // (the same ones companyCan/projectInScope already read).
-async function applyMembership(member) {
+async function applyMembership(member, companyData = {}) {
   const role = MEMBER_ROLES.includes(member.role) ? member.role : 'inspector';
   const before = await getCompanyRoom();
   const scopeBefore = before && !before.isAdmin ? before.projectScope : null;
   const scope = role !== 'admin' && Array.isArray(member.projectIds) ? member.projectIds : null;
   await saveSetting(COMPANY_ROLE_ID_SETTING, null);
   await saveSetting(COMPANY_ADMIN_SETTING, role === 'admin');
-  if (role !== 'admin') await saveSetting(COMPANY_PERMISSIONS_SETTING, ROLE_PERMISSIONS[role]);
+  if (role !== 'admin') await saveSetting(COMPANY_PERMISSIONS_SETTING, rolePermissionsFor(companyData, role));
   await saveSetting(COMPANY_PROJECT_SCOPE_SETTING, scope);
   if (JSON.stringify(scopeBefore) !== JSON.stringify(scope)) {
     // Different projects now: the next pull reads everything allowed from
