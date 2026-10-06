@@ -72,6 +72,9 @@
     margin: 1.4rem 0 0.6rem; padding-bottom: 0.3rem; border-bottom: 1px solid var(--border);
   }
   .settings-subhead:first-child { margin-top: 0; }
+  /* A quick "Saved" next to an email switch the moment it's stored. */
+  .pref-saved { margin-left: 0.5rem; color: var(--ok); font-weight: 700; font-size: 0.8rem; white-space: nowrap; transition: opacity 0.4s; }
+  .pref-saved.fade { opacity: 0; }
 
   /* Pencil-edit -- the actual "access via a little edit icon" ask. A small,
      semi-transparent overlay button on a preview image; clicking it just
@@ -2951,20 +2954,37 @@ $$('[data-email-pref]').forEach((box) => box.addEventListener('change', async (e
   try {
     await writeAccountProfile(account.uid, { [key]: e.target.checked });
     accountNotice(EMAIL_PREF_NOTICES[key][e.target.checked ? 0 : 1]);
+    flashSaved(e.target.closest('label').querySelector('span'), 'Saved \u2713');
   } catch (err) {
     e.target.checked = !e.target.checked;
     alert("Couldn't save that: " + err.message);
   }
 }));
+function flashSaved(after, text) {
+  if (!after) return;
+  const prev = after.parentNode.querySelector('.pref-saved');
+  if (prev) prev.remove();
+  const tag = document.createElement('span');
+  tag.className = 'pref-saved';
+  tag.textContent = text;
+  after.after(tag);
+  setTimeout(() => tag.classList.add('fade'), 1800);
+  setTimeout(() => tag.remove(), 2300);
+}
 $('#btn-account-roundup-preview').addEventListener('click', async (e) => {
-  e.target.disabled = true;
+  const btn = e.currentTarget;
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Sending\u2026';
   try {
     const result = await sendRoundupPreview();
-    accountNotice(`Sent last week's roundup to ${result.email}.`);
+    btn.textContent = 'Sent \u2713';
+    accountNotice(`Sent last week's roundup to ${result.email}. It should arrive within a minute or two.`);
+    setTimeout(() => { btn.textContent = label; btn.disabled = false; }, 3000);
   } catch (err) {
+    btn.textContent = label;
+    btn.disabled = false;
     alert(err.message || "Couldn't send the roundup.");
-  } finally {
-    e.target.disabled = false;
   }
 });
 $('#btn-account-reset').addEventListener('click', () => {
