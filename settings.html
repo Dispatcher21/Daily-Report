@@ -789,17 +789,31 @@
                     <td class="roles-all">All</td>
                   </tr>
                   <tr>
-                    <th scope="row">Approve/comment on reports</th>
-                    <td><input type="checkbox" id="cm-perm-approve-reports" aria-label="Approve/comment on reports: people without an account"></td>
-                    <td><input type="checkbox" data-role="inspector" data-key="membersCanApproveReports" aria-label="Approve/comment on reports: Inspector"></td>
-                    <td><input type="checkbox" data-role="manager" data-key="membersCanApproveReports" aria-label="Approve/comment on reports: Manager"></td>
+                    <th scope="row">Approve/request changes on reports</th>
+                    <td><input type="checkbox" id="cm-perm-approve-reports" aria-label="Approve/request changes on reports: people without an account"></td>
+                    <td><input type="checkbox" data-role="inspector" data-key="membersCanApproveReports" aria-label="Approve/request changes on reports: Inspector"></td>
+                    <td><input type="checkbox" data-role="manager" data-key="membersCanApproveReports" aria-label="Approve/request changes on reports: Manager"></td>
                     <td class="roles-all">All</td>
                   </tr>
                   <tr>
-                    <th scope="row">Approve/comment on Pay Apps</th>
-                    <td><input type="checkbox" id="cm-perm-approve-payapps" aria-label="Approve/comment on Pay Apps: people without an account"></td>
-                    <td><input type="checkbox" data-role="inspector" data-key="membersCanApprovePayApps" aria-label="Approve/comment on Pay Apps: Inspector"></td>
-                    <td><input type="checkbox" data-role="manager" data-key="membersCanApprovePayApps" aria-label="Approve/comment on Pay Apps: Manager"></td>
+                    <th scope="row">Comment on reports</th>
+                    <td><input type="checkbox" id="cm-perm-comment-reports" aria-label="Comment on reports: people without an account"></td>
+                    <td><input type="checkbox" data-role="inspector" data-key="membersCanCommentReports" aria-label="Comment on reports: Inspector"></td>
+                    <td><input type="checkbox" data-role="manager" data-key="membersCanCommentReports" aria-label="Comment on reports: Manager"></td>
+                    <td class="roles-all">All</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Approve/request changes on Pay Apps</th>
+                    <td><input type="checkbox" id="cm-perm-approve-payapps" aria-label="Approve/request changes on Pay Apps: people without an account"></td>
+                    <td><input type="checkbox" data-role="inspector" data-key="membersCanApprovePayApps" aria-label="Approve/request changes on Pay Apps: Inspector"></td>
+                    <td><input type="checkbox" data-role="manager" data-key="membersCanApprovePayApps" aria-label="Approve/request changes on Pay Apps: Manager"></td>
+                    <td class="roles-all">All</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">Comment on Pay Apps</th>
+                    <td><input type="checkbox" id="cm-perm-comment-payapps" aria-label="Comment on Pay Apps: people without an account"></td>
+                    <td><input type="checkbox" data-role="inspector" data-key="membersCanCommentPayApps" aria-label="Comment on Pay Apps: Inspector"></td>
+                    <td><input type="checkbox" data-role="manager" data-key="membersCanCommentPayApps" aria-label="Comment on Pay Apps: Manager"></td>
                     <td class="roles-all">All</td>
                   </tr>
                 </tbody>
@@ -1385,6 +1399,8 @@ async function refreshCompanySection() {
     $('#cm-perm-view-manager-dashboard').checked = !!perms.membersCanViewManagerDashboard;
     $('#cm-perm-approve-reports').checked = !!perms.membersCanApproveReports;
     $('#cm-perm-approve-payapps').checked = !!perms.membersCanApprovePayApps;
+    $('#cm-perm-comment-reports').checked = !!perms.membersCanCommentReports;
+    $('#cm-perm-comment-payapps').checked = !!perms.membersCanCommentPayApps;
     const roles = await getRolePermissions().catch(() => null);
     if (roles) $$('#roles-table input[data-role]').forEach((cb) => { cb.checked = !!roles[cb.dataset.role][cb.dataset.key]; });
 
@@ -2331,6 +2347,17 @@ $('#cm-perm-approve-reports').addEventListener('change', async (e) => {
     cmError(userError("Couldn't save that permission: " + err.message, 'PERMISSION_TOGGLE'));
   }
 });
+[['#cm-perm-comment-reports', 'membersCanCommentReports'], ['#cm-perm-comment-payapps', 'membersCanCommentPayApps']].forEach(([sel, key]) => $(sel).addEventListener('change', async (e) => {
+  cmError('');
+  try {
+    await updateCompanyPermissions({ [key]: e.target.checked });
+    cmStatus('Permissions saved.');
+  } catch (err) {
+    console.error(err);
+    e.target.checked = !e.target.checked;
+    cmError(userError("Couldn't save that permission: " + err.message, 'PERMISSION_TOGGLE'));
+  }
+}));
 $('#cm-perm-approve-payapps').addEventListener('change', async (e) => {
   cmError('');
   try {
@@ -2382,8 +2409,10 @@ function csPermissionSummary(perms) {
   if (perms.membersCanEditAnyReport) bits.push('edit ANY reports');
   if (perms.membersCanEditProjects) bits.push('edit projects');
   if (perms.membersCanCreateProjects) bits.push('create projects');
-  if (perms.membersCanApproveReports) bits.push('approve/comment on reports');
-  if (perms.membersCanApprovePayApps) bits.push('approve/comment on Pay Apps');
+  if (perms.membersCanApproveReports) bits.push('approve reports');
+  if (perms.membersCanCommentReports) bits.push('comment on reports');
+  if (perms.membersCanApprovePayApps) bits.push('approve Pay Apps');
+  if (perms.membersCanCommentPayApps) bits.push('comment on Pay Apps');
   return bits.length ? bits.join(', ') : 'view only';
 }
 

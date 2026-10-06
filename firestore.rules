@@ -28,22 +28,39 @@ service cloud.firestore {
     function canAdmin(code) { return signedIn() && (!enforced(code) || isAdmin(code)); }
     // What each role may do, from Settings > Roles (company rolePermissions),
     // falling back to the built-in defaults. Admins may do everything.
+    // Built-in defaults: managers can do everything except create
+    // projects; inspectors can only edit their own reports. (Kept as plain
+    // comparisons: a map literal here costs dozens of steps on every check,
+    // and a rule may only take 1,000.)
     function defaultPerm(role, key) {
-      return {
-        'manager': { 'membersCanEditOwnReports': true, 'membersCanEditAnyReport': true, 'membersCanEditProjects': true, 'membersCanCreateProjects': false, 'membersCanViewManagerDashboard': true, 'membersCanApproveReports': true, 'membersCanApprovePayApps': true },
-        'inspector': { 'membersCanEditOwnReports': true, 'membersCanEditAnyReport': false, 'membersCanEditProjects': false, 'membersCanCreateProjects': false, 'membersCanViewManagerDashboard': false, 'membersCanApproveReports': false, 'membersCanApprovePayApps': false }
-      }[role][key];
+      return role == 'manager' ? key != 'membersCanCreateProjects' : key == 'membersCanEditOwnReports';
     }
     function can(code, key) {
       return isMember(code) && (me(code).role == 'admin'
         || company(code).get('rolePermissions', {}).get(me(code).role, {}).get(key, defaultPerm(me(code).role, key)) == true);
     }
+    // Commenting used to come with approving: a role whose comment setting
+    // was never saved keeps whatever its approve setting says.
+    function canComment(code, key, approveKey) {
+      return isMember(code) && (me(code).role == 'admin'
+        || commentPerm(company(code).get('rolePermissions', {}).get(me(code).role, {}), me(code).role, key, approveKey));
+    }
+    function commentPerm(rolePerms, role, key, approveKey) {
+      return rolePerms.get(key, rolePerms.get(approveKey, defaultPerm(role, approveKey))) == true;
+    }
     // Once accounts are required, permission `key` per the role table;
     // before that, anyone signed in (the old password-only behavior).
     function allowed(code, key) { return signedIn() && (!enforced(code) || can(code, key)); }
-    // A change that only touches a report's review: approval and comments.
+    // A change that only touches a report's review: approval and comments,
+    // or just one of the two.
     function reviewOnly() {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approvalStatus', 'approvalBy', 'approvalByUid', 'comments', 'updatedAt']);
+    }
+    function approvalOnly() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approvalStatus', 'approvalBy', 'approvalByUid', 'updatedAt']);
+    }
+    function commentsOnly() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['comments', 'updatedAt']);
     }
     // A report this person wrote: by account, or (older reports, from before
     // accounts) by the name on their member record.
@@ -132,16 +149,19 @@ service cloud.firestore {
           && (!enforced(code) || request.resource.data.get('createdByUid', request.auth.uid) == request.auth.uid
               || request.resource.data.get('createdByUid', null) == null || can(code, 'membersCanEditAnyReport'));
         // Per the role table: anyone's reports, their own, or just the review
-        // (approval and comments).
+        // (approving and commenting are separate permissions).
         allow update: if canSeeProject(code, resource.data.projectId) && canSeeProject(code, request.resource.data.projectId)
           && (!enforced(code)
               || can(code, 'membersCanEditAnyReport')
               || (can(code, 'membersCanEditOwnReports') && ownsReport(code, resource.data)
                   && request.resource.data.get('createdByUid', null) == resource.data.get('createdByUid', request.resource.data.get('createdByUid', null)))
-              || (can(code, 'membersCanApproveReports') && reviewOnly())
-              // The author can always reply to comments on their own report.
-              || (isMember(code) && ownsReport(code, resource.data)
-                  && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['comments', 'updatedAt'])));
+              // (The cheap which-fields-changed checks go first, so the
+              // permission lookups only run when they could matter.)
+              || (approvalOnly() && can(code, 'membersCanApproveReports'))
+              || (commentsOnly() && (canComment(code, 'membersCanCommentReports', 'membersCanApproveReports')
+                  // The author can always reply to comments on their own report.
+                  || (isMember(code) && ownsReport(code, resource.data))))
+              || (reviewOnly() && can(code, 'membersCanApproveReports') && canComment(code, 'membersCanCommentReports', 'membersCanApproveReports')));
         allow delete: if canAdmin(code);
       }
 

@@ -3,6 +3,11 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.0521 -- 2026-10-06
+  - Settings > Company > Roles: approving (or requesting changes) and
+    commenting are now separate permissions, for reports and for Pay
+    Apps. Each company keeps its current setup until an admin changes it.
+
 0.052 -- 2026-10-06
   - Quantities and Pay Apps redesigned. The project page has a card for
     each, with live numbers, and the two pages share a tab bar to switch

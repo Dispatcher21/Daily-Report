@@ -436,8 +436,10 @@ const PERMISSION_NAMES = {
   membersCanEditProjects: 'edit projects',
   membersCanCreateProjects: 'create projects',
   membersCanViewManagerDashboard: 'view the Manager Dashboard',
-  membersCanApproveReports: 'approve/comment on reports',
-  membersCanApprovePayApps: 'approve/comment on Pay Apps',
+  membersCanApproveReports: 'approve/request changes on reports',
+  membersCanApprovePayApps: 'approve/request changes on Pay Apps',
+  membersCanCommentReports: 'comment on reports',
+  membersCanCommentPayApps: 'comment on Pay Apps',
 };
 const PROBLEM_GAP_MS = 24 * 60 * 60 * 1000;
 

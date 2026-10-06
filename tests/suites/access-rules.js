@@ -99,6 +99,16 @@ const raw = (p, fn, arg) => p.evaluate(async ({ src, arg }) => {
   check('roles: managers allowed to create projects -> can', await raw(M, `await fs.setDoc(fs.doc(db, 'companies', code, 'projects', 'p8'), { id: 'p8', name: 'P8' });`), 'ok');
   check("manager's device picks up the new role settings", await M.evaluate(async () => { await autoPullCompanyData(true); return companyCan('createProjects'); }), true);
   await A.evaluate(() => updateRolePermission('inspector', 'membersCanApproveReports', false));
+  // Approving and commenting are separate permissions.
+  const approveIt = (id) => `await fs.updateDoc(fs.doc(db, 'companies', code, 'reports', '${id}'), { approvalStatus: 'approved', approvalBy: 'Bob', approvalByUid: 'b', updatedAt: Date.now() });`;
+  await A.evaluate(() => updateRolePermission('inspector', 'membersCanCommentReports', true));
+  check('comment only: can comment', await raw(Bp, commentOn('rep-p1')), 'ok');
+  check('comment only: cannot approve', await raw(Bp, approveIt('rep-p1')), 'permission-denied');
+  await A.evaluate(async () => { await updateRolePermission('inspector', 'membersCanCommentReports', false); await updateRolePermission('inspector', 'membersCanApproveReports', true); });
+  check('approve only: can approve', await raw(Bp, approveIt('rep-p1')), 'ok');
+  check('approve only: cannot comment', await raw(Bp, commentOn('rep-p1')), 'permission-denied');
+  check("inspector's device sees the split", await Bp.evaluate(async () => { await autoPullCompanyData(true); return [await companyCan('approveReports'), await companyCan('commentReports')]; }), [true, false]);
+  await A.evaluate(() => updateRolePermission('inspector', 'membersCanApproveReports', false));
   // The author can reply on their own report even when inspectors can't edit their own.
   const bobReport = await Bp.evaluate(async () => (await getAllReports()).find((r) => r.createdByUid === window.FirebaseCore.auth.currentUser.uid).id);
   await A.evaluate(() => updateRolePermission('inspector', 'membersCanEditOwnReports', false));
