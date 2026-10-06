@@ -32,9 +32,101 @@
 </header>
 
 <main>
-  <div class="step">
+  <!-- Sign in with an account (or create one). -->
+  <div class="step" id="view-account">
     <div class="step-header">
       <span class="step-num">WELCOME</span>
+      <h2>Sign In</h2>
+    </div>
+    <div class="step-body">
+      <div class="segmented" id="account-mode" role="group" aria-label="Sign in or create an account" style="margin-bottom:1rem;">
+        <button type="button" data-mode="signin" aria-pressed="true">Sign in</button>
+        <button type="button" data-mode="create" aria-pressed="false">Create account</button>
+      </div>
+
+      <div id="form-signin">
+        <label>Email <input type="email" id="si-email" autocomplete="username" inputmode="email"></label>
+        <label style="margin-top:0.75rem;">Password <input type="password" id="si-password" autocomplete="current-password"></label>
+        <button type="button" class="btn-primary" id="btn-signin" style="margin-top:0.75rem;">Sign In</button>
+        <button type="button" class="text-btn" id="btn-forgot" style="margin-top:0.25rem;">Forgot password?</button>
+      </div>
+
+      <div id="form-create" hidden>
+        <label>Your Name
+          <input type="text" id="ca-name" autocomplete="name">
+          <span class="hint">Fills in as Representative on your reports.</span>
+        </label>
+        <label style="margin-top:0.75rem;">Email <input type="email" id="ca-email" autocomplete="username" inputmode="email"></label>
+        <label style="margin-top:0.75rem;">Password <input type="password" id="ca-password" autocomplete="new-password">
+          <span class="hint">At least 8 characters.</span>
+        </label>
+        <button type="button" class="btn-primary" id="btn-create" style="margin-top:0.75rem;">Create Account</button>
+      </div>
+
+      <div class="success" id="account-notice" hidden style="margin-top:0.75rem;"></div>
+      <div class="err" id="account-error" hidden></div>
+    </div>
+  </div>
+
+  <!-- After signing in, if the account isn't in a company yet. -->
+  <div class="step" id="view-company" hidden>
+    <div class="step-header">
+      <span class="step-num">ONE MORE STEP</span>
+      <h2>Join Your Company</h2>
+    </div>
+    <div class="step-body">
+      <p class="hint" id="company-intro" style="margin:0 0 0.9rem;"></p>
+      <label>Company Password
+        <input type="password" id="jc-password" autocomplete="off">
+        <span class="hint">From your company admin. You only need it once: after this, signing in on any device connects you.</span>
+      </label>
+      <button type="button" class="btn-primary" id="btn-join" style="margin-top:0.75rem;">Join Company</button>
+      <button type="button" class="text-btn" id="btn-skip-company" style="margin-top:0.25rem;">Skip for now</button>
+      <div class="err" id="company-error" hidden></div>
+    </div>
+  </div>
+
+  <!-- Joined with the company password, but the company approves new
+       members first. -->
+  <div class="step" id="view-pending" hidden>
+    <div class="step-header">
+      <span class="step-num">ALMOST THERE</span>
+      <h2>Waiting for Approval</h2>
+    </div>
+    <div class="step-body">
+      <p id="pending-text" style="margin-top:0;"></p>
+      <button type="button" class="btn-primary" id="btn-pending-check">Check Again</button>
+      <div style="display:flex; gap:0.75rem; flex-wrap:wrap; margin-top:0.25rem;">
+        <button type="button" class="text-btn" id="btn-pending-other">Use a different company password</button>
+        <button type="button" class="text-btn" id="btn-pending-signout">Sign out</button>
+      </div>
+      <div class="err" id="pending-error" hidden></div>
+    </div>
+  </div>
+
+  <!-- This account's email was pre-approved by a company. -->
+  <div class="step" id="view-invite" hidden>
+    <div class="step-header">
+      <span class="step-num">YOU'RE INVITED</span>
+      <h2 id="invite-title">Join Your Company</h2>
+    </div>
+    <div class="step-body">
+      <p id="invite-text" style="margin-top:0;"></p>
+      <button type="button" class="btn-primary" id="btn-invite-accept">I've Verified My Email</button>
+      <div style="display:flex; gap:0.75rem; flex-wrap:wrap; margin-top:0.25rem;">
+        <button type="button" class="text-btn" id="btn-invite-resend">Resend the email</button>
+        <button type="button" class="text-btn" id="btn-invite-skip">Skip for now</button>
+      </div>
+      <div class="success" id="invite-notice" hidden style="margin-top:0.75rem;"></div>
+      <div class="err" id="invite-error" hidden></div>
+    </div>
+  </div>
+
+  <!-- The original setup: a name on this device, and optionally the company
+       password -- no account. -->
+  <div class="step" id="view-legacy" hidden>
+    <div class="step-header">
+      <span class="step-num">WITHOUT AN ACCOUNT</span>
       <h2>Get Started</h2>
     </div>
     <div class="step-body">
@@ -52,6 +144,10 @@
       <div class="err" id="login-error" hidden></div>
     </div>
   </div>
+
+  <p class="hint" style="text-align:center;" id="legacy-link-row"><button type="button" class="text-btn" id="btn-show-legacy" style="padding:0;">Continue without an account</button></p>
+  <p class="hint" style="text-align:center;" id="account-link-row" hidden><button type="button" class="text-btn" id="btn-show-account" style="padding:0;">Sign in with an account instead</button></p>
+  <p class="hint" style="text-align:center;">New here? <a href="tutorial.html">Try the tutorial</a> &mdash; an example project to explore, kept separate from your own data.</p>
 </main>
 
 <script src="common.js"></script>
@@ -61,9 +157,216 @@
 <script type="module" src="firebase-init.js"></script>
 <script src="firebase-sync.js"></script>
 <script>
+// ?mode=signin|create opens straight to that tab (Settings links here);
+// ?next= is where to go when done (default: home).
+const loginMode = queryParam('mode');
+const nextPage = /^[a-z-]+\.html$/.test(queryParam('next') || '') ? queryParam('next') : 'index.html';
 
-onEnterSubmit($('.step-body'), $('#btn-continue'));
+function showView(id) {
+  ['view-account', 'view-company', 'view-pending', 'view-invite', 'view-legacy'].forEach((v) => { $('#' + v).hidden = v !== id; });
+  $('#legacy-link-row').hidden = id !== 'view-account';
+  $('#account-link-row').hidden = id !== 'view-legacy';
+}
 
+function setMode(mode) {
+  $$('#account-mode button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === mode)));
+  $('#form-signin').hidden = mode !== 'signin';
+  $('#form-create').hidden = mode !== 'create';
+  $('#account-error').hidden = true;
+  $('#account-notice').hidden = true;
+}
+$('#account-mode').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-mode]');
+  if (b) setMode(b.dataset.mode);
+});
+$('#btn-show-legacy').addEventListener('click', () => showView('view-legacy'));
+$('#btn-show-account').addEventListener('click', () => showView('view-account'));
+
+function showError(el, msg) {
+  el.textContent = msg;
+  el.hidden = false;
+}
+
+function finish() {
+  // First time this device has been set up: offer the tutorial once on
+  // the home page (see common.js). Never again after that, either way.
+  try { if (!localStorage.getItem(TUTORIAL_OFFER_KEY)) localStorage.setItem(TUTORIAL_OFFER_KEY, 'pending'); } catch (e) {}
+  location.href = nextPage;
+}
+
+// Signed in or just created, but not in a company yet: waiting on an
+// approval, invited by email, or asked for the company password once.
+async function afterAccount() {
+  if (await getCompanyRoom()) { finish(); return; }
+  const pending = await checkPendingApproval(reportCompanyProgress).catch(() => null);
+  if (pending && pending.status === 'active') { finish(); return; }
+  if (pending && pending.status === 'pending') { showPending(pending.companyName); return; }
+  const invite = await getMyInvite().catch(() => null);
+  if (invite) { await showInvite(invite); return; }
+  const name = await getUserName();
+  $('#company-intro').textContent = `${name ? `Welcome, ${name}. ` : ''}${pending && pending.status === 'declined' ? 'Your request to join wasn\u2019t approved. ' : ''}Join your company to see its projects and reports.`;
+  showView('view-company');
+  $('#jc-password').focus();
+}
+
+function showPending(companyName) {
+  $('#pending-text').textContent = `You've asked to join ${companyName || 'your company'}. An admin needs to approve you before you can see its projects. Once they do, tap Check Again (or just sign in later).`;
+  showView('view-pending');
+}
+
+async function showInvite(invite) {
+  const account = await getAccount();
+  $('#invite-title').textContent = `Join ${invite.companyName || 'Your Company'}`;
+  if (account && account.emailVerified) {
+    // Verified already: join straight away.
+    await joinByInvite();
+    return;
+  }
+  $('#invite-text').textContent = `${invite.companyName || 'A company'} has invited ${account ? account.email : 'you'}. To join, verify your email: open the message we just sent you and click the link, then come back and tap below.`;
+  showView('view-invite');
+}
+
+async function joinByInvite() {
+  const errorEl = $('#invite-error');
+  errorEl.hidden = true;
+  startProgressBanner();
+  progressStep('joining', 'Joining your company');
+  try {
+    await acceptMyInvite(reportCompanyProgress);
+    finishProgressBanner("You're all set!");
+    finish();
+  } catch (err) {
+    console.error(err);
+    progressBannerError(err.message);
+    showView('view-invite');
+    showError(errorEl, err.message);
+  }
+}
+
+onEnterSubmit($('#form-signin'), $('#btn-signin'));
+$('#btn-signin').addEventListener('click', async () => {
+  const btn = $('#btn-signin');
+  const errorEl = $('#account-error');
+  errorEl.hidden = true;
+  const wait = loginThrottleRemaining('account-signin');
+  if (wait > 0) { showError(errorEl, `Too many attempts. Try again in ${wait}s.`); return; }
+  btn.disabled = true;
+  startProgressBanner();
+  progressStep('signing-in', 'Signing you in');
+  try {
+    await signInAccount({ email: $('#si-email').value, password: $('#si-password').value }, reportCompanyProgress);
+    loginThrottleReset('account-signin');
+    finishProgressBanner('Signed in.');
+    await afterAccount();
+  } catch (err) {
+    console.error(err);
+    loginThrottleRecordFailure('account-signin');
+    progressBannerError(err.message);
+    showError(errorEl, err.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+$('#btn-forgot').addEventListener('click', async () => {
+  const errorEl = $('#account-error');
+  errorEl.hidden = true;
+  try {
+    await sendAccountPasswordReset($('#si-email').value);
+    $('#account-notice').textContent = 'If that email has an account, a link to reset the password is on its way. Check your spam folder too.';
+    $('#account-notice').hidden = false;
+  } catch (err) {
+    showError(errorEl, err.message);
+  }
+});
+
+onEnterSubmit($('#form-create'), $('#btn-create'));
+$('#btn-create').addEventListener('click', async () => {
+  const btn = $('#btn-create');
+  const errorEl = $('#account-error');
+  errorEl.hidden = true;
+  btn.disabled = true;
+  try {
+    await createAccount({ name: $('#ca-name').value, email: $('#ca-email').value, password: $('#ca-password').value });
+    await afterAccount();
+  } catch (err) {
+    console.error(err);
+    showError(errorEl, err.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+onEnterSubmit($('#view-company'), $('#btn-join'));
+$('#btn-join').addEventListener('click', async () => {
+  const btn = $('#btn-join');
+  const errorEl = $('#company-error');
+  errorEl.hidden = true;
+  const password = $('#jc-password').value;
+  if (!password) { showError(errorEl, 'Enter the company password, or skip for now.'); return; }
+  const wait = loginThrottleRemaining('join-company');
+  if (wait > 0) { showError(errorEl, `Too many attempts. Try again in ${wait}s.`); return; }
+  btn.disabled = true;
+  startProgressBanner();
+  progressStep('joining', 'Joining your company');
+  try {
+    await joinCompanyRoom(password, reportCompanyProgress);
+    loginThrottleReset('join-company');
+    finishProgressBanner("You're all set!");
+    finish();
+  } catch (err) {
+    if (err.code === 'pending-approval') {
+      // The password was right; the company just approves new members.
+      loginThrottleReset('join-company');
+      finishProgressBanner('Request sent.');
+      btn.disabled = false;
+      showPending(err.companyName);
+      return;
+    }
+    console.error(err);
+    loginThrottleRecordFailure('join-company');
+    progressBannerError(userError("Couldn't join: " + err.message, 'JOIN_COMPANY'));
+    showError(errorEl, err.message);
+    btn.disabled = false;
+  }
+});
+$('#btn-skip-company').addEventListener('click', finish);
+
+$('#btn-pending-check').addEventListener('click', async () => {
+  const errorEl = $('#pending-error');
+  errorEl.hidden = true;
+  try {
+    const result = await checkPendingApproval(reportCompanyProgress);
+    if (result && result.status === 'active') { finish(); return; }
+    if (!result || result.status === 'declined') { await afterAccount(); return; }
+    showError(errorEl, 'Not approved yet. Ask your admin, then check again.');
+  } catch (err) {
+    showError(errorEl, err.message);
+  }
+});
+$('#btn-pending-other').addEventListener('click', async () => {
+  await cancelPendingApproval().catch((err) => console.error(err));
+  await afterAccount();
+});
+$('#btn-pending-signout').addEventListener('click', async () => {
+  await signOutAccount().catch((err) => console.error(err));
+  location.reload();
+});
+
+$('#btn-invite-accept').addEventListener('click', joinByInvite);
+$('#btn-invite-resend').addEventListener('click', async () => {
+  try {
+    await resendAccountVerification();
+    $('#invite-notice').textContent = 'Sent. Check your spam folder too.';
+    $('#invite-notice').hidden = false;
+  } catch (err) {
+    showError($('#invite-error'), err.message);
+  }
+});
+$('#btn-invite-skip').addEventListener('click', finish);
+
+// The original, account-free setup.
+onEnterSubmit($('#view-legacy .step-body'), $('#btn-continue'));
 $('#btn-continue').addEventListener('click', async () => {
   const btn = $('#btn-continue');
   const errorEl = $('#login-error');
@@ -94,9 +397,18 @@ $('#btn-continue').addEventListener('click', async () => {
       loginThrottleReset('join-company');
     }
     finishProgressBanner("You're all set!");
-    location.href = 'index.html';
+    finish();
   } catch (err) {
     console.error(err);
+    if (err.code === 'account-required') {
+      // The company wants everyone signed in: straight to creating an account.
+      hideProgressBanner();
+      btn.disabled = false;
+      showView('view-account');
+      setMode('create');
+      showError($('#account-error'), err.message);
+      return;
+    }
     if (password) loginThrottleRecordFailure('join-company');
     const msg = password
       ? "Couldn't join with that company password: " + err.message + ' Your name is saved, though -- clear the password and continue if you want to join later instead.'
@@ -106,8 +418,12 @@ $('#btn-continue').addEventListener('click', async () => {
   }
 });
 
-// Already set up on this device -- skip straight past.
 (async () => {
+  if (loginMode === 'create' || loginMode === 'signin') {
+    setMode(loginMode);
+    return; // asked for on purpose (from Settings) -- don't skip past
+  }
+  // Already set up on this device -- skip straight past.
   const name = await getUserName();
   if (name) location.href = 'index.html';
 })();

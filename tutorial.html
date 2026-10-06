@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';">
+<title>Tutorial</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1c3d5a">
+<link rel="stylesheet" href="style.css">
+<script src="theme.js"></script>
+</head>
+<body>
+
+<main>
+  <div class="step" style="max-width:480px; margin:3rem auto;">
+    <div class="step-header"><span class="step-num">TUTORIAL</span><h2 id="tut-title">Setting up the example project</h2></div>
+    <div class="step-body">
+      <p id="tut-status" style="margin:0;">Starting&hellip;</p>
+      <p class="err" id="tut-error" hidden></p>
+    </div>
+  </div>
+</main>
+
+<!-- Enters or exits tutorial mode. Entering: switch this tab to the
+     separate tutorial database (storage.js isTutorialMode), wipe whatever a
+     previous tutorial left there, load the example project and reports
+     (tutorial-data.js), then go to the home page. Exiting (?exit=1): switch
+     back to the real database first, then delete the tutorial copy. No
+     Firebase scripts on this page -- tutorial data is never synced. -->
+<script src="common.js"></script>
+<script src="defaults.js"></script>
+<script src="storage.js"></script>
+<script src="audit-log.js"></script>
+<script src="firebase-sync.js"></script>
+<script src="tutorial-data.js"></script>
+<script>
+function deleteTutorialDb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.deleteDatabase(TUTORIAL_DB_NAME);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+    // Still open in another tab: those connections close themselves on
+    // request (see openDb's onversionchange), and this then succeeds.
+    req.onblocked = () => { $('#tut-status').textContent = 'Waiting for other tutorial tabs to close…'; };
+  });
+}
+
+// Forget which page tours have played and whether the person chose the
+// walkthrough, so every new tutorial starts with the inspector's welcome.
+function resetTourState() {
+  Object.keys(sessionStorage)
+    .filter((k) => k.startsWith('dr-tour-'))
+    .forEach((k) => sessionStorage.removeItem(k));
+}
+
+(async () => {
+  const exiting = queryParam('exit') === '1';
+  try {
+    resetTourState();
+    if (exiting) {
+      sessionStorage.removeItem(TUTORIAL_FLAG_KEY);
+      $('#tut-title').textContent = 'Leaving the tutorial';
+      $('#tut-status').textContent = 'Clearing the example data…';
+      await deleteTutorialDb();
+      location.replace('index.html');
+      return;
+    }
+    sessionStorage.setItem(TUTORIAL_FLAG_KEY, '1');
+    $('#tut-status').textContent = 'Clearing any earlier tutorial data…';
+    await deleteTutorialDb();
+    await seedTutorialData((msg) => { $('#tut-status').textContent = msg; });
+    location.replace('index.html');
+  } catch (err) {
+    console.error(err);
+    $('#tut-error').textContent = `Something went wrong: ${err.message || err}`;
+    $('#tut-error').hidden = false;
+  }
+})();
+</script>
+</body>
+</html>
