@@ -21,6 +21,10 @@ import {
   sendPasswordResetEmail,
   updateProfile,
   signOut,
+  applyActionCode,
+  checkActionCode,
+  verifyPasswordResetCode,
+  confirmPasswordReset,
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import { getFirestore } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import { getStorage } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js';
@@ -84,6 +88,10 @@ function resetSignIn() {
 // Account sign-in, for firebase-sync.js's Accounts section (plain scripts
 // can't import from the SDK themselves).
 const authApi = {
+  applyActionCode,
+  checkActionCode,
+  verifyPasswordResetCode,
+  confirmPasswordReset,
   signInWithEmailAndPassword,
   linkWithCredential,
   EmailAuthProvider,

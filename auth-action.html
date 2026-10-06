@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://www.gstatic.com https://*.googleapis.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';">
+<title>Daily Work Reports</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1c3d5a">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="stylesheet" href="style.css">
+<script src="theme.js"></script>
+<style>
+  /* Same single centered card as the sign-in page. */
+  main { max-width: 480px; }
+</style>
+</head>
+<body data-plain-header>
+
+<header class="app-header">
+  <div>
+    <h1>Daily Work Reports</h1>
+    <div class="app-sub">Field inspection reporting</div>
+  </div>
+  <span></span>
+</header>
+
+<!-- Where the links in account emails land (verify your email, reset your
+     password, undo an email change) -- on this site rather than Firebase's
+     own address, so the emails don't look like phishing. -->
+<main>
+  <div class="step" id="view-working">
+    <div class="step-header"><span class="step-num">ONE MOMENT</span><h2 id="working-title">Checking your link</h2></div>
+    <div class="step-body"><p class="hint" style="margin:0;">This only takes a second.</p></div>
+  </div>
+
+  <div class="step" id="view-done" hidden>
+    <div class="step-header"><span class="step-num">DONE</span><h2 id="done-title"></h2></div>
+    <div class="step-body">
+      <p id="done-text" style="margin-top:0;"></p>
+      <a class="btn-primary" id="done-link" href="login.html" style="display:block; text-align:center; text-decoration:none;">Continue</a>
+    </div>
+  </div>
+
+  <div class="step" id="view-reset" hidden>
+    <div class="step-header"><span class="step-num">YOUR ACCOUNT</span><h2>Choose a New Password</h2></div>
+    <div class="step-body">
+      <p style="margin-top:0;">For <strong id="reset-email"></strong></p>
+      <label>New Password
+        <input type="password" id="reset-password" autocomplete="new-password">
+        <span class="hint">At least 8 characters.</span>
+      </label>
+      <label>Confirm New Password
+        <input type="password" id="reset-confirm" autocomplete="new-password">
+      </label>
+      <button type="button" class="btn-primary" id="btn-reset" style="margin-top:0.75rem;">Save New Password</button>
+      <div class="err" id="reset-error" hidden></div>
+    </div>
+  </div>
+
+  <div class="step" id="view-error" hidden>
+    <div class="step-header"><span class="step-num">SORRY</span><h2>This Link Didn't Work</h2></div>
+    <div class="step-body">
+      <p id="error-text" style="margin-top:0;"></p>
+      <a class="btn-primary" href="login.html?mode=signin" style="display:block; text-align:center; text-decoration:none;">Go to Sign In</a>
+    </div>
+  </div>
+</main>
+
+<script src="common.js"></script>
+<script src="defaults.js"></script>
+<script src="storage.js"></script>
+<script src="audit-log.js"></script>
+<script type="module" src="firebase-init.js"></script>
+<script src="firebase-sync.js"></script>
+<script>
+function show(id) {
+  ['view-working', 'view-done', 'view-reset', 'view-error'].forEach((v) => { $('#' + v).hidden = v !== id; });
+}
+function done(title, text, linkText, href) {
+  $('#done-title').textContent = title;
+  $('#done-text').textContent = text;
+  $('#done-link').textContent = linkText;
+  $('#done-link').href = href;
+  show('view-done');
+}
+function linkError(err) {
+  const code = err && err.code;
+  $('#error-text').textContent = code === 'auth/expired-action-code'
+    ? 'This link has expired. Sign in and ask for a new one.'
+    : code === 'auth/invalid-action-code'
+      ? 'This link has already been used or is no longer valid. If you already did this, you can just sign in.'
+      : "Something went wrong with this link. Sign in and ask for a new one.";
+  show('view-error');
+}
+
+const mode = queryParam('mode');
+const oobCode = queryParam('oobCode');
+
+(async () => {
+  const { auth, authApi } = await waitForFirebaseCore();
+  if (!oobCode) { linkError(null); return; }
+  try {
+    if (mode === 'verifyEmail') {
+      await authApi.applyActionCode(auth, oobCode);
+      // If this browser is the one signed in, it knows straight away.
+      await reloadAccount().catch(() => {});
+      done('Email Verified', 'Thanks, your email address is confirmed. If your company pre-approved your email, you can join it now.', 'Continue', 'login.html');
+    } else if (mode === 'resetPassword') {
+      $('#reset-email').textContent = await authApi.verifyPasswordResetCode(auth, oobCode);
+      show('view-reset');
+    } else if (mode === 'recoverEmail') {
+      const info = await authApi.checkActionCode(auth, oobCode);
+      await authApi.applyActionCode(auth, oobCode);
+      done('Email Change Undone', `Your account's email is back to ${info.data.email}. If you didn't ask for the change, set a new password now.`, 'Go to Sign In', 'login.html?mode=signin');
+    } else {
+      linkError(null);
+    }
+  } catch (err) {
+    console.error(err);
+    linkError(err);
+  }
+})();
+
+$('#btn-reset').addEventListener('click', async () => {
+  const errorEl = $('#reset-error');
+  errorEl.hidden = true;
+  const password = $('#reset-password').value;
+  if (password.length < ACCOUNT_MIN_PASSWORD) { errorEl.textContent = `Choose a password with at least ${ACCOUNT_MIN_PASSWORD} characters.`; errorEl.hidden = false; return; }
+  if (password !== $('#reset-confirm').value) { errorEl.textContent = "The two passwords don't match."; errorEl.hidden = false; return; }
+  $('#btn-reset').disabled = true;
+  try {
+    const { auth, authApi } = await waitForFirebaseCore();
+    await authApi.confirmPasswordReset(auth, oobCode, password);
+    done('Password Changed', 'Your new password is saved. Use it next time you sign in.', 'Go to Sign In', 'login.html?mode=signin');
+  } catch (err) {
+    console.error(err);
+    $('#btn-reset').disabled = false;
+    if (err.code === 'auth/weak-password') { errorEl.textContent = 'Choose a stronger password.'; errorEl.hidden = false; return; }
+    linkError(err);
+  }
+});
+</script>
+</body>
+</html>
