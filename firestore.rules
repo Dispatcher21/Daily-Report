@@ -28,11 +28,12 @@ service cloud.firestore {
     function canAdmin(code) { return signedIn() && (!enforced(code) || isAdmin(code)); }
     // What each role may do, from Settings > Roles (company rolePermissions),
     // falling back to the built-in defaults. Admins may do everything.
+    // Built-in defaults: managers can do everything except create
+    // projects; inspectors can only edit their own reports. (Kept as plain
+    // comparisons: a map literal here costs dozens of steps on every check,
+    // and a rule may only take 1,000.)
     function defaultPerm(role, key) {
-      return {
-        'manager': { 'membersCanEditOwnReports': true, 'membersCanEditAnyReport': true, 'membersCanEditProjects': true, 'membersCanCreateProjects': false, 'membersCanViewManagerDashboard': true, 'membersCanApproveReports': true, 'membersCanApprovePayApps': true, 'membersCanCommentReports': true, 'membersCanCommentPayApps': true },
-        'inspector': { 'membersCanEditOwnReports': true, 'membersCanEditAnyReport': false, 'membersCanEditProjects': false, 'membersCanCreateProjects': false, 'membersCanViewManagerDashboard': false, 'membersCanApproveReports': false, 'membersCanApprovePayApps': false, 'membersCanCommentReports': false, 'membersCanCommentPayApps': false }
-      }[role][key];
+      return role == 'manager' ? key != 'membersCanCreateProjects' : key == 'membersCanEditOwnReports';
     }
     function can(code, key) {
       return isMember(code) && (me(code).role == 'admin'
@@ -42,8 +43,10 @@ service cloud.firestore {
     // was never saved keeps whatever its approve setting says.
     function canComment(code, key, approveKey) {
       return isMember(code) && (me(code).role == 'admin'
-        || company(code).get('rolePermissions', {}).get(me(code).role, {}).get(key,
-             company(code).get('rolePermissions', {}).get(me(code).role, {}).get(approveKey, defaultPerm(me(code).role, approveKey))) == true);
+        || commentPerm(company(code).get('rolePermissions', {}).get(me(code).role, {}), me(code).role, key, approveKey));
+    }
+    function commentPerm(rolePerms, role, key, approveKey) {
+      return rolePerms.get(key, rolePerms.get(approveKey, defaultPerm(role, approveKey))) == true;
     }
     // Once accounts are required, permission `key` per the role table;
     // before that, anyone signed in (the old password-only behavior).
@@ -152,7 +155,9 @@ service cloud.firestore {
               || can(code, 'membersCanEditAnyReport')
               || (can(code, 'membersCanEditOwnReports') && ownsReport(code, resource.data)
                   && request.resource.data.get('createdByUid', null) == resource.data.get('createdByUid', request.resource.data.get('createdByUid', null)))
-              || (can(code, 'membersCanApproveReports') && approvalOnly())
+              // (The cheap which-fields-changed checks go first, so the
+              // permission lookups only run when they could matter.)
+              || (approvalOnly() && can(code, 'membersCanApproveReports'))
               || (commentsOnly() && (canComment(code, 'membersCanCommentReports', 'membersCanApproveReports')
                   // The author can always reply to comments on their own report.
                   || (isMember(code) && ownsReport(code, resource.data))))
