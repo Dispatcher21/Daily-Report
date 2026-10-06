@@ -1,0 +1,173 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- helpers ----------
+    function signedIn() { return request.auth != null; }
+    function hasAccount() {
+      return signedIn() && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+    function companyPath(code) { return /databases/$(database)/documents/companies/$(code); }
+    function memberPath(code) { return /databases/$(database)/documents/companies/$(code)/members/$(request.auth.uid); }
+    function company(code) { return get(companyPath(code)).data; }
+    // A company's "Require accounts" switch. Off = the old password-only
+    // behavior: anyone signed in who knows the company password.
+    function enforced(code) { return company(code).get('accountsRequired', false) == true; }
+    function me(code) { return get(memberPath(code)).data; }
+    function isMember(code) {
+      return hasAccount() && exists(memberPath(code)) && me(code).status == 'active';
+    }
+    function isAdmin(code) { return isMember(code) && me(code).role == 'admin'; }
+    // Company data at all.
+    function canUse(code) { return signedIn() && (!enforced(code) || isMember(code)); }
+    // One project's data. Admins, and members with no project limit, see all.
+    function allProjects(code) { return me(code).role == 'admin' || me(code).get('projectIds', null) == null; }
+    function canSeeProject(code, projectId) {
+      return signedIn() && (!enforced(code) || (isMember(code) && (allProjects(code) || projectId in me(code).projectIds)));
+    }
+    function canAdmin(code) { return signedIn() && (!enforced(code) || isAdmin(code)); }
+    // What each role may do, from Settings > Roles (company rolePermissions),
+    // falling back to the built-in defaults. Admins may do everything.
+    function defaultPerm(role, key) {
+      return {
+        'manager': { 'membersCanEditOwnReports': true, 'membersCanEditAnyReport': true, 'membersCanEditProjects': true, 'membersCanCreateProjects': false, 'membersCanViewManagerDashboard': true, 'membersCanApproveReports': true, 'membersCanApprovePayApps': true },
+        'inspector': { 'membersCanEditOwnReports': true, 'membersCanEditAnyReport': false, 'membersCanEditProjects': false, 'membersCanCreateProjects': false, 'membersCanViewManagerDashboard': false, 'membersCanApproveReports': false, 'membersCanApprovePayApps': false }
+      }[role][key];
+    }
+    function can(code, key) {
+      return isMember(code) && (me(code).role == 'admin'
+        || company(code).get('rolePermissions', {}).get(me(code).role, {}).get(key, defaultPerm(me(code).role, key)) == true);
+    }
+    // Once accounts are required, permission `key` per the role table;
+    // before that, anyone signed in (the old password-only behavior).
+    function allowed(code, key) { return signedIn() && (!enforced(code) || can(code, key)); }
+    // A change that only touches a report's review: approval and comments.
+    function reviewOnly() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approvalStatus', 'approvalBy', 'approvalByUid', 'comments', 'updatedAt']);
+    }
+    // A report this person wrote: by account, or (older reports, from before
+    // accounts) by the name on their member record.
+    function ownsReport(code, data) {
+      return data.get('createdByUid', null) == request.auth.uid
+        || (data.get('createdByUid', null) == null && data.get('createdBy', '') == me(code).get('displayName', ''));
+    }
+    function isInvitee(email) {
+      return hasAccount() && request.auth.token.email != null && request.auth.token.email.lower() == email;
+    }
+
+    // ---------- accounts ----------
+    match /users/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
+    match /invites/{email} {
+      allow read: if isInvitee(email) || isAdmin(resource.data.companyCode);
+      allow create, update: if isAdmin(request.resource.data.companyCode);
+      allow delete: if isInvitee(email) || isAdmin(resource.data.companyCode);
+    }
+
+    // ---------- companies ----------
+    match /companies/{code} {
+      // Knowing the company password (its hash is this id) is what lets
+      // someone look a company up. Listing companies is never allowed.
+      allow get: if signedIn();
+      allow create: if signedIn() && request.resource.data.get('createdByUid', request.auth.uid) == request.auth.uid;
+      // Turning "Require accounts" on or off is always an admin's call.
+      allow update: if canAdmin(code)
+        && (request.resource.data.get('accountsRequired', false) == resource.data.get('accountsRequired', false) || isAdmin(code));
+      // Custom-setup pointer docs (password-only logins) are removed by their company's admin.
+      allow delete: if signedIn() && resource.data.get('isRoleSetup', false) == true && canAdmin(resource.data.companyCode);
+
+      match /members/{uid} {
+        allow get: if signedIn() && (request.auth.uid == uid || isAdmin(code));
+        allow list: if isAdmin(code);
+        // Joining: an account adds itself. As an inspector with every
+        // project (waiting for approval when the company requires it), as
+        // whatever a pre-approved email says (never admin: emails aren't
+        // verified), or, while accounts aren't
+        // required yet, as an admin (the admin password is still how admins
+        // are recognized then).
+        allow create: if hasAccount() && request.auth.uid == uid && request.resource.data.uid == uid && (
+          (request.resource.data.role == 'inspector'
+            && request.resource.data.get('projectIds', null) == null
+            && request.resource.data.status == (company(code).get('requireApproval', false) ? 'pending' : 'active'))
+          || (request.resource.data.status == 'active' && !enforced(code) && request.resource.data.role == 'admin')
+          || (request.resource.data.status == 'active' && company(code).get('createdByUid', '') == request.auth.uid && request.resource.data.role == 'admin')
+          || (request.resource.data.status == 'active'
+            && request.resource.data.role in ['inspector', 'manager']
+            && exists(/databases/$(database)/documents/invites/$(request.auth.token.email.lower()))
+            && get(/databases/$(database)/documents/invites/$(request.auth.token.email.lower())).data.companyCode == code
+            && request.resource.data.role == get(/databases/$(database)/documents/invites/$(request.auth.token.email.lower())).data.role
+            && request.resource.data.get('projectIds', null) == get(/databases/$(database)/documents/invites/$(request.auth.token.email.lower())).data.get('projectIds', null))
+        ) || isAdmin(code);
+        // Your own name/email stay current; becoming an admin with the admin
+        // password only works while accounts aren't required. Everything
+        // else is an admin's job.
+        allow update: if isAdmin(code) || (hasAccount() && request.auth.uid == uid && (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['email', 'displayName', 'updatedAt'])
+          || (!enforced(code) && resource.data.status == 'active'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'projectIds', 'updatedAt'])
+            && request.resource.data.role == 'admin')
+        ));
+        // Withdrawing your own request to join; otherwise admins only.
+        allow delete: if isAdmin(code) || (signedIn() && request.auth.uid == uid && resource.data.status == 'pending');
+      }
+
+      match /projects/{projectId} {
+        // A missing project reads as nothing for any member (the app checks
+        // before writing).
+        allow get: if canUse(code) && (resource == null || canSeeProject(code, projectId));
+        allow list: if canSeeProject(code, resource.data.id);
+        allow create: if allowed(code, 'membersCanCreateProjects');
+        // Pay apps and quantities live on the project, so anyone working on
+        // it saves it.
+        allow update: if canSeeProject(code, projectId) && request.resource.data.id == projectId;
+        allow delete: if allowed(code, 'membersCanEditProjects') && canSeeProject(code, projectId);
+      }
+
+      match /reports/{reportId} {
+        allow get: if canUse(code) && (resource == null || canSeeProject(code, resource.data.projectId));
+        allow list: if canSeeProject(code, resource.data.projectId);
+        allow create: if canSeeProject(code, request.resource.data.projectId)
+          && (!enforced(code) || request.resource.data.get('createdByUid', request.auth.uid) == request.auth.uid
+              || request.resource.data.get('createdByUid', null) == null || can(code, 'membersCanEditAnyReport'));
+        // Per the role table: anyone's reports, their own, or just the review
+        // (approval and comments).
+        allow update: if canSeeProject(code, resource.data.projectId) && canSeeProject(code, request.resource.data.projectId)
+          && (!enforced(code)
+              || can(code, 'membersCanEditAnyReport')
+              || (can(code, 'membersCanEditOwnReports') && ownsReport(code, resource.data)
+                  && request.resource.data.get('createdByUid', null) == resource.data.get('createdByUid', request.resource.data.get('createdByUid', null)))
+              || (can(code, 'membersCanApproveReports') && reviewOnly())
+              // The author can always reply to comments on their own report.
+              || (isMember(code) && ownsReport(code, resource.data)
+                  && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['comments', 'updatedAt'])));
+        allow delete: if canAdmin(code);
+      }
+
+      // The activity log is append-only once accounts are required: an
+      // entry can be added (or re-sent unchanged), never edited or erased.
+      match /auditLog/{entryId} {
+        allow read: if signedIn() && (!enforced(code) || (isMember(code) && allProjects(code)));
+        allow create: if canUse(code);
+        allow update: if canUse(code) && (!enforced(code)
+          || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['id', 'timestamp', 'userName', 'action', 'entityType', 'entityId', 'entityLabel', 'changes', 'hash']));
+        allow delete: if !enforced(code) && signedIn();
+      }
+
+      // Problems the app hits (uploads the server keeps refusing), for the
+      // admins' problem emails. Write-only: the server reads and clears them.
+      match /problems/{id} {
+        allow create: if canUse(code)
+          && request.resource.data.keys().hasOnly(['text', 'by', 'at'])
+          && request.resource.data.text is string && request.resource.data.text.size() <= 500
+          && request.resource.data.by is string && request.resource.data.by.size() <= 80;
+      }
+      match /deletedProjects/{id} { allow read, write: if canUse(code); }
+      match /deletedReports/{id} { allow read, write: if canUse(code); }
+      match /userLayouts/{id} { allow read, write: if canUse(code); }
+      // Custom setups hold recoverable passwords: admins only.
+      match /roles/{roleId} { allow read, write: if canAdmin(code); }
+    }
+  }
+}

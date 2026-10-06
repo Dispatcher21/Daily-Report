@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://www.gstatic.com https://*.googleapis.com https://api.open-meteo.com https://geocoding-api.open-meteo.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';">
-<title>Quick Quantity Add</title>
+<title>Log Quantities</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c3d5a">
@@ -16,15 +16,29 @@
 <script src="theme.js"></script>
 <style>
   .qq-row {
-    display: flex; align-items: center; gap: 0.75rem;
-    padding: 0.6rem 0; border-bottom: 1px solid var(--border);
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.75rem;
+    padding: 0.7rem 0; border-bottom: 1px solid var(--border);
   }
+  /* To date against the plan, under each item: updates as you type. */
+  .qq-progress { flex: 1 1 100%; font-size: 0.8rem; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+  .qq-progress .qp-stack { margin: 0.25rem 0 0; max-width: 22rem; height: 7px; }
+  .qq-over { color: var(--danger); font-weight: 700; }
+  .qq-day { display: flex; align-items: flex-end; gap: 0.5rem; flex-wrap: wrap; }
+  .qq-day label { flex: 0 1 14rem; margin: 0; }
+  .qq-day .btn-sm { margin: 0; min-height: 2.6rem; min-width: 2.6rem; font-size: 1.1rem; font-weight: 800; }
+  .qq-day .text-btn { margin: 0 0 0.6rem; }
+  .qq-note { border-radius: var(--radius-sm); padding: 0.55rem 0.8rem; font-size: 0.9rem; font-weight: 600; margin: 0.75rem 0 0; }
+  .qq-note-edit { background: var(--brand-dim); color: var(--text); }
+  .qq-note-new { background: var(--warn-bg); color: var(--warn); }
+  /* Save stays in reach at the bottom of the screen on a long list. */
+  .qq-savebar { position: sticky; bottom: 0; z-index: 5; margin: 1rem -1rem -1rem; padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom, 0px)); background: var(--surface); border-top: 1px solid var(--border); }
+  .qq-savebar .btn-primary { margin: 0; }
   .qq-row:last-child { border-bottom: none; }
   .qq-item-info { flex: 1; min-width: 0; }
   .qq-item-num { font-weight: 700; }
   .qq-item-desc { font-size: 0.85rem; color: var(--text-dim); }
   .qq-qty-wrap { display: flex; align-items: center; gap: 0.4rem; flex: 0 0 auto; }
-  .qq-qty { width: 6.5rem; text-align: right; }
+  .qq-qty { width: 8rem; text-align: right; font-weight: 700; }
   .qq-unit { font-size: 0.8rem; color: var(--text-dim); width: 2.5rem; }
   .qq-manual-row .qq-item-num { font-weight: 400; }
   .qq-manual-remove { flex: 0 0 auto; }
@@ -57,7 +71,7 @@
      on the far left and a qty box 1300px away is just a long dead gutter,
      not a more useful layout. */
   @media (min-width: 900px) {
-    #catalog-list, #manual-list { max-width: 780px; }
+    #catalog-list, #manual-list { max-width: 900px; }
   }
 </style>
 </head>
@@ -68,7 +82,7 @@
     <span></span><span></span><span></span>
   </button>
   <div>
-    <h1>Quick Quantity Add</h1>
+    <h1>Log Quantities</h1>
     <div class="app-sub" id="project-name-sub"></div>
   </div>
   <span></span>
@@ -78,14 +92,20 @@
 </div>
 
 <main>
+  <div id="qp-tabs"></div>
   <div class="step">
     <div class="step-header">
       <span class="step-num">DATE</span>
       <h2>Which Day</h2>
     </div>
     <div class="step-body">
-      <label>Date <input type="date" id="f-date"></label>
-      <p class="hint" id="date-context" style="margin-bottom:0;"></p>
+      <div class="qq-day">
+        <button type="button" class="btn-sm" id="day-prev" aria-label="Previous day">&#8249;</button>
+        <label>Date <input type="date" id="f-date"></label>
+        <button type="button" class="btn-sm" id="day-next" aria-label="Next day">&#8250;</button>
+        <button type="button" class="text-btn" id="day-today">Today</button>
+      </div>
+      <p class="qq-note" id="date-context"></p>
       <div id="multi-report-picker" hidden>
         <label>Multiple reports exist on this date -- which one?
           <select id="f-report-picker"></select>
@@ -120,9 +140,11 @@
       </div>
       <div id="manual-list"></div>
 
-      <button type="button" class="btn-primary" id="btn-save-quantities" style="margin-top:1rem;">Save Quantities</button>
-      <div class="success" id="save-success" hidden style="margin-top:0.75rem;"></div>
-      <div class="err" id="save-error" hidden></div>
+      <div class="qq-savebar">
+        <button type="button" class="btn-primary" id="btn-save-quantities">Save Quantities</button>
+        <div class="success" id="save-success" hidden style="margin:0.6rem 0 0;"></div>
+        <div class="err" id="save-error" hidden style="margin:0.6rem 0 0;"></div>
+      </div>
     </div>
   </div>
 </main>
@@ -131,6 +153,8 @@
 <script src="defaults.js"></script>
 <script src="storage.js"></script>
 <script src="audit-log.js"></script>
+<script src="quantity-calc.js"></script>
+<script src="quantities-ui.js"></script>
 <script src="local-sync.js"></script>
 <script type="module" src="firebase-init.js"></script>
 <script src="firebase-sync.js"></script>
@@ -145,6 +169,7 @@ let currentReport = null; // the report the date currently resolves to, or null 
 // Replaces that item's entries on the report wholesale on save, unlike the
 // plain catalog inputs below which just edit a single existing qty in place.
 let multiEntries = {};
+let qtyCatalog = new Map(); // itemNumber -> item (unit, plan, price), see quantities-ui.js
 
 async function init() {
   project = projectId ? await getProject(projectId) : null;
@@ -152,15 +177,18 @@ async function init() {
     location.href = 'index.html';
     return;
   }
-  document.title = `Quick Quantity Add — ${project.name}`;
+  document.title = `Log Quantities · ${project.name}`;
   $('#project-name-sub').textContent = project.name;
   renderBreadcrumb('#bb-trail', [
     { label: 'Home', href: 'index.html' },
     { label: project.name, href: `project.html?id=${project.id}` },
-    { label: 'Quick Quantity Add' },
+    { label: 'Quantities', href: `quantity-sheet.html?project=${project.id}` },
+    { label: 'Log Quantities' },
   ]);
 
   allReports = await getReportsForProject(project.id);
+  qtyCatalog = new Map(qtyItems(project).map((it) => [it.itemNumber, it]));
+  $('#qp-tabs').innerHTML = qtySectionTabsHtml(project, qtyProjectSummary(project, allReports), 'quantities');
   // ?date= lets another page (the project dashboard's calendar) deep-link
   // straight to a specific day instead of always landing on today.
   $('#f-date').value = queryParam('date') || todayIso();
@@ -186,6 +214,7 @@ function renderCatalogList() {
               <div class="qq-item-desc">${escapeHtml(it.description || '')}${it.unit ? ' &middot; ' + escapeHtml(it.unit) : ''}</div>
             </div>
           </div>
+          <div class="qq-progress" data-progress="${escapeHtml(it.itemNumber)}"></div>
           <div class="qq-multi-entries" id="multi-entries-${i}" data-multi-idx="${i}"></div>
           <button type="button" class="btn-sm qq-multi-add" data-add-entry="${i}">+ Add Entry</button>
         </div>`;
@@ -200,6 +229,7 @@ function renderCatalogList() {
           <input type="number" inputmode="decimal" step="any" class="qq-qty" id="qty-${i}" data-item-number="${escapeHtml(it.itemNumber)}">
           <span class="qq-unit">${escapeHtml(it.unit || '')}</span>
         </div>
+        <div class="qq-progress" data-progress="${escapeHtml(it.itemNumber)}"></div>
       </div>`;
     })
     .join('');
@@ -292,7 +322,38 @@ function renderMultiEntries(catalogItem, idx) {
       renderMultiEntries(catalogItem, idx);
     });
   });
+  refreshProgress();
 }
+
+// Each item's total to date with what's typed here counted in (in place of
+// whatever this day's report already had), against its plan, and against
+// what's been billed on Pay Apps.
+function refreshProgress() {
+  const others = qtyLoggedByItem(allReports.filter((r) => !currentReport || r.id !== currentReport.id));
+  const billed = qtyBilledByItem(qtyLatestEstimate(project));
+  $$('[data-progress]', $('#catalog-list')).forEach((el) => {
+    const n = el.dataset.progress;
+    const it = qtyCatalog.get(n);
+    if (!it) return;
+    let typed = 0;
+    if (multiEntries[n]) multiEntries[n].forEach((e) => { typed += Number(e.qty) || 0; });
+    else {
+      const input = el.parentElement.querySelector('.qq-qty');
+      typed = input ? Number(input.value) || 0 : 0;
+    }
+    const L = (others.get(n) || 0) + typed;
+    const B = billed.get(n) || 0;
+    const base = qtyPlanBase(it);
+    let text;
+    if (it.isLump) text = `To date ${qtyMoney(L)}${base != null ? ` of ${qtyMoney(base)}` : ''}`;
+    else if (base != null) {
+      const left = base - L;
+      text = `To date ${qtyNum(L)} of ${qtyNum(base)} ${escapeHtml(it.unit)} &middot; ${left >= 0 ? `${qtyNum(left)} left` : `<span class="qq-over">${qtyNum(-left)} over plan</span>`}`;
+    } else text = `To date ${qtyNum(L)} ${escapeHtml(it.unit)}`;
+    el.innerHTML = `${text}${B ? ` &middot; ${it.isLump ? qtyMoney(B) : qtyNum(B)} billed` : ''}${base != null ? qtyStackBarHtml(qtySplit(L, B), base) : ''}`;
+  });
+}
+$('#catalog-list').addEventListener('input', refreshProgress);
 
 function renderManualList() {
   $('#manual-list').innerHTML = manualItems
@@ -378,10 +439,25 @@ async function updateDateContext() {
 
   $('#date-context').textContent = currentReport
     ? `Editing Report #${currentReport.reportNo}'s quantities.`
-    : `No report exists for this date yet -- saving will create one.`;
+    : `No report for this day yet. Saving starts a new report for ${date}.`;
+  $('#date-context').className = `qq-note ${currentReport ? 'qq-note-edit' : 'qq-note-new'}`;
 
   prefillFromReport(currentReport);
+  refreshProgress();
 }
+
+// Previous / next day, and back to today.
+function shiftDate(days) {
+  const base = $('#f-date').value || todayIso();
+  const d = new Date(base + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() + days);
+  $('#f-date').value = d.toISOString().slice(0, 10);
+  $('#save-success').hidden = true;
+  updateDateContext();
+}
+$('#day-prev').addEventListener('click', () => shiftDate(-1));
+$('#day-next').addEventListener('click', () => shiftDate(1));
+$('#day-today').addEventListener('click', () => { $('#f-date').value = todayIso(); $('#save-success').hidden = true; updateDateContext(); });
 
 $('#f-date').addEventListener('change', updateDateContext);
 $('#f-report-picker').addEventListener('change', async () => {
@@ -392,6 +468,7 @@ $('#f-report-picker').addEventListener('change', async () => {
   $('#readonly-banner').hidden = editable;
   $('#btn-save-quantities').disabled = !editable;
   prefillFromReport(currentReport);
+  refreshProgress();
 });
 
 // ---------- Add item not in catalog ----------
@@ -499,6 +576,7 @@ $('#btn-save-quantities').addEventListener('click', async () => {
     await saveReport(report);
 
     allReports = await getReportsForProject(project.id);
+    $('#qp-tabs').innerHTML = qtySectionTabsHtml(project, qtyProjectSummary(project, allReports), 'quantities');
     currentReport = report;
     $('#save-success').textContent = `Saved to Report #${report.reportNo}.`;
     $('#save-success').hidden = false;

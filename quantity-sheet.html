@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://www.gstatic.com https://*.googleapis.com https://api.open-meteo.com https://geocoding-api.open-meteo.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';">
-<title>Quantity Sheet</title>
+<title>Quantities</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c3d5a">
@@ -14,6 +14,88 @@
 <meta name="apple-mobile-web-app-title" content="Daily Reports">
 <link rel="stylesheet" href="style.css">
 <script src="theme.js"></script>
+<style>
+  main { max-width: 1440px; }
+  #qty-step [hidden] { display: none !important; }
+  #qty-step .step-header h2 { flex: 0 1 auto; }
+  .qs-toolbar .view-toggle-btn { white-space: nowrap; flex: none; width: auto; padding: 0 0.9rem; font-size: 0.88rem; font-weight: 700; color: var(--text); }
+  .qs-toolbar .view-toggle-btn.active { color: var(--on-brand); }
+  .qs-ledger a { color: var(--link); }
+  .qs-head-actions { margin-left: auto; display: flex; gap: 0.5rem; flex-wrap: wrap; }
+  .qs-head-btn {
+    border-radius: var(--radius-sm); padding: 0.35rem 0.8rem; font-size: 0.88rem; font-weight: 700;
+    border: 1.5px solid rgba(255, 255, 255, 0.35); background: rgba(255, 255, 255, 0.12); color: var(--on-brand);
+    text-decoration: none; cursor: pointer; font-family: inherit; min-height: 0;
+  }
+  .qs-head-btn.solid { background: var(--on-brand); color: var(--brand); border-color: var(--on-brand); }
+  #qty-body { display: grid; gap: 0.9rem; grid-template-columns: minmax(0, 1fr); }
+  #qty-body > *, .qs-table, .qs-ledger { min-width: 0; }
+  .qs-range { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+  .qs-chip {
+    border: 1.5px solid var(--border); background: var(--surface); color: var(--text); border-radius: 999px;
+    padding: 0.35rem 0.85rem; font-size: 0.88rem; font-weight: 600; cursor: pointer; min-height: 0; font-family: inherit;
+  }
+  .qs-chip[aria-pressed="true"] { background: var(--brand); border-color: var(--brand); color: var(--on-brand); }
+  .qs-custom { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+  .qs-custom label { flex: 0 1 12rem; margin: 0; }
+  .qs-toolbar { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; }
+  .qs-summary { margin: 0; flex: 1 1 16rem; font-size: 0.9rem; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+  .qs-summary b { color: var(--text); }
+  #qty-search { flex: 0 1 18rem; min-width: 0; margin: 0; }
+
+  /* Item table: a grid that turns into stacked cards on a phone. */
+  .qs-table { border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+  .qs-row { display: grid; grid-template-columns: minmax(11rem, 1.6fr) minmax(0, 1.1fr) minmax(0, 2fr) 10rem; gap: 0.75rem; align-items: center; padding: 0.7rem 0.9rem; border-top: 1px solid var(--border); }
+  .qs-row.qs-head { border-top: 0; background: var(--surface-2); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-dim); padding-block: 0.5rem; }
+  button.qs-row { width: 100%; text-align: left; background: var(--surface); color: inherit; font: inherit; border-left: 0; border-right: 0; border-bottom: 0; border-radius: 0; cursor: pointer; min-height: 0; }
+  button.qs-row:hover { background: var(--surface-2); }
+  button.qs-row[aria-expanded="true"] { background: var(--brand-dim); }
+  .qs-row:first-child { border-top: 0; }
+  .qs-item { display: grid; min-width: 0; }
+  .qs-num { font-weight: 800; }
+  .qs-desc { font-size: 0.85rem; color: var(--text-dim); }
+  .qs-chev { display: inline-block; font-size: 0.75rem; color: var(--text-dim); margin-right: 0.35rem; transition: transform 0.15s; }
+  button.qs-row[aria-expanded="true"] .qs-chev { transform: rotate(90deg); }
+  .qs-big { font-weight: 800; font-variant-numeric: tabular-nums; }
+  .qs-small { font-size: 0.8rem; color: var(--text-dim); }
+  .qs-label { display: none; }
+  .qs-ledger { background: var(--surface-2); border-top: 1px solid var(--border); padding: 0.6rem 0.9rem 0.8rem 2.1rem; }
+  .qs-ledger table { width: 100%; border-collapse: collapse; font-size: 0.88rem; font-variant-numeric: tabular-nums; }
+  .qs-ledger th { text-align: left; font-size: 0.68rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-dim); padding: 0.25rem 0.6rem 0.25rem 0; }
+  .qs-ledger td { padding: 0.35rem 0.6rem 0.35rem 0; border-top: 1px solid var(--border); vertical-align: top; }
+  .qs-ledger .r { text-align: right; white-space: nowrap; }
+  .qs-ledger tr.qs-billed td { background: var(--billed-bg); }
+  .qs-ledger .qs-ahead { color: var(--danger); font-weight: 800; }
+  .qs-where { display: block; font-size: 0.78rem; color: var(--text-dim); }
+  .qs-empty { padding: 1.2rem; text-align: center; color: var(--text-dim); margin: 0; }
+  .qs-byday { border-collapse: collapse; width: 100%; font-size: 0.88rem; font-variant-numeric: tabular-nums; }
+  .qs-byday th, .qs-byday td { padding: 0.5rem 0.7rem; border-top: 1px solid var(--border); text-align: right; white-space: nowrap; }
+  .qs-byday th:first-child, .qs-byday td:first-child { text-align: left; position: sticky; left: 0; background: var(--surface); }
+  .qs-byday thead th, .qs-byday thead th:first-child { background: var(--surface-2); border-top: 0; font-size: 0.72rem; color: var(--text-dim); vertical-align: bottom; }
+  .qs-byday tr.qs-off td { color: var(--text-dim); font-style: italic; }
+  .qs-byday tfoot td, .qs-byday tfoot td:first-child { font-weight: 800; background: var(--surface-2); }
+  .qs-scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+  .qs-export-card { max-width: 460px; padding: 0; overflow: hidden; }
+  .qs-export-card .step-body { display: grid; gap: 0.7rem; }
+  .qs-opt { display: flex; gap: 0.6rem; align-items: flex-start; padding: 0.55rem 0.7rem; border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; margin: 0; font-weight: 400; }
+  .qs-opt input { width: 18px; height: 18px; margin-top: 0.15rem; flex: none; min-height: 0; }
+  .qs-opt b { display: block; }
+  .qs-opt small { color: var(--text-dim); }
+  .qs-dialog-actions { display: flex; justify-content: flex-end; gap: 0.6rem; flex-wrap: wrap; }
+  .qs-dialog-actions .btn-primary { width: auto; }
+  @media (max-width: 720px) {
+    .qs-row.qs-head { display: none; }
+    .qs-row { grid-template-columns: minmax(0, 1fr) auto; gap: 0.4rem 0.9rem; }
+    .qs-row > .qs-c-chk { order: 1; align-self: start; }
+    .qs-row > .qs-c-range { order: 2; grid-column: 1 / -1; }
+    .qs-row > .qs-c-prog { order: 3; grid-column: 1 / -1; }
+    .qs-label { display: inline; font-size: 0.66rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-dim); }
+    .qs-ledger { padding-left: 0.9rem; }
+    #qty-search { flex: 1 1 100%; }
+    #qty-step .step-header .step-num, #qty-step .step-header .info-tip { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { .qs-chev { transition: none; } }
+</style>
 </head>
 <body>
 
@@ -22,7 +104,7 @@
     <span></span><span></span><span></span>
   </button>
   <div>
-    <h1>Quantity Sheet</h1>
+    <h1>Quantities</h1>
     <div class="app-sub" id="project-name-sub"></div>
   </div>
   <span></span>
@@ -32,182 +114,83 @@
 </div>
 
 <main>
-  <div class="step">
+  <div id="qp-tabs"></div>
+
+  <div class="step" id="qty-step">
     <div class="step-header">
-      <span class="step-num">RANGE</span>
-      <h2>Choose Which Reports to Include</h2>
-      <button type="button" class="info-tip" data-tip="Quantities logged across the reports in range, combined by day. Days sharing the same date are treated as one." aria-label="What this does">i</button>
+      <span class="step-num">QUANTITIES</span>
+      <h2>Pay Item Quantities</h2>
+      <button type="button" class="info-tip" data-tip="Logged is what inspectors recorded in their daily reports. Billed is what the contractor has been paid on Pay Apps (the latest one's totals). Tap an item to see every report entry and Pay App for it, in date order." aria-label="What this does">i</button>
+      <span class="qs-head-actions">
+        <button type="button" class="qs-head-btn" id="btn-export">&#8681; Excel</button>
+        <a class="qs-head-btn solid" id="btn-log" href="#">+ Log Quantities</a>
+      </span>
     </div>
-    <div class="step-body">
-
-      <div class="segmented" id="range-mode-picker">
-        <button type="button" data-mode="range">Date Range</button>
-        <button type="button" data-mode="all">All Reports</button>
-        <button type="button" data-mode="estimate">By Estimate</button>
+    <div class="step-body" id="qty-body">
+      <div id="qty-cbar"></div>
+      <div class="qs-range" id="range-chips" role="group" aria-label="Which reports">
+        <button type="button" class="qs-chip" data-range="week">This Week</button>
+        <button type="button" class="qs-chip" data-range="lastweek">Last Week</button>
+        <button type="button" class="qs-chip" data-range="month">This Month</button>
+        <button type="button" class="qs-chip" data-range="sincepa">Since Last Pay App</button>
+        <button type="button" class="qs-chip" data-range="all">All</button>
+        <button type="button" class="qs-chip" data-range="custom">Custom</button>
       </div>
-
-      <div class="field-grid" id="range-fields" style="margin-top:0.75rem;">
+      <div class="qs-custom" id="custom-range" hidden>
         <label>From <input type="date" id="f-date-from"></label>
         <label>To <input type="date" id="f-date-to"></label>
       </div>
-      <div id="range-estimate-field" style="margin-top:0.75rem;" hidden>
-        <label>Estimate <select id="f-estimate"></select></label>
-      </div>
-      <div class="qty-range-footer">
-        <p class="hint" id="range-summary">&nbsp;</p>
-        <a class="text-btn" id="link-pay-apps" href="#">Manage Pay Apps &rarr;</a>
-      </div>
-    </div>
-  </div>
-
-  <div class="step" id="payapp-file-step">
-    <div class="step-header">
-      <span class="step-num">PAY APPS</span>
-      <h2>Pay App Quantities (Excel)</h2>
-      <button type="button" class="info-tip" data-tip="Download a spreadsheet with one row per Pay App and one column per pay item (with its description/unit shown right under the header, and a running $ total per Pay App and per item), fill in figures there instead of one at a time on the Pay Apps page, then upload it back. Only ever touches Pay App quantities/dates/notes -- never your project settings or pay item catalog. A Pay App already on file keeps its approval status/comments, reset to Pending only if its figures actually changed." aria-label="What this does">i</button>
-    </div>
-    <div class="step-body">
-      <button type="button" class="btn-secondary" id="btn-download-payapp-file" style="margin-bottom:0.75rem;">&#8681; Download Pay App Quantities</button>
-      <div class="uz" id="uz-payapp-reupload">
-        <input type="file" id="f-payapp-reupload" accept=".xlsx,.xls">
-        <span class="uz-icon">&#128202;</span>
-        <span class="uz-lbl">Upload Filled-In Pay App Quantities</span>
-        <span class="uz-hint">Matched by Pay App No. -- approval status/comments are kept</span>
-        <span class="uz-fname" id="fn-payapp-reupload"></span>
-      </div>
-    </div>
-  </div>
-
-  <div class="step" id="period-step" hidden>
-    <div class="step-header">
-      <span class="step-num">PERIOD</span>
-      <h2>This Billing Period</h2>
-    </div>
-    <div class="step-body">
-      <p class="hint" id="period-summary" style="margin-top:0;"></p>
-      <div id="period-items"></div>
-    </div>
-  </div>
-
-  <div class="step">
-    <div class="step-header">
-      <span class="step-num">QUANTITIES</span>
-      <h2>Quantities For This Range</h2>
-    </div>
-    <div class="step-body">
-      <div class="segmented view-tabs" id="view-picker">
-        <button type="button" data-view="totals">Totals</button>
-        <button type="button" data-view="byDay">By Day</button>
-        <button type="button" data-view="byEstimate">By Estimate</button>
-        <button type="button" data-view="detail">Detail Log</button>
-      </div>
-
-      <label class="qty-opt-toggle" style="margin-top:0.75rem;"><input type="checkbox" id="opt-show-zero"> Show items at 0 qty / 0% complete</label>
-
-      <div id="view-totals" style="margin-top:0.9rem;">
-        <div id="qty-status-summary"></div>
-        <div class="pi-controls" id="qty-controls" hidden>
-          <input type="text" id="qty-search" placeholder="Search item # or description...">
-          <select id="qty-sort">
-            <option value="most-complete">Sort: Most Complete First</option>
-            <option value="default">Sort: Least Complete First</option>
-            <option value="item-number">Sort: Item Number</option>
-            <option value="earned-desc">Sort: Highest $ Earned</option>
-            <option value="remaining-desc">Sort: Highest $ Remaining</option>
-          </select>
+      <div class="qs-toolbar">
+        <p class="qs-summary" id="range-summary"></p>
+        <input type="search" id="qty-search" placeholder="Search items" aria-label="Search items">
+        <div class="view-toggle" id="view-picker" role="group" aria-label="View">
+          <button type="button" class="view-toggle-btn active" data-view="items">Items</button>
+          <button type="button" class="view-toggle-btn" data-view="byDay">By Day</button>
         </div>
-        <div class="bar-list" id="qty-bars"></div>
-        <p class="hint" id="qty-bars-empty" hidden style="margin:0;">No pay items logged on any report in this range.</p>
-        <p class="hint" id="qty-bars-no-match" hidden style="margin:0;">No pay items match the current search/filter.</p>
-
-        <div class="eyebrow" style="margin-top:1.25rem;">Excel Preview <button type="button" class="info-tip" data-tip="Exactly what the Totals sheet of the downloaded workbook will contain, same column order and all." aria-label="What this does">i</button></div>
-        <div class="table-scroll"><table class="data-table xlsx-table" id="totals-preview-table"></table></div>
       </div>
-
-      <div id="view-byDay" style="margin-top:0.9rem;" hidden>
-        <div class="panel-tip-row"><button type="button" class="info-tip" data-tip="Each item's own quantity for that day -- not a running total." aria-label="What this does">i</button></div>
-        <div class="table-scroll"><table class="data-table xlsx-table" id="byday-table"></table></div>
-        <p class="hint" id="byday-empty" hidden style="margin:0;">No pay items logged on any report in this range.</p>
-      </div>
-
-      <div id="view-byEstimate" style="margin-top:0.9rem;" hidden>
-        <div class="panel-tip-row"><button type="button" class="info-tip" data-tip="Each item's quantity billed in that period (since the previous estimate, or since the start for the first one)." aria-label="What this does">i</button></div>
-        <div class="table-scroll"><table class="data-table xlsx-table" id="byestimate-table"></table></div>
-        <p class="hint" id="byestimate-empty" hidden style="margin:0;">No estimates recorded yet -- add one from Manage Pay Apps above.</p>
-      </div>
-
-      <div id="view-detail" style="margin-top:0.9rem;" hidden>
-        <div class="pi-controls" id="detail-controls">
-          <input type="text" id="detail-search" placeholder="Search item # or description...">
-          <select id="detail-side"><option value="">All Sides</option></select>
-          <select id="detail-estimate"><option value="">All Estimates</option></select>
-          <select id="detail-inspector"><option value="">All Inspectors</option></select>
-          <select id="detail-sort">
-            <option value="date-desc">Sort: Date (Newest)</option>
-            <option value="date-asc">Sort: Date (Oldest)</option>
-            <option value="item-number">Sort: Item Number</option>
-            <option value="qty-desc">Sort: Qty (High-Low)</option>
-          </select>
-          <label class="detail-group-toggle"><input type="checkbox" id="detail-group"> Group by Item</label>
-        </div>
-        <div class="table-scroll"><table class="data-table xlsx-table" id="detail-table"></table></div>
-        <p class="hint" id="detail-empty" hidden style="margin:0;">No pay items logged on any report in this range.</p>
-        <p class="hint" id="detail-summary" style="margin-bottom:0;"></p>
-      </div>
-
-      <div class="eyebrow" style="margin-top:1.25rem;">Export Options</div>
-      <div class="qty-export-options">
-        <label><input type="checkbox" id="opt-include-byday" checked> Include "By Day" sheet</label>
-        <label><input type="checkbox" id="opt-include-detail" checked> Include "Detail Log" sheet</label>
-      </div>
-      <div class="panel-tip-row" style="margin-top:0.5rem;margin-bottom:-0.4rem;"><button type="button" class="info-tip" data-tip="Includes a Cover page and whichever of the By Day / By Estimate / Detail Log breakdowns are checked above, alongside the Totals." aria-label="What this does">i</button></div>
-      <button type="button" class="btn-primary" id="btn-generate" disabled style="margin-top:1rem;">Download as Excel</button>
+      <div id="view-items"></div>
+      <div id="view-byDay" hidden></div>
     </div>
   </div>
 </main>
 
+<div class="modal-overlay" id="export-dialog" hidden>
+  <div class="modal-card qs-export-card step" role="dialog" aria-modal="true" aria-labelledby="export-title">
+    <div class="step-header"><span class="step-num">EXCEL</span><h2 id="export-title">Download Quantities</h2></div>
+    <div class="step-body">
+      <p class="hint" id="export-range" style="margin:0;"></p>
+      <label class="qs-opt"><input type="checkbox" checked disabled><span><b>Totals</b><small>One row per pay item. Always included, with a cover page.</small></span></label>
+      <label class="qs-opt"><input type="checkbox" id="opt-include-byday" checked><span><b>By Day</b><small>Each item's quantity for each reporting day.</small></span></label>
+      <label class="qs-opt"><input type="checkbox" id="opt-include-detail" checked><span><b>Detail Log</b><small>Every entry with stations, side, date and inspector.</small></span></label>
+      <div class="qs-dialog-actions">
+        <button type="button" class="btn-secondary" id="btn-export-cancel">Cancel</button>
+        <button type="button" class="btn-primary" id="btn-generate">Download .xlsx</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="lib/exceljs.min.js"></script>
-<script src="lib/xlsx.min.js"></script>
 <script src="common.js"></script>
 <script src="defaults.js"></script>
 <script src="storage.js"></script>
 <script src="audit-log.js"></script>
 <script src="quantity-calc.js"></script>
+<script src="quantities-ui.js"></script>
 <script src="quantity-sheet-export.js"></script>
-<script src="project-file.js"></script>
 <script src="local-sync.js"></script>
 <script type="module" src="firebase-init.js"></script>
 <script src="firebase-sync.js"></script>
 <script>
 const projectId = queryParam('project');
 // Arriving from Reports' "Quantity Sheet Selected" names specific report
-// ids -- rather than keep a separate selection mechanism for that, it's
-// translated into a date range (that batch's own min/max date) so there's
-// exactly one selection model on this page. If none of those reports have
-// a date, a range can't represent them, so it falls back to All Reports.
+// ids; that batch becomes a Custom range over its own dates. ?from=&to=
+// (from a Pay App's "What was logged in this period") does the same.
 const preselectedIds = new Set((queryParam('report') || '').split(',').filter(Boolean));
 let project = null;
 let allReports = [];
-let rangeMode = 'range'; // 'range' | 'all' | 'estimate'
-let selectedEstimateId = null;
-
-// Export/view options -- affect both the on-screen Totals/By Day/By
-// Estimate tabs and the Excel download, so the two never drift apart on
-// what they include (see itemsForFlat, and buildQuantitySheetWorkbook's own
-// use of these same three flags).
-const qtyOptions = { showZero: false, includeByDay: true, includeDetail: true };
-
-// aggregatePayItemTotals only ever returns items actually used somewhere in
-// the flat entries passed in -- a catalog item nobody's logged against yet
-// in this range just isn't in its output. fullPayItemCatalogOverview is the
-// other function in quantity-calc.js that starts from the full catalog
-// instead and fills in zeros for anything untouched, which is exactly what
-// "Show items at 0 qty / 0% complete" needs.
-function itemsForFlat(flat) {
-  return qtyOptions.showZero
-    ? fullPayItemCatalogOverview(flat, project.payItemCatalog)
-    : aggregatePayItemTotals(flat, project.payItemCatalog);
-}
+let latestPayApp = null;
+const state = { range: 'all', from: '', to: '', view: 'items', search: '', showAll: false, open: new Set(), fullHistory: new Set() };
 
 async function init() {
   project = projectId ? await getProject(projectId) : null;
@@ -215,596 +198,293 @@ async function init() {
     location.href = 'index.html';
     return;
   }
-  document.title = `Quantity Sheet — ${project.name}`;
+  document.title = `Quantities · ${project.name}`;
   $('#project-name-sub').textContent = project.name;
   renderBreadcrumb('#bb-trail', [
     { label: 'Home', href: 'index.html' },
     { label: project.name, href: `project.html?id=${project.id}` },
-    { label: 'Quantity Sheet' },
+    { label: 'Quantities' },
   ]);
-  $('#link-pay-apps').href = `pay-apps.html?project=${project.id}`;
-
+  $('#btn-log').href = `quick-quantity.html?project=${project.id}`;
   allReports = (await getReportsForProject(project.id)).sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  latestPayApp = qtyLatestEstimate(project);
 
-  const datedReports = allReports.filter((r) => r.date);
-  if (preselectedIds.size > 0) {
-    const picked = datedReports.filter((r) => preselectedIds.has(r.id));
-    if (picked.length > 0) {
-      $('#f-date-from').value = picked[0].date;
-      $('#f-date-to').value = picked[picked.length - 1].date;
-    } else {
-      rangeMode = 'all'; // none of the preselected reports have a date to range over
-    }
-  } else if (datedReports.length > 0) {
-    // No handoff -- default the range to cover everything on file, so
-    // "Date Range" starts out equivalent to "All" and the user narrows it.
-    $('#f-date-from').value = datedReports[0].date;
-    $('#f-date-to').value = datedReports[datedReports.length - 1].date;
-  } else {
-    rangeMode = 'all'; // nothing has a date at all -- a range can never match anything
+  const dated = allReports.filter((r) => r.date);
+  const picked = dated.filter((r) => preselectedIds.has(r.id));
+  if (picked.length) {
+    setCustom(picked[0].date, picked[picked.length - 1].date);
+  } else if (queryParam('from') || queryParam('to')) {
+    setCustom(queryParam('from') || '', queryParam('to') || '');
+  } else if (latestPayApp && reportsInRange(...rangeBounds('sincepa')).length) {
+    state.range = 'sincepa';
   }
-
-  $('#view-picker button[data-view="totals"]').setAttribute('aria-pressed', 'true');
-  renderRangeMode();
+  render();
 }
 
-function reportsBetween(from, to) {
-  if (!from && !to) return allReports.filter((r) => r.date);
+function setCustom(from, to) {
+  state.range = 'custom';
+  state.from = from;
+  state.to = to;
+  $('#f-date-from').value = from;
+  $('#f-date-to').value = to;
+}
+
+// ---------- Range ----------
+
+const addDaysIso = (iso, n) => { const d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+const weekdayOf = (iso) => new Date(iso + 'T12:00:00Z').getUTCDay();
+const shortDate = (iso) => new Date(iso + 'T12:00:00Z').toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
+const dayLabel = (iso) => new Date(iso + 'T12:00:00Z').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+
+// [from, to, label] for a range; null means open-ended. 'all' is every
+// report, undated ones included.
+function rangeBounds(range) {
+  const today = todayIso();
+  const monday = addDaysIso(today, -((weekdayOf(today) + 6) % 7));
+  switch (range) {
+    case 'week': return [monday, addDaysIso(monday, 6), 'this week'];
+    case 'lastweek': return [addDaysIso(monday, -7), addDaysIso(monday, -1), 'last week'];
+    case 'month': return [today.slice(0, 8) + '01', today, 'this month'];
+    case 'sincepa': return latestPayApp ? [addDaysIso(latestPayApp.date, 1), today, `since Pay App ${latestPayApp.estimateNo}`] : [null, null, 'all reports'];
+    case 'custom': return [state.from || null, state.to || null, 'in this range'];
+    default: return [null, null, 'all reports'];
+  }
+}
+
+function reportsInRange(from, to) {
+  if (from == null && to == null) return allReports;
   return allReports.filter((r) => r.date && (!from || r.date >= from) && (!to || r.date <= to));
 }
 
-function selectedReports() {
-  if (rangeMode === 'all') return allReports;
-  if (rangeMode === 'estimate') {
-    const bounds = selectedEstimateId ? estimatePeriodBounds(project.billingEstimates, selectedEstimateId) : null;
-    if (!bounds) return [];
-    return reportsBetween(bounds.cumulativeFrom, bounds.cumulativeTo);
-  }
-  const from = $('#f-date-from').value;
-  const to = $('#f-date-to').value;
-  if (!from && !to) return [];
-  return reportsBetween(from, to);
-}
+// ---------- Render ----------
 
-function renderRangeMode() {
-  $$('#range-mode-picker button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === rangeMode)));
-  $('#range-fields').style.display = rangeMode === 'range' ? '' : 'none';
-  $('#range-estimate-field').hidden = rangeMode !== 'estimate';
-  if (rangeMode === 'estimate') renderEstimateSelect();
-  updateControls();
-}
+function render() {
+  const [from, to, label] = rangeBounds(state.range);
+  const reports = reportsInRange(from, to);
+  const ranged = from != null || to != null;
+  const loggedRange = qtyLoggedByItem(reports);
+  const loggedAll = qtyLoggedByItem(allReports);
+  const billed = qtyBilledByItem(latestPayApp);
+  const items = qtyItems(project, [...loggedAll.keys(), ...billed.keys()]);
 
-function renderEstimateSelect() {
-  const sorted = sortedEstimates(project.billingEstimates);
-  const select = $('#f-estimate');
-  if (sorted.length === 0) {
-    select.innerHTML = '<option value="">No estimates recorded yet</option>';
-    selectedEstimateId = null;
-    return;
-  }
-  if (!selectedEstimateId || !sorted.some((e) => e.id === selectedEstimateId)) {
-    selectedEstimateId = sorted[sorted.length - 1].id; // most recent by default
-  }
-  select.innerHTML = sorted
-    .map((e) => `<option value="${e.id}"${e.id === selectedEstimateId ? ' selected' : ''}>Estimate ${escapeHtml(e.estimateNo)} &middot; ${e.date}${e.note ? ' — ' + escapeHtml(e.note) : ''}</option>`)
-    .join('');
-}
-
-function updateControls() {
-  const selected = selectedReports();
-  const n = selected.length;
-  if (allReports.length === 0) {
-    $('#range-summary').textContent = 'No reports in this project yet.';
-  } else if (rangeMode === 'all') {
-    $('#range-summary').textContent = `${n} report(s) -- every report in this project.`;
-  } else if (rangeMode === 'estimate') {
-    $('#range-summary').textContent = selectedEstimateId
-      ? `${n} report(s) from the start of the project through this estimate's date.`
-      : 'Record an estimate below to select one.';
-  } else if (n === 0) {
-    $('#range-summary').textContent = 'No reports fall in that range.';
-  } else {
-    $('#range-summary').textContent = `${n} report(s) from ${selected[0].date} to ${selected[n - 1].date}.`;
-  }
-  $('#btn-generate').disabled = n === 0;
-  $('#btn-generate').textContent = n > 1 ? `Download as Excel (${n} reports)` : 'Download as Excel';
-  renderPeriodSection();
-  renderActiveView();
-}
-
-// ---------- View tabs (Totals / By Day / By Estimate / Detail Log) ----------
-
-let activeView = 'totals';
-
-function renderActiveView() {
-  if (activeView === 'totals') renderQuantityTotals();
-  else if (activeView === 'byDay') renderByDayTable();
-  else if (activeView === 'byEstimate') renderByEstimateTable();
-  else if (activeView === 'detail') renderDetailTable();
-}
-
-$('#view-picker').addEventListener('click', (e) => {
-  const btn = e.target.closest('button');
-  if (!btn) return;
-  activeView = btn.dataset.view;
-  $$('#view-picker button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.view === activeView)));
-  ['totals', 'byDay', 'byEstimate', 'detail'].forEach((v) => {
-    $(`#view-${v}`).hidden = v !== activeView;
+  $('#qp-tabs').innerHTML = qtySectionTabsHtml(project, qtyProjectSummary(project, allReports), 'quantities');
+  $('#qty-cbar').innerHTML = qtyContractBarHtml(qtyContractSums(items, loggedAll, billed),
+    latestPayApp ? `logged through today, billed through Pay App ${latestPayApp.estimateNo}` : 'no Pay Apps recorded yet');
+  $$('#range-chips .qs-chip').forEach((b) => {
+    b.setAttribute('aria-pressed', String(b.dataset.range === state.range));
+    if (b.dataset.range === 'sincepa') b.hidden = !latestPayApp;
   });
-  renderActiveView();
-});
+  $('#custom-range').hidden = state.range !== 'custom';
 
-function fillFilterSelect(select, values, allLabel) {
-  const current = select.value;
-  select.innerHTML = `<option value="">${allLabel}</option>` +
-    values.map((v) => `<option value="${escapeHtml(v)}"${v === current ? ' selected' : ''}>${escapeHtml(v)}</option>`).join('');
+  const rangeCost = items.reduce((s, it) => s + (qtyCost(it, loggedRange.get(it.itemNumber) || 0) || 0), 0);
+  const dates = reports.filter((r) => r.date).map((r) => r.date);
+  const span = !ranged
+    ? (dates.length ? `${shortDate(dates[0])} to ${shortDate(dates[dates.length - 1])}` : 'every report')
+    : `${from ? shortDate(from) : 'start'} to ${to ? shortDate(to > todayIso() ? todayIso() : to) : 'today'}`;
+  $('#range-summary').innerHTML = `<b>${rangeCost ? qtyMoney(rangeCost) + ' logged' : 'Logged ' + escapeHtml(label)}</b> &middot; ${escapeHtml(span)} &middot; ${reports.length} report${reports.length === 1 ? '' : 's'}`;
+
+  $('#qty-search').hidden = state.view !== 'items';
+  $$('#view-picker .view-toggle-btn').forEach((b) => b.classList.toggle('active', b.dataset.view === state.view));
+  $('#view-items').hidden = state.view !== 'items';
+  $('#view-byDay').hidden = state.view !== 'byDay';
+  if (state.view === 'items') renderItems(items, loggedRange, loggedAll, billed, label, from, to);
+  else renderByDay(reports, items, loggedRange);
 }
 
-function renderByDayTable() {
-  const selected = selectedReports();
-  const byDate = new Map();
-  for (const r of selected) {
-    const date = r.date || NO_DATE_KEY;
-    const its = (r.payItems || []).filter((it) => it && String(it.itemNumber || '').trim() !== '');
-    if (!byDate.has(date)) byDate.set(date, []);
-    byDate.get(date).push(...its);
-  }
-  const dates = Array.from(byDate.keys()).sort(compareDateKeys);
-  const flat = dates.flatMap((d) => byDate.get(d));
-  const items = itemsForFlat(flat);
-  $('#byday-empty').hidden = items.length > 0;
-  if (items.length === 0) {
-    $('#byday-table').innerHTML = '';
-    return;
-  }
-
-  const perDateQty = new Map();
-  for (const date of dates) {
-    const m = new Map();
-    items.forEach((it) => m.set(it.itemNumber, 0));
-    for (const e of byDate.get(date)) {
-      const k = String(e.itemNumber).trim();
-      m.set(k, (m.get(k) || 0) + (Number(e.qty) || 0));
-    }
-    perDateQty.set(date, m);
-  }
-
-  const header = `<thead><tr><th>Item Number</th><th>Description</th><th>Unit</th>${dates.map((d) => `<th class="dt-num">${escapeHtml(displayDate(d))}</th>`).join('')}</tr></thead>`;
-  const body = items
-    .map((it) => {
-      const cells = dates.map((d) => {
-        const v = perDateQty.get(d).get(it.itemNumber);
-        return `<td class="dt-num">${v ? v.toLocaleString() : ''}</td>`;
-      }).join('');
-      return `<tr><td>${escapeHtml(it.itemNumber)}</td><td>${escapeHtml(it.description)}</td><td>${escapeHtml(it.unit || '')}</td>${cells}</tr>`;
-    })
-    .join('');
-  $('#byday-table').innerHTML = header + `<tbody>${body}</tbody>`;
-}
-
-function renderByEstimateTable() {
-  const selected = selectedReports();
-  const sortedBillingEstimates = sortedEstimates(project.billingEstimates);
-  if (sortedBillingEstimates.length === 0) {
-    $('#byestimate-table').innerHTML = '';
-    $('#byestimate-empty').textContent = 'No estimates recorded yet -- add one from Manage Pay Apps above.';
-    $('#byestimate-empty').hidden = false;
-    return;
-  }
-
-  const flat = selected.flatMap((r) =>
-    (r.payItems || []).filter((it) => it && String(it.itemNumber || '').trim() !== '').map((it) => ({ ...it, __date: r.date }))
-  );
-  const items = itemsForFlat(flat);
-  if (items.length === 0) {
-    $('#byestimate-table').innerHTML = '';
-    $('#byestimate-empty').textContent = 'No pay items logged on any report in this range.';
-    $('#byestimate-empty').hidden = false;
-    return;
-  }
-  $('#byestimate-empty').hidden = true;
-
-  const perEstimateQty = sortedBillingEstimates.map((e) => {
-    const bounds = estimatePeriodBounds(project.billingEstimates, e.id);
-    const periodItems = flat.filter((it) => it.__date && (!bounds.periodFrom || it.__date > bounds.periodFrom) && it.__date <= bounds.periodTo);
-    const m = new Map();
-    items.forEach((it) => m.set(it.itemNumber, 0));
-    for (const it of periodItems) {
-      const k = String(it.itemNumber).trim();
-      m.set(k, (m.get(k) || 0) + (Number(it.qty) || 0));
-    }
-    return m;
-  });
-
-  const header = `<thead><tr><th>Item Number</th><th>Description</th><th>Unit</th>${sortedBillingEstimates.map((e) => `<th class="dt-num">Est. ${escapeHtml(e.estimateNo)} (${e.date})</th>`).join('')}</tr></thead>`;
-  const body = items
-    .map((it) => {
-      const cells = perEstimateQty.map((m) => {
-        const v = m.get(it.itemNumber);
-        return `<td class="dt-num">${v ? v.toLocaleString() : ''}</td>`;
-      }).join('');
-      return `<tr><td>${escapeHtml(it.itemNumber)}</td><td>${escapeHtml(it.description)}</td><td>${escapeHtml(it.unit || '')}</td>${cells}</tr>`;
-    })
-    .join('');
-  $('#byestimate-table').innerHTML = header + `<tbody>${body}</tbody>`;
-}
-
-const detailFilterState = { search: '', side: '', estimate: '', inspector: '', sort: 'date-desc', group: false };
-
-function detailEntries() {
-  const selected = selectedReports();
-  const sortedBillingEstimates = sortedEstimates(project.billingEstimates);
-  const rows = [];
-  for (const r of selected) {
-    for (const pi of (r.payItems || [])) {
-      if (!pi.itemNumber) continue;
-      const overrun = pi.theoreticalQty ? computeOverrun(pi.qty, pi.theoreticalQty) : null;
-      rows.push({
-        itemNumber: pi.itemNumber, description: pi.description || '', date: r.date || '',
-        startStation: pi.startStation || '', endStation: pi.endStation || '', side: pi.side || '',
-        qty: Number(pi.qty) || 0, unit: pi.unit || '',
-        theoreticalQty: pi.theoreticalQty || '', overrun,
-        estimateNo: estimateNoForDate(sortedBillingEstimates, r.date),
-        inspector: r.representative || '',
-      });
-    }
-  }
-  return rows;
-}
-
-function renderDetailTable() {
-  const all = detailEntries();
-  $('#detail-empty').hidden = all.length > 0;
-  if (all.length === 0) {
-    $('#detail-table').innerHTML = '';
-    $('#detail-summary').textContent = '';
-    return;
-  }
-
-  fillFilterSelect($('#detail-side'), Array.from(new Set(all.map((r) => r.side).filter(Boolean))).sort(), 'All Sides');
-  fillFilterSelect($('#detail-estimate'), Array.from(new Set(all.map((r) => r.estimateNo).filter(Boolean))).sort(), 'All Estimates');
-  fillFilterSelect($('#detail-inspector'), Array.from(new Set(all.map((r) => r.inspector).filter(Boolean))).sort(), 'All Inspectors');
-
-  const q = detailFilterState.search.trim().toLowerCase();
-  let filtered = all.filter((r) => {
-    if (q && !r.itemNumber.toLowerCase().includes(q) && !r.description.toLowerCase().includes(q)) return false;
-    if (detailFilterState.side && r.side !== detailFilterState.side) return false;
-    if (detailFilterState.estimate && r.estimateNo !== detailFilterState.estimate) return false;
-    if (detailFilterState.inspector && r.inspector !== detailFilterState.inspector) return false;
-    return true;
-  });
-
-  const sortFns = {
-    'date-desc': (a, b) => (b.date || '').localeCompare(a.date || ''),
-    'date-asc': (a, b) => (a.date || '').localeCompare(b.date || ''),
-    'item-number': (a, b) => a.itemNumber.localeCompare(b.itemNumber, undefined, { numeric: true }),
-    'qty-desc': (a, b) => b.qty - a.qty,
+function renderItems(items, loggedRange, loggedAll, billed, label, from, to) {
+  const q = state.search.trim().toLowerCase();
+  const matches = items.filter((it) => !q || it.itemNumber.toLowerCase().includes(q) || it.description.toLowerCase().includes(q));
+  const showRow = (it) => {
+    const R = loggedRange.get(it.itemNumber) || 0, L = loggedAll.get(it.itemNumber) || 0, B = billed.get(it.itemNumber) || 0;
+    return state.showAll || R !== 0 || (state.range === 'all' && (L !== 0 || B !== 0));
   };
-  filtered = filtered.slice().sort(sortFns[detailFilterState.sort] || sortFns['date-desc']);
-
-  const hasTheoretical = filtered.some((r) => r.theoreticalQty !== '');
-  const headerCols = ['Item', 'Description', 'Date', 'Station', 'Stop', 'Side', 'Qty', 'Unit', ...(hasTheoretical ? ['Theoretical', 'Overrun'] : []), 'Estimate', 'Inspector'];
-  const numCols = new Set(['Qty', 'Theoretical', 'Overrun']);
-  const header = `<thead><tr>${headerCols.map((h) => `<th${numCols.has(h) ? ' class="dt-num"' : ''}>${escapeHtml(h)}</th>`).join('')}</tr></thead>`;
-
-  function rowHtml(r) {
-    const theoCells = hasTheoretical ? `<td class="dt-num">${escapeHtml(String(r.theoreticalQty))}</td><td class="dt-num">${r.overrun != null ? r.overrun : ''}</td>` : '';
-    return `<tr><td>${escapeHtml(r.itemNumber)}</td><td>${escapeHtml(r.description)}</td><td>${escapeHtml(r.date)}</td><td>${escapeHtml(r.startStation)}</td><td>${escapeHtml(r.endStation)}</td><td>${escapeHtml(r.side)}</td><td class="dt-num">${r.qty.toLocaleString()}</td><td>${escapeHtml(r.unit)}</td>${theoCells}<td>${escapeHtml(r.estimateNo)}</td><td>${escapeHtml(r.inspector)}</td></tr>`;
-  }
-
-  let bodyHtml;
-  if (detailFilterState.group) {
-    const groups = new Map();
-    filtered.forEach((r) => {
-      if (!groups.has(r.itemNumber)) groups.set(r.itemNumber, []);
-      groups.get(r.itemNumber).push(r);
-    });
-    bodyHtml = Array.from(groups.entries())
-      .map(([item, rows]) => {
-        const subtotal = rows.reduce((s, r) => s + r.qty, 0);
-        const trailingCols = headerCols.length - 7;
-        const groupRow = `<tr class="dt-group-row"><td colspan="6">${escapeHtml(item)} &mdash; ${escapeHtml(rows[0].description)}</td><td class="dt-num">${subtotal.toLocaleString()}</td>${'<td></td>'.repeat(trailingCols)}</tr>`;
-        return groupRow + rows.map(rowHtml).join('');
-      })
-      .join('');
-  } else {
-    bodyHtml = filtered.map(rowHtml).join('');
-  }
-
-  $('#detail-table').innerHTML = header + `<tbody>${bodyHtml}</tbody>`;
-  $('#detail-summary').textContent = `${filtered.length} of ${all.length} entries.`;
-}
-
-$('#detail-search').addEventListener('input', (e) => { detailFilterState.search = e.target.value; renderDetailTable(); });
-$('#detail-side').addEventListener('change', (e) => { detailFilterState.side = e.target.value; renderDetailTable(); });
-$('#detail-estimate').addEventListener('change', (e) => { detailFilterState.estimate = e.target.value; renderDetailTable(); });
-$('#detail-inspector').addEventListener('change', (e) => { detailFilterState.inspector = e.target.value; renderDetailTable(); });
-$('#detail-sort').addEventListener('change', (e) => { detailFilterState.sort = e.target.value; renderDetailTable(); });
-$('#detail-group').addEventListener('change', (e) => { detailFilterState.group = e.target.checked; renderDetailTable(); });
-
-$('#f-estimate').addEventListener('change', (e) => {
-  selectedEstimateId = e.target.value || null;
-  updateControls();
-});
-
-// ---------- This Billing Period ----------
-
-function renderPeriodSection() {
-  const step = $('#period-step');
-  if (rangeMode !== 'estimate' || !selectedEstimateId) {
-    step.hidden = true;
-    return;
-  }
-  const bounds = estimatePeriodBounds(project.billingEstimates, selectedEstimateId);
-  if (!bounds) {
-    step.hidden = true;
-    return;
-  }
-  step.hidden = false;
-  const periodReports = reportsBetween(bounds.periodFrom, bounds.periodTo);
-  const flat = periodReports.flatMap((r) => (r.payItems || []).filter((it) => it && String(it.itemNumber || '').trim() !== ''));
-  const items = aggregatePayItemTotals(flat, project.payItemCatalog).filter((it) => it.total);
-  const { totalEarned } = contractValueSummary(items);
-
-  const rangeDesc = bounds.prevEstimate
-    ? `since Estimate ${escapeHtml(bounds.prevEstimate.estimateNo)} (${bounds.prevEstimate.date})`
-    : 'since the start of the project (first estimate on file)';
-  $('#period-summary').textContent = `${periodReports.length} report(s) ${rangeDesc}, through ${bounds.estimate.date}.` +
-    (totalEarned != null ? ` ${fmtMoney(totalEarned)} billed this period.` : '');
-
-  const container = $('#period-items');
-  if (items.length === 0) {
-    container.innerHTML = '<p class="hint" style="margin:0;">No pay items logged this period.</p>';
-    return;
-  }
-  container.innerHTML = `
-    <table class="estimate-table">
-      <thead><tr><th>Item</th><th>Description</th><th>Qty This Period</th><th>$ Billed</th></tr></thead>
-      <tbody>
-        ${sortPayItems(items, 'item-number').map((it) => `
-          <tr>
-            <td>${escapeHtml(it.itemNumber)}</td>
-            <td>${escapeHtml(it.description)}</td>
-            <td>${it.total.toLocaleString()} ${escapeHtml(it.unit || '')}</td>
-            <td>${it.earnedTotal != null ? fmtMoney(it.earnedTotal) : '—'}</td>
-          </tr>`).join('')}
-      </tbody>
-    </table>`;
-}
-
-// ---------- Totals view (same visual language as project.html's Pay Item
-// Completion list -- status strip, color bands, search/sort) ----------
-
-const qtyFilterState = { search: '', sort: 'most-complete', hiddenBands: new Set() };
-let allQtyItems = [];
-
-// Flat pay-item usage across every report currently in range -- the same
-// input buildQuantitySheetWorkbook's Totals tab is built from, just without
-// the by-day breakdown that only the Excel export needs.
-function selectedRangeItems() {
-  const flat = selectedReports().flatMap((r) => (r.payItems || []).filter((it) => it && String(it.itemNumber || '').trim() !== ''));
-  return itemsForFlat(flat);
-}
-
-function renderQuantityTotals() {
-  allQtyItems = selectedRangeItems();
-  $('#qty-controls').hidden = allQtyItems.length === 0;
-  renderFilteredQuantityItems();
-  renderTotalsPreviewTable();
-}
-
-// A literal preview of the Totals sheet the Excel download will contain --
-// same columns, same order (see buildQuantitySheetWorkbook's Totals section
-// below) -- so what's on screen here is what actually downloads, not just a
-// similar-looking summary. Styled with .xlsx-table to carry the same
-// brand-header/zebra look the real export gets from ExcelJS.
-function renderTotalsPreviewTable() {
-  const table = $('#totals-preview-table');
-  const items = allQtyItems;
-  if (items.length === 0) {
-    table.innerHTML = '';
-    return;
-  }
-  const header = `<thead><tr>
-    <th>Item Number</th><th>Description</th><th class="dt-num">Per Plans Total</th><th>Unit</th>
-    <th class="dt-num">Total Quantity</th><th class="dt-num">Remaining Quantity</th>
-    <th class="dt-num">% Complete</th><th class="dt-num">Overrun/Underrun</th>
-  </tr></thead>`;
-  const body = items.map((it) => {
-    const remaining = it.planned != null ? Math.round((it.planned - it.total) * 1000) / 1000 : null;
-    return `<tr>
-      <td>${escapeHtml(it.itemNumber)}</td>
-      <td>${escapeHtml(it.description)}</td>
-      <td class="dt-num">${it.planned != null ? it.planned.toLocaleString() : ''}</td>
-      <td>${escapeHtml(it.unit || '')}</td>
-      <td class="dt-num">${it.total.toLocaleString()}</td>
-      <td class="dt-num">${remaining != null ? remaining.toLocaleString() : ''}</td>
-      <td class="dt-num">${it.pct != null ? (it.pct * 100).toFixed(1) + '%' : ''}</td>
-      <td class="dt-num">${it.overrun != null ? it.overrun.toLocaleString() : ''}</td>
-    </tr>`;
+  const rows = matches.filter(showRow);
+  const hidden = matches.length - rows.length;
+  const html = rows.map((it) => {
+    const R = loggedRange.get(it.itemNumber) || 0, L = loggedAll.get(it.itemNumber) || 0, B = billed.get(it.itemNumber) || 0;
+    const entries = countEntries(it.itemNumber, from, to);
+    const open = state.open.has(it.itemNumber);
+    return `<button type="button" class="qs-row" data-item="${escapeHtml(it.itemNumber)}" aria-expanded="${open}">
+        <span class="qs-item"><span class="qs-num"><span class="qs-chev" aria-hidden="true">&#9656;</span>${escapeHtml(it.itemNumber)}</span><span class="qs-desc">${escapeHtml(it.description)}</span></span>
+        <span class="qs-c-range"><span class="qs-label">Logged ${escapeHtml(label)}: </span>${R ? `<span class="qs-big">${escapeHtml(qtyAmountText(it, R))}</span> <span class="qs-small">${entries} entr${entries === 1 ? 'y' : 'ies'}</span>` : '<span class="qs-small">None</span>'}</span>
+        <span class="qs-c-prog">${qtyProgressHtml(it, L, B)}</span>
+        <span class="qs-c-chk">${qtyCheckChipHtml(it, L, B)}</span>
+      </button>${open ? ledgerHtml(it, from, to) : ''}`;
   }).join('');
-  table.innerHTML = header + `<tbody>${body}</tbody>`;
+  $('#view-items').innerHTML = `
+    ${rows.length ? `<div class="qs-table">
+      <div class="qs-row qs-head" aria-hidden="true"><span>Pay item</span><span>Logged ${escapeHtml(label)}</span><span>Progress to date</span><span>Check</span></div>
+      ${html}</div>` : `<p class="qs-empty">${items.length ? (q ? 'No pay items match that search.' : 'Nothing was logged in this range.') : 'This project has no pay items yet.'}</p>`}
+    ${hidden && !state.showAll ? `<button type="button" class="text-btn" id="show-all-items">Show the ${hidden} item${hidden === 1 ? '' : 's'} with nothing logged ${escapeHtml(label)}</button>` : ''}`;
 }
 
-function renderFilteredQuantityItems() {
-  const items = allQtyItems;
-  $('#qty-bars-empty').hidden = items.length > 0;
-  if (items.length === 0) {
-    $('#qty-bars-no-match').hidden = true;
-    $('#qty-status-summary').innerHTML = '';
-    $('#qty-bars').innerHTML = '';
-    return;
-  }
+function countEntries(itemNumber, from, to) {
+  let n = 0;
+  reportsInRange(from, to).forEach((r) => (r.payItems || []).forEach((p) => { if (qtyKey(p.itemNumber) === itemNumber && Number(p.qty)) n++; }));
+  return n;
+}
 
-  const counts = Object.fromEntries(PI_BAND_ORDER.map((b) => [b, 0]));
-  items.forEach((it) => counts[completionBand(it.pct).cls]++);
-  const total = items.length;
-
-  const segments = PI_BAND_ORDER.filter((b) => counts[b] > 0)
-    .map((b) => `<span class="${b}" style="width:${(counts[b] / total) * 100}%"></span>`).join('');
-  const legend = PI_BAND_ORDER.filter((b) => counts[b] > 0)
-    .map((b) => {
-      const off = qtyFilterState.hiddenBands.has(b);
-      return `<span class="sl-item${off ? ' sl-off' : ''}" data-band="${b}" title="Click to ${off ? 'show' : 'hide'} ${PI_BAND_LABELS[b]}"><span class="sl-dot ${b}"></span>${PI_BAND_LABELS[b]} (${counts[b]})</span>`;
-    }).join('');
-  $('#qty-status-summary').innerHTML = `<div class="status-bar">${segments}</div><div class="status-legend">${legend}</div>`;
-  $$('.sl-item', $('#qty-status-summary')).forEach((el) => {
-    el.addEventListener('click', () => {
-      const band = el.dataset.band;
-      if (qtyFilterState.hiddenBands.has(band)) qtyFilterState.hiddenBands.delete(band);
-      else qtyFilterState.hiddenBands.add(band);
-      renderFilteredQuantityItems();
-    });
+// One item's history: report entries and Pay App billings in date order,
+// with running logged and billed totals, so it's clear where they split.
+function ledgerHtml(it, from, to) {
+  const events = [];
+  allReports.forEach((r) => (r.payItems || []).forEach((p) => {
+    const q = Number(p.qty);
+    if (qtyKey(p.itemNumber) !== it.itemNumber || !isFinite(q) || !q) return;
+    const where = [p.startStation && p.endStation ? `Sta. ${p.startStation} to ${p.endStation}` : p.startStation ? `Sta. ${p.startStation}` : '', p.location, p.side].filter(Boolean).join(' · ');
+    events.push({ date: r.date || '', kind: 'logged', q, label: `Report #${r.reportNo}`, href: `report-viewer.html?project=${project.id}&report=${r.id}`, where });
+  }));
+  let prev = 0;
+  sortedEstimates(project.billingEstimates).forEach((e) => {
+    const total = qtyBilledByItem(e).get(it.itemNumber) || 0;
+    if (!qtyEqual(total, prev)) events.push({ date: e.date || '', kind: 'billed', q: total - prev, label: `Pay App ${e.estimateNo}`, href: `pay-apps.html?project=${project.id}&estimate=${e.id}` });
+    prev = total;
   });
+  // Undated reports last; a Pay App after the reports of its own date.
+  events.sort((a, b) => (a.date === b.date ? (a.kind === 'logged' ? -1 : 1) : !a.date ? 1 : !b.date ? -1 : a.date < b.date ? -1 : 1));
+  let L = 0, B = 0;
+  const rows = events.map((e) => {
+    if (e.kind === 'logged') L += e.q; else B += e.q;
+    const inRange = (from == null && to == null) || (e.date && (!from || e.date >= from) && (!to || e.date <= to));
+    return { ...e, L, B, inRange };
+  });
+  const shown = state.fullHistory.has(it.itemNumber) ? rows : rows.filter((r) => r.inRange);
+  const more = rows.length - shown.length;
+  const amt = (v) => escapeHtml(qtyAmountText(it, v));
+  return `<div class="qs-ledger">
+    ${shown.length ? `<div class="table-scroll"><table>
+      <thead><tr><th>Date</th><th>Entry</th><th class="r">Amount</th><th class="r">Logged total</th><th class="r">Billed total</th></tr></thead>
+      <tbody>${shown.map((e) => `<tr${e.kind === 'billed' ? ' class="qs-billed"' : ''}>
+        <td>${e.date ? dayLabel(e.date) : 'No date'}</td>
+        <td><a href="${e.href}">${escapeHtml(e.label)}</a>${e.where ? `<span class="qs-where">${escapeHtml(e.where)}</span>` : ''}</td>
+        <td class="r">${e.kind === 'billed' ? 'billed ' : ''}${e.q > 0 && e.kind === 'billed' ? '+' : ''}${amt(e.q)}</td>
+        <td class="r">${amt(e.L)}</td>
+        <td class="r${e.B > e.L + 1e-9 ? ' qs-ahead' : ''}">${amt(e.B)}</td></tr>`).join('')}</tbody>
+    </table></div>` : `<p class="hint" style="margin:0;">Nothing logged or billed for ${escapeHtml(it.itemNumber)} in this range.</p>`}
+    ${more ? `<button type="button" class="text-btn" data-full-history="${escapeHtml(it.itemNumber)}">Show the full history (${more} more)</button>` : ''}
+  </div>`;
+}
 
-  const q = qtyFilterState.search.trim().toLowerCase();
-  let filtered = q
-    ? items.filter((it) => it.itemNumber.toLowerCase().includes(q) || (it.description || '').toLowerCase().includes(q))
-    : items.slice();
-  if (qtyFilterState.hiddenBands.size) {
-    filtered = filtered.filter((it) => !qtyFilterState.hiddenBands.has(completionBand(it.pct).cls));
+// A row per reporting day, a column per item logged in the range.
+function renderByDay(reports, items, loggedRange) {
+  const cols = items.filter((it) => (loggedRange.get(it.itemNumber) || 0) !== 0);
+  if (!cols.length) {
+    $('#view-byDay').innerHTML = '<p class="qs-empty">Nothing was logged in this range.</p>';
+    return;
   }
-  const sorted = sortPayItems(filtered, qtyFilterState.sort);
-
-  $('#qty-bars-no-match').hidden = sorted.length > 0;
-  $('#qty-bars').innerHTML = sorted.map((it) => {
-    const band = completionBand(it.pct);
-    const widthPct = it.pct == null ? 0 : Math.min(Math.max(it.pct, 0) * 100, 100);
-    const pctLabel = it.pct == null ? '—' : `${(it.pct * 100).toFixed(1)}%`;
-    // A Lump Sum item's pct is dollars earned vs. its contract value (see
-    // quantity-calc.js), not a quantity-vs-planned ratio -- shown as
-    // "$X of $Y billed" instead of the generic qty/planned phrasing, and
-    // moneyLine is skipped for it since that would just repeat the same two
-    // figures a second time.
-    const isLump = isLumpSumUnit(it.unit);
-    const qtyLine = isLump
-      ? (it.contractTotal != null ? `${fmtMoney(it.earnedTotal)} of ${fmtMoney(it.contractTotal)} billed` : `${it.total.toLocaleString()} ${it.unit || ''} used — no Unit Price on file to measure against`)
-      : it.pct != null
-        ? `${it.total.toLocaleString()} of ${it.planned.toLocaleString()} ${it.unit || ''} planned`
-        : `${it.total.toLocaleString()} ${it.unit || ''} used — no Per Plans Total on file`;
-    const moneyLine = (!isLump && it.unitPrice != null)
-      ? ` &middot; ${fmtMoney(it.earnedTotal)} earned${it.contractTotal != null ? ' of ' + fmtMoney(it.contractTotal) : ''}`
-      : '';
-    const overrunLine = it.overrun != null ? ` &middot; ${overrunLabel(it.overrun)}` : '';
-    const tip = `${qtyLine}.${it.unitPrice != null ? ' Unit price ' + fmtMoney(it.unitPrice) + '/' + (it.unit || 'unit') + '.' : ' No Unit Price on file.'}`;
-    return `
-      <div class="bar-row" data-tip="${escapeHtml(tip)}" tabindex="0">
-        <div class="br-top">
-          <span class="br-label">${escapeHtml(it.itemNumber)} <span class="br-desc">${escapeHtml(it.description)}</span></span>
-          <span class="pill ${band.cls}">${band.label}</span>
-        </div>
-        <div class="bar-track"><div class="bar-fill ${band.cls}" style="width:${widthPct}%"></div></div>
-        <div class="br-sub"><span>${qtyLine}${moneyLine}${overrunLine}</span><span class="br-pct">${pctLabel}</span></div>
-      </div>`;
+  const byDate = new Map();
+  reports.forEach((r) => {
+    const key = r.date || NO_DATE_KEY;
+    if (!byDate.has(key)) byDate.set(key, []);
+    byDate.get(key).push(r);
+  });
+  const dates = Array.from(byDate.keys()).sort(compareDateKeys);
+  const cell = (it, v) => (v ? (it.isLump ? qtyMoney(v) : qtyNum(v)) : '');
+  const body = dates.map((d) => {
+    const day = qtyLoggedByItem(byDate.get(d));
+    const nos = byDate.get(d).map((r) => `#${r.reportNo}`).join(', ');
+    const label = `${d === NO_DATE_KEY ? 'No date' : dayLabel(d)} <span class="qs-small">${escapeHtml(nos)}</span>`;
+    if (!cols.some((it) => day.get(it.itemNumber))) return `<tr class="qs-off"><td>${label}</td><td colspan="${cols.length}" style="text-align:left">No quantities logged</td></tr>`;
+    return `<tr><td>${label}</td>${cols.map((it) => `<td>${cell(it, day.get(it.itemNumber))}</td>`).join('')}</tr>`;
   }).join('');
+  $('#view-byDay').innerHTML = `<div class="qs-scroll"><table class="qs-byday">
+    <thead><tr><th>Day</th>${cols.map((it) => `<th title="${escapeHtml(it.description)}">${escapeHtml(it.itemNumber)}<br><span style="font-weight:600">${it.isLump ? 'LS $' : escapeHtml(it.unit)}</span></th>`).join('')}</tr></thead>
+    <tbody>${body}</tbody>
+    <tfoot><tr><td>Total logged</td>${cols.map((it) => `<td>${cell(it, loggedRange.get(it.itemNumber))}</td>`).join('')}</tr></tfoot>
+  </table></div>`;
 }
 
-function fmtMoney(n) {
-  return n == null ? '—' : n.toLocaleString(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
-}
+// ---------- Events ----------
 
+$('#range-chips').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-range]');
+  if (!btn) return;
+  state.range = btn.dataset.range;
+  if (state.range === 'custom' && !state.from && !state.to) {
+    const dated = allReports.filter((r) => r.date);
+    if (dated.length) setCustom(dated[0].date, dated[dated.length - 1].date);
+  }
+  state.open.clear();
+  state.fullHistory.clear();
+  state.showAll = false;
+  render();
+});
+['#f-date-from', '#f-date-to'].forEach((sel) => $(sel).addEventListener('change', () => {
+  state.from = $('#f-date-from').value;
+  state.to = $('#f-date-to').value;
+  render();
+}));
+$('#view-picker').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-view]');
+  if (!btn) return;
+  state.view = btn.dataset.view;
+  render();
+});
 $('#qty-search').addEventListener('input', (e) => {
-  qtyFilterState.search = e.target.value;
-  renderFilteredQuantityItems();
+  state.search = e.target.value;
+  render();
 });
-$('#qty-sort').addEventListener('change', (e) => {
-  qtyFilterState.sort = e.target.value;
-  renderFilteredQuantityItems();
+$('#view-items').addEventListener('click', (e) => {
+  if (e.target.closest('a')) return;
+  const full = e.target.closest('[data-full-history]');
+  if (full) { state.fullHistory.add(full.dataset.fullHistory); render(); return; }
+  if (e.target.closest('#show-all-items')) { state.showAll = true; render(); return; }
+  const row = e.target.closest('button.qs-row');
+  if (!row) return;
+  const n = row.dataset.item;
+  if (state.open.has(n)) state.open.delete(n); else state.open.add(n);
+  render();
 });
-$('#opt-show-zero').addEventListener('change', (e) => {
-  qtyOptions.showZero = e.target.checked;
-  renderActiveView();
-});
+
+// ---------- Excel ----------
+// buildQuantitySheetWorkbook lives in quantity-sheet-export.js, shared with
+// local-sync.js's folder sync so the two never build different workbooks.
+
+const qtyOptions = { showZero: false, includeByDay: true, includeDetail: true };
 $('#opt-include-byday').addEventListener('change', (e) => { qtyOptions.includeByDay = e.target.checked; });
 $('#opt-include-detail').addEventListener('change', (e) => { qtyOptions.includeDetail = e.target.checked; });
 
-$('#range-mode-picker').addEventListener('click', (e) => {
-  const btn = e.target.closest('button');
-  if (!btn) return;
-  rangeMode = btn.dataset.mode;
-  renderRangeMode();
+function closeExport() { $('#export-dialog').hidden = true; }
+$('#btn-export').addEventListener('click', () => {
+  const [from, to, label] = rangeBounds(state.range);
+  const n = reportsInRange(from, to).length;
+  $('#export-range').textContent = `${n} report${n === 1 ? '' : 's'} (${label}). Choose which sheets to include.`;
+  $('#btn-generate').disabled = n === 0;
+  $('#export-dialog').hidden = false;
+  $('#btn-generate').focus();
 });
-$('#f-date-from').addEventListener('input', updateControls);
-$('#f-date-to').addEventListener('input', updateControls);
-
-// ---------- Workbook building ----------
-// buildQuantitySheetWorkbook and its helpers now live in
-// quantity-sheet-export.js (script tag above), shared with local-sync.js's
-// folder/zip sync so the two never build a differently-shaped workbook.
-
-onEnterSubmit($('#range-fields'), $('#btn-generate'));
+$('#btn-export-cancel').addEventListener('click', closeExport);
+$('#export-dialog').addEventListener('click', (e) => { if (e.target.id === 'export-dialog') closeExport(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#export-dialog').hidden) closeExport(); });
 
 $('#btn-generate').addEventListener('click', async () => {
-  const selected = selectedReports();
+  const selected = reportsInRange(...rangeBounds(state.range).slice(0, 2));
   if (selected.length === 0) return;
-
   const btn = $('#btn-generate');
-  const original = btn.textContent;
   btn.disabled = true;
-  btn.textContent = 'Generating...';
+  btn.textContent = 'Building...';
   try {
     const room = await getCompanyRoom();
     const result = await buildQuantitySheetWorkbook(selected, project, room, qtyOptions);
     if (!result) {
-      alert('None of the selected reports have any pay items listed -- nothing to build.');
+      alert('None of these reports have any pay items listed, so there is nothing to put in the spreadsheet.');
       return;
     }
     const { wb, dates } = result;
     const realDates = dates.filter((d) => d !== NO_DATE_KEY);
     const projectNo = project.meta.projectNo || 'PR';
-    const stamp =
-      realDates.length === 0
-        ? 'undated'
-        : realDates.length === 1
-          ? realDates[0]
-          : `${realDates[0]}_to_${realDates[realDates.length - 1]}`;
+    const stamp = realDates.length === 0 ? 'undated'
+      : realDates.length === 1 ? realDates[0]
+        : `${realDates[0]}_to_${realDates[realDates.length - 1]}`;
     const out = await wb.xlsx.writeBuffer();
-    triggerDownload(
-      new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
-      `PR${projectNo}_QuantitySheet_${stamp}.xlsx`
-    );
+    triggerDownload(new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `PR${projectNo}_QuantitySheet_${stamp}.xlsx`);
+    closeExport();
   } catch (err) {
     console.error(err);
     alert(userError("Couldn't build the quantity sheet: " + err.message, 'QUANTITY_SHEET'));
   } finally {
-    btn.textContent = original;
+    btn.textContent = 'Download .xlsx';
     btn.disabled = false;
-  }
-});
-
-$('#btn-download-payapp-file').addEventListener('click', async () => {
-  if (!project) return;
-  try {
-    await downloadPayAppQuantitiesFile(project);
-  } catch (err) {
-    console.error(err);
-    alert(userError("Couldn't build the Pay App file: " + err.message, 'DOWNLOAD_PAYAPP_FILE'));
-  }
-});
-
-$('#f-payapp-reupload').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  try {
-    const rows = await parsePayAppQuantitiesFile(file);
-    if (rows == null) {
-      alert(`Couldn't find a "${PAY_APP_QUANTITIES_SHEET}" sheet in that file -- make sure you're uploading the file downloaded from this same button.`);
-      return;
-    }
-    // Only ever touches billingEstimates -- unlike the Project Data file's
-    // own re-upload, there's no meta/payItemCatalog/contractors to merge
-    // here, so this goes straight to mergeBillingEstimates rather than
-    // through applyProjectUpdate.
-    project.billingEstimates = mergeBillingEstimates(project.billingEstimates, rows);
-    await saveProject(project);
-    $('#uz-payapp-reupload').classList.add('has');
-    $('#fn-payapp-reupload').textContent = file.name;
-    renderEstimateSelect();
-    updateControls();
-    alert('Pay App quantities updated.');
-  } catch (err) {
-    console.error(err);
-    alert(userError("Couldn't read that file: " + err.message, 'PARSE_PAYAPP_EXCEL'));
   }
 });
 
