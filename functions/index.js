@@ -8,7 +8,7 @@
 // new sender as phishing. Only people with an account get emails (that's
 // where the address comes from).
 
-const { onDocumentUpdated } = require('firebase-functions/v2/firestore');
+const { onDocumentUpdated, onDocumentCreated, onDocumentWritten } = require('firebase-functions/v2/firestore');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const crypto = require('crypto');
 const { FieldValue } = require('firebase-admin/firestore');
@@ -265,6 +265,7 @@ exports.resetPasswordWithCode = onCall(async (request) => {
   const user = await admin.auth().getUserByEmail(email).catch(() => null);
   if (!user) throw new HttpsError('not-found', 'No account was found for that email.');
   await admin.auth().updateUser(user.uid, { password });
+  await sendPasswordChangedNotice(email, 'with an emailed reset code');
   return { ok: true };
 });
 
@@ -317,4 +318,98 @@ exports.sendRoundupPreview = onCall({ secrets: [RESEND_API_KEY] }, async (reques
   }
   if (result.skip) throw new HttpsError('failed-precondition', 'Only active members with an account email get the roundup.');
   return { ok: true, email: result.to, projectCount: result.projectCount };
+});
+
+// ---------- account emails ----------
+// Join requests (to admins), "you're approved", invites, and a heads-up
+// whenever a password changes. Same plain, link-free style as the rest.
+
+const ROLE_NAMES = { admin: 'Admin', manager: 'Manager', inspector: 'Inspector' };
+
+function plainMessage(subject, paragraphs, footer) {
+  const text = ['Hello,', '', ...paragraphs.flatMap((p) => [p, '']), ...(footer ? [footer, ''] : []), 'Inspector Manager'].join('\n');
+  const html = `<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#1c2b3a;line-height:1.5">
+<p>Hello,</p>${paragraphs.map((p) => `<p>${escapeHtml(p)}</p>`).join('\n')}
+${footer ? `<p style="color:#5b6b7a;font-size:13px">${escapeHtml(footer)}</p>` : ''}
+<p>Inspector Manager</p></div>`;
+  return { subject, text, html };
+}
+
+async function trySend(to, msg, what) {
+  try {
+    await sendEmail(to, msg);
+    console.log(`${what}: emailed ${to}`);
+  } catch (err) {
+    console.error(`${what} email to ${to} failed:`, err);
+  }
+}
+
+async function sendPasswordChangedNotice(email, how) {
+  await trySend(email, plainMessage('Your Daily Work Reports password was changed', [
+    `The password for your Daily Work Reports account (${email}) was just changed ${how}.`,
+    "If that was you, there's nothing else to do.",
+    `If it wasn't, choose "Forgot password?" on the Daily Work Reports sign-in screen to set a new one right away, and let your company's admin know.`,
+  ]), 'password changed notice');
+}
+
+// The app calls this right after changing a password in Settings (the
+// change itself happens in the browser, so the server can't see it).
+exports.passwordChangedNotice = onCall({ secrets: [RESEND_API_KEY] }, async (request) => {
+  if (!request.auth || !request.auth.token.email) throw new HttpsError('unauthenticated', 'Sign in first.');
+  // Only right after a sign-in or password change, which refreshes the token.
+  if (Date.now() / 1000 - request.auth.token.auth_time > 10 * 60) return { ok: false };
+  const ref = db().collection('users').doc(request.auth.uid);
+  const last = ((await ref.get()).data() || {}).passwordNoticeAt || 0;
+  if (Date.now() - last < 60 * 1000) return { ok: false };
+  await ref.set({ passwordNoticeAt: Date.now() }, { merge: true });
+  await sendPasswordChangedNotice(cleanEmail(request.auth.token.email), 'in Settings');
+  return { ok: true };
+});
+
+// Someone asks to join (admins hear about it), or an admin approves them
+// (they hear about it).
+exports.onMemberWritten = onDocumentWritten({ document: 'companies/{code}/members/{uid}', secrets: [RESEND_API_KEY] }, async (event) => {
+  const before = event.data.before.exists ? event.data.before.data() : null;
+  const after = event.data.after.exists ? event.data.after.data() : null;
+  if (!after) return;
+  const joining = after.status === 'pending' && (!before || before.status !== 'pending');
+  const approved = before && before.status === 'pending' && after.status === 'active' && after.email;
+  if (!joining && !approved) return; // most changes (names, roles) need no email
+  const company = db().collection('companies').doc(event.params.code);
+  const companyName = ((await company.get()).data() || {}).name || 'your company';
+  const who = after.displayName ? `${after.displayName}${after.email ? ` (${after.email})` : ''}` : (after.email || 'Someone');
+
+  if (joining) {
+    const admins = (await company.collection('members').where('role', '==', 'admin').get()).docs
+      .map((d) => ({ uid: d.id, ...d.data() })).filter((m) => m.status === 'active' && m.email);
+    for (const a of admins) {
+      const prefs = (await db().collection('users').doc(a.uid).get()).data() || {};
+      if (prefs.emailJoinRequests === false) continue;
+      await trySend(a.email, plainMessage(`${after.displayName || after.email || 'Someone'} asked to join ${companyName}`, [
+        `${who} asked to join ${companyName} on Daily Work Reports.`,
+        'To approve or decline, open Daily Work Reports and go to Settings, Company, Team.',
+      ], 'You get this because you are an admin. You can turn these emails off in Daily Work Reports under Settings, Account.'), 'join request');
+    }
+  }
+
+  if (approved) {
+    await trySend(after.email, plainMessage(`You're approved to join ${companyName}`, [
+      `Good news: you've been approved to join ${companyName} on Daily Work Reports as ${/^[aeiou]/i.test(ROLE_NAMES[after.role] || 'Inspector') ? 'an' : 'a'} ${ROLE_NAMES[after.role] || 'Inspector'}.`,
+      'Open Daily Work Reports and sign in with this email address to get started.',
+    ]), 'approved');
+  }
+});
+
+// An admin pre-approves an email: that person gets told how to join.
+exports.onInviteCreated = onDocumentCreated({ document: 'invites/{email}', secrets: [RESEND_API_KEY] }, async (event) => {
+  const invite = event.data.data() || {};
+  const email = cleanEmail(event.params.email);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
+  const companyName = invite.companyName || 'a company';
+  const inviter = invite.invitedBy || 'An admin';
+  const role = ROLE_NAMES[invite.role] || 'Inspector';
+  await trySend(email, plainMessage(`You're invited to join ${companyName} on Daily Work Reports`, [
+    `${inviter} invited you to join ${companyName} on Daily Work Reports as ${/^[aeiou]/i.test(role) ? 'an' : 'a'} ${role}.`,
+    `To join, go to inspector-manager.com, choose Create Account, and sign up with this email address (${email}). Then enter your company's password, which ${inviter} will give you.`,
+  ], "If you weren't expecting this, you can ignore it."), 'invite');
 });

@@ -793,6 +793,8 @@ async function changeAccountPassword(current, next) {
   } catch (err) {
     throw new Error(accountErrorMessage(err));
   }
+  // A "your password was changed" email, in case it wasn't them.
+  callAccountFunction('passwordChangedNotice', {}).catch((err) => console.error('password notice:', err));
 }
 
 async function resendAccountVerification() {

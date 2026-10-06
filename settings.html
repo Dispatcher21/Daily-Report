@@ -301,15 +301,6 @@
             <button type="button" class="btn-secondary" id="btn-account-reset" style="margin-top:0;">Change Password</button>
             <button type="button" class="btn-secondary" id="btn-account-signout" style="margin-top:0;">Sign Out</button>
           </div>
-          <label class="toggle-row" for="account-email-comments" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-top:0.75rem;">
-            <input type="checkbox" id="account-email-comments">
-            <span>Email me when someone comments on, approves or asks for changes on my reports or Pay Apps</span>
-          </label>
-          <label class="toggle-row" for="account-roundup" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-top:0.5rem;">
-            <input type="checkbox" id="account-roundup">
-            <span>Weekly roundup email of the projects I manage (Tuesdays, 6:30 AM my time)</span>
-          </label>
-          <button type="button" class="btn-secondary" id="btn-account-roundup-preview" style="margin-top:0.5rem;">Send Me a Roundup Now</button>
           <div class="account-pw" id="account-pw" hidden>
             <label>Current Password <input type="password" id="account-pw-current" autocomplete="current-password"></label>
             <label>New Password <input type="password" id="account-pw-new" autocomplete="new-password"><span class="hint">At least 8 characters.</span></label>
@@ -317,6 +308,21 @@
             <button type="button" class="btn-primary" id="btn-account-pw-save" style="margin-top:0.5rem;">Save New Password</button>
             <p class="hint" style="margin:0.5rem 0 0;">Forgot your current password? Sign out, then use "Forgot password?" on the sign-in screen.</p>
           </div>
+          <p class="settings-subhead" style="margin-top:1.25rem;">Email Me About</p>
+          <label class="toggle-row" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;">
+            <input type="checkbox" id="account-email-comments" data-email-pref="emailComments">
+            <span>Comments, replies, approvals and change requests on my reports and Pay Apps</span>
+          </label>
+          <label class="toggle-row" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-top:0.5rem;">
+            <input type="checkbox" id="account-roundup" data-email-pref="weeklyRoundup">
+            <span>A weekly roundup of the projects I manage (Tuesdays, 6:30 AM my time)</span>
+          </label>
+          <label class="toggle-row" id="account-join-requests-row" hidden style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-top:0.5rem;">
+            <input type="checkbox" id="account-join-requests" data-email-pref="emailJoinRequests">
+            <span>People asking to join the company</span>
+          </label>
+          <button type="button" class="btn-secondary" id="btn-account-roundup-preview" style="margin-top:0.75rem;">Send Me a Roundup Now</button>
+          <p class="hint" style="margin:0.5rem 0 0;">Password changes, reset codes and approvals are always emailed.</p>
           <div class="success" id="account-notice" hidden style="margin-top:0.75rem;"></div>
         </div>
       </div>
@@ -2898,8 +2904,8 @@ async function renderAccount() {
   const roleEl = $('#account-role');
   roleEl.hidden = !(member && room);
   const profile = await readAccountProfile(account.uid).catch(() => null);
-  $('#account-email-comments').checked = !(profile && profile.emailComments === false);
-  $('#account-roundup').checked = !(profile && profile.weeklyRoundup === false);
+  $$('[data-email-pref]').forEach((box) => { box.checked = !(profile && profile[box.dataset.emailPref] === false); });
+  $('#account-join-requests-row').hidden = !(member && room && member.role === 'admin');
   if (member && room) {
     const projects = Array.isArray(member.projectIds)
       ? `${member.projectIds.length} project${member.projectIds.length === 1 ? '' : 's'}`
@@ -2914,28 +2920,23 @@ function accountNotice(text) {
   el.hidden = false;
 }
 
-$('#account-email-comments').addEventListener('change', async (e) => {
+const EMAIL_PREF_NOTICES = {
+  emailComments: ["You'll get an email when someone comments on your work.", 'Comment emails are off.'],
+  weeklyRoundup: ["You'll get a roundup of your managed projects every Tuesday morning.", 'Weekly roundup emails are off.'],
+  emailJoinRequests: ["You'll get an email when someone asks to join.", 'Join request emails are off.'],
+};
+$$('[data-email-pref]').forEach((box) => box.addEventListener('change', async (e) => {
   const account = await getAccount();
   if (!account) return;
+  const key = e.target.dataset.emailPref;
   try {
-    await writeAccountProfile(account.uid, { emailComments: e.target.checked });
-    accountNotice(e.target.checked ? "You'll get an email when someone comments on your work." : "Comment emails are off.");
+    await writeAccountProfile(account.uid, { [key]: e.target.checked });
+    accountNotice(EMAIL_PREF_NOTICES[key][e.target.checked ? 0 : 1]);
   } catch (err) {
     e.target.checked = !e.target.checked;
     alert("Couldn't save that: " + err.message);
   }
-});
-$('#account-roundup').addEventListener('change', async (e) => {
-  const account = await getAccount();
-  if (!account) return;
-  try {
-    await writeAccountProfile(account.uid, { weeklyRoundup: e.target.checked });
-    accountNotice(e.target.checked ? "You'll get a roundup of your managed projects every Tuesday morning." : 'Weekly roundup emails are off.');
-  } catch (err) {
-    e.target.checked = !e.target.checked;
-    alert("Couldn't save that: " + err.message);
-  }
-});
+}));
 $('#btn-account-roundup-preview').addEventListener('click', async (e) => {
   e.target.disabled = true;
   try {

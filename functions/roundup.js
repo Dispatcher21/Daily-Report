@@ -15,7 +15,7 @@ const vm = require('vm');
 const calc = (() => {
   const ctx = {};
   vm.runInNewContext(`${fs.readFileSync(path.join(__dirname, 'lib', 'quantity-calc.js'), 'utf8')}
-;this.__x = { aggregatePayItemTotals, fullPayItemCatalogOverview, contractValueSummary, overallPercentComplete, effectivePayItemFlatEntries };`, ctx);
+;this.__x = { aggregatePayItemTotals, fullPayItemCatalogOverview, contractValueSummary, overallPercentComplete, effectivePayItemFlatEntries, isLumpSumUnit };`, ctx);
   return ctx.__x;
 })();
 
@@ -82,6 +82,17 @@ function projectSummary(project, reports, week, today) {
       schedule = overall + 0.05 >= timeFrac ? 'On schedule' : overall + 0.2 >= timeFrac ? 'Slightly behind' : 'Behind schedule';
     }
   }
+  // Heads-up items: contract time running out or gone, behind schedule,
+  // and pay items past their planned quantity (to date, all reports).
+  const alerts = [];
+  if (daysLeft != null && daysLeft < 0) alerts.push(`Past contract time by ${-daysLeft} day${daysLeft === -1 ? '' : 's'}`);
+  else if (daysLeft != null && daysLeft <= 30) alerts.push(`${daysLeft} day${daysLeft === 1 ? '' : 's'} left on the contract`);
+  if (schedule && schedule !== 'On schedule') {
+    alerts.push(`${schedule}: ${Math.round(overall * 100)}% complete with ${Math.round((daysBetween(meta.ntpDate, today) / contractLength) * 100)}% of contract time used`);
+  }
+  const overruns = overview.filter((it) => it.planned && it.total > it.planned && !calc.isLumpSumUnit(it.unit));
+  overruns.slice(0, 5).forEach((it) => alerts.push(`Item ${it.itemNumber}${it.description ? ` ${it.description}` : ''} is over plan: ${fmt(it.total, 2)} of ${fmt(it.planned, 2)} ${it.unit || ''} (${Math.round((it.total / it.planned) * 100)}%)`.replace(/ +\(/, ' (')));
+  if (overruns.length > 5) alerts.push(`and ${overruns.length - 5} more pay items over plan`);
   const counts = { approved: 0, changes_requested: 0, pending: 0 };
   weekReports.forEach((r) => { counts[r.approvalStatus in counts ? r.approvalStatus : 'pending']++; });
   return {
@@ -90,7 +101,7 @@ function projectSummary(project, reports, week, today) {
     totalHours: [...people.values()].reduce((s, p) => s + p.hours, 0),
     people: [...people.entries()].map(([name, v]) => ({ name, ...v })).sort((a, b) => b.hours - a.hours || b.reports - a.reports),
     payItems: weekItems.map((it) => ({ itemNumber: it.itemNumber, description: it.description, unit: it.unit, total: it.total })),
-    overall, totalContract, totalEarned, daysLeft, schedule, counts,
+    overall, totalContract, totalEarned, daysLeft, schedule, counts, alerts,
   };
 }
 
@@ -127,6 +138,7 @@ ${p.payItems.length > 12 ? `<tr><td colspan="3" style="color:#5b6b7a;padding-top
 ${p.projectNo || p.schedule ? `<div style="font-size:12px;opacity:.85">${esc(p.projectNo)}${p.projectNo && p.schedule ? ' &middot; ' : ''}${p.schedule ? `<span style="color:#ffffff;background:${scheduleColor[p.schedule]};padding:1px 7px;border-radius:9px">${p.schedule}</span>` : ''}</div>` : ''}
 </td></tr>
 <tr><td style="padding:14px 16px">
+${p.alerts.length ? `<div style="background:#fff6e5;border:1px solid #f0d199;border-radius:8px;padding:8px 12px;margin:0 0 10px;font-size:13px;color:#7a4a00"><div style="font-weight:bold;margin-bottom:2px">Heads up</div>${p.alerts.map((a) => `<div>${esc(a)}</div>`).join('')}</div>` : ''}
 <table role="presentation" width="100%" cellspacing="6" cellpadding="0"><tr>
 ${statCell('Reports', p.reportCount)}${statCell('Hours', fmt(p.totalHours))}${statCell('Complete', pct)}${statCell('Days left', days)}
 </tr></table>
@@ -157,6 +169,7 @@ function composeRoundup({ name, companyName, week, projects }, esc) {
     ...projects.flatMap((p) => [
       `${p.name}${p.projectNo ? ` (${p.projectNo})` : ''}`,
       `  Reports: ${p.reportCount}   Hours: ${fmt(p.totalHours)}   Complete: ${p.overall == null ? '-' : `${Math.round(p.overall * 100)}%`}   Days left: ${p.daysLeft == null ? '-' : p.daysLeft}${p.schedule ? `   (${p.schedule})` : ''}`,
+      ...p.alerts.map((a) => `  Heads up: ${a}`),
       ...p.people.map((x) => `  ${x.name}: ${x.reports ? `${x.reports} reports, ` : ''}${fmt(x.hours)} hrs`),
       ...p.payItems.slice(0, 12).map((it) => `  ${it.itemNumber} ${it.description || ''}: ${fmt(it.total, 2)} ${it.unit || ''}`),
       '',
