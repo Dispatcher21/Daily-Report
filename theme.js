@@ -392,6 +392,7 @@ function readAccent() {
   async function mountHeaderControls() {
     const header = document.querySelector('.app-header');
     if (!header || header.querySelector('.header-controls')) return;
+    if (document.body.hasAttribute('data-plain-header')) return; // e.g. the email-link page
     const slot = header.querySelector(':scope > span:empty');
     const isSettingsPage = /settings\.html$/i.test(location.pathname);
 
