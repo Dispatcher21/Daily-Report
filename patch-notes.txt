@@ -3,7 +3,7 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
-0.052 -- 2026-10-06
+0.0511 -- 2026-10-06
   - Settings > Account: "Send Me a Roundup Now" says Sending..., then
     Sent, and each email switch shows a quick "Saved" when you flip it.
 
