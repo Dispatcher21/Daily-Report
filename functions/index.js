@@ -9,6 +9,9 @@
 // where the address comes from).
 
 const { onDocumentUpdated } = require('firebase-functions/v2/firestore');
+const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const crypto = require('crypto');
+const { FieldValue } = require('firebase-admin/firestore');
 const { setGlobalOptions } = require('firebase-functions/v2');
 const { defineSecret, defineString } = require('firebase-functions/params');
 const admin = require('firebase-admin');
@@ -49,11 +52,20 @@ function whatHappened(before, after, people) {
   const author = people.resolve(after.createdByUid, after.createdBy);
   const oldIds = new Set((before.comments || []).map((c) => c.id));
   const participants = new Set((before.comments || []).map((c) => people.resolve(c.authorUid, c.author)).filter(Boolean));
+  const byId = new Map((after.comments || []).map((c) => [c.id, c]));
   for (const c of after.comments || []) {
     if (oldIds.has(c.id)) continue;
     const actor = people.resolve(c.authorUid, c.author);
-    const to = new Set([author, ...participants].filter((u) => u && u !== actor));
-    events.push({ kind: 'comment', actor, actorName: c.author || 'Someone', text: c.text || '', to });
+    const parent = c.parentId ? byId.get(c.parentId) : null;
+    if (parent) {
+      // A reply: whoever wrote the comment it answers, and the owner.
+      const parentAuthor = people.resolve(parent.authorUid, parent.author);
+      const to = new Set([parentAuthor, author].filter((u) => u && u !== actor));
+      events.push({ kind: 'reply', actor, actorName: c.author || 'Someone', text: c.text || '', parentAuthor, parentAuthorName: parent.author || 'someone', to });
+    } else {
+      const to = new Set([author, ...participants].filter((u) => u && u !== actor));
+      events.push({ kind: 'comment', actor, actorName: c.author || 'Someone', text: c.text || '', to });
+    }
     if (actor) participants.add(actor);
   }
   if (after.approvalStatus !== before.approvalStatus && NOTIFY_STATUSES[after.approvalStatus]) {
@@ -65,19 +77,25 @@ function whatHappened(before, after, people) {
   return { events, author };
 }
 
-function compose(recipientIsAuthor, thing, events) {
+function compose(recipientIsAuthor, thing, events, recipient) {
   const whose = recipientIsAuthor ? 'your' : 'the';
-  const lines = events.map((e) => e.kind === 'comment'
-    ? `${e.actorName} commented on ${whose} ${thing}:\n\n    "${e.text}"`
-    : `${e.actorName} ${NOTIFY_STATUSES[e.status]} ${whose} ${thing}.`);
+  const replyTarget = (e) => (e.parentAuthor && e.parentAuthor === recipient ? 'your comment' : `${e.parentAuthorName}'s comment`);
+  const lead = (e) => e.kind === 'reply'
+    ? `${e.actorName} replied to ${replyTarget(e)} on ${whose} ${thing}`
+    : `${e.actorName} commented on ${whose} ${thing}`;
+  const lines = events.map((e) => e.kind === 'status'
+    ? `${e.actorName} ${NOTIFY_STATUSES[e.status]} ${whose} ${thing}.`
+    : `${lead(e)}:\n\n    "${e.text}"`);
   const first = events[0];
-  const subject = first.kind === 'comment'
-    ? `New comment on ${whose} ${thing}`
-    : first.status === 'approved' ? `Approved: ${whose} ${thing}` : `Changes requested: ${whose} ${thing}`;
+  const subject = first.kind === 'reply'
+    ? `New reply on ${whose} ${thing}`
+    : first.kind === 'comment'
+      ? `New comment on ${whose} ${thing}`
+      : first.status === 'approved' ? `Approved: ${whose} ${thing}` : `Changes requested: ${whose} ${thing}`;
   const text = [...lines, '', 'Open Daily Work Reports to see it or reply.', '', 'You can turn these emails off in Daily Work Reports under Settings, Account.', '', 'Inspector Manager'].join('\n');
   const html = `<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#1c2b3a;line-height:1.5">
-${events.map((e) => e.kind === 'comment'
-    ? `<p><strong>${escapeHtml(e.actorName)}</strong> commented on ${whose} ${escapeHtml(thing)}:</p><blockquote style="margin:0 0 14px;padding:8px 12px;border-left:3px solid #1c3d5a;background:#f3f6f9">${escapeHtml(e.text)}</blockquote>`
+${events.map((e) => e.kind !== 'status'
+    ? `<p>${escapeHtml(lead(e)).replace(escapeHtml(e.actorName), `<strong>${escapeHtml(e.actorName)}</strong>`)}:</p><blockquote style="margin:0 0 14px;padding:8px 12px;border-left:3px solid #1c3d5a;background:#f3f6f9">${escapeHtml(e.text)}</blockquote>`
     : `<p><strong>${escapeHtml(e.actorName)}</strong> ${NOTIFY_STATUSES[e.status]} ${whose} ${escapeHtml(thing)}.</p>`).join('\n')}
 <p>Open Daily Work Reports to see it or reply.</p>
 <p style="color:#5b6b7a;font-size:13px">You can turn these emails off in Daily Work Reports under Settings, Account.</p>
@@ -103,7 +121,7 @@ async function sendEmail(to, msg) {
 async function notify(people, author, thing, events) {
   // One line per change in the function log: what happened and who was told.
   const told = [...new Set(events.flatMap((e) => [...e.to]))].map((u) => people.byUid.get(u).email);
-  console.log(`${thing}: ${events.map((e) => (e.kind === 'comment' ? `comment by ${e.actorName}` : `${e.status} by ${e.actorName}`)).join(', ')}. Author: ${author ? people.byUid.get(author).email : 'not found among active members'}. Telling: ${told.join(', ') || 'nobody (no one else involved)'}`);
+  console.log(`${thing}: ${events.map((e) => (e.kind === 'status' ? `${e.status} by ${e.actorName}` : `${e.kind} by ${e.actorName}`)).join(', ')}. Author: ${author ? people.byUid.get(author).email : 'not found among active members'}. Telling: ${told.join(', ') || 'nobody (no one else involved)'}`);
   const perPerson = new Map();
   for (const e of events) for (const uid of e.to) {
     if (!perPerson.has(uid)) perPerson.set(uid, []);
@@ -113,7 +131,7 @@ async function notify(people, author, thing, events) {
     const prefs = (await db().collection('users').doc(uid).get()).data() || {};
     if (prefs.emailComments === false) { console.log(`${people.byUid.get(uid).email} has comment emails turned off`); continue; }
     try {
-      await sendEmail(people.byUid.get(uid).email, compose(uid === author, thing, list));
+      await sendEmail(people.byUid.get(uid).email, compose(uid === author, thing, list, uid));
       console.log(`emailed ${people.byUid.get(uid).email}`);
     } catch (err) {
       console.error('notification email failed:', err);
@@ -151,4 +169,101 @@ exports.onPayAppComment = onDocumentUpdated({ document: 'companies/{code}/projec
     const thing = `Pay App${estimate.estimateNo != null ? ` #${estimate.estimateNo}` : ''}${after.name ? ` for ${after.name}` : ''}${dateLabel(estimate.date)}`;
     await notify(people, author, thing, events);
   }
+});
+
+// ---------- Password reset by emailed code ----------
+//
+// "Forgot password?" (or an admin's "Send reset code") emails a 6-digit
+// code -- plain words, no link. Codes are stored only as hashes in
+// emailCodes (closed to app users by the database rules), expire after 15
+// minutes, allow 5 wrong tries, and are rate-limited per address.
+
+const CODE_TTL_MS = 15 * 60 * 1000;
+const MAX_TRIES = 5;
+const RESEND_GAP_MS = 60 * 1000;
+const MAX_SENDS_PER_HOUR = 5;
+const MIN_PASSWORD = 8;
+const cleanEmail = (email) => String(email || '').trim().toLowerCase();
+const codeDocId = (email) => crypto.createHash('sha256').update(`reset:${email}`).digest('hex');
+const hashCode = (docId, code) => crypto.createHash('sha256').update(`${docId}:${code}`).digest('hex');
+
+function resetMessage(code, sentByAdmin) {
+  const why = sentByAdmin ? `${sentByAdmin} sent you a code to set a new password.` : 'You asked to reset your password.';
+  const text = [
+    'Hello,', '', why, '', `Your code is: ${code}`, '',
+    'On the Daily Work Reports sign-in screen, choose "Forgot password?", then "I have a code", and enter it with your new password. It expires in 15 minutes.',
+    '', "If you didn't ask for this, you can ignore this email; your password hasn't changed.", '', 'Inspector Manager',
+  ].join('\n');
+  const html = `<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#1c2b3a;line-height:1.5">
+<p>Hello,</p><p>${escapeHtml(why)}</p><p>Your code is:</p>
+<p style="font-size:30px;font-weight:bold;letter-spacing:6px;margin:8px 0 16px">${code}</p>
+<p>On the Daily Work Reports sign-in screen, choose <strong>Forgot password?</strong>, then <strong>I have a code</strong>, and enter it with your new password. It expires in 15 minutes.</p>
+<p style="color:#5b6b7a">If you didn't ask for this, you can ignore this email; your password hasn't changed.</p>
+<p>Inspector Manager</p></div>`;
+  return { subject: 'Your Daily Work Reports password reset code', text, html };
+}
+
+async function issueResetCode(email, sentByAdmin) {
+  const id = codeDocId(email);
+  const ref = db().collection('emailCodes').doc(id);
+  const now = Date.now();
+  const prior = (await ref.get()).data() || {};
+  const recent = (prior.sends || []).filter((t) => now - t < 60 * 60 * 1000);
+  if (recent.length && now - recent[recent.length - 1] < RESEND_GAP_MS) throw new HttpsError('resource-exhausted', 'A code was just sent. Wait a minute before asking for another.');
+  if (recent.length >= MAX_SENDS_PER_HOUR) throw new HttpsError('resource-exhausted', 'Too many codes asked for. Try again in an hour.');
+  const exists = await admin.auth().getUserByEmail(email).then(() => true, () => false);
+  if (!exists) { await ref.set({ sends: [...recent, now] }, { merge: true }); return; } // say nothing about who has an account
+  const code = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+  await ref.set({ codeHash: hashCode(id, code), expiresAt: now + CODE_TTL_MS, tries: 0, sends: [...recent, now] });
+  try {
+    await sendEmail(email, resetMessage(code, sentByAdmin));
+  } catch (err) {
+    console.error('reset email failed:', err);
+    throw new HttpsError('unavailable', "The email couldn't be sent right now. Try again in a few minutes.");
+  }
+}
+
+exports.sendResetCode = onCall({ secrets: [RESEND_API_KEY] }, async (request) => {
+  const email = cleanEmail(request.data && request.data.email);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpsError('invalid-argument', 'Enter a valid email address.');
+  await issueResetCode(email, null);
+  return { ok: true };
+});
+
+// An admin sends a reset code to someone in their company.
+exports.adminSendResetCode = onCall({ secrets: [RESEND_API_KEY] }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in first.');
+  const profile = (await db().collection('users').doc(request.auth.uid).get()).data() || {};
+  const code = profile.companyCode;
+  const company = code ? db().collection('companies').doc(code) : null;
+  const me = company ? (await company.collection('members').doc(request.auth.uid).get()).data() : null;
+  if (!me || me.role !== 'admin' || me.status !== 'active') throw new HttpsError('permission-denied', 'Only an admin can do that.');
+  const target = (await company.collection('members').doc(String((request.data && request.data.uid) || '')).get()).data();
+  if (!target || !target.email) throw new HttpsError('not-found', "That person doesn't have an account email.");
+  await issueResetCode(cleanEmail(target.email), me.displayName || 'Your admin');
+  console.log(`${me.email} sent a reset code to ${target.email}`);
+  return { ok: true, email: target.email };
+});
+
+exports.resetPasswordWithCode = onCall(async (request) => {
+  const email = cleanEmail(request.data && request.data.email);
+  const password = String((request.data && request.data.password) || '');
+  if (password.length < MIN_PASSWORD) throw new HttpsError('invalid-argument', `Choose a password with at least ${MIN_PASSWORD} characters.`);
+  const id = codeDocId(email);
+  const ref = db().collection('emailCodes').doc(id);
+  const doc = (await ref.get()).data();
+  if (!doc || !doc.codeHash) throw new HttpsError('failed-precondition', 'Ask for a code first.');
+  if (Date.now() > doc.expiresAt) throw new HttpsError('deadline-exceeded', 'That code has expired. Ask for a new one.');
+  if (doc.tries >= MAX_TRIES) throw new HttpsError('resource-exhausted', 'Too many wrong tries. Ask for a new code.');
+  const given = Buffer.from(hashCode(id, String((request.data && request.data.code) || '').replace(/\D/g, '')));
+  const wanted = Buffer.from(doc.codeHash);
+  if (given.length !== wanted.length || !crypto.timingSafeEqual(given, wanted)) {
+    await ref.update({ tries: FieldValue.increment(1) });
+    throw new HttpsError('invalid-argument', doc.tries + 1 >= MAX_TRIES ? 'Too many wrong tries. Ask for a new code.' : "That code isn't right. Check the email and try again.");
+  }
+  await ref.update({ codeHash: FieldValue.delete(), expiresAt: FieldValue.delete(), tries: 0 });
+  const user = await admin.auth().getUserByEmail(email).catch(() => null);
+  if (!user) throw new HttpsError('not-found', 'No account was found for that email.');
+  await admin.auth().updateUser(user.uid, { password });
+  return { ok: true };
 });

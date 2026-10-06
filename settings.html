@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://www.gstatic.com https://*.googleapis.com https://api.open-meteo.com https://geocoding-api.open-meteo.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://www.gstatic.com https://*.googleapis.com https://*.cloudfunctions.net https://api.open-meteo.com https://geocoding-api.open-meteo.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';">
 <title>Settings</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="manifest" href="manifest.json">
@@ -2697,6 +2697,7 @@ function renderTeamLists() {
         <select data-team-role aria-label="Role for ${escapeHtml(teamMemberName(m))}">${teamRoleOptions(m.role)}</select>
         ${m.role === 'admin' ? '' : '<button type="button" class="btn-sm" data-team-projects>Projects</button>'}
         ${me ? '' : `<button type="button" class="btn-sm" data-team-toggle>${off ? 'Turn On' : 'Turn Off'}</button>`}
+        ${me || off || !m.email ? '' : '<button type="button" class="btn-sm" data-team-resetpw>Send Reset Code</button>'}
         ${me ? '' : '<button type="button" class="btn-sm btn-sm-danger" data-team-remove>Remove</button>'}
       </div>
       <div class="team-project-panel team-projects" hidden></div>
@@ -2839,6 +2840,12 @@ $('#team-members').addEventListener('click', (e) => {
     const turnOff = m.status !== 'disabled';
     if (turnOff && !confirm(`Turn off ${teamMemberName(m)}'s access? Their device leaves the company the next time it syncs. Their reports stay.`)) return;
     teamChange(() => updateTeamMember(uid, { status: turnOff ? 'disabled' : 'active' }), turnOff ? `${teamMemberName(m)}'s access is off.` : `${teamMemberName(m)}'s access is back on.`);
+  } else if (e.target.closest('[data-team-resetpw]')) {
+    if (!confirm(`Email ${teamMemberName(m)} a code to set a new password? They enter it on the sign-in screen under "Forgot password?", then "I have a code".`)) return;
+    adminSendResetCode(uid).then(
+      (email) => teamStatus(`Reset code sent to ${email}. It works for 15 minutes.`),
+      (err) => teamError(err.message)
+    );
   } else if (e.target.closest('[data-team-remove]')) {
     if (!confirm(`Remove ${teamMemberName(m)} from the team? Their device leaves the company the next time it syncs. Their reports stay. You can pre-approve their email again later.`)) return;
     teamChange(() => removeTeamMember(uid), `${teamMemberName(m)} removed.`);

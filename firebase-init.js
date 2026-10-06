@@ -30,6 +30,7 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import { getFirestore } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 import { getStorage } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js';
+import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-functions.js';
 
 // The live Firebase project -- what inspector-manager.com uses.
 const PRODUCTION_CONFIG = {
@@ -63,6 +64,10 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
+// The project's own server functions (functions/index.js), e.g. emailing a
+// password reset code. Resolves with the function's result.
+const functions = getFunctions(app, 'us-central1');
+const callFunction = (name, data) => httpsCallable(functions, name)(data).then((result) => result.data);
 
 // Resolves once someone is signed in: whoever this device already has
 // (an account, or an earlier anonymous session -- Firebase keeps both
@@ -106,5 +111,5 @@ const authApi = {
 };
 
 // Plain-global bridge for the rest of the app (see file header).
-window.FirebaseCore = { app, auth, db, storage, ensureSignedIn, resetSignIn, authApi, projectId: firebaseConfig.projectId };
+window.FirebaseCore = { app, auth, db, storage, functions, callFunction, ensureSignedIn, resetSignIn, authApi, projectId: firebaseConfig.projectId };
 window.dispatchEvent(new CustomEvent('firebase-core-ready'));

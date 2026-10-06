@@ -567,6 +567,7 @@ async function renderReportDetails(report) {
 }
 
 let rvCanApprove = false;
+let rvCanReply = false; // approvers, and the report's own author
 
 // ---------- Pin-drop comments ----------
 //
@@ -714,9 +715,21 @@ function renderReviewPanel(report) {
   const list = $('#rv-comments');
   list.innerHTML = '';
   let pinNum = 0;
+  // Replies sit under the comment they answer, oldest first.
+  const ids = new Set(comments.map((c) => c.id));
+  const repliesTo = new Map();
   comments.forEach((c) => {
+    if (c.parentId && ids.has(c.parentId)) {
+      if (!repliesTo.has(c.parentId)) repliesTo.set(c.parentId, []);
+      repliesTo.get(c.parentId).push(c);
+    }
+  });
+  const ordered = [];
+  comments.filter((c) => !(c.parentId && ids.has(c.parentId))).forEach((c) => { ordered.push(c); (repliesTo.get(c.id) || []).forEach((r) => ordered.push(r)); });
+  ordered.forEach((c) => {
+    const isReply = !!(c.parentId && ids.has(c.parentId));
     const item = document.createElement('div');
-    item.className = 'rv-comment';
+    item.className = isReply ? 'rv-comment rv-reply' : 'rv-comment';
     item.dataset.commentId = c.id;
     const head = document.createElement('div');
     head.className = 'rv-comment-head';
@@ -765,6 +778,29 @@ function renderReviewPanel(report) {
       };
       item.appendChild(del);
     }
+    if (rvCanReply && !isReply) {
+      const replyBtn = document.createElement('button');
+      replyBtn.type = 'button';
+      replyBtn.className = 'text-btn rv-reply-btn';
+      replyBtn.textContent = 'Reply';
+      replyBtn.onclick = () => {
+        if (item.querySelector('.rv-reply-form')) return;
+        const form = document.createElement('div');
+        form.className = 'rv-reply-form';
+        form.innerHTML = '<textarea rows="2" placeholder="Write a reply"></textarea><div class="rv-reply-actions"><button type="button" class="btn-sm" data-send>Send Reply</button><button type="button" class="text-btn" data-cancel>Cancel</button></div>';
+        form.querySelector('[data-cancel]').onclick = () => form.remove();
+        form.querySelector('[data-send]').onclick = async () => {
+          const text = form.querySelector('textarea').value.trim();
+          if (!text) return;
+          report = await saveReportApproval(report.id, { comment: text, parentId: c.id });
+          renderReviewPanel(report);
+        };
+        item.appendChild(form);
+        form.querySelector('textarea').focus();
+        syncMainBottomPadding();
+      };
+      item.appendChild(replyBtn);
+    }
     list.appendChild(item);
   });
   $('#rv-comments-empty').hidden = comments.length > 0;
@@ -811,6 +847,10 @@ async function initReviewPanel(report) {
   // Needs to be known before the first renderReviewPanel call -- it decides
   // whether each comment gets a delete button.
   rvCanApprove = await companyCan('approveReports');
+  // The report's own author can always answer comments on it.
+  const uid = currentAccountUid();
+  const me = await getUserName();
+  rvCanReply = rvCanApprove || (uid ? report.createdByUid === uid : false) || (!report.createdByUid && !!me && report.createdBy === me);
   renderReviewPanel(report);
 
   const canApprove = rvCanApprove;

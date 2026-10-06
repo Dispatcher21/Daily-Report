@@ -763,11 +763,19 @@ function renderReview() {
   const estimate = selectedEstimate();
   if (!estimate) return;
   const comments = estimate.comments || [];
+  // Replies sit under the comment they answer. Approvers and whoever
+  // recorded the Pay App can reply.
+  const ids = new Set(comments.map((c) => c.id));
+  const isReply = (c) => !!(c.parentId && ids.has(c.parentId));
+  const ordered = [];
+  comments.filter((c) => !isReply(c)).forEach((c) => { ordered.push(c); comments.filter((r) => r.parentId === c.id).forEach((r) => ordered.push(r)); });
+  const canReply = canApprovePayApps || (!!estimate.createdByUid && estimate.createdByUid === currentAccountUid());
   const commentsHtml = comments.length
-    ? comments.map((c) => `
-      <div class="rv-comment">
+    ? ordered.map((c) => `
+      <div class="rv-comment${isReply(c) ? ' rv-reply' : ''}" data-comment-id="${escapeHtml(c.id)}">
         <div class="rv-comment-head"><span class="rv-comment-author">${escapeHtml(c.author || 'Unknown')}</span><span>${payAppCommentTime(c.createdAt)}</span></div>
         <div class="rv-comment-text">${escapeHtml(c.text || '')}</div>
+        ${canReply && !isReply(c) ? `<button type="button" class="text-btn rv-reply-btn" data-reply-to="${escapeHtml(c.id)}">Reply</button>` : ''}
       </div>`).join('')
     : '<p class="hint" style="margin:0;">No comments yet.</p>';
   $('#pa-review-body').innerHTML = `
@@ -804,6 +812,20 @@ $('#pa-review').addEventListener('click', (e) => {
   else if (e.target.closest('#pa-add-comment')) {
     const text = $('#pa-comment-text').value.trim();
     if (text) applyPayAppApproval({ comment: text });
+  } else if (e.target.closest('[data-reply-to]')) {
+    const item = e.target.closest('.rv-comment');
+    if (item.querySelector('.rv-reply-form')) return;
+    const form = document.createElement('div');
+    form.className = 'rv-reply-form';
+    form.innerHTML = '<textarea rows="2" placeholder="Write a reply"></textarea><div class="rv-reply-actions"><button type="button" class="btn-sm" data-send-reply>Send Reply</button><button type="button" class="text-btn" data-cancel-reply>Cancel</button></div>';
+    item.appendChild(form);
+    form.querySelector('textarea').focus();
+  } else if (e.target.closest('[data-cancel-reply]')) {
+    e.target.closest('.rv-reply-form').remove();
+  } else if (e.target.closest('[data-send-reply]')) {
+    const item = e.target.closest('.rv-comment');
+    const text = item.querySelector('.rv-reply-form textarea').value.trim();
+    if (text) applyPayAppApproval({ comment: text, parentId: item.dataset.commentId });
   }
 });
 

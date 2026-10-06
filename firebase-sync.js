@@ -737,15 +737,38 @@ async function disconnectCompanyKeepingUnsynced() {
   }
 }
 
+// Forgot password: emails a 6-digit code (no link -- see functions/index.js),
+// saying nothing about whether that email has an account.
+async function callAccountFunction(name, data) {
+  const { callFunction } = await waitForFirebaseCore();
+  try {
+    return await callFunction(name, data);
+  } catch (err) {
+    const code = (err && err.code) || '';
+    if (code === 'functions/internal' || code === 'functions/not-found') throw new Error("That can't be done right now. Try again later, or ask your admin.");
+    throw new Error((err && err.message) || 'Something went wrong.');
+  }
+}
+
 async function sendAccountPasswordReset(email) {
   email = (email || '').trim();
   if (!email) throw new Error('Enter your email first.');
-  const { auth, authApi } = await waitForFirebaseCore();
-  try {
-    await authApi.sendPasswordResetEmail(auth, email);
-  } catch (err) {
-    throw new Error(accountErrorMessage(err));
-  }
+  await callAccountFunction('sendResetCode', { email });
+}
+
+// Sets a new password with the emailed code.
+async function resetAccountPassword({ email, code, password }) {
+  email = (email || '').trim();
+  if (!email) throw new Error('Enter your email first.');
+  if (!/^\s*\d{6}\s*$/.test(code || '')) throw new Error('Enter the 6-digit code from the email.');
+  if ((password || '').length < ACCOUNT_MIN_PASSWORD) throw new Error(`Choose a password with at least ${ACCOUNT_MIN_PASSWORD} characters.`);
+  await callAccountFunction('resetPasswordWithCode', { email, code: code.trim(), password });
+}
+
+// Admins: email someone on the team a reset code. Resolves with their email.
+async function adminSendResetCode(uid) {
+  const { email } = await callAccountFunction('adminSendResetCode', { uid });
+  return email;
 }
 
 // Changes the password while signed in -- no email needed, just the

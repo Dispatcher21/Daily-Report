@@ -1834,6 +1834,12 @@ html:has(.rv-carousel), body:has(.rv-carousel) { overflow-x: clip; }
   margin-bottom: 0.5rem;
 }
 .rv-comment:last-child { margin-bottom: 0; }
+.rv-comment.rv-reply { margin-left: 1.25rem; border-left: 3px solid var(--border); }
+.rv-reply-btn { margin-top: 0.2rem; padding: 0.1rem 0; min-height: 0; font-size: 0.8rem; }
+.rv-reply-form { margin-top: 0.4rem; }
+.rv-reply-form textarea { width: 100%; box-sizing: border-box; }
+.rv-reply-actions { display: flex; gap: 0.75rem; align-items: center; margin-top: 0.3rem; }
+.rv-reply-actions .btn-sm { margin-top: 0; }
 .rv-comment-head { display: flex; justify-content: space-between; gap: 0.75rem; font-size: 0.76rem; color: var(--text-dim); margin-bottom: 0.25rem; padding-right: 1.4rem; }
 .rv-comment-head-left { display: flex; align-items: center; gap: 0.4rem; min-width: 0; }
 .rv-comment-author { font-weight: 700; color: var(--text); }
