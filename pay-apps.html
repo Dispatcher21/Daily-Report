@@ -852,7 +852,8 @@ $('#btn-record-estimate').addEventListener('click', async () => {
     Object.assign(savedEstimate, { estimateNo, date, note, itemTotals });
     if (contentChanged && savedEstimate.approvalStatus) savedEstimate.approvalStatus = 'pending';
   } else {
-    savedEstimate = { id: crypto.randomUUID(), estimateNo, date, note, itemTotals };
+    // Who recorded it -- they're who hears about comments on it.
+    savedEstimate = { id: crypto.randomUUID(), estimateNo, date, note, itemTotals, createdBy: (await getUserName()) || '', createdByUid: currentAccountUid() };
     project.billingEstimates.push(savedEstimate);
   }
   // Its own activity marker -- project.updatedAt gets bumped by every field

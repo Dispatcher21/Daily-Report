@@ -10,3 +10,5 @@ wrangler.jsonc
 .wrangler
 node_modules
 cloudflare-worker.js
+functions
+firebase.json

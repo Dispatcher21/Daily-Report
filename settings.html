@@ -286,6 +286,10 @@
             <button type="button" class="btn-secondary" id="btn-account-reset" style="margin-top:0;">Change Password</button>
             <button type="button" class="btn-secondary" id="btn-account-signout" style="margin-top:0;">Sign Out</button>
           </div>
+          <label class="toggle-row" for="account-email-comments" style="flex-direction:row;align-items:center;gap:0.6rem;cursor:pointer;margin-top:0.75rem;">
+            <input type="checkbox" id="account-email-comments">
+            <span>Email me when someone comments on, approves or asks for changes on my reports or Pay Apps</span>
+          </label>
           <div class="account-pw" id="account-pw" hidden>
             <label>Current Password <input type="password" id="account-pw-current" autocomplete="current-password"></label>
             <label>New Password <input type="password" id="account-pw-new" autocomplete="new-password"><span class="hint">At least 8 characters.</span></label>
@@ -2815,6 +2819,8 @@ async function renderAccount() {
   const room = await getCompanyRoom();
   const roleEl = $('#account-role');
   roleEl.hidden = !(member && room);
+  const profile = await readAccountProfile(account.uid).catch(() => null);
+  $('#account-email-comments').checked = !(profile && profile.emailComments === false);
   if (member && room) {
     const projects = Array.isArray(member.projectIds)
       ? `${member.projectIds.length} project${member.projectIds.length === 1 ? '' : 's'}`
@@ -2829,6 +2835,17 @@ function accountNotice(text) {
   el.hidden = false;
 }
 
+$('#account-email-comments').addEventListener('change', async (e) => {
+  const account = await getAccount();
+  if (!account) return;
+  try {
+    await writeAccountProfile(account.uid, { emailComments: e.target.checked });
+    accountNotice(e.target.checked ? "You'll get an email when someone comments on your work." : "Comment emails are off.");
+  } catch (err) {
+    e.target.checked = !e.target.checked;
+    alert("Couldn't save that: " + err.message);
+  }
+});
 $('#btn-account-reset').addEventListener('click', () => {
   const panel = $('#account-pw');
   panel.hidden = !panel.hidden;

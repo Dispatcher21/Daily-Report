@@ -398,12 +398,18 @@ async function saveReportApproval(reportId, { status, comment, pin } = {}) {
   if (!report) throw new Error('Report not found.');
 
   const fromStatus = report.approvalStatus || 'pending';
-  if (status) report.approvalStatus = status;
-
   const userName = await getUserName();
+  // Who did it, by account too -- the comment-notification emails (see
+  // functions/index.js) use these to know who to tell and who not to.
+  if (status) {
+    report.approvalStatus = status;
+    report.approvalBy = userName || '';
+    report.approvalByUid = currentAccountUid();
+  }
+
   let addedComment = null;
   if (comment && comment.trim()) {
-    addedComment = { id: crypto.randomUUID(), author: userName || '', text: comment.trim(), createdAt: Date.now() };
+    addedComment = { id: crypto.randomUUID(), author: userName || '', authorUid: currentAccountUid(), text: comment.trim(), createdAt: Date.now() };
     if (pin && Number.isFinite(pin.page) && Number.isFinite(pin.x) && Number.isFinite(pin.y)) {
       addedComment.pin = { page: pin.page, x: pin.x, y: pin.y };
     }
@@ -661,12 +667,16 @@ async function saveBillingEstimateApproval(projectId, estimateId, { status, comm
   if (!estimate) throw new Error('Pay App not found.');
 
   const fromStatus = estimate.approvalStatus || 'pending';
-  if (status) estimate.approvalStatus = status;
-
   const userName = await getUserName();
+  if (status) {
+    estimate.approvalStatus = status;
+    estimate.approvalBy = userName || '';
+    estimate.approvalByUid = currentAccountUid();
+  }
+
   let addedComment = null;
   if (comment && comment.trim()) {
-    addedComment = { id: crypto.randomUUID(), author: userName || '', text: comment.trim(), createdAt: Date.now() };
+    addedComment = { id: crypto.randomUUID(), author: userName || '', authorUid: currentAccountUid(), text: comment.trim(), createdAt: Date.now() };
     estimate.comments = [...(estimate.comments || []), addedComment];
   }
 
