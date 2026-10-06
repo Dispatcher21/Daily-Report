@@ -350,8 +350,6 @@ async function duplicateReport(source, nextReportNo, project) {
     thumbnailAt: null,
     createdBy: undefined,
     lastEditedBy: undefined,
-    createdByUid: undefined,
-    lastEditedByUid: undefined,
     createdAt: Date.now(),
     updatedAt: Date.now(),
   };

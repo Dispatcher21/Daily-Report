@@ -1,7 +1,7 @@
 // Caches the app shell so it keeps working with no signal in the field.
 // Bump CACHE_NAME whenever any of these files change so the new version
 // actually gets picked up.
-const CACHE_NAME = 'daily-report-app-v323';
+const CACHE_NAME = 'daily-report-app-v324';
 const ASSETS = [
   './',
   './login.html',
@@ -20,7 +20,6 @@ const ASSETS = [
   './pay-apps.html',
   './quick-quantity.html',
   './required-fields.html',
-  './tutorial.html',
   './print-layout.json',
   './error-codes.txt',
   './patch-notes.txt',
@@ -37,15 +36,6 @@ const ASSETS = [
   './defaults.js',
   './storage.js',
   './audit-log.js',
-  './tutorial-data.js',
-  './tutorial-tour.js',
-  './tutorial/inspector-neutral.svg',
-  './tutorial/inspector-happy.svg',
-  './tutorial/inspector-thinking.svg',
-  './tutorial/inspector-surprised.svg',
-  './tutorial/inspector-pointing.svg',
-  './tutorial/hand.svg',
-  './tutorial/dialogue.txt',
   './project-file.js',
   './quantity-calc.js',
   './dashboard-widgets.js',
@@ -86,27 +76,7 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// The tutorial's dialogue is meant to be edited on its own, so it's fetched
-// fresh whenever there's a connection (no version bump needed for a wording
-// change), falling back to the cached copy offline.
-const NETWORK_FIRST = ['/tutorial/dialogue.txt'];
-
 self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
-  if (event.request.method === 'GET' && url.origin === self.location.origin && NETWORK_FIRST.some((p) => url.pathname.endsWith(p))) {
-    event.respondWith(
-      fetch(event.request.url, { cache: 'no-store' })
-        .then((res) => {
-          if (res.ok) {
-            const copy = res.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put('./tutorial/dialogue.txt', copy));
-          }
-          return res;
-        })
-        .catch(() => caches.match('./tutorial/dialogue.txt'))
-    );
-    return;
-  }
   event.respondWith(
     caches.match(event.request).then((cached) => cached || fetch(event.request))
   );

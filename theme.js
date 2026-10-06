@@ -440,14 +440,6 @@ function readAccent() {
           if (registration) await registration.update();
         }
 
-        // Tutorial mode never talks to the company (see firebase-sync.js's
-        // waitForFirebaseCore), so say so plainly instead of the error
-        // the company sync below would otherwise end in.
-        if (typeof isTutorialMode === 'function' && isTutorialMode()) {
-          if (showProgress) finishProgressBanner('Checked for app updates. Company sync is off in the tutorial, so nothing leaves this device.');
-          return;
-        }
-
         if (room) {
           await syncCompanyRoomNow(showProgress ? reportCompanyProgress : undefined);
           // Pages that care already listen for this (see index.html/
