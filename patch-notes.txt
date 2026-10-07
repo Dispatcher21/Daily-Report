@@ -3,6 +3,21 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.056 -- 2026-10-07
+  - Printed report: the Work Summary box now holds the pay item table
+    at its bottom, built to fit however many items there are (no more
+    6-line limit or items pushed into the summary). With no pay items
+    there's no table. The text shrinks to fit when a day is busy, down
+    to 7pt, and the editor warns if even that isn't enough.
+  - New report sections after Work Summary: Tests Performed (pick a
+    standard test from the list, plus a note for location and results)
+    and Checks Completed (the project's checks, each marked Done, Not
+    done or N/A with remarks). Both print as tables under the pay items.
+  - Project Settings: a new Checks section for the project's checks, and
+    both new sections can be Optional, Required or Hidden under Report
+    Form.
+  - Reports search also finds tests and pay items.
+
 0.055 -- 2026-10-07
   - Project Settings is one page: a section list on the left (Project
     Info, Pay Items, Contractors & Equipment, Report Form, Icon &
