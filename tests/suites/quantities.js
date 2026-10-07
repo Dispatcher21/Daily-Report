@@ -203,6 +203,11 @@ const text = (p, sel) => p.textContent(sel).then((t) => t.replace(/\s+/g, ' ').t
   check('then it unlocks', await p.isDisabled('#btn-delete-project'), false);
   await p.evaluate(async (id) => { const pr = await getProject(id); pr.requiredFields = []; pr.hiddenFields = []; await saveProject(pr); }, pid);
 
+  // The tutorial is W.I.P.: no character or hand yet, labeled throughout.
+  await p.goto(`${B}/index.html`); await settle();
+  check('tutorial pages stamped W.I.P.', await p.evaluate(() => document.body.classList.contains('tutorial-wip') && document.querySelector('.tutorial-banner').textContent.includes('W.I.P.')), true);
+  check('no character or hand', [await p.isVisible('.tour-char'), await p.isVisible('.tour-hand')], [false, false]);
+
   // Phone width: nothing wider than the screen.
   await p.setViewportSize({ width: 390, height: 844 });
   for (const page of [`quantity-sheet.html?project=${pid}`, `pay-apps.html?project=${pid}`, `quick-quantity.html?project=${pid}`, `project.html?id=${pid}`, `report-editor.html?project=${pid}&report=${rid}`, `project-setup.html?id=${pid}`]) {

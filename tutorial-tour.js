@@ -10,6 +10,11 @@
 // expressions never shifts them. The hand points up-left; `width`/`height`
 // are its natural size and `tip` its fingertip in those same pixels, and
 // `displayWidth` is how wide it shows on screen.
+// The character and the pointing hand are placeholders until the real
+// drawings are ready: off for now (the dialogue box and the outline around
+// what it's talking about still show).
+const TOUR_SHOW_ART = false;
+
 const TOUR_ART = {
   name: 'Inspector',
   emotions: {
@@ -398,7 +403,8 @@ const tour = {
     this.hand.style.width = `${TOUR_ART.hand.displayWidth}px`;
     this.hand.hidden = true;
     this.root = document.createElement('div');
-    this.root.className = 'tour-root';
+    this.root.className = TOUR_SHOW_ART ? 'tour-root' : 'tour-root tour-no-art';
+    if (!TOUR_SHOW_ART) this.hand.classList.add('tour-no-art');
     this.root.setAttribute('role', 'dialog');
     this.root.setAttribute('aria-live', 'polite');
     this.root.setAttribute('aria-label', 'Tutorial guide');
@@ -418,7 +424,7 @@ const tour = {
         </div>
       </div>
       <img class="tour-char" alt="">`;
-    this.root.querySelector('.tour-name').textContent = (tourDialogue && tourDialogue.name) || TOUR_ART.name;
+    this.root.querySelector('.tour-name').textContent = TOUR_SHOW_ART ? ((tourDialogue && tourDialogue.name) || TOUR_ART.name) : 'Tutorial · W.I.P.';
     // Preload every emotion so switching expressions doesn't flash.
     Object.values(TOUR_ART.emotions).forEach((src) => { new Image().src = src; });
     document.body.append(this.ring, this.hand, this.root);
