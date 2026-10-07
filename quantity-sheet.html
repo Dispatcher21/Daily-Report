@@ -478,9 +478,7 @@ $('#btn-generate').addEventListener('click', async () => {
     const { wb, dates } = result;
     const realDates = dates.filter((d) => d !== NO_DATE_KEY);
     const projectNo = project.meta.projectNo || 'PR';
-    const stamp = realDates.length === 0 ? 'undated'
-      : realDates.length === 1 ? realDates[0]
-        : `${realDates[0]}_to_${realDates[realDates.length - 1]}`;
+    const stamp = fileDateRange(realDates);
     const out = await wb.xlsx.writeBuffer();
     triggerDownload(new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `PR${projectNo}_QuantitySheet_${stamp}.xlsx`);
     closeExport();

@@ -368,9 +368,7 @@ function buildSheet1Values(report) {
   v[RR_WORK_SUMMARY_CELL] = report.workSummary || '';
   // The tables under the summary (see RR_SBOX_* above); kept off the
   // enumerable keys so nothing that walks the values sees it as a cell.
-  const payItems = (report.payItems || [])
-    .filter((it) => it && (it.itemNumber || it.description))
-    .map((it) => ({ itemNumber: it.itemNumber || '', description: it.description || '', qty: it.qty != null ? String(it.qty) : '', unit: it.unit || '', detail: payItemDetailLine(it) }));
+  const payItems = summaryBoxPayItems(report.payItems);
   const tests = (report.tests || []).filter((t) => t && t.name).map((t) => ({ name: t.name, note: t.note || '' }));
   const checks = (report.checks || []).filter((c) => c && c.name && c.status).map((c) => ({ name: c.name, status: CHECK_STATUS_LABELS[c.status] || c.status, note: c.note || '' }));
   Object.defineProperty(v, 'summaryBox', { value: { payItems, tests, checks }, enumerable: false });
@@ -774,6 +772,33 @@ function fitRotatedText(scope) {
 // The Work Summary box (RR_WORK_SUMMARY_CELL): the summary text, then each
 // table that has anything in it. Sizes are in em so fitSummaryBox can scale
 // the whole box by changing one font size.
+// The pay item rows for the summary box. The same item logged more than
+// once on a report prints as one row with the total, and the detail line
+// under it lists each entry: "250 TON: Sta. 10+00 to 12+00, Lt; 100 TON:
+// Sta. 15+00 to 16+00".
+function summaryBoxPayItems(items) {
+  const groups = new Map();
+  (items || []).filter((it) => it && (it.itemNumber || it.description)).forEach((it) => {
+    const key = [it.itemNumber || '', it.itemNumber ? '' : (it.description || ''), (it.unit || '').trim().toUpperCase()].join('|');
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(it);
+  });
+  return [...groups.values()].map((list) => {
+    const first = list[0];
+    const row = { itemNumber: first.itemNumber || '', description: first.description || '', unit: first.unit || '' };
+    if (list.length === 1) return { ...row, qty: first.qty != null ? String(first.qty) : '', detail: payItemDetailLine(first) };
+    const nums = list.map((it) => pcNum(it.qty));
+    const qty = nums.every((n) => n != null) ? pcFmt(nums.reduce((a, b) => a + b, 0)) : list.map((it) => String(it.qty ?? '').trim()).filter(Boolean).join(' + ');
+    const detail = list.map((it) => {
+      const q = String(it.qty ?? '').trim();
+      const part = [q, it.unit || ''].filter(Boolean).join(' ');
+      const d = payItemDetailLine(it);
+      return part && d ? `${part}: ${d}` : (part || d);
+    }).filter(Boolean).join('; ');
+    return { ...row, qty, detail };
+  });
+}
+
 function buildSummaryBox(cellEl, text, box) {
   cellEl.classList.add('rr-sbox');
   cellEl.style.padding = '0';

@@ -450,7 +450,7 @@ async function downloadPayAppQuantitiesFile(project) {
   const out = await wb.xlsx.writeBuffer();
   triggerDownload(
     new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
-    `PayApps_${slug || 'project'}.xlsx`
+    `PayApps_${slug || 'project'}_${fileDateRange((project.billingEstimates || []).map((e) => e.date))}.xlsx`
   );
 }
 
@@ -623,5 +623,5 @@ function downloadProjectDataFile(project) {
     .replace(/[^A-Za-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '')
     .slice(0, 60);
-  writeProjectWorkbook(wb, `ProjectData_${slug || 'project'}.xlsx`);
+  writeProjectWorkbook(wb, `ProjectData_${slug || 'project'}_${todayIso()}.xlsx`);
 }
