@@ -3,6 +3,16 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.058 -- 2026-10-07
+  - Phones: Project Settings' Pay Items list no longer runs off the side
+    of the screen when an item has a long description.
+  - Phones: on Pay Apps, large quantities no longer overlap the "billed
+    ahead" chip, and big totals in the bar at the bottom wrap instead of
+    running together.
+  - Phones: on Quantities, the status chip sits under the item instead of
+    squeezing its name into a narrow column.
+  - Pay App editing on a computer gets its intended column widths back.
+
 0.057 -- 2026-10-07
   - Logging out now really logs out: the device leaves the company and
     its projects are removed from it (anything not yet synced is kept
