@@ -77,10 +77,11 @@ const REPORT_FIELD_LABELS = {
   workingConditions: 'Working Conditions', trafficControlSelect: 'Traffic Control Status',
   workBegin: 'Work Begin', workEnd: 'Work End', repSignatureName: 'Representative Signature',
   peSignatureName: 'PE Signature', weatherDesc: 'Weather', tempHigh: 'Temp High', tempLow: 'Temp Low',
+  tests: 'Tests Performed', checks: 'Checks Completed',
 };
 const PROJECT_FIELD_LABELS = {
   name: 'Project Display Name', payItemCatalog: 'Pay Item Catalog', defaultContractors: 'Default Contractors',
-  defaultEquipmentLabels: 'Default Equipment Labels',
+  defaultEquipmentLabels: 'Default Equipment Labels', checks: 'Checks',
   'meta.projectNo': 'Project No.', 'meta.projectName': 'Project Name', 'meta.ntpDate': 'NTP Date',
   'meta.contractLength': 'Contract Length', 'meta.representative': 'Representative', 'meta.peName': 'PE Name',
   'meta.activity': 'Default Activity', 'meta.notes': 'Default Notes',

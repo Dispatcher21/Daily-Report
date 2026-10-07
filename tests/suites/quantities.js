@@ -114,9 +114,17 @@ const text = (p, sel) => p.textContent(sel).then((t) => t.replace(/\s+/g, ' ').t
   check('Lump Sum percent', await p.inputValue('.rpi-open [data-f=qty]'), '1900');
   await p.click('.rpi-open [data-open]');
   check('closed item shows its details', await text(p, '.rpi-item:nth-child(2) .rpi-sum'), 'Sta. 12+30 to 13+00, Lt, 70 × 12 ft. Saw cut first');
-  const printed = await p.evaluate(() => { const v = buildSheet1Values(report); return { rows: [28, 29, 30, 31, 32].map((r) => [v['I' + r] || '', v['K' + r] || '', v['P' + r] || '']), small: [...v.smallCells], summary: v[RR_WORK_SUMMARY_CELL].includes('713-01') }; });
-  check('prints details on the line under the item', printed.rows.slice(0, 3), [['502-01', 'Asphalt Concrete', '104'], ['202-01', 'Removal of Existing Pavement', '93.333'], ['', 'Sta. 12+30 to 13+00, Lt, 70 × 12 ft. Saw cut first', '']]);
-  check('then the next item, details smaller', [printed.rows[3][0], printed.rows[4][1], printed.small], ['713-01', '5% complete', ['K30', 'K32']]);
+  // Printed: the Work Summary box holds the summary, then a pay item table
+  // with each item's details on the line under it.
+  await p.waitForTimeout(800);
+  const box = await p.evaluate(() => {
+    const el = document.querySelector('#rb-preview .rr-sbox');
+    const rows = [...el.querySelectorAll('table')[0].querySelectorAll('tbody tr')].map((tr) => [...tr.cells].map((c) => c.textContent));
+    return { caption: el.querySelector('caption').textContent, rows, det: el.querySelectorAll('tr.rr-det').length };
+  });
+  check('pay item table under the summary', box.caption.startsWith('Pay Items'), true);
+  check('prints details on the line under the item', box.rows.slice(0, 3), [['502-01', 'Asphalt Concrete', '104', 'TON'], ['202-01', 'Removal of Existing Pavement', '93.333', 'SY'], ['', 'Sta. 12+30 to 13+00, Lt, 70 × 12 ft. Saw cut first']]);
+  check('every item in the table, nothing moved to the summary', [box.rows[3][0], box.rows[4][1], box.det], ['713-01', '5% complete', 2]);
   await p.screenshot({ path: `${OUT}/report-payitems-desktop.png`, fullPage: true });
   await Promise.all([p.waitForURL(/reports\.html/, { timeout: 30000 }), p.click('#btn-save-report')]);
   check('saved with remarks and calculator', await p.evaluate(async (id) => { const r = await getReport(id); const it = r.payItems.find((x) => x.itemNumber === '202-01'); return [it.remarks, it.calc.type, it.calc.w, it.qty]; }, rid), ['Saw cut first', 'area', '12', '93.333']);
@@ -187,7 +195,7 @@ const text = (p, sel) => p.textContent(sel).then((t) => t.replace(/\s+/g, ' ').t
   await p.goto(`${B}/project.html?id=${pid}`); await settle();
   check('project page links to Settings', await p.getAttribute('#btn-project-settings', 'href'), `project-setup.html?id=${pid}`);
   await p.goto(`${B}/project-setup.html?id=${pid}`); await settle();
-  check('settings sections', await p.$$eval('#ps-nav [data-sec]', (els) => els.map((e) => e.dataset.sec)), ['info', 'pay', 'crew', 'form', 'look', 'files', 'delete']);
+  check('settings sections', await p.$$eval('#ps-nav [data-sec]', (els) => els.map((e) => e.dataset.sec)), ['info', 'pay', 'crew', 'checks', 'form', 'look', 'files', 'delete']);
   check('contract end worked out', (await text(p, '#ps-endinfo')).startsWith('Ends '), true);
   await p.click('[data-sec="form"]');
   check('no print preview beside Report Form', await p.isVisible('#ps-right'), false);
@@ -202,6 +210,47 @@ const text = (p, sel) => p.textContent(sel).then((t) => t.replace(/\s+/g, ' ').t
   await p.fill('#ps-del-confirm', 'demo-101');
   check('then it unlocks', await p.isDisabled('#btn-delete-project'), false);
   await p.evaluate(async (id) => { const pr = await getProject(id); pr.requiredFields = []; pr.hiddenFields = []; await saveProject(pr); }, pid);
+
+  // Tests Performed and Checks Completed: checks set up in Project
+  // Settings, both marked on a report, both printed under the pay items.
+  await p.goto(`${B}/project-setup.html?id=${pid}`); await settle();
+  await p.click('[data-sec="checks"]');
+  for (const c of ['Slope', 'Erosion Control']) { await p.fill('#ps-new-check', c); await p.keyboard.press('Enter'); }
+  check('checks listed', await p.$$eval('[data-chk]', (els) => els.map((e) => e.value)), ['Slope', 'Erosion Control']);
+  await p.click('[data-sec="form"]');
+  await p.click('.ps-frow:has-text("Checks Completed") [data-v="req"]');
+  await p.click('#fsb-save');
+  await p.waitForFunction(() => document.querySelector('#fsb-status').textContent === 'Saved.', null, { timeout: 15000 });
+  await p.goto(`${B}/report-editor.html?project=${pid}&report=${rid}`); await settle();
+  check('editor order: tests and checks right after Work Summary', await p.$$eval('#rb-groups .rb-group', (els) => els.map((e) => e.dataset.group).slice(3, 6)), ['workSummary', 'tests', 'checks']);
+  await p.evaluate(() => { setGroupOpen('tests', true); setGroupOpen('checks', true); });
+  await p.click('#rtests-add');
+  await p.selectOption('#rtests-list select', 'Slump');
+  await p.fill('[data-tn="0"]', 'Truck 4417, 3.5 in');
+  check('checks needing a mark', await text(p, '#rb-group-checks .rb-group-sum'), '2 of 2 not marked');
+  await p.click('[data-ck="Slope"][data-st="done"]');
+  await p.fill('[data-cn="Slope"]', '2:1 on Lt embankment');
+  await p.click('#btn-generate');
+  await p.waitForSelector('#rf-warning-overlay:not([hidden])', { timeout: 15000 }).catch(() => {});
+  check('required checks block Generate', (await text(p, '#rf-warning-list')).includes('Checks Completed'), true);
+  await p.click('#rf-warning-close');
+  await p.click('[data-ck="Erosion Control"][data-st="na"]');
+  check('all marked', await text(p, '#rb-group-checks .rb-group-sum'), 'All marked');
+  await p.waitForTimeout(800);
+  const printedBox = await p.evaluate(() => {
+    const el = document.querySelector('#rb-preview .rr-sbox');
+    return { captions: [...el.querySelectorAll('caption')].map((c) => c.textContent), tests: [...el.querySelectorAll('table')[1].querySelectorAll('tbody td')].map((c) => c.textContent), checks: [...el.querySelectorAll('table')[2].querySelectorAll('tbody tr')].map((tr) => [...tr.cells].map((c) => c.textContent)), overflow: !!el.dataset.overflow };
+  });
+  check('printed in order under the summary', printedBox.captions, ['Pay Items (Location and Description of each item required above):', 'Tests Performed:', 'Checks Completed:']);
+  check('test printed', printedBox.tests, ['Slump', 'Truck 4417, 3.5 in']);
+  check('checks printed', printedBox.checks, [['Slope', 'Done', '2:1 on Lt embankment'], ['Erosion Control', 'N/A', '']]);
+  check('fits', [printedBox.overflow, await p.isVisible('#rb-fit-warn')], [false, false]);
+  await Promise.all([p.waitForURL(/reports\.html/, { timeout: 30000 }), p.click('#btn-save-report')]);
+  const visible = () => p.$$eval('.report-row, .report-card', (els) => els.filter((e) => e.offsetParent).length);
+  await p.waitForTimeout(500);
+  const all = await visible();
+  await p.fill('#f-search', 'slump'); await p.waitForTimeout(500);
+  check('search finds just the day a test was done', [all > 1, await visible()], [true, 1]);
 
   // The tutorial is W.I.P.: no character or hand yet, labeled throughout.
   await p.goto(`${B}/index.html`); await settle();
