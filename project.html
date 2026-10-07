@@ -648,7 +648,7 @@ function renderFilteredPayItems() {
     // "$X of $Y billed" instead of the generic qty/planned phrasing, and
     // moneyLine is skipped for it since that would just repeat the same two
     // figures a second time.
-    const isLump = isLumpSumUnit(it.unit);
+    const isLump = isLumpSumItem(it);
     const qtyLine = isLump
       ? (it.contractTotal != null ? `${fmtMoney(it.earnedTotal)} of ${fmtMoney(it.contractTotal)} billed` : `${it.total.toLocaleString()} ${it.unit || ''} used — no Unit Price on file to measure against`)
       : it.pct != null

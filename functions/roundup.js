@@ -15,7 +15,7 @@ const vm = require('vm');
 const calc = (() => {
   const ctx = {};
   vm.runInNewContext(`${fs.readFileSync(path.join(__dirname, 'lib', 'quantity-calc.js'), 'utf8')}
-;this.__x = { aggregatePayItemTotals, fullPayItemCatalogOverview, contractValueSummary, overallPercentComplete, effectivePayItemFlatEntries, isLumpSumUnit };`, ctx);
+;this.__x = { aggregatePayItemTotals, fullPayItemCatalogOverview, contractValueSummary, overallPercentComplete, effectivePayItemFlatEntries, isLumpSumUnit, isLumpSumItem };`, ctx);
   return ctx.__x;
 })();
 
@@ -90,7 +90,7 @@ function projectSummary(project, reports, week, today) {
   if (schedule && schedule !== 'On schedule') {
     alerts.push(`${schedule}: ${Math.round(overall * 100)}% complete with ${Math.round((daysBetween(meta.ntpDate, today) / contractLength) * 100)}% of contract time used`);
   }
-  const overruns = overview.filter((it) => it.planned && it.total > it.planned && !calc.isLumpSumUnit(it.unit));
+  const overruns = overview.filter((it) => it.planned && it.total > it.planned && !calc.isLumpSumItem(it));
   overruns.slice(0, 5).forEach((it) => alerts.push(`Item ${it.itemNumber}${it.description ? ` ${it.description}` : ''} is over plan: ${fmt(it.total, 2)} of ${fmt(it.planned, 2)} ${it.unit || ''} (${Math.round((it.total / it.planned) * 100)}%)`.replace(/ +\(/, ' (')));
   if (overruns.length > 5) alerts.push(`and ${overruns.length - 5} more pay items over plan`);
   const counts = { approved: 0, changes_requested: 0, pending: 0 };

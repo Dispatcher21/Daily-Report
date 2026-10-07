@@ -140,46 +140,122 @@ function computeAreaQty(length, width, unit) {
   return String(Math.round(qty * 1000) / 1000);
 }
 
-// ---------- Pay item calculators and the printed detail line ----------
+// ---------- Pay item units and calculators ----------
+//
+// A catalog item's `unit` is the text printed on the report, exactly as the
+// contract has it (LUMP, TONS, SQ. YD.). Its `unitKind` says what that unit
+// means: one of PAY_UNITS below, or 'OTHER' for a unit of the admin's own
+// (typed quantity, no calculators). Items from before this have no
+// unitKind; Project Settings lists them for an admin to confirm, and until
+// then the app goes by its own best match of the text (payItemKind).
 //
 // A report pay item can carry `calc` ({ type, ...inputs }): the helper the
-// inspector used to work out the quantity (report-editor.html). Which
-// helpers are offered depends on the item's unit. The inputs are kept so
-// the item can be reopened and adjusted, and so the printed report can say
-// how the number was reached on the line under the item.
+// inspector used to work out the quantity (report-editor.html). The inputs
+// are kept so the item can be reopened and adjusted, and so the printed
+// report can say how the number was reached on the line under the item.
 
-// The unit reduced to one of LF / SY / SF / CY / TON / LS, or '' when it's
-// none of those (EA and the like get no calculator).
-function payItemUnitKind(unit) {
-  const u = String(unit || '').trim().toUpperCase().replace(/\./g, '').replace(/\s+/g, ' ');
-  if (/^(LF|LIN FT|LINEAR FT|LINEAR FEET|FT)$/.test(u)) return 'LF';
-  if (/^(SY|SQ YD|SQYD|SQUARE YARDS?)$/.test(u)) return 'SY';
-  if (/^(SF|SQ FT|SQFT|SQUARE FEET)$/.test(u)) return 'SF';
-  if (/^(CY|CU YD|CUYD|CUBIC YARDS?)$/.test(u)) return 'CY';
-  if (/^(TON|TONS|TN)$/.test(u)) return 'TON';
-  if (/^(LS|LUMP SUM)$/.test(u)) return 'LS';
-  return '';
+const PAY_UNITS = [
+  { k: 'LF', name: 'Linear feet', aliases: ['LF', 'LIN FT', 'LIN. FT', 'LINEAR FT', 'LINEAR FEET', 'FT', 'FEET', 'L.F.'], calcs: ['stations', 'joints', 'striping'] },
+  { k: 'MI', name: 'Miles', aliases: ['MI', 'MILE', 'MILES'], calcs: ['miles'] },
+  { k: 'SY', name: 'Square yards', aliases: ['SY', 'SQ YD', 'SQ YDS', 'SQYD', 'SQUARE YARD', 'SQUARE YARDS', 'S.Y.'], calcs: ['area'] },
+  { k: 'SF', name: 'Square feet', aliases: ['SF', 'SQ FT', 'SQFT', 'SQUARE FEET', 'SQUARE FOOT', 'S.F.'], calcs: ['area'] },
+  { k: 'ACRE', name: 'Acres', aliases: ['ACRE', 'ACRES', 'AC'], calcs: ['acres'] },
+  { k: 'CY', name: 'Cubic yards', aliases: ['CY', 'CU YD', 'CU YDS', 'CUYD', 'CUBIC YARD', 'CUBIC YARDS', 'C.Y.'], calcs: ['volume', 'loads', 'thickness'] },
+  { k: 'TON', name: 'Tons', aliases: ['TON', 'TONS', 'TN'], calcs: ['tickets', 'paving', 'tonsFromYards'] },
+  { k: 'GAL', name: 'Gallons', aliases: ['GAL', 'GALLON', 'GALLONS'], calcs: ['tackRate'] },
+  { k: 'HR', name: 'Hours', aliases: ['HR', 'HRS', 'HOUR', 'HOURS', 'MAN HOUR', 'MAN HOURS'], calcs: ['crewHours'] },
+  { k: 'DAY', name: 'Days', aliases: ['DAY', 'DAYS', 'WORKING DAY', 'WORKING DAYS', 'CALENDAR DAY', 'CALENDAR DAYS'], calcs: [] },
+  { k: 'EA', name: 'Each', aliases: ['EA', 'EACH', 'UNIT', 'UNITS'], calcs: ['count'] },
+  { k: 'LS', name: 'Lump sum (logged in dollars)', aliases: ['LS', 'L.S.', 'LUMP', 'LUMP SUM', 'LUMPSUM'], calcs: ['percent'] },
+];
+const PAY_UNIT_OTHER = 'OTHER';
+
+const PAY_CALCS = {
+  stations: 'Length from stations',
+  joints: 'Pipe joints',
+  striping: 'Striping (lines)',
+  miles: 'Miles from stations',
+  area: 'Length × Width',
+  acres: 'Length × Width (acres)',
+  volume: 'Length × Width × Depth',
+  loads: 'Truck loads',
+  thickness: 'Area × thickness',
+  tickets: 'Truck tickets',
+  paving: 'Paving (area × thickness)',
+  tonsFromYards: 'Tons from yards',
+  tackRate: 'Area × rate (tack, prime)',
+  crewHours: 'Start/stop × crew size',
+  count: 'Count',
+  percent: 'Percent complete',
+};
+
+function payUnitDef(kind) {
+  return PAY_UNITS.find((u) => u.k === kind) || null;
 }
 
-// [type, label] pairs, in the order offered. `catalogItem` may be null (an
-// item typed in by hand), in which case only the unit decides.
+// The standard unit a piece of unit text most likely means, or '' when
+// nothing matches. Used to suggest a unit for an item that hasn't been
+// confirmed yet, and to fill in UNIT TYPE when a project file leaves it out.
+function matchPayUnit(unit) {
+  const u = String(unit || '').trim().toUpperCase().replace(/\s+/g, ' ');
+  if (!u) return '';
+  const bare = u.replace(/\./g, '').trim();
+  const hit = PAY_UNITS.find((d) => d.aliases.some((a) => a === u || a.replace(/\./g, '') === bare));
+  return hit ? hit.k : '';
+}
+
+// What an item's unit means, for calculators and dollar math: the confirmed
+// unitKind when there is one ('' for OTHER), otherwise the best match of its
+// text. An unconfirmed item is only ever treated as Lump Sum when its text
+// is one the dashboards already count as dollars (isLumpSumUnit), so an
+// unconfirmed "LUMP" item doesn't start logging dollars before an admin
+// says it should.
+function payItemKind(catalogItem, unit) {
+  const cat = catalogItem || {};
+  if (cat.unitKind) return cat.unitKind === PAY_UNIT_OTHER ? '' : cat.unitKind;
+  const text = unit || cat.unit;
+  const kind = matchPayUnit(text);
+  // Same test as isLumpSumUnit in quantity-calc.js (not loaded on every page).
+  if (kind === 'LS' && !/^lump\s*sum$|^l\.?s\.?$/i.test(String(text || '').trim())) return '';
+  return kind;
+}
+
+// An unconfirmed item whose unit text already is a standard unit, spelled
+// the standard way (LF, TON, SY...), needs nothing from an admin: it means
+// exactly that. Anything else (LUMP, SQ YD, a unit the app doesn't know)
+// is listed in Project Settings to confirm.
+function payItemUnitNeedsConfirm(catalogItem) {
+  if (!catalogItem || catalogItem.unitKind) return false;
+  const text = String(catalogItem.unit || '').trim().toUpperCase().replace(/\./g, '');
+  return !text || !payUnitDef(text);
+}
+
+// Kept for older callers: the unit text's kind, ignoring the catalog.
+function payItemUnitKind(unit) {
+  return payItemKind(null, unit);
+}
+
+// [type, label] pairs an item offers, in order. `catalogItem` may be null
+// (an item typed in by hand), in which case only the unit decides. A
+// catalog item's `calcs` (if set) narrows the unit's list.
 function payItemCalcOptions(catalogItem, unit) {
   const cat = catalogItem || {};
-  const kind = payItemUnitKind(unit || cat.unit);
-  const out = [];
-  if (kind === 'LF' && cat.stations) out.push(['stations', 'Length from stations']);
-  if (kind === 'SY' || kind === 'SF' || (cat.computed && kind !== 'CY')) out.push(['area', 'Length × Width']);
-  if (kind === 'CY') out.push(['volume', 'Length × Width × Depth']);
-  if (kind === 'TON') {
-    out.push(['tickets', 'Truck tickets']);
-    out.push(['paving', 'Paving (area × thickness)']);
-  }
-  if (kind === 'LS' && Number(cat.unitPrice) > 0) out.push(['percent', 'Percent complete']);
-  return out;
+  const kind = payItemKind(catalogItem, unit);
+  const def = payUnitDef(kind);
+  let types = def ? def.calcs.slice() : [];
+  // Before units were confirmed, "Computed" was how an item got Length x
+  // Width; an unconfirmed Computed item keeps it whatever its unit.
+  if (!cat.unitKind && cat.computed && kind !== 'CY' && !types.includes('area')) types.unshift('area');
+  if (kind === 'LS' && !(Number(cat.unitPrice) > 0)) types = types.filter((t) => t !== 'percent');
+  if (Array.isArray(cat.calcs)) types = types.filter((t) => cat.calcs.includes(t));
+  return types.map((t) => [t, PAY_CALCS[t]]);
 }
 
+// Calculators that use the item's start and stop stations.
+const PAY_CALCS_USING_STATIONS = ['stations', 'miles', 'striping', 'area', 'volume', 'acres', 'thickness'];
+
 function pcNum(value) {
-  const s = String(value ?? '').replace(/,/g, '').trim();
+  const s = String(value ?? '').replace(/[,$]/g, '').trim();
   if (!s) return null;
   const n = Number(s);
   return Number.isFinite(n) ? n : null;
@@ -191,6 +267,18 @@ function pcRound(n, places) {
   const f = Math.pow(10, places);
   return String(Math.round(n * f) / f);
 }
+// "7", "7:30", "7:30 AM", "15:30" -> hours since midnight, or null.
+function pcTime(value) {
+  const m = /^\s*(\d{1,2})(?::(\d{2}))?\s*([ap])?\.?m?\.?\s*$/i.exec(String(value || ''));
+  if (!m) return null;
+  let h = Number(m[1]);
+  const min = Number(m[2] || 0);
+  if (h > 23 || min > 59) return null;
+  const ap = (m[3] || '').toLowerCase();
+  if (ap === 'p' && h < 12) h += 12;
+  if (ap === 'a' && h === 12) h = 0;
+  return h + min / 60;
+}
 
 // Runs an item's calculator. Returns { qty, math, print } once enough is
 // filled in, otherwise null. `qty` is the string to store; `math` is the
@@ -200,57 +288,123 @@ function runPayItemCalc(item, unitPrice) {
   const k = item && item.calc;
   if (!k || !k.type) return null;
   const kind = payItemUnitKind(item.unit);
+  const unitText = item.unit || kind;
   const span = () => {
     const a = parseStation(item.startStation);
     const b = parseStation(item.endStation);
     return a != null && b != null ? Math.abs(b - a) : null;
   };
-  if (k.type === 'stations') {
-    const L = span();
-    if (L == null) return null;
-    return { qty: pcRound(L, 3), math: `${item.endStation} - ${item.startStation} = ${pcFmt(L)} LF`, print: '' };
+  // A typed length wins; otherwise the station span.
+  const lengthOf = (v) => (pcNum(v) == null ? span() : pcNum(v));
+  const fromSta = (v) => (pcNum(v) == null ? ' (length from stations)' : '');
+  const result = (q, places, math, print) => {
+    const qty = pcRound(q, places);
+    return { qty, math: `${math} = ${pcFmt(Number(qty))} ${unitText}`.trim(), print };
+  };
+  switch (k.type) {
+    case 'stations': {
+      const L = span();
+      if (L == null) return null;
+      return result(L, 3, `${item.endStation} - ${item.startStation}`, '');
+    }
+    case 'miles': {
+      const L = span();
+      if (L == null) return null;
+      return result(L / 5280, 3, `${pcFmt(L)} ft ÷ 5,280`, '');
+    }
+    case 'joints': {
+      const n = pcNum(k.joints);
+      const len = pcNum(k.len);
+      if (n == null || len == null) return null;
+      return result(n * len, 3, `${pcFmt(n)} joints × ${pcFmt(len)} ft`, `${pcFmt(n)} joints at ${pcFmt(len)} ft`);
+    }
+    case 'striping': {
+      const L = lengthOf(k.l);
+      const lines = pcNum(k.lines);
+      if (L == null || lines == null) return null;
+      return result(L * lines, 3, `${pcFmt(L)} ft × ${pcFmt(lines)} line${lines === 1 ? '' : 's'}${fromSta(k.l)}`, `${pcFmt(lines)} line${lines === 1 ? '' : 's'}`);
+    }
+    case 'area':
+    case 'volume':
+    case 'acres':
+    case 'thickness': {
+      const L = lengthOf(k.l);
+      const W = pcNum(k.w);
+      if (L == null || W == null) return null;
+      const dims = `${pcFmt(L)} × ${pcFmt(W)} ft`;
+      if (k.type === 'acres') return result((L * W) / 43560, 3, `${dims}${fromSta(k.l)} ÷ 43,560`, dims);
+      if (k.type === 'volume') {
+        const D = pcNum(k.d);
+        if (D == null) return null;
+        const d3 = `${pcFmt(L)} × ${pcFmt(W)} × ${pcFmt(D)} ft`;
+        return result((L * W * D) / 27, 3, `${d3}${fromSta(k.l)} ÷ 27`, d3);
+      }
+      if (k.type === 'thickness') {
+        const T = pcNum(k.t);
+        if (T == null) return null;
+        return result((L * W * (T / 12)) / 27, 3, `${dims} × ${pcFmt(T)} in${fromSta(k.l)}`, `${dims} at ${pcFmt(T)} in`);
+      }
+      const sqft = L * W;
+      return kind === 'SY' ? result(sqft / 9, 3, `${dims}${fromSta(k.l)} ÷ 9`, dims) : result(sqft, 3, `${dims}${fromSta(k.l)}`, dims);
+    }
+    case 'loads': {
+      const n = pcNum(k.loads);
+      const size = pcNum(k.size);
+      if (n == null || size == null) return null;
+      return result(n * size, 3, `${pcFmt(n)} loads × ${pcFmt(size)} CY`, `${pcFmt(n)} loads at ${pcFmt(size)} CY`);
+    }
+    case 'tickets': {
+      const t = (k.tickets || []).map(pcNum).filter((v) => v != null);
+      if (!t.length) return null;
+      const n = `${t.length} ticket${t.length === 1 ? '' : 's'}`;
+      return result(t.reduce((a, b) => a + b, 0), 3, `${n}: ${t.map(pcFmt).join(' + ')}`, n);
+    }
+    case 'paving': {
+      const A = pcNum(k.area);
+      const T = pcNum(k.thick);
+      const rate = pcNum(k.rate == null ? '110' : k.rate);
+      if (A == null || T == null || rate == null) return null;
+      return result((A * T * rate) / 2000, 3, `${pcFmt(A)} SY × ${pcFmt(T)} in × ${pcFmt(rate)} lb/SY-in ÷ 2,000`, `${pcFmt(A)} SY at ${pcFmt(T)} in`);
+    }
+    case 'tonsFromYards': {
+      const cy = pcNum(k.cy);
+      const dens = pcNum(k.density);
+      if (cy == null || dens == null) return null;
+      return result(cy * dens, 3, `${pcFmt(cy)} CY × ${pcFmt(dens)} TON/CY`, `${pcFmt(cy)} CY at ${pcFmt(dens)} TON/CY`);
+    }
+    case 'tackRate': {
+      const A = pcNum(k.area);
+      const rate = pcNum(k.rate);
+      if (A == null || rate == null) return null;
+      return result(A * rate, 3, `${pcFmt(A)} SY × ${pcFmt(rate)} gal/SY`, `${pcFmt(A)} SY at ${pcFmt(rate)} gal/SY`);
+    }
+    case 'crewHours': {
+      const a = pcTime(k.start);
+      const b = pcTime(k.stop);
+      const crew = pcNum(k.crew);
+      if (a == null || b == null || crew == null) return null;
+      const off = pcNum(k.off) || 0;
+      const hrs = Math.max(0, (b >= a ? b - a : b + 24 - a) - off);
+      const offTxt = off ? ` - ${pcFmt(off)} hr off` : '';
+      return result(hrs * crew, 2, `${k.start} to ${k.stop}${offTxt} = ${pcFmt(hrs)} hr × ${pcFmt(crew)}`, `${k.start} to ${k.stop}, crew of ${pcFmt(crew)}`);
+    }
+    case 'count': {
+      const n = pcNum(k.n);
+      if (n == null) return null;
+      return { qty: pcRound(n, 3), math: '', print: '' };
+    }
+    case 'percent': {
+      const p = pcNum(k.pct);
+      if (p == null) return null;
+      const price = Number(unitPrice);
+      if (!(price > 0)) return { qty: null, math: '', print: `${pcFmt(p)}% complete` };
+      const qty = pcRound((price * p) / 100, 2);
+      const money = (n) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 });
+      return { qty, math: `${pcFmt(p)}% of ${money(price)} = ${money(Number(qty))}`, print: `${pcFmt(p)}% complete` };
+    }
+    default:
+      return null;
   }
-  if (k.type === 'area' || k.type === 'volume') {
-    const lengthFromStations = pcNum(k.l) == null;
-    const L = lengthFromStations ? span() : pcNum(k.l);
-    const W = pcNum(k.w);
-    const D = k.type === 'volume' ? pcNum(k.d) : 1;
-    if (L == null || W == null || D == null) return null;
-    const cubicOrSquareFt = L * W * D;
-    let q = cubicOrSquareFt;
-    let unitLabel = item.unit || '';
-    if (k.type === 'volume') { q = cubicOrSquareFt / 27; unitLabel = 'CY'; }
-    else if (kind === 'SY') { q = cubicOrSquareFt / 9; unitLabel = 'SY'; }
-    else if (kind === 'SF' || !unitLabel) unitLabel = 'SF';
-    const dims = k.type === 'volume' ? `${pcFmt(L)} × ${pcFmt(W)} × ${pcFmt(D)} ft` : `${pcFmt(L)} × ${pcFmt(W)} ft`;
-    const qty = pcRound(q, 3);
-    return { qty, math: `${dims}${lengthFromStations ? ' (length from stations)' : ''} = ${pcFmt(Number(qty))} ${unitLabel}`, print: dims };
-  }
-  if (k.type === 'tickets') {
-    const t = (k.tickets || []).map(pcNum).filter((v) => v != null);
-    if (!t.length) return null;
-    const qty = pcRound(t.reduce((a, b) => a + b, 0), 3);
-    const n = `${t.length} ticket${t.length === 1 ? '' : 's'}`;
-    return { qty, math: `${n}: ${t.map(pcFmt).join(' + ')} = ${pcFmt(Number(qty))} TON`, print: n };
-  }
-  if (k.type === 'paving') {
-    const A = pcNum(k.area);
-    const T = pcNum(k.thick);
-    const rate = pcNum(k.rate == null ? '110' : k.rate);
-    if (A == null || T == null || rate == null) return null;
-    const qty = pcRound((A * T * rate) / 2000, 3);
-    return { qty, math: `${pcFmt(A)} SY × ${pcFmt(T)} in × ${pcFmt(rate)} lb/SY-in ÷ 2,000 = ${pcFmt(Number(qty))} TON`, print: `${pcFmt(A)} SY at ${pcFmt(T)} in` };
-  }
-  if (k.type === 'percent') {
-    const p = pcNum(k.pct);
-    if (p == null) return null;
-    const price = Number(unitPrice);
-    if (!(price > 0)) return { qty: null, math: '', print: `${pcFmt(p)}% complete` };
-    const qty = pcRound((price * p) / 100, 2);
-    const money = (n) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 });
-    return { qty, math: `${pcFmt(p)}% of ${money(price)} = ${money(Number(qty))}`, print: `${pcFmt(p)}% complete` };
-  }
-  return null;
 }
 
 // The line printed under a pay item: only what was filled in (stations,
@@ -706,12 +860,33 @@ function mergeBillingEstimates(existingList, fileRows) {
 // carries it (see the Pay App Quantities file on the Quantity Sheet page,
 // which uses mergeBillingEstimates above for its own, much narrower
 // import), so a re-upload here can never touch it either way.
+// Pay item settings a project file may not carry (an older file, or one
+// from a DOTD spreadsheet): a setting the file has no column for keeps the
+// project's current value. A confirmed unit only carries over while the
+// unit text is unchanged.
+const PAY_ITEM_KEPT_SETTINGS = ['unitKind', 'calcs', 'remarksRequired', 'dailyLimit', 'payAppOnly'];
+function mergePayItemSettings(existingCatalog, newCatalog) {
+  const before = new Map((existingCatalog || []).map((c) => [String(c.itemNumber || '').trim(), c]));
+  return (newCatalog || []).map((item) => {
+    const old = before.get(String(item.itemNumber || '').trim());
+    if (!old) return item;
+    const merged = { ...item };
+    PAY_ITEM_KEPT_SETTINGS.forEach((key) => {
+      if (merged[key] !== undefined || old[key] === undefined) return;
+      if (key === 'unitKind' && String(old.unit || '').trim().toUpperCase() !== String(item.unit || '').trim().toUpperCase()) return;
+      merged[key] = Array.isArray(old[key]) ? [...old[key]] : old[key];
+    });
+    if (merged.calcs === null) delete merged.calcs;
+    return merged;
+  });
+}
+
 function applyProjectUpdate(existing, candidate) {
   return {
     ...existing,
     name: candidate.name,
     meta: candidate.meta,
-    payItemCatalog: candidate.payItemCatalog,
+    payItemCatalog: mergePayItemSettings(existing.payItemCatalog, candidate.payItemCatalog),
     defaultContractors: candidate.defaultContractors,
     defaultEquipmentLabels: candidate.defaultEquipmentLabels,
   };
@@ -863,8 +1038,20 @@ function isFieldHidden(project, key) {
 // point of marking a day as one in the first place.
 function getMissingRequiredFields(report, project) {
   const required = (project && project.requiredFields) || [];
-  if (!required.length || !report || isNoWorkDayReport(report) || isWeatherDayReport(report)) return [];
-  return REQUIRED_FIELD_DEFS.filter(
+  if (!report || isNoWorkDayReport(report) || isWeatherDayReport(report)) return [];
+  const missing = REQUIRED_FIELD_DEFS.filter(
     (def) => required.includes(def.key) && !isFieldHidden(project, def.key) && def.isEmpty(report)
   );
+  // Pay items whose catalog entry asks for remarks (Project Settings).
+  if (!isFieldHidden(project, 'payItems')) {
+    const catalog = new Map(((project && project.payItemCatalog) || []).map((c) => [c.itemNumber, c]));
+    const seen = new Set();
+    (report.payItems || []).forEach((pi) => {
+      const cat = pi && pi.itemNumber && catalog.get(pi.itemNumber);
+      if (!cat || !cat.remarksRequired || String(pi.remarks || '').trim() || seen.has(pi.itemNumber)) return;
+      seen.add(pi.itemNumber);
+      missing.push({ key: 'payItems', label: `Remarks for pay item ${pi.itemNumber}` });
+    });
+  }
+  return missing;
 }

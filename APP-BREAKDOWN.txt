@@ -318,6 +318,12 @@ project-setup.html
   existing archive of Daily Work Report Excel files (handleImportReportsChange
   -> render-report.js's parseReportExcelFile, one file at a time, logged via
   common.js's irLogRow). Autosaves via saveProject() (markDirty/saveNow).
+  The Pay Items tab lists one line per item (renderPayItemsTab, ps*
+  functions) with a unit tag; the open item has the Unit dropdown
+  (PAY_UNITS or Other), the printed unit text, calculator chips
+  (catalog `calcs`), what to ask inspectors for (stations, side,
+  theoretical, required remarks, locations), a daily limit and Pay App
+  only. Units still to confirm are listed at the top.
 
 reports.html
   The list of a project's reports: table/card view toggle, per-report
@@ -352,7 +358,9 @@ report-editor.html
   "Same items as Report #N"; per item stations/side/location, a
   calculator (payItemCalcOptions/runPayItemCalc in defaults.js, stored
   as payItem.calc), theoretical quantity and remarks (payItem.remarks);
-  "X left of plan" counts every other report on the project.
+  "X left of plan" counts every other report on the project. A catalog
+  item's dailyLimit flags a bigger day; remarksRequired makes the remarks
+  a required field (getMissingRequiredFields).
 
 report-viewer.html
   Read-only printed-page preview of one report (renderPreview, reusing
@@ -417,8 +425,8 @@ pay-apps.html
   billingEstimates on the project record): history list, an editable
   per-item table with contractor-cost/diff-severity indicators
   (payAppRowContractorCost, updatePayAppDiffs), and Lump Sum percent-of-
-  value entry (see quantity-calc.js's isLumpSumUnit/contractTotalFor
-  handling).
+  value entry (see quantity-calc.js's isLumpSumItem/contractTotalFor
+  handling; isLumpSumItem goes by an item's confirmed unitKind first).
 
 quick-quantity.html
   A fast, report-independent way to log pay-item quantities without opening
@@ -504,11 +512,17 @@ defaults.js
   calendar/day-detail modal, and index.html's Manager Dashboard day-detail
   modal all share this one lookup rather than each reading report.activity
   directly), payItemNeedsMultiple, computeOverrun/overrunLabel,
-  parseStation, computeAreaQty, and the pay item calculators:
-  payItemUnitKind, payItemCalcOptions (which calculators an item's unit
-  allows: length from stations for LF, Length x Width for SY/SF,
-  x Depth for CY, truck tickets and paving for TON, percent complete for
-  a priced Lump Sum), runPayItemCalc, and payItemDetailLine (the line
+  parseStation, computeAreaQty, and pay item units and calculators:
+  PAY_UNITS (the standard unit list: LF, MI, SY, SF, ACRE, CY, TON, GAL,
+  HR, DAY, EA, LS, each with its spellings and calculators) plus
+  PAY_UNIT_OTHER for an admin's own unit; a catalog item's `unit` is the
+  printed text and `unitKind` what it means (unset on items from before,
+  which Project Settings lists to confirm: payItemUnitNeedsConfirm,
+  matchPayUnit). payItemKind (the unit an item counts as; an unconfirmed
+  item is only Lump Sum when its text already says LS/LUMP SUM),
+  PAY_CALCS, payItemCalcOptions (narrowed by the item's `calcs`),
+  runPayItemCalc, mergePayItemSettings (a project file re-upload keeps
+  settings the file has no column for), and payItemDetailLine (the line
   printed under an item: stations, side, location, calculator inputs,
   theoretical, then remarks; render-report.js's buildSheet1Values puts it
   on the table row under its item in smaller text, and an item that
@@ -615,7 +629,10 @@ project-file.js
   project.html when a project file is uploaded); buildProjectDataWorkbook/
   downloadProjectDataTemplate/downloadProjectDataFile are the write side
   (settings.html's "Download Project Data Template" and project-setup.html's
-  "Export"). normalizeDateValue handles the various date formats a
+  "Export"). PAY ITEMS also carries the optional UNIT TYPE, CALCULATORS,
+  REMARKS REQUIRED, DAILY LIMIT and PAY APP ONLY columns; a file without
+  them still loads, and a re-upload keeps those settings (see
+  mergePayItemSettings in defaults.js). normalizeDateValue handles the various date formats a
   hand-typed Excel cell might carry.
 
 quantity-calc.js

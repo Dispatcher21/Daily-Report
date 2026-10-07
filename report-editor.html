@@ -1465,7 +1465,7 @@ function piPreviousReport() {
 // other report plus today's.
 function piLeftText(pi, cat) {
   if (!cat) return '';
-  const isLS = payItemUnitKind(cat.unit) === 'LS';
+  const isLS = payItemKind(cat, cat.unit) === 'LS';
   const base = isLS ? Number(cat.unitPrice) : Number(cat.plannedQty);
   if (!(base > 0)) return '';
   let logged = Number(pi.qty) || 0;
@@ -1487,7 +1487,7 @@ function piEntryFor(cat) {
     startStation: '', endStation: '', location: '', side: '', length: '', width: '', theoreticalQty: '', remarks: '',
     // Computed items always worked out their quantity from Length x Width;
     // they start out on that calculator.
-    calc: cat.computed ? { type: 'area', l: '', w: '' } : null,
+    calc: !cat.unitKind && cat.computed && payItemCalcOptions(cat, cat.unit).some(([t]) => t === 'area') ? { type: 'area', l: '', w: '' } : null,
   };
 }
 
@@ -1564,28 +1564,78 @@ function piCalcHtml(pi, i, cat) {
   if (!k) return '';
   const r = runPayItemCalc(pi, cat && cat.unitPrice);
   const stationSpan = parseStation(pi.startStation) != null && parseStation(pi.endStation) != null;
-  const inp = (f, ph, cls, val) => `<input type="text" inputmode="decimal" class="${cls || 'rpi-sm'}" data-i="${i}" data-c="${f}" value="${escapeHtml(val != null ? val : (k[f] ?? ''))}" placeholder="${ph}" aria-label="${ph}">`;
-  const unitTxt = (t) => `<span class="rpi-calc">${t}</span>`;
+  const inp = (f, ph, cls, val, mode) => `<input type="text" inputmode="${mode || 'decimal'}" class="${cls || 'rpi-sm'}" data-i="${i}" data-c="${f}" value="${escapeHtml(val != null ? val : (k[f] ?? ''))}" placeholder="${ph}" aria-label="${ph}">`;
+  const txt = (t) => `<span class="rpi-calc">${t}</span>`;
+  const len = () => inp('l', stationSpan ? 'From stations' : 'Length');
   let body = '';
-  if (k.type === 'stations') body = unitTxt('Uses the stations above.');
-  if (k.type === 'area') body = `${inp('l', stationSpan ? 'From stations' : 'Length')} ${unitTxt('ft ×')} ${inp('w', 'Width')} ${unitTxt('ft')}`;
-  if (k.type === 'volume') body = `${inp('l', stationSpan ? 'From stations' : 'Length')} ${unitTxt('ft ×')} ${inp('w', 'Width')} ${unitTxt('ft ×')} ${inp('d', 'Depth')} ${unitTxt('ft')}`;
-  if (k.type === 'tickets') {
-    const tickets = k.tickets && k.tickets.length ? k.tickets : [''];
-    body = `${tickets.map((t, ti) => `<input type="text" inputmode="decimal" class="rpi-sm" data-i="${i}" data-ticket="${ti}" value="${escapeHtml(t)}" placeholder="Ticket ${ti + 1}" aria-label="Ticket ${ti + 1} tons">`).join(' ')} <button type="button" class="rpi-chip" data-addticket="${i}">+ Ticket</button>`;
+  switch (k.type) {
+    case 'stations':
+    case 'miles':
+      body = txt('Uses the stations above.');
+      break;
+    case 'area':
+    case 'acres':
+      body = `${len()} ${txt('ft ×')} ${inp('w', 'Width')} ${txt('ft')}`;
+      break;
+    case 'volume':
+      body = `${len()} ${txt('ft ×')} ${inp('w', 'Width')} ${txt('ft ×')} ${inp('d', 'Depth')} ${txt('ft')}`;
+      break;
+    case 'thickness':
+      body = `${len()} ${txt('ft ×')} ${inp('w', 'Width')} ${txt('ft ×')} ${inp('t', 'Thickness')} ${txt('in')}`;
+      break;
+    case 'joints':
+      body = `${inp('joints', 'Joints')} ${txt('joints ×')} ${inp('len', 'Length')} ${txt('ft each')}`;
+      break;
+    case 'striping':
+      body = `${len()} ${txt('ft ×')} ${inp('lines', 'Lines')} ${txt('lines')}`;
+      break;
+    case 'loads':
+      body = `${inp('loads', 'Loads')} ${txt('loads ×')} ${inp('size', 'Truck size')} ${txt('CY each')}`;
+      break;
+    case 'tickets': {
+      const tickets = k.tickets && k.tickets.length ? k.tickets : [''];
+      body = `${tickets.map((t, ti) => `<input type="text" inputmode="decimal" class="rpi-sm" data-i="${i}" data-ticket="${ti}" value="${escapeHtml(t)}" placeholder="Ticket ${ti + 1}" aria-label="Ticket ${ti + 1} tons">`).join(' ')} <button type="button" class="rpi-chip" data-addticket="${i}">+ Ticket</button>`;
+      break;
+    }
+    case 'paving':
+      body = `${inp('area', 'Area', 'rpi-md')} ${txt('SY ×')} ${inp('thick', 'Thickness')} ${txt('in ×')} ${inp('rate', '110', 'rpi-sm', k.rate == null ? '110' : k.rate)} ${txt('lb/SY-in')}`;
+      break;
+    case 'tonsFromYards':
+      body = `${inp('cy', 'Yards', 'rpi-md')} ${txt('CY ×')} ${inp('density', 'Density')} ${txt('TON/CY')}`;
+      break;
+    case 'tackRate':
+      body = `${inp('area', 'Area', 'rpi-md')} ${txt('SY ×')} ${inp('rate', 'Rate')} ${txt('gal/SY')}`;
+      break;
+    case 'crewHours':
+      body = `${inp('start', '7:00 AM', 'rpi-md', null, 'text')} ${txt('to')} ${inp('stop', '3:30 PM', 'rpi-md', null, 'text')} ${txt('×')} ${inp('crew', 'Crew')} ${txt('people, less')} ${inp('off', '0')} ${txt('hr off')}`;
+      break;
+    case 'count':
+      body = `<button type="button" class="rpi-chip" data-count="-1" data-i="${i}" aria-label="One less">&minus; 1</button> ${inp('n', 'Count')} <button type="button" class="rpi-chip" data-count="1" data-i="${i}" aria-label="One more">+ 1</button>`;
+      break;
+    case 'percent': {
+      const price = Number(cat && cat.unitPrice);
+      body = `${inp('pct', 'Percent')} ${txt(`% of ${price.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })}`)}`;
+      break;
+    }
+    default:
+      body = '';
   }
-  if (k.type === 'paving') body = `${inp('area', 'Area', 'rpi-md')} ${unitTxt('SY ×')} ${inp('thick', 'Thickness')} ${unitTxt('in ×')} ${inp('rate', '110', 'rpi-sm', k.rate == null ? '110' : k.rate)} ${unitTxt('lb/SY-in')}`;
-  if (k.type === 'percent') {
-    const price = Number(cat && cat.unitPrice);
-    body = `${inp('pct', 'Percent')} ${unitTxt(`% of ${price.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })}`)}`;
-  }
-  const label = (opts.find(([t]) => t === k.type) || [k.type, 'Calculator'])[1];
-  const other = opts.find(([t]) => t !== k.type);
+  const label = PAY_CALCS[k.type] || 'Calculator';
+  const note = r && r.math ? escapeHtml(r.math) : k.type === 'count' ? '' : 'Fill these in and the quantity is worked out for you.';
   return `<div class="rpi-calcbox">
     <div class="rpi-row"><span class="rpi-label">${escapeHtml(label)}</span>${body}</div>
-    <div class="rpi-calc"><span data-calcmath="${i}">${r && r.math ? escapeHtml(r.math) : 'Fill these in and the quantity is worked out for you.'}</span>
-      <button type="button" class="rpi-textbtn" data-calcoff="${i}">Type the quantity myself</button>${other ? ` <button type="button" class="rpi-textbtn" data-calc="${other[0]}" data-i="${i}">Use ${escapeHtml(other[1])} instead</button>` : ''}</div>
+    <div class="rpi-calc"><span data-calcmath="${i}">${note}</span>
+      <button type="button" class="rpi-textbtn" data-calcoff="${i}">Type the quantity myself</button>${opts.length > 1 ? ` <button type="button" class="rpi-textbtn" data-calcswitch="${i}">Other calculator</button>` : ''}</div>
   </div>`;
+}
+
+// An admin can set a daily limit on an item (Project Settings); a day's
+// quantity past it is flagged, not blocked.
+function piLimitText(pi, cat) {
+  const limit = pcNum(cat && cat.dailyLimit);
+  const q = pcNum(pi.qty);
+  if (limit == null || q == null || q <= limit) return '';
+  return `More than this item's daily limit of ${pcFmt(limit)} ${pi.unit || ''}. Double-check the quantity.`.replace(' .', '.');
 }
 
 function piTheoText(pi) {
@@ -1600,7 +1650,7 @@ function piCardHtml(pi, i) {
   const missing = piMissingQty(pi);
   const isOpen = piOpenIdx === i;
   const unit = pi.unit || (cat && cat.unit) || '';
-  const isLS = payItemUnitKind(unit) === 'LS';
+  const isLS = payItemKind(cat, unit) === 'LS';
   const calculated = !!(pi.calc && runPayItemCalc(pi, cat && cat.unitPrice));
   const summary = payItemDetailLine(pi);
   const qtyBox = `<label class="rpi-qty">${isLS ? '<span>$</span>' : ''}<input type="text" inputmode="decimal" data-i="${i}" data-f="qty" value="${escapeHtml(pi.qty ?? '')}" placeholder="0" aria-label="${escapeHtml(pi.itemNumber || pi.description)} quantity"${calculated ? ' readonly title="Worked out by the calculator"' : ''}>${unit ? `<span>${escapeHtml(unit)}</span>` : ''}</label>`;
@@ -1610,7 +1660,8 @@ function piCardHtml(pi, i) {
     const rows = [];
     const left = piLeftText(pi, cat);
     if (left) rows.push(`<span class="rpi-left" data-left="${i}">${left}</span>`);
-    const tracksStations = (cat && cat.stations) || pi.startStation || pi.endStation;
+    rows.push(`<span class="rpi-warn" data-limit="${i}"${piLimitText(pi, cat) ? '' : ' hidden'}>${piLimitText(pi, cat)}</span>`);
+    const tracksStations = (cat && cat.stations) || pi.startStation || pi.endStation || (pi.calc && ['stations', 'miles'].includes(pi.calc.type));
     if (tracksStations) {
       rows.push(`<div class="rpi-row"><span class="rpi-label">Stations</span><input type="text" class="rpi-md" data-i="${i}" data-f="startStation" value="${escapeHtml(pi.startStation || '')}" placeholder="Start (120+15)" aria-label="Start station"> <span class="rpi-calc">to</span> <input type="text" class="rpi-md" data-i="${i}" data-f="endStation" value="${escapeHtml(pi.endStation || '')}" placeholder="Stop (121+40)" aria-label="Stop station"></div>`);
     }
@@ -1626,9 +1677,10 @@ function piCardHtml(pi, i) {
     if ((cat && cat.theoretical) || String(pi.theoreticalQty || '').trim()) {
       rows.push(`<div class="rpi-row"><span class="rpi-label">Theoretical</span><input type="text" inputmode="decimal" class="rpi-md" data-i="${i}" data-f="theoreticalQty" value="${escapeHtml(pi.theoreticalQty || '')}" placeholder="From plans" aria-label="Theoretical quantity"> <span class="rpi-calc" data-theo="${i}">${escapeHtml(unit)}${piTheoText(pi)}</span></div>`);
     }
-    const hasRemarks = !!String(pi.remarks || '').trim() || piRemarksOpenIdx === i;
+    const remarksRequired = !!(cat && cat.remarksRequired);
+    const hasRemarks = !!String(pi.remarks || '').trim() || piRemarksOpenIdx === i || remarksRequired;
     if (hasRemarks) {
-      rows.push(`<div class="rpi-row"><span class="rpi-label">Remarks</span><input type="text" class="rpi-wide" data-i="${i}" data-f="remarks" value="${escapeHtml(pi.remarks || '')}" placeholder="Prints with this item" aria-label="Remarks" maxlength="200"></div>`);
+      rows.push(`<div class="rpi-row"><span class="rpi-label">Remarks${remarksRequired ? ' *' : ''}</span><input type="text" class="rpi-wide" data-i="${i}" data-f="remarks" value="${escapeHtml(pi.remarks || '')}" placeholder="${remarksRequired ? 'Required for this item. Prints with it.' : 'Prints with this item'}" aria-label="Remarks" maxlength="200"></div>`);
     }
     const calcOpts = payItemCalcOptions(cat, unit);
     if (piCalcMenuIdx === i && !pi.calc) {
@@ -1642,8 +1694,10 @@ function piCardHtml(pi, i) {
     body = `<div class="rpi-body">${rows.join('')}<div class="rpi-links">${links.join('')}</div></div>`;
   }
 
-  const sumHtml = !isOpen && (summary || missing)
-    ? `<span class="rpi-sum${missing ? ' rpi-need' : ''}">${missing ? 'Needs a quantity' : escapeHtml(summary)}</span>`
+  const needsRemarks = !!(cat && cat.remarksRequired && !String(pi.remarks || '').trim());
+  const flag = missing ? 'Needs a quantity' : needsRemarks ? 'Needs remarks' : piLimitText(pi, cat) ? 'Over the daily limit' : '';
+  const sumHtml = !isOpen && (summary || flag)
+    ? `<span class="rpi-sum${flag ? ' rpi-need' : ''}">${escapeHtml(flag || summary)}</span>`
     : '';
   return `<div class="rpi-item${missing ? ' rpi-missing' : ''}${isOpen ? ' rpi-open' : ''}" data-card="${i}">
     <div class="rpi-line">
@@ -1763,6 +1817,8 @@ function bindPayItems() {
       if (card) card.classList.toggle('rpi-missing', piMissingQty(pi));
       const leftEl = card && card.querySelector('[data-left]');
       if (leftEl) leftEl.innerHTML = piLeftText(pi, piCatalogItem(pi.itemNumber));
+      const limitEl = card && card.querySelector('[data-limit]');
+      if (limitEl) { const t = piLimitText(pi, piCatalogItem(pi.itemNumber)); limitEl.textContent = t; limitEl.hidden = !t; }
       const theoEl = card && card.querySelector('[data-theo]');
       if (theoEl) theoEl.innerHTML = escapeHtml(pi.unit || '') + piTheoText(pi);
       updatePayItemsTag();
@@ -1851,6 +1907,23 @@ function bindPayItems() {
       return;
     }
     if (t.dataset.calc) { piStartCalc(idx(t.dataset.i), t.dataset.calc); return; }
+    if (t.dataset.calcswitch != null) {
+      const n = idx(t.dataset.calcswitch);
+      report.payItems[n].calc = null;
+      piCalcMenuIdx = n;
+      scheduleSave();
+      piRefreshCard(n);
+      return;
+    }
+    if (t.dataset.count) {
+      const n = idx(t.dataset.i);
+      const pi = report.payItems[n];
+      pi.calc.n = String(Math.max(0, (pcNum(pi.calc.n) || 0) + Number(t.dataset.count)));
+      piRecalc(pi);
+      scheduleSave();
+      piRefreshCard(n);
+      return;
+    }
     if (t.dataset.calcoff != null) {
       const n = idx(t.dataset.calcoff);
       report.payItems[n].calc = null;
@@ -1901,6 +1974,7 @@ function piStartCalc(i, type) {
   piCalcMenuIdx = null;
   pi.calc = { type, tickets: [''] };
   if (type !== 'tickets') delete pi.calc.tickets;
+  if (type === 'count') pi.calc.n = String(pcNum(pi.qty) || 0);
   piRecalc(pi);
   scheduleSave();
   piRefreshCard(i);
