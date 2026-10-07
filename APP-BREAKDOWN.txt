@@ -594,7 +594,10 @@ firebase-sync.js
   + wireAutoPull (background pull on load/tab-focus, throttled),
   pushPendingChanges (uploads pendingPush records on every page's load,
   tab-focus and the browser's 'online' event), setPendingPush (flips just
-  that flag, skipped if the record was saved again since), and the
+  that flag, skipped if the record was saved again since, and fires
+  'pending-push-changed'), refreshOfflineBanner (the grey "You're
+  offline" bar under the header on every page, with how many reports are
+  waiting to upload), and the
   admin-password-derived encryption used to store a recoverable copy of the
   company/custom-setup passwords (hashAdminPassword/verifyAdminPassword/
   encryptWithAdminPassword/decryptWithAdminPassword/pbkdf2Hash/

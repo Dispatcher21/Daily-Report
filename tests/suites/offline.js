@@ -4,7 +4,7 @@
 // a report saved offline uploads by itself once the connection is back.
 // Uses localhost rather than 127.0.0.1: the service worker only runs on
 // https or localhost (see common.js).
-const { launchBrowser, emulatorContext, clearEmulators, PROJECT } = require('../harness');
+const { launchBrowser, emulatorContext, clearEmulators, PROJECT, OUT } = require('../harness');
 const B = 'http://localhost:8126';
 let fails = 0;
 const check = (label, got, want) => { const ok = JSON.stringify(got) === JSON.stringify(want); if (!ok) fails++; console.log(`${ok ? 'PASS' : 'FAIL'} ${label}: ${JSON.stringify(got)}${ok ? '' : ` (wanted ${JSON.stringify(want)})`}`); };
@@ -40,6 +40,7 @@ async function cloudReport(code, id) {
   // ---------- an inspector's iPad: in a company, signal comes and goes ----------
   const ctx = await emulatorContext(browser);
   const a = await ctx.newPage();
+
   a.on('pageerror', (e) => errs.push('A ' + e.message));
   await install(a, 'settings.html');
   const { code, projectId } = await a.evaluate(async () => {
@@ -61,6 +62,9 @@ async function cloudReport(code, id) {
   check('reports page opens offline', (await a.title()).startsWith('View Reports'), true);
   await a.goto(`${B}/report-editor.html?project=${projectId}&report=new`);
   check('report form opens offline', new URL(a.url()).pathname, '/report-editor.html');
+  const offlineBar = () => a.evaluate(() => { const el = document.getElementById('offline-banner'); return el && !el.hidden ? el.textContent : null; });
+  await a.waitForFunction(() => { const el = document.getElementById('offline-banner'); return el && el.textContent; });
+  check('offline bar shows', await offlineBar(), "You're offline. Reports save on this device and upload when you're back online.");
   check('report form has the project', await a.evaluate(async (id) => (await getProject(id)).name, projectId), 'OFF-1 Field Project');
   check('Firebase loads offline from the saved copy', await a.evaluate(() => waitForFirebaseCore().then((core) => !!core.auth)), true);
 
@@ -72,16 +76,23 @@ async function cloudReport(code, id) {
   await a.waitForTimeout(1500);
   check('offline report waits to upload', await a.evaluate(async (id) => !!(await getReport(id)).pendingPush, reportId), true);
   check('not in the cloud yet', await cloudReport(code, reportId), false);
+  check('offline bar counts it', await offlineBar(), "You're offline. 1 report waiting to upload when you're back online.");
 
   // Closing the app before the upload gave up still leaves it queued.
   await a.goto(`${B}/index.html`);
+  // Long enough for Firebase to decide it's offline and fail any read the
+  // home page makes (about 10 seconds), so one that isn't handled shows up
+  // in the page errors check at the end (the Manager Dashboard used to).
+  await a.waitForTimeout(12000);
   check('still queued after leaving the page', await a.evaluate(async (id) => !!(await getReport(id)).pendingPush, reportId), true);
+  await a.screenshot({ path: `${OUT}/offline-bar.png` });
 
   await goOnline(ctx);
   let landed = false;
   for (let i = 0; i < 30 && !landed; i++) { await a.waitForTimeout(1000); landed = await cloudReport(code, reportId); }
   check('uploads by itself when the signal comes back', landed, true);
   await a.waitForTimeout(1000);
+  check('offline bar gone', await offlineBar(), null);
   check('no longer queued', await a.evaluate(async (id) => !!(await getReport(id)).pendingPush, reportId), false);
 
   // ---------- no saved Firebase SDK: the sign-in page still moves on ----------

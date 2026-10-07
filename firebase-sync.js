@@ -2364,6 +2364,16 @@ function wireAutoPull() {
 const PENDING_PUSH_THROTTLE_MS = 60 * 1000;
 const PENDING_PUSH_SETTING = 'companyPendingPushAt';
 let pushingPending = false;
+
+// This company's projects and reports on this device still waiting to
+// upload (trashed reports included: the delete itself is what's waiting).
+async function getPendingPushRecords(code) {
+  return {
+    reports: (await getAllReports({ includeDeleted: true })).filter((r) => r.pendingPush && reportInScope(r, { code })),
+    projects: (await getAllProjects()).filter((p) => p.pendingPush && projectInScope(p, { code })),
+  };
+}
+
 async function pushPendingChanges(force) {
   if (pushingPending || !navigator.onLine || isTutorialMode()) return;
   pushingPending = true;
@@ -2371,9 +2381,8 @@ async function pushPendingChanges(force) {
     const room = await getCompanyRoom();
     if (!room) return;
     if (!force && Date.now() - ((await getSetting(PENDING_PUSH_SETTING)) || 0) < PENDING_PUSH_THROTTLE_MS) return;
-    const pending = (await getAllReports({ includeDeleted: true })).some((r) => r.pendingPush && reportInScope(r, { code: room.code }))
-      || (await getAllProjects()).some((p) => p.pendingPush && projectInScope(p, { code: room.code }));
-    if (!pending) return;
+    const pending = await getPendingPushRecords(room.code);
+    if (!pending.reports.length && !pending.projects.length) return;
     await saveSetting(PENDING_PUSH_SETTING, Date.now());
     await pushAllLocalData(room.code, null, { dirtyOnly: true });
   } catch (err) {
@@ -2387,6 +2396,50 @@ window.addEventListener('online', () => pushPendingChanges(true));
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') pushPendingChanges();
 });
+
+// ---------- Offline indicator ----------
+//
+// A bar under the header on every page while the device has no
+// connection, so an inspector can see their saves are staying on the
+// device for now, and how many reports are waiting to upload. Same
+// placement as common.js's global-sync-banner. login.html has no header,
+// so it never shows there.
+async function refreshOfflineBanner() {
+  const header = document.querySelector('.app-header');
+  if (!header) return;
+  let banner = document.getElementById('offline-banner');
+  if (navigator.onLine) {
+    if (banner) banner.hidden = true;
+    return;
+  }
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'offline-banner';
+    banner.className = 'offline-banner';
+    banner.setAttribute('role', 'status');
+    header.insertAdjacentElement('afterend', banner);
+  }
+  let text = "You're offline. Everything still saves on this device.";
+  try {
+    const room = isTutorialMode() ? null : await getCompanyRoom();
+    if (room) {
+      const n = (await getPendingPushRecords(room.code)).reports.length;
+      text = n
+        ? `You're offline. ${n} report${n === 1 ? '' : 's'} waiting to upload when you're back online.`
+        : "You're offline. Reports save on this device and upload when you're back online.";
+    }
+  } catch (err) {
+    console.error('offline banner:', err);
+  }
+  if (navigator.onLine) return; // came back while counting; the 'online' refresh hides it
+  banner.textContent = text;
+  banner.hidden = false;
+}
+document.addEventListener('DOMContentLoaded', refreshOfflineBanner);
+window.addEventListener('online', refreshOfflineBanner);
+window.addEventListener('offline', refreshOfflineBanner);
+window.addEventListener('pending-push-changed', refreshOfflineBanner);
+window.addEventListener('pageshow', (e) => { if (e.persisted) refreshOfflineBanner(); });
 
 // ---------- Project sync ----------
 //
@@ -3200,7 +3253,7 @@ function setPendingPush(storeName, record, pending) {
         store.put({ ...current, pendingPush: pending });
       }
     };
-  });
+  }).then(() => { window.dispatchEvent(new CustomEvent('pending-push-changed')); }); // the offline bar's count
 }
 
 async function onCompanySyncProjectChanged(project, deleted) {
