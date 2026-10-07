@@ -448,6 +448,9 @@ async function loadAndShowReport(id, { includeDeleted = false } = {}) {
     syncMainBottomPadding();
   }
   await renderReportDetails(report);
+  // Other people's changes to this report come from the company's log,
+  // fetched for just this report (it's no longer pulled with every sync).
+  fetchCompanyAuditLog({ entityId: report.id }).then((added) => { if (added) renderReportDetails(report); });
   return report;
 }
 

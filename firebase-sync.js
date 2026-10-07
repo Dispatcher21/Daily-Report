@@ -2493,6 +2493,27 @@ async function pushAuditEntryToCompany(code, entry) {
   await setDoc(doc(db, 'companies', code, 'auditLog', entry.id), entry);
 }
 
+// The company's activity log, fetched when someone opens it (the Audit Log
+// page, or one report's Revision History with `entityId`) instead of with
+// every sync. Merged into this device's copy; returns how many were new.
+// Quietly 0 when there's no company, no connection, or no permission.
+async function fetchCompanyAuditLog({ entityId = null } = {}) {
+  if (isTutorialMode()) return 0;
+  const room = await getCompanyRoom();
+  if (!room) return 0;
+  try {
+    const { db, ensureSignedIn } = await waitForFirebaseCore();
+    const { collection, getDocs, query, where } = await import(FIRESTORE_SDK);
+    await ensureSignedIn();
+    const ref = collection(db, 'companies', room.code, 'auditLog');
+    const snap = await getDocs(entityId ? query(ref, where('entityId', '==', entityId)) : ref);
+    return await mergeAuditEntriesBulk(snap.docs.map((d) => ({ ...d.data(), id: d.id, companyCode: room.code, fromCompany: true })));
+  } catch (err) {
+    console.warn('audit log fetch:', err);
+    return 0;
+  }
+}
+
 async function onCompanySyncAuditEntry(entry) {
   if (isTutorialMode()) return; // nothing syncs in tutorial mode (see waitForFirebaseCore)
   const room = await getCompanyRoom();
@@ -2698,32 +2719,10 @@ async function pullAllCompanyData(code, onProgress) {
     }
   }
 
-  // The activity log covers every project, so someone limited to some
-  // projects doesn't get it.
-  if (scope) {
-    summary.auditEntriesPulled = 0;
-  } else {
-    if (onProgress) onProgress({ phase: 'audit' });
-    const auditSnap = await getDocs(collection(db, 'companies', code, 'auditLog'));
-    summary.auditEntriesPulled = 0;
-    for (const d of auditSnap.docs) {
-      const result = await mergeAuditEntry({ ...d.data(), id: d.id, companyCode: code });
-      if (result !== 'skipped') summary.auditEntriesPulled++;
-    }
-    // Same reconciliation as projects/reports above, and for the same reason:
-    // mergeAuditEntry skips the write entirely for an id already cached
-    // locally (audit entries are immutable, so "skip if present" is exactly
-    // right there), which means the companyCode stamped on the incoming copy
-    // just above never lands for an entry that was already on file --
-    // including one that's actually foreign, cached here from a different
-    // company entirely. Settle every untagged entry one way or the other.
-    const authoritativeAuditIds = new Set(auditSnap.docs.map((d) => d.id));
-    for (const e of await getAllAuditEntries()) {
-      if (!e.companyCode) {
-        await saveAuditEntry({ ...e, companyCode: authoritativeAuditIds.has(e.id) ? code : FOREIGN_COMPANY_SENTINEL });
-      }
-    }
-  }
+  // The activity log isn't pulled with everything else any more: it's big,
+  // and only the Audit Log page and a report's Revision History use it, so
+  // they fetch it when opened (fetchCompanyAuditLog).
+  summary.auditEntriesPulled = 0;
 
   // Prune deletion tombstones old enough that nothing could still need
   // them -- see TOMBSTONE_RETENTION_MS. Every device eventually runs this
@@ -2868,17 +2867,7 @@ async function pullDeltaCompanyData(code, onProgress, cursor) {
     }
   }
 
-  summary.auditEntriesPulled = 0;
-  if (!scope) {
-    if (onProgress) onProgress({ phase: 'audit' });
-    const auditSnap = await getDocs(
-      query(collection(db, 'companies', code, 'auditLog'), where('timestamp', '>', queryCursor))
-    );
-    for (const d of auditSnap.docs) {
-      const result = await mergeAuditEntry({ ...d.data(), id: d.id, companyCode: code });
-      if (result !== 'skipped') summary.auditEntriesPulled++;
-    }
-  }
+  summary.auditEntriesPulled = 0; // fetched when opened instead, see fetchCompanyAuditLog
 
   await saveSetting(DELTA_PULL_CURSOR_SETTING, pullStartedAt);
   return summary;
@@ -3000,7 +2989,9 @@ async function pushAllLocalData(code, onProgress, { dirtyOnly = false } = {}) {
   // nothing extra to re-send. Not worth its own pendingPush tracking; the
   // cost this feature actually targets is re-uploading every project's/
   // report's full data (photos included) on every click, not this.
-  const auditEntries = (await getAllAuditEntries()).filter((e) => auditEntryInCompany(e, { code }));
+  // Only this device's own entries: the ones fetched from the company
+  // (fromCompany, see fetchCompanyAuditLog) are already there.
+  const auditEntries = (await getAllAuditEntries()).filter((e) => auditEntryInCompany(e, { code }) && !e.fromCompany);
   await Promise.all(auditEntries.map((entry) => pushAuditEntryToCompany(code, entry).catch(refusedOk)));
   if (onProgress) onProgress({ phase: 'audit', count: auditEntries.length });
   if (refused) {

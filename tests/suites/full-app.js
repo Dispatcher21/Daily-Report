@@ -37,9 +37,17 @@ const step = async (label, page, fn, arg) => {
   await step('B sync now', Bp, async () => { await syncCompanyRoomNow(); return 'ok'; });
   await step('custom setup login', Bp, async () => { await leaveCompanyRoom(); await joinCompanyRoom('crew-pw-1'); return (await getCompanyRoom()).projectScope; });
   await step('delete custom setup', A, async () => { const roles = await listCustomRoles(); await deleteCustomRole(roles[0].id); return (await listCustomRoles()).length; });
-  await step('audit log pull', A, async () => { await autoPullCompanyData(true); return (await getAllAuditEntries()).length > 0; });
+  await step('audit log fetched when opened, not with sync', A, async () => { await autoPullCompanyData(true); const before = (await getAllAuditEntries()).filter((e) => e.fromCompany).length; const added = await fetchCompanyAuditLog(); return before === 0 && added > 0; });
   await step('change company password (moves company)', A, async () => { await changeCompanyPassword('rules-pw-2', 'rules-admin-1'); return (await getCompanyRoom()).name; });
   await step('join with the new password', Bp, async () => { await leaveCompanyRoom(); const r = await joinCompanyRoom('rules-pw-2'); return [r.name, (await getAllProjects()).filter((p) => !p.deleted).length, (await getAllReports()).length]; });
+  // Log out from the menu (no account on B): the company and its projects
+  // leave the device.
+  await step('B has the company before logging out', Bp, async () => [!!(await getCompanyRoom()), (await getAllProjects()).filter((p) => !p.deleted).length > 0]);
+  await Bp.goto(`${B}/settings.html`); await Bp.waitForTimeout(1500);
+  Bp.once('dialog', (d) => d.accept());
+  await Bp.click('#hamburger-btn'); await Bp.click('#hb-logout');
+  await Bp.waitForURL(/login\.html/, { timeout: 15000 }).catch(() => {});
+  await step('logged out: no company or projects left on B', Bp, async () => [await getCompanyRoom(), (await getAllProjects()).length]);
   await step('delete project', A, async () => { await deleteProject('proj-r'); await new Promise((r) => setTimeout(r, 1000)); return 'ok'; });
   await step('listing all companies is refused', A, async () => { const { collection, getDocs } = await import(FIRESTORE_SDK); try { await getDocs(collection(window.FirebaseCore.db, 'companies')); return 'ALLOWED'; } catch (e) { return e.code; } });
   console.log('page errors:', JSON.stringify(errs));

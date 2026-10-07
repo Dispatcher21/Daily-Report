@@ -920,6 +920,21 @@ function getAllAuditEntries() {
   });
 }
 
+// Many at once (a whole company's log), in one transaction: entries are
+// immutable, so only ids not already here are added. Returns how many.
+function mergeAuditEntriesBulk(entries) {
+  return withStore(AUDIT_STORE, 'readwrite', (store) => new Promise((resolve, reject) => {
+    const req = store.getAllKeys();
+    req.onsuccess = () => {
+      const have = new Set(req.result);
+      let added = 0;
+      entries.forEach((e) => { if (!have.has(e.id)) { store.put(e); added++; } });
+      resolve(added);
+    };
+    req.onerror = () => reject(req.error);
+  }));
+}
+
 async function mergeAuditEntry(entry) {
   const existing = await getAuditEntry(entry.id);
   if (existing) return 'skipped';
