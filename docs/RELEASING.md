@@ -9,19 +9,10 @@ Everything waiting to be applied to the live Firebase project
 (`daily-reports-53c82`). Add to this list as you go; clear it once the
 owner has applied it.
 
-- **Rules (`firestore.rules`)**: devices without an account need an
-  approved member record (they join as waiting, inspector, no projects;
-  an admin approves them on Team and gives them projects), whatever
-  "Require everyone to sign in" says. Admins without an account (made
-  admin with the admin password) can manage Team. **Order matters this
-  time: push the app first, then publish the rules right after.** The new
-  app is what creates the member records; with the old app, a device
-  without an account just gets "permission denied" until it updates.
-- **Functions deploy: `onMemberWritten`**: the join-request email to
-  admins says "(no account, one device)" for a device without an account.
+(Nothing pending.)
 
-
-(Last applied: 0.054, 2026-10-07: weeklyRoundup and sendRoundupPreview
+(Last applied: 0.057, 2026-10-07: rules for devices without an account
+(approval, assigned projects only); onMemberWritten. 0.054, 2026-10-07: weeklyRoundup and sendRoundupPreview
 (Lump Sum by confirmed unit). 0.053, 2026-10-06: every function on Node.js 22.
 0.0521, 2026-10-06: rules with
 separate approve and comment permissions; onCompanyUpdated redeployed.

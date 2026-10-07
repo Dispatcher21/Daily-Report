@@ -3432,6 +3432,10 @@ input[type="date"] { min-width: 0; }
   .pa-run-totals .rt-value { font-size: 0.95rem; }
   .pa-savebar-actions .btn-primary { padding: 0.55rem 1.1rem; }
 }
+/* A phone: big totals wrap onto a second line instead of running into the
+   next one. */
+@media (max-width: 480px) {
+  .pa-run-totals .rt-value { font-size: 0.85rem; overflow-wrap: anywhere; }
 }
 
 /* The form's rows: Item / previous Pay App (reference) / this entry. */
@@ -3485,6 +3489,11 @@ input[type="date"] { min-width: 0; }
   .pa-bd-row { grid-template-columns: minmax(0, 1fr) auto; gap: 0.4rem 0.75rem; }
   .pa-bd-row > .pa-bd-prog { grid-column: 1 / -1; order: 3; }
   .pa-sum-value { font-size: 1.05rem; }
+}
+/* A phone: one column, so big quantities and the status chip don't collide. */
+@media (max-width: 560px) {
+  .pa-bd-row { grid-template-columns: minmax(0, 1fr); }
+  .pa-bd-row > .pa-bd-cell { justify-self: start; max-width: 100%; }
 }
 
 /* ---------- Progress-over-time chart ---------- */
