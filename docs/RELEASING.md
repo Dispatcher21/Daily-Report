@@ -9,12 +9,10 @@ Everything waiting to be applied to the live Firebase project
 (`daily-reports-53c82`). Add to this list as you go; clear it once the
 owner has applied it.
 
-- **Functions deploy: `weeklyRoundup` and `sendRoundupPreview`**: the
-  roundup's copy of quantity-calc.js now counts a pay item whose unit an
-  admin confirmed as Lump Sum (for example "LUMP") in dollars, the same as
-  the dashboards.
+Nothing pending.
 
-(Last applied: 0.053, 2026-10-06: every function on Node.js 22.
+(Last applied: 0.054, 2026-10-07: weeklyRoundup and sendRoundupPreview
+(Lump Sum by confirmed unit). 0.053, 2026-10-06: every function on Node.js 22.
 0.0521, 2026-10-06: rules with
 separate approve and comment permissions; onCompanyUpdated redeployed.
 0.052: weeklyRoundup and sendRoundupPreview. 0.051: rules with the
