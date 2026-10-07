@@ -69,6 +69,12 @@ const shot = (p, n) => p.screenshot({ path: `${OUT}/ui-${NAME}-${n}.png`, fullPa
   await r.goto(`${B}/login.html`); await r.waitForTimeout(800);
   await r.click('#btn-show-legacy');
   await r.fill('#f-name', 'Carl'); await r.fill('#f-password', 'emu-company-pw'); await r.click('#btn-continue');
+  // Without an account it waits for an admin, who approves it and gives it projects.
+  await r.waitForSelector('#view-pending:not([hidden])', { timeout: 15000 });
+  check('no account: waiting screen', [/without an account/.test(await r.textContent('#pending-text')), await r.textContent('#btn-pending-signout')], [true, 'Cancel my request']);
+  await shot(r, '6-waiting');
+  await admin.evaluate(async (uid) => { await approveTeamMember(uid); await updateTeamMember(uid, { projectIds: null }); }, await r.evaluate(() => window.FirebaseCore.auth.currentUser.uid));
+  await r.click('#btn-pending-check');
   await r.waitForURL(/index\.html/, { timeout: 15000 });
   await r.goto(`${B}/settings.html`); await r.waitForTimeout(1200);
   check('legacy device: settings offers account', await r.isVisible('#account-signed-out'), true);

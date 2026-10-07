@@ -92,6 +92,10 @@ async function init() {
     { label: 'Audit Log' },
   ]);
 
+  // Fetched from the company now, not with every sync (see fetchCompanyAuditLog).
+  $('#al-company-sub').textContent = `Admin — ${room.name || 'Audit Log'} — loading…`;
+  await fetchCompanyAuditLog();
+  $('#al-company-sub').textContent = `Admin — ${room.name || 'Audit Log'}`;
   allEntries = (await getAllAuditEntries()).filter((e) => auditEntryInCompany(e, room));
   await Promise.all(allEntries.map(async (e) => { e.tampered = (await verifyAuditEntry(e)) === false; }));
   const tamperedCount = allEntries.filter((e) => e.tampered).length;

@@ -14,18 +14,26 @@ service cloud.firestore {
     // behavior: anyone signed in who knows the company password.
     function enforced(code) { return company(code).get('accountsRequired', false) == true; }
     function me(code) { return get(memberPath(code)).data; }
-    function isMember(code) {
-      return hasAccount() && exists(memberPath(code)) && me(code).status == 'active';
-    }
-    function isAdmin(code) { return isMember(code) && me(code).role == 'admin'; }
+    // An active member record for whoever is asking -- an account, or a
+    // device without one (its anonymous sign-in has a member record too).
+    function memberActive(code) { return exists(memberPath(code)) && me(code).status == 'active'; }
+    function isMember(code) { return hasAccount() && memberActive(code); }
+    // An admin: an account, or (while accounts aren't required) a device
+    // without one that was made admin with the admin password.
+    function isAdmin(code) { return memberActive(code) && me(code).role == 'admin' && (hasAccount() || !enforced(code)); }
+    // The old password-only access ("Require accounts" off) now only ever
+    // applies to accounts. A device without an account always needs an
+    // approved member record, whatever the switch says: it's only let in,
+    // and only to the projects it was given, once an admin approves it.
+    function openToAccounts(code) { return hasAccount() && !enforced(code); }
     // Company data at all.
-    function canUse(code) { return signedIn() && (!enforced(code) || isMember(code)); }
+    function canUse(code) { return signedIn() && (openToAccounts(code) || (hasAccount() ? isMember(code) : (memberActive(code) && !enforced(code)))); }
     // One project's data. Admins, and members with no project limit, see all.
     function allProjects(code) { return me(code).role == 'admin' || me(code).get('projectIds', null) == null; }
     function canSeeProject(code, projectId) {
-      return signedIn() && (!enforced(code) || (isMember(code) && (allProjects(code) || projectId in me(code).projectIds)));
+      return signedIn() && (openToAccounts(code) || (memberActive(code) && (hasAccount() || !enforced(code)) && (allProjects(code) || projectId in me(code).projectIds)));
     }
-    function canAdmin(code) { return signedIn() && (!enforced(code) || isAdmin(code)); }
+    function canAdmin(code) { return signedIn() && (openToAccounts(code) || (memberActive(code) && me(code).role == 'admin' && (hasAccount() || !enforced(code)))); }
     // What each role may do, from Settings > Roles (company rolePermissions),
     // falling back to the built-in defaults. Admins may do everything.
     // Built-in defaults: managers can do everything except create
@@ -36,13 +44,13 @@ service cloud.firestore {
       return role == 'manager' ? key != 'membersCanCreateProjects' : key == 'membersCanEditOwnReports';
     }
     function can(code, key) {
-      return isMember(code) && (me(code).role == 'admin'
+      return memberActive(code) && (hasAccount() || !enforced(code)) && (me(code).role == 'admin'
         || company(code).get('rolePermissions', {}).get(me(code).role, {}).get(key, defaultPerm(me(code).role, key)) == true);
     }
     // Commenting used to come with approving: a role whose comment setting
     // was never saved keeps whatever its approve setting says.
     function canComment(code, key, approveKey) {
-      return isMember(code) && (me(code).role == 'admin'
+      return memberActive(code) && (hasAccount() || !enforced(code)) && (me(code).role == 'admin'
         || commentPerm(company(code).get('rolePermissions', {}).get(me(code).role, {}), me(code).role, key, approveKey));
     }
     function commentPerm(rolePerms, role, key, approveKey) {
@@ -50,7 +58,7 @@ service cloud.firestore {
     }
     // Once accounts are required, permission `key` per the role table;
     // before that, anyone signed in (the old password-only behavior).
-    function allowed(code, key) { return signedIn() && (!enforced(code) || can(code, key)); }
+    function allowed(code, key) { return signedIn() && (openToAccounts(code) || can(code, key)); }
     // A change that only touches a report's review: approval and comments,
     // or just one of the two.
     function reviewOnly() {
@@ -103,8 +111,16 @@ service cloud.firestore {
         // whatever a pre-approved email says (never admin: emails aren't
         // verified), or, while accounts aren't
         // required yet, as an admin (the admin password is still how admins
-        // are recognized then).
-        allow create: if hasAccount() && request.auth.uid == uid && request.resource.data.uid == uid && (
+        // are recognized then). A device without an account adds itself only as waiting, with no
+        // projects -- an admin approves it and hands out projects -- or,
+        // while accounts aren't required, as an admin (the admin password
+        // is how admins are recognized then; the app checks it).
+        allow create: if (signedIn() && !hasAccount() && request.auth.uid == uid && request.resource.data.uid == uid && (
+          (request.resource.data.role == 'inspector' && request.resource.data.status == 'pending'
+            && request.resource.data.get('projectIds', null) == [] && request.resource.data.get('noAccount', false) == true)
+          || (request.resource.data.status == 'active' && !enforced(code) && request.resource.data.role == 'admin')
+          || (request.resource.data.status == 'active' && company(code).get('createdByUid', '') == request.auth.uid && request.resource.data.role == 'admin')
+        )) || (hasAccount() && request.auth.uid == uid && request.resource.data.uid == uid && (
           (request.resource.data.role == 'inspector'
             && request.resource.data.get('projectIds', null) == null
             && request.resource.data.status == (company(code).get('requireApproval', false) ? 'pending' : 'active'))
@@ -116,15 +132,16 @@ service cloud.firestore {
             && get(/databases/$(database)/documents/invites/$(request.auth.token.email.lower())).data.companyCode == code
             && request.resource.data.role == get(/databases/$(database)/documents/invites/$(request.auth.token.email.lower())).data.role
             && request.resource.data.get('projectIds', null) == get(/databases/$(database)/documents/invites/$(request.auth.token.email.lower())).data.get('projectIds', null))
-        ) || isAdmin(code);
+        )) || isAdmin(code);
         // Your own name/email stay current; becoming an admin with the admin
         // password only works while accounts aren't required. Everything
         // else is an admin's job.
-        allow update: if isAdmin(code) || (hasAccount() && request.auth.uid == uid && (
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['email', 'displayName', 'updatedAt'])
-          || (!enforced(code) && resource.data.status == 'active'
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'projectIds', 'updatedAt'])
-            && request.resource.data.role == 'admin')
+        allow update: if isAdmin(code) || (signedIn() && request.auth.uid == uid && (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['email', 'displayName', 'noAccount', 'updatedAt'])
+          || (!enforced(code)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'projectIds', 'status', 'updatedAt'])
+            && request.resource.data.role == 'admin' && request.resource.data.status == 'active'
+            && resource.data.status != 'disabled')
         ));
         // Withdrawing your own request to join; otherwise admins only.
         allow delete: if isAdmin(code) || (signedIn() && request.auth.uid == uid && resource.data.status == 'pending');
@@ -146,12 +163,12 @@ service cloud.firestore {
         allow get: if canUse(code) && (resource == null || canSeeProject(code, resource.data.projectId));
         allow list: if canSeeProject(code, resource.data.projectId);
         allow create: if canSeeProject(code, request.resource.data.projectId)
-          && (!enforced(code) || request.resource.data.get('createdByUid', request.auth.uid) == request.auth.uid
+          && (openToAccounts(code) || request.resource.data.get('createdByUid', request.auth.uid) == request.auth.uid
               || request.resource.data.get('createdByUid', null) == null || can(code, 'membersCanEditAnyReport'));
         // Per the role table: anyone's reports, their own, or just the review
         // (approving and commenting are separate permissions).
         allow update: if canSeeProject(code, resource.data.projectId) && canSeeProject(code, request.resource.data.projectId)
-          && (!enforced(code)
+          && (openToAccounts(code)
               || can(code, 'membersCanEditAnyReport')
               || (can(code, 'membersCanEditOwnReports') && ownsReport(code, resource.data)
                   && request.resource.data.get('createdByUid', null) == resource.data.get('createdByUid', request.resource.data.get('createdByUid', null)))
@@ -160,7 +177,7 @@ service cloud.firestore {
               || (approvalOnly() && can(code, 'membersCanApproveReports'))
               || (commentsOnly() && (canComment(code, 'membersCanCommentReports', 'membersCanApproveReports')
                   // The author can always reply to comments on their own report.
-                  || (isMember(code) && ownsReport(code, resource.data))))
+                  || (memberActive(code) && ownsReport(code, resource.data))))
               || (reviewOnly() && can(code, 'membersCanApproveReports') && canComment(code, 'membersCanCommentReports', 'membersCanApproveReports')));
         allow delete: if canAdmin(code);
       }
@@ -168,11 +185,11 @@ service cloud.firestore {
       // The activity log is append-only once accounts are required: an
       // entry can be added (or re-sent unchanged), never edited or erased.
       match /auditLog/{entryId} {
-        allow read: if signedIn() && (!enforced(code) || (isMember(code) && allProjects(code)));
+        allow read: if signedIn() && (openToAccounts(code) || (memberActive(code) && (hasAccount() || !enforced(code)) && allProjects(code)));
         allow create: if canUse(code);
-        allow update: if canUse(code) && (!enforced(code)
+        allow update: if canUse(code) && (openToAccounts(code)
           || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['id', 'timestamp', 'userName', 'action', 'entityType', 'entityId', 'entityLabel', 'changes', 'hash']));
-        allow delete: if !enforced(code) && signedIn();
+        allow delete: if openToAccounts(code);
       }
 
       // Problems the app hits (uploads the server keeps refusing), for the

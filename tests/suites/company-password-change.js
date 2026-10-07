@@ -52,10 +52,15 @@ const check = (label, got, want) => { const ok = JSON.stringify(got) === JSON.st
   check('old password refused', await L.evaluate(() => joinCompanyRoom('pw-old-1').then(() => 'joined', (e) => e.message)), 'This company password has been changed. Ask your admin for the new one.');
 
   // Logo leak: L joins with the new password after having a stray logo; then leaves.
-  check('stray logo cleared on joining a company', await L.evaluate(async () => {
+  // (L has no account, so an admin approves it first.)
+  await L.evaluate(async () => {
     await saveReportLogo(new Blob(['stray'], { type: 'image/png' }));
     await saveSetting(THEMES_SYNCED_AT_SETTING, Date.now());
-    await joinCompanyRoom('pw-new-1');
+    await joinCompanyRoom('pw-new-1').catch(() => {});
+  });
+  await A.evaluate((uid) => approveTeamMember(uid), await L.evaluate(() => window.FirebaseCore.auth.currentUser.uid));
+  check('stray logo cleared on joining a company', await L.evaluate(async () => {
+    await checkPendingApproval();
     await new Promise((r) => setTimeout(r, 2500)); // background logo pull
     const logo = await getReportLogo();
     return logo ? logo.size : null;
@@ -64,9 +69,10 @@ const check = (label, got, want) => { const ok = JSON.stringify(got) === JSON.st
   const M = await device('M');
   await M.evaluate(() => createCompanyRoom({ name: 'Plain Co', password: 'plain-pw-1', adminPassword: 'plain-admin-1' }));
   const N = await device('N');
+  await N.evaluate(async () => { await saveReportLogo(new Blob(['GEC'], { type: 'image/png' })); await joinCompanyRoom('plain-pw-1').catch(() => {}); });
+  await M.evaluate((uid) => approveTeamMember(uid), await N.evaluate(() => window.FirebaseCore.auth.currentUser.uid));
   check('joining a logo-less company drops a stray logo', await N.evaluate(async () => {
-    await saveReportLogo(new Blob(['GEC'], { type: 'image/png' }));
-    await joinCompanyRoom('plain-pw-1');
+    await checkPendingApproval();
     await new Promise((r) => setTimeout(r, 1500));
     return [await getReportLogo(), (await getCompanyRoom()).name];
   }), [undefined, 'Plain Co']);

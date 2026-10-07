@@ -117,6 +117,11 @@
         <button type="button" class="text-btn" id="btn-pending-other">Use a different company password</button>
         <button type="button" class="text-btn" id="btn-pending-signout">Sign out</button>
       </div>
+      <details class="pending-admin" id="pending-admin" style="margin-top:0.9rem;">
+        <summary class="text-btn" style="cursor:pointer;">I'm this company's admin</summary>
+        <label style="margin-top:0.6rem;">Admin Password <input type="password" id="pa-admin-password" autocomplete="off"></label>
+        <button type="button" class="btn-secondary" id="btn-pending-admin" style="margin-top:0.5rem;">Unlock as Admin</button>
+      </details>
       <div class="err" id="pending-error" hidden></div>
     </div>
   </div>
@@ -227,8 +232,12 @@ async function afterAccount() {
   $('#jc-password').focus();
 }
 
-function showPending(companyName) {
-  $('#pending-text').textContent = `You've asked to join ${companyName || 'your company'}. An admin needs to approve you before you can see its projects. Once they do, tap Check Again (or just sign in later).`;
+async function showPending(companyName) {
+  const noAccount = !(await getAccount());
+  $('#pending-text').textContent = noAccount
+    ? `You've asked to join ${companyName || 'your company'} without an account. An admin needs to approve you on their Team screen and give you projects before you can see any. Once they do, tap Check Again.`
+    : `You've asked to join ${companyName || 'your company'}. An admin needs to approve you before you can see its projects. Once they do, tap Check Again (or just sign in later).`;
+  $('#btn-pending-signout').textContent = noAccount ? 'Cancel my request' : 'Sign out';
   showView('view-pending');
 }
 
@@ -410,8 +419,33 @@ $('#btn-pending-other').addEventListener('click', async () => {
   await afterAccount();
 });
 $('#btn-pending-signout').addEventListener('click', async () => {
-  await signOutAccount().catch((err) => console.error(err));
-  location.reload();
+  if (await getAccount()) {
+    await signOutAccount().catch((err) => console.error(err));
+  } else {
+    await cancelPendingApproval().catch((err) => console.error(err));
+    await saveUserName('');
+  }
+  location.href = 'login.html';
+});
+onEnterSubmit($('#pending-admin'), $('#btn-pending-admin'));
+$('#btn-pending-admin').addEventListener('click', async () => {
+  const errorEl = $('#pending-error');
+  errorEl.hidden = true;
+  const wait = loginThrottleRemaining('admin-unlock');
+  if (wait > 0) { showError(errorEl, `Too many attempts. Try again in ${wait}s.`); return; }
+  startProgressBanner();
+  progressStep('joining', 'Unlocking admin');
+  try {
+    await claimAdminWhilePending($('#pa-admin-password').value, reportCompanyProgress);
+    loginThrottleReset('admin-unlock');
+    finishProgressBanner("You're all set!");
+    finish();
+  } catch (err) {
+    console.error(err);
+    loginThrottleRecordFailure('admin-unlock');
+    hideProgressBanner();
+    showError(errorEl, err.message);
+  }
 });
 
 $('#btn-invite-accept').addEventListener('click', joinByInvite);
@@ -452,6 +486,14 @@ $('#btn-continue').addEventListener('click', async () => {
     finish();
   } catch (err) {
     console.error(err);
+    if (err.code === 'pending-approval') {
+      // No account: an admin has to approve this device first.
+      loginThrottleReset('join-company');
+      finishProgressBanner('Request sent.');
+      btn.disabled = false;
+      await showPending(err.companyName);
+      return;
+    }
     if (err.code === 'account-required') {
       // The company wants everyone signed in: straight to creating an account.
       hideProgressBanner();
@@ -474,6 +516,12 @@ $('#btn-continue').addEventListener('click', async () => {
   if (loginMode === 'create' || loginMode === 'signin') {
     setMode(loginMode);
     return; // asked for on purpose (from Settings) -- don't skip past
+  }
+  // Waiting on an admin (with or without an account): back to that screen.
+  if (!(await getCompanyRoom())) {
+    const pending = await checkPendingApproval(reportCompanyProgress).catch(() => null);
+    if (pending && pending.status === 'active') { finish(); return; }
+    if (pending && pending.status === 'pending') { await showPending(pending.companyName); return; }
   }
   // Already set up on this device -- skip straight past.
   const name = await getUserName();

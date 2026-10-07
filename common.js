@@ -11,7 +11,7 @@ function escapeHtml(str) {
 
 // The app's version, shown at the bottom of every page as a link to the
 // patch notes. Bump it together with each new patch-notes.txt entry.
-const APP_VERSION = '0.056';
+const APP_VERSION = '0.057';
 document.addEventListener('DOMContentLoaded', () => {
   const main = document.querySelector('main');
   if (!main) return;
@@ -255,8 +255,22 @@ async function initHamburgerMenu() {
     if (!confirm('Start the tutorial? It opens an example project with sample reports to explore. Your real projects stay untouched, and you can exit any time.')) e.preventDefault();
   });
   const logoutBtn = panel.querySelector('#hb-logout');
+  // Logging out disconnects this device from the company (its projects and
+  // reports leave the device; anything not uploaded yet stays) and signs
+  // the account out. It used to only forget the typed name, which left the
+  // company's projects open to whoever picked up the device next.
   if (logoutBtn) logoutBtn.addEventListener('click', async () => {
-    if (!confirm("Log out on this device? You'll need to enter your name again next time.")) return;
+    if (!confirm("Log out on this device? The company's projects and reports are removed from this device until you sign back in. Anything that hasn't uploaded yet stays.")) return;
+    logoutBtn.disabled = true;
+    try {
+      if (typeof signOutAccount === 'function' && typeof getAccount === 'function' && await getAccount()) {
+        await signOutAccount();
+      } else if (typeof disconnectCompanyKeepingUnsynced === 'function') {
+        await disconnectCompanyKeepingUnsynced();
+      }
+    } catch (err) {
+      console.error('log out:', err);
+    }
     if (typeof saveUserName === 'function') await saveUserName('');
     location.href = 'login.html';
   });

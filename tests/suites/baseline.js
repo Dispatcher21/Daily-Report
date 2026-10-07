@@ -21,7 +21,7 @@ const check = (label, got, want) => { const ok = JSON.stringify(got) === JSON.st
   const b = await (await emulatorContext(browser)).newPage();
   b.on('pageerror', (e) => errs.push('B ' + e.message));
   await b.goto(`${B}/settings.html`); await b.waitForTimeout(1200);
-  const got = await b.evaluate(async () => { await saveUserName('Bob'); await joinCompanyRoom('emu-company-pw'); return (await getAllProjects()).map((p) => p.name); });
+  const got = await b.evaluate(async () => { await saveUserName('Bob'); await createAccount({ name: 'Bob', email: 'bob@example.com', password: 'bobpass12' }); await joinCompanyRoom('emu-company-pw'); return (await getAllProjects()).map((p) => p.name); });
   check('device B sees the project', got, ['EMU-1 Test Project']);
   check('page errors', errs, []);
   console.log(fails ? `${fails} FAILED` : 'ALL PASSED');

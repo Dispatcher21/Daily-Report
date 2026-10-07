@@ -364,10 +364,11 @@ async function joinCompanyRoom(password, onProgress) {
     companyDoc = realSnap.data();
   }
 
-  // A signed-in account joining with the company password: if the company
-  // wants new members approved, it's recorded as waiting and doesn't get
-  // in until an admin approves it (see checkPendingApproval).
-  if (!roleId) await checkJoinAllowed(code, companyDoc);
+  // Joining with the company password: if the company wants new members
+  // approved -- or this device has no account, which always needs an
+  // admin -- it's recorded as waiting and doesn't get in until an admin
+  // approves it (see checkPendingApproval).
+  if (!roleId || !(await getAccount())) await checkJoinAllowed(code, companyDoc);
 
   const result = await enterCompany(code, companyDoc, { roleId, scopedPermissions, projectIds }, onProgress);
   if (typeof logCompanyAuditEvent === 'function') {
@@ -437,8 +438,8 @@ async function unlockCompanyAdmin(adminPassword) {
   // have joined under -- full access, not a narrower view layered on top.
   await saveSetting(COMPANY_PROJECT_SCOPE_SETTING, null);
   await saveSetting(COMPANY_ROLE_ID_SETTING, null);
-  // A signed-in member who knows the admin password is an admin.
-  const account = await getAccount();
+  // A member (with or without an account) who knows the admin password is an admin.
+  const account = await getMemberIdentity();
   if (account) {
     const { setDoc, serverTimestamp } = await import(FIRESTORE_SDK);
     await setDoc(doc(db, 'companies', room.code, 'members', account.uid), { role: 'admin', projectIds: null, updatedAt: serverTimestamp() }, { merge: true });
@@ -614,6 +615,30 @@ async function getAccount() {
   const u = core.auth.currentUser;
   if (!u || u.isAnonymous) return null;
   return { uid: u.uid, email: u.email || '', emailVerified: !!u.emailVerified, displayName: u.displayName || '' };
+}
+
+// Whoever this device is to the company: the signed-in account, or (no
+// account) its own anonymous sign-in, which gets a member record too --
+// noAccount -- so an admin sees it on Team, approves it and hands out its
+// projects. null in tutorial mode or with no Firebase.
+async function getMemberIdentity() {
+  const account = await getAccount();
+  if (account) return { ...account, noAccount: false };
+  let core;
+  try { core = await waitForFirebaseCore(); } catch (e) { return null; }
+  try { await core.ensureSignedIn(); } catch (e) { return null; }
+  const u = core.auth.currentUser;
+  return u ? { uid: u.uid, email: '', emailVerified: false, displayName: '', noAccount: true } : null;
+}
+
+// A device without an account's first member record: waiting for an admin,
+// an inspector with no projects (the rules only allow exactly this).
+function noAccountMemberRecord(uid, name, serverTimestamp) {
+  return {
+    uid, email: '', displayName: name, noAccount: true,
+    role: 'inspector', status: 'pending', projectIds: [],
+    createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+  };
 }
 
 async function writeAccountProfile(uid, fields) {
@@ -851,7 +876,7 @@ async function updateAccountName(name) {
 // company and applies its role and project access to this device. A no-op
 // for an anonymous device or one with no company.
 async function refreshMembership({ joined = false } = {}) {
-  const account = await getAccount();
+  const account = await getMemberIdentity();
   const room = await getCompanyRoom();
   if (!account || !room) return null;
   const { db } = await waitForFirebaseCore();
@@ -877,9 +902,18 @@ async function refreshMembership({ joined = false } = {}) {
   }
   if (snap.exists()) {
     member = snap.data();
-    if (member.email !== account.email || member.displayName !== name) {
-      await setDoc(ref, { email: account.email, displayName: name, updatedAt: serverTimestamp() }, { merge: true });
+    // (A device that was without an account and has just made one keeps
+    // its record; it just isn't "no account" any more.)
+    const linked = member.noAccount && !account.noAccount;
+    if ((member.email || '') !== account.email || member.displayName !== name || linked) {
+      await setDoc(ref, { email: account.email, displayName: name, ...(linked ? { noAccount: false } : {}), updatedAt: serverTimestamp() }, { merge: true });
+      member = { ...member, email: account.email, displayName: name, ...(linked ? { noAccount: false } : {}) };
     }
+  } else if (account.noAccount && !room.isAdmin) {
+    // A device without an account (including every one that joined before
+    // this): it waits for an admin, with no projects until it's given some.
+    member = noAccountMemberRecord(account.uid, name, serverTimestamp);
+    await setDoc(ref, member);
   } else {
     // First time this account is seen in this company: a device that's
     // already unlocked admin brings that along; anyone else starts as an
@@ -890,6 +924,7 @@ async function refreshMembership({ joined = false } = {}) {
       uid: account.uid,
       email: account.email,
       displayName: name,
+      ...(account.noAccount ? { noAccount: true } : {}),
       role,
       status: role !== 'admin' && requireApproval ? 'pending' : 'active',
       projectIds: null,
@@ -910,6 +945,8 @@ async function refreshMembership({ joined = false } = {}) {
   // Turned off (or never approved) by an admin: this device disconnects,
   // keeping only what hasn't uploaded yet, and the page says why.
   if (member.status === 'disabled' || member.status === 'pending') {
+    // Remembered so the sign-in page shows the waiting screen next.
+    if (member.status === 'pending') await writeAccountProfile(account.uid, { pendingCompanyCode: room.code, pendingCompanyName: room.name || '' }).catch(() => {});
     await disconnectCompanyKeepingUnsynced();
     window.dispatchEvent(new CustomEvent('company-access-ended', { detail: { company: room.name || '', status: member.status } }));
     return member;
@@ -961,8 +998,10 @@ class PendingApprovalError extends Error {
 // Before a signed-in account joins with the company password: refuses a
 // turned-off member, and puts a new one on the waiting list when the
 // company requires approval.
+// A device without an account always waits for an admin (and gets no
+// projects until it's given some), whatever the company's setting.
 async function checkJoinAllowed(code, companyDoc) {
-  const account = await getAccount();
+  const account = await getMemberIdentity();
   if (!account) return;
   const { db } = await waitForFirebaseCore();
   const { doc, getDoc, setDoc, serverTimestamp } = await import(FIRESTORE_SDK);
@@ -971,10 +1010,10 @@ async function checkJoinAllowed(code, companyDoc) {
   const existing = snap.exists() ? snap.data() : null;
   if (existing && existing.status === 'disabled') throw new Error('Your access to this company has been turned off. Ask your admin.');
   if (existing && existing.status === 'active') return;
-  if (!existing && !companyDoc.requireApproval) return;
+  if (!existing && !account.noAccount && !companyDoc.requireApproval) return;
   if (!existing) {
     const name = (await getUserName()) || account.displayName || '';
-    await setDoc(ref, {
+    await setDoc(ref, account.noAccount ? noAccountMemberRecord(account.uid, name, serverTimestamp) : {
       uid: account.uid, email: account.email, displayName: name,
       role: 'inspector', status: 'pending', projectIds: null,
       createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
@@ -987,7 +1026,7 @@ async function checkJoinAllowed(code, companyDoc) {
 // For an account waiting on approval: { status: 'pending'|'active'|'declined', companyName }
 // -- and when it's been approved, connects this device right away.
 async function checkPendingApproval(onProgress) {
-  const account = await getAccount();
+  const account = await getMemberIdentity();
   if (!account) return null;
   const profile = await readAccountProfile(account.uid);
   if (!profile || !profile.pendingCompanyCode) return null;
@@ -1006,9 +1045,36 @@ async function checkPendingApproval(onProgress) {
   return { status: 'active', companyName };
 }
 
+// While waiting: whoever knows the company's admin password gets in as an
+// admin instead (only while the company doesn't require accounts -- then
+// admins are set on Team). How an admin without an account gets in now
+// that every device without one waits to be approved.
+async function claimAdminWhilePending(adminPassword, onProgress) {
+  const account = await getMemberIdentity();
+  if (!account) throw new Error('Not connected.');
+  const profile = await readAccountProfile(account.uid);
+  const code = profile && profile.pendingCompanyCode;
+  if (!code) throw new Error('Join with the company password first.');
+  if (!adminPassword) throw new Error('Enter the admin password.');
+  const { db } = await waitForFirebaseCore();
+  const { doc, getDoc, setDoc, serverTimestamp } = await import(FIRESTORE_SDK);
+  const companySnap = await getDoc(doc(db, 'companies', code));
+  if (!companySnap.exists()) throw new Error('That company could not be found.');
+  const data = companySnap.data();
+  const { valid } = await verifyAdminPassword(adminPassword, data.adminPasswordHash);
+  if (!valid) throw new Error('Incorrect admin password.');
+  if (data.accountsRequired) throw new Error('Your company manages admins on its Team screen. Ask an admin to approve you.');
+  await setDoc(doc(db, 'companies', code, 'members', account.uid), { role: 'admin', projectIds: null, status: 'active', updatedAt: serverTimestamp() }, { merge: true });
+  await writeAccountProfile(account.uid, { pendingCompanyCode: null, pendingCompanyName: null });
+  const result = await enterCompany(code, data, {}, onProgress);
+  await saveSetting(COMPANY_ADMIN_SETTING, true);
+  await saveSetting(COMPANY_PROJECT_SCOPE_SETTING, null);
+  return result;
+}
+
 // Stops waiting (e.g. to try a different company password instead).
 async function cancelPendingApproval() {
-  const account = await getAccount();
+  const account = await getMemberIdentity();
   if (!account) return;
   const profile = await readAccountProfile(account.uid);
   if (profile && profile.pendingCompanyCode) {
@@ -1068,7 +1134,9 @@ async function acceptMyInvite(onProgress) {
 async function requireTeamAdmin() {
   const room = await getCompanyRoom();
   if (!room || !room.isAdmin) throw new Error('Only an admin can manage the team.');
-  const account = await getAccount();
+  // An admin without an account manages the team too (its own member
+  // record is an admin's), so devices waiting to be approved can be.
+  const account = await getMemberIdentity();
   if (!account) throw new Error('Sign in with an account to manage the team.');
   const { db } = await waitForFirebaseCore();
   return { room, account, db };
@@ -1218,7 +1286,7 @@ async function pruneOutOfScope(code, projectIds) {
 // This device's member record, without changing anything (null if not
 // signed in, not in a company, or not recorded yet).
 async function getMyMembership() {
-  const account = await getAccount();
+  const account = await getMemberIdentity();
   const room = await getCompanyRoom();
   if (!account || !room) return null;
   const { db } = await waitForFirebaseCore();
@@ -1263,6 +1331,7 @@ async function syncCompanyRoomNow(onProgress) {
   // A signed-in member's own role/project access (set by an admin) takes
   // over from the company-wide switches just applied.
   await refreshMembership().catch((err) => console.error('membership:', err));
+  if (!(await getCompanyRoom())) throw new Error("You're waiting for an admin to approve you, or your access was turned off. Ask your admin.");
 
   // Delta by default -- see pullCompanyDataSmart -- with a full pull still
   // falling back in automatically often enough (FULL_RECONCILE_INTERVAL_MS)
@@ -1558,8 +1627,9 @@ async function relabelLocalCompanyData(oldCode, newCode) {
 async function copyCompanyAccounts(oldCode, newCode, companyName, onProgress) {
   const { db } = await waitForFirebaseCore();
   const { doc, setDoc, collection, getDocs, query, where, serverTimestamp } = await import(FIRESTORE_SDK);
-  const account = await getAccount();
-  // Only an admin with an account can write member records.
+  // The admin doing this, with or without an account (devices without one
+  // have member records too).
+  const account = await getMemberIdentity();
   if (!account) return;
   if (onProgress) onProgress({ phase: 'members' });
   const members = (await getDocs(collection(db, 'companies', oldCode, 'members'))).docs.map((d) => ({ ...d.data(), uid: d.id }));
@@ -2238,6 +2308,7 @@ async function autoPullCompanyData(force) {
     if (await blockedForAccount(room)) return;
     // Picks up a role or project-access change an admin made elsewhere.
     await refreshMembership().catch((err) => console.error('membership:', err));
+    if (!(await getCompanyRoom())) return; // just disconnected (waiting, turned off, removed)
     await pullCompanyDataSmart(room.code, null, force);
     // Own try/catch, not allowed to fail this pull -- themes previously
     // only synced on join or a manual Sync Now (same cadence as the
@@ -2493,6 +2564,27 @@ async function pushAuditEntryToCompany(code, entry) {
   await setDoc(doc(db, 'companies', code, 'auditLog', entry.id), entry);
 }
 
+// The company's activity log, fetched when someone opens it (the Audit Log
+// page, or one report's Revision History with `entityId`) instead of with
+// every sync. Merged into this device's copy; returns how many were new.
+// Quietly 0 when there's no company, no connection, or no permission.
+async function fetchCompanyAuditLog({ entityId = null } = {}) {
+  if (isTutorialMode()) return 0;
+  const room = await getCompanyRoom();
+  if (!room) return 0;
+  try {
+    const { db, ensureSignedIn } = await waitForFirebaseCore();
+    const { collection, getDocs, query, where } = await import(FIRESTORE_SDK);
+    await ensureSignedIn();
+    const ref = collection(db, 'companies', room.code, 'auditLog');
+    const snap = await getDocs(entityId ? query(ref, where('entityId', '==', entityId)) : ref);
+    return await mergeAuditEntriesBulk(snap.docs.map((d) => ({ ...d.data(), id: d.id, companyCode: room.code, fromCompany: true })));
+  } catch (err) {
+    console.warn('audit log fetch:', err);
+    return 0;
+  }
+}
+
 async function onCompanySyncAuditEntry(entry) {
   if (isTutorialMode()) return; // nothing syncs in tutorial mode (see waitForFirebaseCore)
   const room = await getCompanyRoom();
@@ -2698,32 +2790,10 @@ async function pullAllCompanyData(code, onProgress) {
     }
   }
 
-  // The activity log covers every project, so someone limited to some
-  // projects doesn't get it.
-  if (scope) {
-    summary.auditEntriesPulled = 0;
-  } else {
-    if (onProgress) onProgress({ phase: 'audit' });
-    const auditSnap = await getDocs(collection(db, 'companies', code, 'auditLog'));
-    summary.auditEntriesPulled = 0;
-    for (const d of auditSnap.docs) {
-      const result = await mergeAuditEntry({ ...d.data(), id: d.id, companyCode: code });
-      if (result !== 'skipped') summary.auditEntriesPulled++;
-    }
-    // Same reconciliation as projects/reports above, and for the same reason:
-    // mergeAuditEntry skips the write entirely for an id already cached
-    // locally (audit entries are immutable, so "skip if present" is exactly
-    // right there), which means the companyCode stamped on the incoming copy
-    // just above never lands for an entry that was already on file --
-    // including one that's actually foreign, cached here from a different
-    // company entirely. Settle every untagged entry one way or the other.
-    const authoritativeAuditIds = new Set(auditSnap.docs.map((d) => d.id));
-    for (const e of await getAllAuditEntries()) {
-      if (!e.companyCode) {
-        await saveAuditEntry({ ...e, companyCode: authoritativeAuditIds.has(e.id) ? code : FOREIGN_COMPANY_SENTINEL });
-      }
-    }
-  }
+  // The activity log isn't pulled with everything else any more: it's big,
+  // and only the Audit Log page and a report's Revision History use it, so
+  // they fetch it when opened (fetchCompanyAuditLog).
+  summary.auditEntriesPulled = 0;
 
   // Prune deletion tombstones old enough that nothing could still need
   // them -- see TOMBSTONE_RETENTION_MS. Every device eventually runs this
@@ -2868,17 +2938,7 @@ async function pullDeltaCompanyData(code, onProgress, cursor) {
     }
   }
 
-  summary.auditEntriesPulled = 0;
-  if (!scope) {
-    if (onProgress) onProgress({ phase: 'audit' });
-    const auditSnap = await getDocs(
-      query(collection(db, 'companies', code, 'auditLog'), where('timestamp', '>', queryCursor))
-    );
-    for (const d of auditSnap.docs) {
-      const result = await mergeAuditEntry({ ...d.data(), id: d.id, companyCode: code });
-      if (result !== 'skipped') summary.auditEntriesPulled++;
-    }
-  }
+  summary.auditEntriesPulled = 0; // fetched when opened instead, see fetchCompanyAuditLog
 
   await saveSetting(DELTA_PULL_CURSOR_SETTING, pullStartedAt);
   return summary;
@@ -3000,7 +3060,9 @@ async function pushAllLocalData(code, onProgress, { dirtyOnly = false } = {}) {
   // nothing extra to re-send. Not worth its own pendingPush tracking; the
   // cost this feature actually targets is re-uploading every project's/
   // report's full data (photos included) on every click, not this.
-  const auditEntries = (await getAllAuditEntries()).filter((e) => auditEntryInCompany(e, { code }));
+  // Only this device's own entries: the ones fetched from the company
+  // (fromCompany, see fetchCompanyAuditLog) are already there.
+  const auditEntries = (await getAllAuditEntries()).filter((e) => auditEntryInCompany(e, { code }) && !e.fromCompany);
   await Promise.all(auditEntries.map((entry) => pushAuditEntryToCompany(code, entry).catch(refusedOk)));
   if (onProgress) onProgress({ phase: 'audit', count: auditEntries.length });
   if (refused) {
@@ -3187,5 +3249,5 @@ window.addEventListener('company-access-ended', (e) => {
       ? `An admin removed you from ${company}.`
       : `An admin turned off your access to ${company}.`;
   alert(`${why} This device has left the company. Anything that hadn't uploaded yet is still saved here.`);
-  location.href = 'index.html';
+  location.href = status === 'pending' ? 'login.html' : 'index.html';
 });
