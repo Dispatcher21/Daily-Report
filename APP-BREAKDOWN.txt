@@ -50,8 +50,11 @@ the browser. It works fully offline once installed/cached.
 Local storage is IndexedDB (one database, `daily-report-app`, wrapped by
 storage.js) -- every project, report, photo, signature, audit-log entry,
 and app setting lives there on-device. A service worker (service-worker.js)
-precaches the app shell (HTML/CSS/JS/vendored libs/icons) so the whole UI
-still loads with zero network.
+precaches the app shell (HTML/CSS/JS/vendored libs/icons) plus the
+gstatic Firebase SDK files, so the whole UI still loads with zero network.
+Saved pages are matched ignoring the query string (project.html?id=...
+finds project.html). With no signal and no saved SDK, waitForFirebaseCore
+rejects after a few seconds instead of waiting forever.
 
 Three independent, optional sync mechanisms layer on top of that local
 store, none of which the app requires to function:
@@ -508,7 +511,8 @@ common.js
   lookup code to user-facing errors -- see error-codes.txt), the
   loginThrottle* family (per-device password-guess speed bump),
   triggerDownload, convertHeicIfNeeded/compressImage/capImageDimensions
-  (photo pipeline), queryParam, service-worker registration + the "new
+  (photo pipeline), queryParam, service-worker registration (and the
+  navigator.storage.persist() request) + the "new
   version ready, reload?" prompt, applyBranding (calls storage.js's
   applyHeaderLogo on DOMContentLoaded), beforeinstallprompt/appinstalled
   handling (isAppInstalled), and the site-wide [data-tip] tooltip
@@ -587,7 +591,10 @@ firebase-sync.js
   onCompanySyncReportChanged (push immediately, with retry, on every
   save/delete) and onCompanySyncAuditEntry (called from audit-log.js).
   Also: fetchReportMedia (lazy photo/signature download), autoPullCompanyData
-  + wireAutoPull (background pull on load/tab-focus, throttled), and the
+  + wireAutoPull (background pull on load/tab-focus, throttled),
+  pushPendingChanges (uploads pendingPush records on every page's load,
+  tab-focus and the browser's 'online' event), setPendingPush (flips just
+  that flag, skipped if the record was saved again since), and the
   admin-password-derived encryption used to store a recoverable copy of the
   company/custom-setup passwords (hashAdminPassword/verifyAdminPassword/
   encryptWithAdminPassword/decryptWithAdminPassword/pbkdf2Hash/
@@ -782,7 +789,8 @@ Creating and saving a report
        b. writes to IndexedDB (putReportRaw),
        c. fires (not awaited) onCompanySyncReportChanged() if
           firebase-sync.js is loaded and a company is joined -- pushes to
-          Firestore/Storage with retry, sets pendingPush on failure,
+          Firestore/Storage with retry; pendingPush is set before
+          trying and cleared once it lands,
        d. fires (not awaited) onLocalFolderSyncReportChanged() if
           local-sync.js is loaded and this project is linked to a folder
           -- lazy-loads html2canvas/jsPDF/render-report.js/pdf-export.js,
@@ -835,6 +843,10 @@ Syncing a project to a company
      (pushAllLocalData with dirtyOnly:true) -- live pushes already cover
      the normal case, so this button exists to catch what a live push
      failed to land.
+  5. pushPendingChanges() does the same push on its own (no pull) on
+     every page load, tab-focus and reconnect, at most once a minute
+     except on reconnect, so reports saved with no signal upload without
+     anyone pressing Sync Now.
 
 Photo upload with HEIC conversion and markup
   1. report-editor.html's photo picker calls common.js's

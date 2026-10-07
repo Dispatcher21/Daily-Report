@@ -759,6 +759,13 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
   const hadControllerAtLoad = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.register('service-worker.js').catch(console.error);
 
+  // Asks the browser not to clear this device's reports and photos when
+  // it runs low on space (iPads and Android otherwise may). Granted or
+  // not, nothing else changes; asked only until it's granted.
+  if (navigator.storage && navigator.storage.persist) {
+    navigator.storage.persisted().then((granted) => granted || navigator.storage.persist()).catch(console.error);
+  }
+
   // A new service worker just took over -- the page already open is still
   // running whatever JS it loaded with, which is now stale relative to
   // what's actually cached (this is exactly the "worked in my browser tab
