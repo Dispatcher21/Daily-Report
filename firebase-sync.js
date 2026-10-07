@@ -1627,8 +1627,9 @@ async function relabelLocalCompanyData(oldCode, newCode) {
 async function copyCompanyAccounts(oldCode, newCode, companyName, onProgress) {
   const { db } = await waitForFirebaseCore();
   const { doc, setDoc, collection, getDocs, query, where, serverTimestamp } = await import(FIRESTORE_SDK);
-  const account = await getAccount();
-  // Only an admin with an account can write member records.
+  // The admin doing this, with or without an account (devices without one
+  // have member records too).
+  const account = await getMemberIdentity();
   if (!account) return;
   if (onProgress) onProgress({ phase: 'members' });
   const members = (await getDocs(collection(db, 'companies', oldCode, 'members'))).docs.map((d) => ({ ...d.data(), uid: d.id }));

@@ -26,7 +26,7 @@ const txt = (p, sel) => p.evaluate((s) => Array.from(document.querySelectorAll(s
   });
   const openTeam = async () => { await A.goto(`${B}/settings.html?tab=company`); await A.waitForTimeout(1500); await A.evaluate(() => { document.querySelector('#team-section').open = true; }); await A.waitForTimeout(300); };
   await openTeam();
-  check('admin without account: sign-in prompt', [await A.isVisible('#team-signed-out'), await A.isVisible('#team-body')], [true, false]);
+  check('admin without account: can manage the team', [await A.isVisible('#team-signed-out'), await A.isVisible('#team-body')], [false, true]);
   await A.evaluate(() => createAccount({ name: 'Alice', email: 'alice@example.com', password: 'alicepass1' }));
   await openTeam();
   check('team: Alice listed as admin (you)', await txt(A, '#team-members .cm-project-name'), ['Alice You']);
