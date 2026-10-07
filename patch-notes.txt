@@ -3,6 +3,20 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.057 -- 2026-10-07
+  - Logging out now really logs out: the device leaves the company and
+    its projects are removed from it (anything not yet synced is kept
+    until it syncs).
+  - Devices without an account are locked down: they join as a waiting
+    request with no projects, show up on Team with a "No account" badge,
+    and get only the projects an admin gives them. Until approved they
+    see a waiting screen (with a way to cancel, or to enter the admin
+    password if it's the company's admin).
+  - "New users must request access" now works for devices without an
+    account too.
+  - The Audit Log is no longer downloaded with every sync; it loads when
+    you open it.
+
 0.056 -- 2026-10-07
   - Printed report: the Work Summary box now holds the pay item table
     at its bottom, built to fit however many items there are (no more
