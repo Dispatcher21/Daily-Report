@@ -229,8 +229,8 @@ Progress Over Time charts how the job is moving, report by report.
 [10]
 Emotion: neutral
 Points at: project settings button
-Project Settings holds the project's details, icon and background,
-required fields, and imports.
+Project Settings has everything about the project in one place: its
+info, pay items, crew, which report fields are required, and files.
 
 [11]
 Emotion: pointing

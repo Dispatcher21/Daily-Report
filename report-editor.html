@@ -542,7 +542,7 @@ async function fetchWeatherForReport() {
   const status = $('#fetch-weather-status');
   const location = (project.meta || {}).location;
   if (!location) {
-    status.textContent = 'Add a Location to this project in Project Setup first.';
+    status.textContent = 'Add a Location to this project in Project Settings first.';
     return;
   }
   if (!report.date) {

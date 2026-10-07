@@ -85,7 +85,7 @@ const TOUR_TARGETS = {
     'pay items panel': { selector: '#dash-content .step-pair > .step:first-child', before: () => tourExpand('#dash-content .step-pair > .step:first-child') },
     'weather panel': { selector: '#dash-weather-step', before: () => tourExpand('#dash-weather-step') },
     'trend chart': { selector: '#dash-trend-step', before: () => tourExpand('#dash-trend-step') },
-    'project settings button': { selector: '#btn-toggle-settings' },
+    'project settings button': { selector: '#btn-project-settings' },
   },
   'reports.html': {
     'filters': { selector: '.filter-row' },

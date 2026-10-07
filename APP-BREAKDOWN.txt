@@ -289,14 +289,8 @@ project.html
   calendar cell using labeled category pills (Activity/Weather/Photos/
   Traffic) instead of bare icons, same visual language index.html's
   Manager Dashboard calendar uses for its own per-project pills), report
-  list entry points, and project-level
-  actions (Sync to Folder via local-sync.js's syncProjectToFolder, importing
-  .report bundles or Daily Work Report Excel files via
-  importReportFilesIntoProject -> report-bundle.js's tryParseReportBundle /
-  render-report.js's parseReportExcelFile). Loads the most JS of any page
-  (xlsx, fflate, html2canvas, jspdf, report-bundle, pdf-export, local-sync,
-  render-report, quantity-calc, dashboard-widgets) because it's the hub for
-  export/import/sync/PDF actions.
+  list entry points, and a Project Settings button (project-setup.html,
+  where every project setting and file action now lives).
   The weather calendar (renderWeatherCalendar/weatherCalDayHtml) shows a
   camera icon on any day with photos (reportHasPhotos -- true for a real
   local Blob, or a slot confirmed to exist remotely but not yet fetched,
@@ -312,13 +306,24 @@ project.html
   (quick-quantity.html?date=), and Edit Report (report-editor.html).
 
 project-setup.html
-  Editing a project's own configuration: PROJECT INFO/PAY ITEMS/
-  CONTRACTORS/EQUIPMENT ROWS tabs (mirrors project-file.js's Excel sheet
-  layout), plus an "Import Reports" tab for bulk-loading a company's
-  existing archive of Daily Work Report Excel files (handleImportReportsChange
-  -> render-report.js's parseReportExcelFile, one file at a time, logged via
-  common.js's irLogRow). Autosaves via saveProject() (markDirty/saveNow).
-  The Pay Items tab lists one line per item (renderPayItemsTab, ps*
+  Project Settings: every setting for one project on one page. A section
+  list on the left (PS_SECTIONS, renderNav/renderActivePanel; ?section=
+  opens one directly), one section at a time, and the printed report
+  beside the sections that change it (refreshReportPreview). Sections:
+  Project Info (basics, contract time with the end date worked out,
+  people, and "starting text for new reports" folded away), Pay Items,
+  Contractors & Equipment (standard equipment rows unless "My own"),
+  Report Form (Optional/Required/Hidden per field: requiredFields and
+  hiddenFields, the same settings required-fields.html's visual editor
+  sets; the order stays there), Icon & Background, Files & Backup
+  (project Excel download/upload, importReportFilesIntoProject for
+  .report and Daily Work Report Excel files, Sync to Folder) and Delete
+  (type the project number to confirm). Who sees which section: Info /
+  Pay Items / Contractors / Delete need "edit projects" (others get Info
+  read-only), Report Form and Icon & Background are admins only, Files &
+  Backup is everyone (uploading a replacement file needs "edit
+  projects"). Edits are held until Save (markDirty/saveNow).
+  The Pay Items section lists one line per item (renderPayItemsTab, ps*
   functions) with a unit tag; the open item has the Unit dropdown
   (PAY_UNITS or Other), the printed unit text, calculator chips
   (catalog `calcs`), what to ask inspectors for (stations, side,

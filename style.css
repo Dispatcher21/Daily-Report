@@ -3665,6 +3665,7 @@ input[type="date"] { min-width: 0; }
   cursor: pointer; min-height: var(--tap);
 }
 .settings-toggle:hover { border-color: var(--brand-light); }
+a.settings-toggle { text-decoration: none; box-sizing: border-box; }
 .settings-toggle .st-chevron { transition: transform 0.2s ease; color: var(--text-dim); }
 .settings-toggle[aria-expanded="true"] .st-chevron { transform: rotate(180deg); }
 /* Open, the toggle becomes this box's own header instead of a separate

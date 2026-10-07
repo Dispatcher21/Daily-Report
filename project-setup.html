@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://www.gstatic.com https://*.googleapis.com https://api.open-meteo.com https://geocoding-api.open-meteo.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';">
-<title>Project Setup</title>
+<title>Project Settings</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c3d5a">
@@ -15,39 +15,77 @@
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="print-sheet.css">
 <script src="theme.js"></script>
+<script src="lib/heic2any.min.js"></script>
 <style>
   main { padding-bottom: 2rem; }
-  /* The right column is a fixed-size report/dashboard mockup, not content
-     that benefits from growing -- at 50/50 it was just eating width the
-     form on the left actually needs (field-grid rows, pay item lists) now
-     that main itself is much wider. Capped instead of 1fr so the left
-     panel absorbs the extra room. */
-  .ps-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 420px); gap: 1.2rem; align-items: start; }
-  .ps-left { min-width: 0; }
-  .ps-right { min-width: 0; display: flex; flex-direction: column; gap: 1rem; position: sticky; top: 1rem; }
-  .ps-preview-block {
-    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.9rem;
-  }
-  .ps-preview-block h3 {
-    margin: 0 0 0.6rem; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-dim);
-  }
-  #ps-report-preview { display: flex; justify-content: center; }
+  /* Section list | one section | the printed report (only beside the
+     sections that change it). */
+  .ps-layout { display: grid; grid-template-columns: 15rem minmax(0, 1fr) minmax(300px, 400px); gap: 1.25rem; align-items: start; }
+  .ps-layout.ps-noprint { grid-template-columns: 15rem minmax(0, 1fr); }
+  .ps-left { min-width: 0; display: grid; gap: 1rem; }
+  .ps-right { min-width: 0; display: flex; flex-direction: column; gap: 0.5rem; position: sticky; top: 1rem; }
+  .ps-right[hidden] { display: none; }
+  .ps-right h3 { margin: 0; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim); }
+  #ps-report-preview { display: flex; justify-content: center; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.75rem; }
   .ps-report-preview-wrap { position: relative; overflow: hidden; border: 1px solid var(--border); margin: 0 auto; }
-  .ps-dash-wrap {
-    border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden;
-    height: 260px; position: relative; background: var(--surface-2);
-  }
-  .ps-dash-wrap iframe {
-    border: 0; position: absolute; top: 0; left: 0; width: 480px; height: 1500px;
-    transform-origin: top left; pointer-events: none;
-  }
-  .ps-item-row {
-    border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.8rem 0.8rem 0.3rem; margin-bottom: 0.8rem;
-    background: var(--surface-2);
-  }
+  .ps-nav { position: sticky; top: 1rem; display: grid; gap: 0.15rem; }
+  .ps-nav button { display: grid; grid-template-columns: 1.6rem minmax(0, 1fr); gap: 0 0.5rem; text-align: left; border: 0; background: none; border-radius: var(--radius-sm); padding: 0.55rem 0.7rem; color: var(--text); font: inherit; cursor: pointer; }
+  .ps-nav button:hover { background: var(--surface-3); }
+  .ps-nav button[aria-current="true"] { background: var(--surface); box-shadow: var(--shadow); }
+  .ps-nav button[aria-current="true"] .psn-t { color: var(--link); }
+  .psn-i { grid-row: span 2; font-size: 1.05rem; line-height: 1.5; }
+  .psn-t { font-weight: 800; }
+  .psn-s { font-size: 0.78rem; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .psn-s.psn-warn { color: var(--warn); font-weight: 700; }
+  .psn-sep { height: 1px; background: var(--border); margin: 0.4rem 0.5rem; }
+  .psn-danger .psn-t { color: var(--danger); }
+  .ps-head h2 { margin: 0; font-size: 1.3rem; text-wrap: balance; }
+  .ps-head p { margin: 0.2rem 0 0; color: var(--text-dim); font-size: 0.92rem; max-width: 62ch; }
+  #ps-panel { display: grid; gap: 1rem; min-width: 0; }
+  .ps-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 1rem; display: grid; gap: 0.7rem; min-width: 0; }
+  .ps-card h3 { margin: 0; font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim); }
+  .ps-card .field-grid { margin: 0; row-gap: 0.9rem; }
+  .ps-card label { margin-bottom: 0; }
+  .ps-full { grid-column: 1 / -1; }
+  .ps-calc { font-size: 0.86rem; background: var(--surface-2); border-radius: var(--radius-sm); padding: 0.5rem 0.65rem; color: var(--text-dim); }
+  .ps-calc b { color: var(--text); }
+  .ps-disc { border-top: 1px solid var(--border); padding-top: 0.75rem; }
+  .ps-disc > button { border: 0; background: none; padding: 0; font: inherit; font-weight: 800; color: var(--link); cursor: pointer; display: flex; gap: 0.5rem; align-items: center; }
+  .ps-disc > button span { color: var(--text-dim); font-weight: 600; font-size: 0.85rem; }
+  .ps-cardhead { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+  .ps-slots { display: grid; gap: 0.4rem; }
+  .ps-slots-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 1rem; }
+  .ps-slot { display: grid; grid-template-columns: 2rem minmax(0, 1fr); gap: 0.5rem; align-items: center; }
+  .ps-slot i { font-style: normal; font-weight: 800; color: var(--text-dim); text-align: right; font-variant-numeric: tabular-nums; }
+  .ps-slot input { min-height: 0; padding: 0.45rem 0.6rem; }
+  .ps-seg { display: inline-flex; border: 1.5px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; flex: none; }
+  .ps-seg button { border: 0; background: var(--surface); color: var(--text); padding: 0.35rem 0.75rem; font: inherit; font-weight: 700; font-size: 0.85rem; cursor: pointer; }
+  .ps-seg button + button { border-left: 1px solid var(--border); }
+  .ps-seg button[aria-pressed="true"] { background: var(--brand); color: var(--on-brand); }
+  .ps-seg button.ps-seg-req[aria-pressed="true"] { background: var(--warn); color: var(--surface); }
+  .ps-seg button.ps-seg-hid[aria-pressed="true"] { background: var(--text-dim); color: var(--surface); }
+  .ps-fgroup { display: grid; gap: 0.1rem; }
+  .ps-fgroup h4 { margin: 0.4rem 0 0.2rem; font-size: 0.92rem; }
+  .ps-frow { display: flex; gap: 0.75rem; align-items: center; justify-content: space-between; padding: 0.4rem 0; border-top: 1px solid var(--border); }
+  .ps-frow > span:first-child { min-width: 0; }
+  .ps-frow-hidden > span:first-child { color: var(--text-dim); text-decoration: line-through; }
+  .ps-icons { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+  .ps-icons button { width: 2.6rem; height: 2.6rem; border-radius: var(--radius-sm); border: 1.5px solid var(--border); background: var(--surface); font-size: 1.25rem; cursor: pointer; }
+  .ps-icons button[aria-pressed="true"] { border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand-dim); }
+  .ps-bgprev { height: 8rem; border-radius: var(--radius-sm); border: 1.5px dashed var(--border); display: grid; place-items: center; color: var(--text-dim); font-size: 0.9rem; background-color: var(--surface-2); background-size: cover; background-position: center; }
+  .ps-row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+  .ps-row .btn-secondary, .ps-filerow .btn-secondary { width: auto; margin: 0; }
+  .ps-filebtn { display: inline-flex; flex-direction: row; cursor: pointer; color: var(--text); font-size: inherit; }
+  .ps-filerow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.75rem; align-items: center; padding: 0.75rem 0; border-top: 1px solid var(--border); }
+  .ps-filerow:first-child { border-top: 0; padding-top: 0; }
+  .ps-filerow b { display: block; }
+  .ps-filerow span { font-size: 0.86rem; color: var(--text-dim); }
+  .ps-dangercard { border-color: var(--danger); background: var(--danger-bg); }
+  .ps-dangercard h3 { color: var(--danger); }
+  .ps-dangercard .btn-danger { width: auto; }
   .ps-checkbox-label { flex-direction: row !important; align-items: center; gap: 0.5rem !important; }
   .ps-checkbox-label input { width: 1.35rem; flex-shrink: 0; }
-  #ps-add-item { margin-bottom: 0.5rem; }
+  #ps-add-item { margin-bottom: 0.5rem; width: auto; }
   .psi-list { display: grid; gap: 0.5rem; margin-bottom: 0.8rem; }
   .psi-item { border: 1.5px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); }
   .psi-item.open { border-color: var(--brand-light); }
@@ -77,9 +115,17 @@
   #psi-confirm-all { justify-self: start; }
   @media (max-width: 560px) { .psi-crow { grid-template-columns: minmax(0, 1fr); } }
 
-  @media (max-width: 900px) {
-    .ps-layout { grid-template-columns: 1fr; }
-    .ps-right { position: static; }
+  @media (max-width: 1150px) {
+    .ps-layout, .ps-layout.ps-noprint { grid-template-columns: 13rem minmax(0, 1fr); }
+    .ps-right { display: none !important; }
+  }
+  @media (max-width: 760px) {
+    .ps-layout, .ps-layout.ps-noprint { grid-template-columns: minmax(0, 1fr); }
+    .ps-nav { position: static; display: flex; overflow-x: auto; gap: 0.35rem; padding-bottom: 0.3rem; }
+    .ps-nav button { grid-template-columns: auto; padding: 0.45rem 0.85rem; border: 1.5px solid var(--border); border-radius: 999px; white-space: nowrap; }
+    .psn-i, .psn-s, .psn-sep { display: none; }
+    .ps-slots-2 { grid-template-columns: minmax(0, 1fr); }
+    .ps-frow, .ps-filerow { grid-template-columns: minmax(0, 1fr); flex-wrap: wrap; }
   }
 </style>
 </head>
@@ -90,7 +136,7 @@
     <span></span><span></span><span></span>
   </button>
   <div>
-    <h1>Project Setup</h1>
+    <h1>Project Settings</h1>
     <div class="app-sub" id="project-name-sub"></div>
   </div>
   <span></span>
@@ -100,26 +146,15 @@
 </div>
 
 <main>
-  <p class="hint" style="margin-top:0;">Fill this out instead of the Excel file, then hit Save. The report preview updates as you type; the dashboard preview updates after you save. (The Excel upload/download on the Project page still works too, as a fallback.)</p>
-
   <div class="ps-layout" id="ps-layout">
+    <nav class="ps-nav" id="ps-nav" aria-label="Settings sections"></nav>
     <div class="ps-left">
-      <div class="tab-row" id="ps-tabs"></div>
       <div id="ps-panel"></div>
     </div>
-
-    <div class="ps-right" id="ps-right">
-      <div class="ps-preview-block">
-        <h3>Report Preview</h3>
-        <div id="ps-report-preview"><p class="hint">Loading preview&hellip;</p></div>
-      </div>
-      <div class="ps-preview-block">
-        <h3>Dashboard Preview</h3>
-        <div class="ps-dash-wrap" id="ps-dash-wrap">
-          <iframe id="ps-dash-frame" title="Dashboard preview"></iframe>
-        </div>
-      </div>
-    </div>
+    <aside class="ps-right" id="ps-right">
+      <h3>How it prints</h3>
+      <div id="ps-report-preview"><p class="hint">Loading preview&hellip;</p></div>
+    </aside>
   </div>
 </main>
 
@@ -130,18 +165,20 @@
 
 <script src="lib/xlsx.min.js"></script>
 <script src="lib/fflate.min.js"></script>
+<script src="lib/html2canvas.min.js"></script>
+<script src="lib/jspdf.umd.min.js"></script>
 <script src="common.js"></script>
 <script src="defaults.js"></script>
 <script src="storage.js"></script>
 <script src="audit-log.js"></script>
 <script src="project-file.js"></script>
+<script src="report-bundle.js"></script>
+<script src="pdf-export.js"></script>
 <script src="local-sync.js"></script>
 <script src="render-report.js"></script>
 <script type="module" src="firebase-init.js"></script>
 <script src="firebase-sync.js"></script>
 <script>
-const PS_DASH_FRAME_W = 480;
-
 const PS_FIELD_TYPES = {
   ntpDate: 'date',
   contractLength: 'number',
@@ -154,18 +191,9 @@ const TRAFFIC_CONTROL_OPTIONS = [
   { value: 'ATTENTION_REQUIRED', label: 'Attention Required' },
 ];
 
-const PS_TABS = [
-  { key: 'info', label: 'Project Info', render: renderInfoTab },
-  { key: 'payItems', label: 'Pay Items', render: renderPayItemsTab },
-  { key: 'contractors', label: 'Contractors', render: renderContractorsTab },
-  { key: 'equipment', label: 'Equipment', render: renderEquipmentTab },
-  { key: 'importReports', label: 'Import Reports', render: renderImportReportsTab },
-];
-
 let project = null;
 let layout = null;
 let logoBlob = null;
-let activeTab = 'info';
 let previewTimer = null;
 let dirty = false;
 
@@ -196,7 +224,7 @@ async function saveNow() {
   $('#fsb-status').textContent = 'Saved.';
   $('#fsb').classList.remove('show');
   btn.textContent = 'Save';
-  refreshDashboardPreview();
+  renderNav();
 }
 
 $('#fsb-save').addEventListener('click', saveNow);
@@ -215,65 +243,407 @@ function schedulePreviewRefresh() {
   previewTimer = setTimeout(refreshReportPreview, 250);
 }
 
-// ---------- Tabs ----------
+// ---------- Sections ----------
+//
+// Every project setting in one place: a section list on the left, one
+// section at a time, and the printed report beside the sections that
+// change it. Who sees what is the same as before this page took over the
+// project page's own settings panel: Info / Pay Items / Contractors need
+// "edit projects" (others get Info read-only); Report Form and Icon &
+// Background are admins only; Files & Backup is everyone (uploading a
+// replacement project file needs "edit projects"); Delete needs "edit
+// projects".
 
-function renderTabs() {
-  $('#ps-tabs').innerHTML = PS_TABS
-    .map((t) => `<button type="button" class="tab-btn${t.key === activeTab ? ' active' : ''}" data-tab="${t.key}">${t.label}</button>`)
-    .join('');
-  $$('#ps-tabs .tab-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      activeTab = btn.dataset.tab;
-      renderTabs();
-      renderActivePanel();
-    });
-  });
+let canEdit = false;
+let isAdmin = false;
+let psSection = 'info';
+let psShowDefaults = false;
+
+const PS_SECTIONS = [
+  { id: 'info', icon: '\u{1F4CB}', title: 'Project Info', prints: true, show: () => true, render: () => renderInfoSection(),
+    sum: () => {
+      const m = project.meta || {};
+      return m.ntpDate ? `NTP ${psFmtDate(m.ntpDate)}${m.contractLength ? ` · ${m.contractLength} days` : ''}` : 'Start here';
+    } },
+  { id: 'pay', icon: '\u{1F4CA}', title: 'Pay Items', show: () => canEdit, render: () => renderPayItemsTab(),
+    sum: () => {
+      const items = (project.payItemCatalog || []).filter((c) => c.itemNumber || c.description);
+      const check = items.filter(payItemUnitNeedsConfirm).length;
+      return `${items.length} item${items.length === 1 ? '' : 's'}${check ? ` · ${check} unit${check === 1 ? '' : 's'} to check` : ''}`;
+    },
+    warn: () => (project.payItemCatalog || []).some((c) => (c.itemNumber || c.description) && payItemUnitNeedsConfirm(c)) },
+  { id: 'crew', icon: '\u{1F477}', title: 'Contractors & Equipment', prints: true, show: () => canEdit, render: () => renderCrewSection(),
+    sum: () => {
+      const n = (project.defaultContractors || []).filter((c) => String(c || '').trim()).length;
+      return `${n} contractor${n === 1 ? '' : 's'} · ${psCustomEquipment() ? 'own' : 'standard'} equipment`;
+    } },
+  { id: 'form', icon: '\u{1F4DD}', title: 'Report Form', show: () => isAdmin, render: () => renderFormSection(),
+    sum: () => `${(project.requiredFields || []).length} required · ${(project.hiddenFields || []).length} hidden` },
+  { id: 'look', icon: '\u{1F3A8}', title: 'Icon & Background', show: () => isAdmin, render: () => renderLookSection(),
+    sum: () => `${project.icon || '\u{1F4C1}'}${project.backgroundImage ? ' · background photo' : ''}` },
+  { id: 'files', icon: '\u{1F4C1}', title: 'Files & Backup', show: () => true, render: () => renderFilesSection(),
+    sum: () => 'Excel file, import, sync' },
+  'sep',
+  { id: 'delete', icon: '\u{1F5D1}\u{FE0F}', title: 'Delete Project', danger: true, show: () => canEdit, render: () => renderDeleteSection(),
+    sum: () => 'Permanent' },
+];
+
+function psFmtDate(iso) {
+  const d = new Date(`${iso}T12:00:00`);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function renderNav() {
+  $('#ps-nav').innerHTML = PS_SECTIONS.filter((s) => s === 'sep' || s.show()).map((s) => (s === 'sep'
+    ? '<div class="psn-sep" role="presentation"></div>'
+    : `<button type="button" data-sec="${s.id}" aria-current="${psSection === s.id}"${s.danger ? ' class="psn-danger"' : ''}><span class="psn-i" aria-hidden="true">${s.icon}</span><span class="psn-t">${escapeHtml(s.title)}</span><span class="psn-s${s.warn && s.warn() ? ' psn-warn' : ''}">${escapeHtml(s.sum())}</span></button>`)).join('');
 }
 
 function renderActivePanel() {
-  const tab = PS_TABS.find((t) => t.key === activeTab);
-  if (tab) tab.render();
+  const s = PS_SECTIONS.find((x) => x !== 'sep' && x.id === psSection && x.show()) || PS_SECTIONS[0];
+  psSection = s.id;
+  renderNav();
+  s.render();
+  $('#ps-layout').classList.toggle('ps-noprint', !s.prints);
+  $('#ps-right').hidden = !s.prints;
+  if (s.prints) schedulePreviewRefresh();
 }
 
-// ---------- Project Info tab ----------
+$('#ps-nav').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-sec]');
+  if (!btn) return;
+  psSection = btn.dataset.sec;
+  renderActivePanel();
+  window.scrollTo({ top: 0 });
+});
 
-function renderInfoTab() {
+function psHead(title, text) {
+  return `<div class="ps-head"><h2>${escapeHtml(title)}</h2>${text ? `<p>${text}</p>` : ''}</div>`;
+}
+
+// ---------- Project Info ----------
+
+// The "starting text" keys: the rest of PROJECT_INFO_FIELDS, minus the two
+// that are only kept for old files (the Work Summary top line follows
+// Activity now, and the Short Work Summary is retired).
+const PS_BASIC_KEYS = ['name', 'projectNo', 'projectName', 'location', 'ntpDate', 'contractLength', 'representative', 'peName'];
+const PS_RETIRED_KEYS = ['workSummaryHeader', 'trafficControlNote'];
+
+function psEndText() {
+  const m = project.meta || {};
+  const days = parseInt(m.contractLength, 10);
+  if (!m.ntpDate || !(days > 0)) return 'Fill in the NTP date and contract length to see when the contract ends.';
+  const start = new Date(`${m.ntpDate}T12:00:00`);
+  if (Number.isNaN(start.getTime())) return '';
+  const end = new Date(start);
+  end.setDate(end.getDate() + days);
+  const today = new Date();
+  today.setHours(12, 0, 0, 0);
+  const used = Math.round((today - start) / 86400000);
+  const endTxt = end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  if (used < 0) return `Ends <b>${endTxt}</b> · starts in ${-used} day${used === -1 ? '' : 's'}`;
+  const left = days - used;
+  return `Ends <b>${endTxt}</b> · day ${used} of ${days} · <b>${left >= 0 ? `${left} day${left === 1 ? '' : 's'} left` : `${-left} day${left === -1 ? '' : 's'} over`}</b>`;
+}
+
+function renderInfoSection() {
   const m = project.meta || (project.meta = {});
-  const fieldsHtml = PROJECT_INFO_FIELDS.filter((f) => f.key !== 'name')
-    .map((f) => {
-      const type = PS_FIELD_TYPES[f.key] || 'text';
-      const val = m[f.key] || '';
-      let control;
-      if (type === 'select') {
-        control = `<select data-meta-key="${f.key}">${TRAFFIC_CONTROL_OPTIONS
-          .map((o) => `<option value="${o.value}"${o.value === val ? ' selected' : ''}>${o.label}</option>`)
-          .join('')}</select>`;
-      } else if (type === 'textarea') {
-        control = `<textarea data-meta-key="${f.key}" rows="4">${escapeHtml(val)}</textarea>`;
-      } else {
-        control = `<input type="${type}" data-meta-key="${f.key}" value="${escapeHtml(val)}">`;
-      }
-      const full = type === 'textarea';
-      return `<label${full ? ' style="grid-column:1/-1;"' : ''}>${escapeHtml(f.label)}${control}</label>`;
-    })
-    .join('');
-
+  const dis = canEdit ? '' : ' disabled';
+  const fld = (key, label, opts = {}) => {
+    const val = key === 'name' ? project.name || '' : m[key] || '';
+    const type = PS_FIELD_TYPES[key] || 'text';
+    let control;
+    if (type === 'select') {
+      control = `<select data-meta-key="${key}"${dis}>${TRAFFIC_CONTROL_OPTIONS.map((o) => `<option value="${o.value}"${o.value === val ? ' selected' : ''}>${o.label}</option>`).join('')}</select>`;
+    } else if (type === 'textarea') {
+      control = `<textarea data-meta-key="${key}" rows="3"${dis}>${escapeHtml(val)}</textarea>`;
+    } else {
+      control = `<input type="${type}" ${key === 'name' ? 'id="ps-name"' : `data-meta-key="${key}"`} value="${escapeHtml(val)}"${opts.ph ? ` placeholder="${escapeHtml(opts.ph)}"` : ''}${dis}>`;
+    }
+    return `<label${opts.full || type === 'textarea' ? ' class="ps-full"' : ''}>${escapeHtml(label)}${control}${opts.hint ? `<span class="hint" style="margin:0">${opts.hint}</span>` : ''}</label>`;
+  };
+  const defaults = PROJECT_INFO_FIELDS.filter((f) => !PS_BASIC_KEYS.includes(f.key) && !PS_RETIRED_KEYS.includes(f.key));
+  const filled = defaults.filter((f) => String(m[f.key] || '').trim()).length;
+  const label = (f) => f.label.replace(/^DEFAULT /, '').toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
   $('#ps-panel').innerHTML = `
-    <label><span class="label-tip">Project Display Name <button type="button" class="info-tip" data-tip="These match the PROJECT INFO sheet in the Excel file -- editing here or there keeps both in sync on save." aria-label="What this does">i</button></span> <input type="text" id="ps-name" value="${escapeHtml(project.name || '')}" placeholder="Shown on the project list"></label>
-    <div class="field-grid">${fieldsHtml}</div>
-  `;
+    ${psHead('Project Info', `What prints at the top of every report, and the dates the dashboard counts from.${canEdit ? '' : ' Only people who can edit projects can change these.'}`)}
+    <div class="ps-card">
+      <h3>The project</h3>
+      <div class="field-grid">
+        ${fld('name', 'Name in the app', { full: true, hint: 'Shown on the home screen and the project list.', ph: 'Shown on the project list' })}
+        ${fld('projectNo', 'Project No.')}
+        ${fld('location', 'Location (city, state)', { hint: 'Used to fetch the weather.' })}
+        ${fld('projectName', 'Project name on the report', { full: true })}
+      </div>
+    </div>
+    <div class="ps-card">
+      <h3>Contract time</h3>
+      <div class="field-grid">
+        ${fld('ntpDate', 'NTP date')}
+        ${fld('contractLength', 'Contract length (calendar days)')}
+      </div>
+      <div class="ps-calc" id="ps-endinfo">${psEndText()}</div>
+    </div>
+    <div class="ps-card">
+      <h3>People</h3>
+      <div class="field-grid">
+        ${fld('peName', 'Project Engineer')}
+        ${fld('representative', 'Resident Inspector', { hint: 'New reports start with this name.' })}
+      </div>
+      <div class="ps-disc">
+        <button type="button" id="ps-defaults-toggle" aria-expanded="${psShowDefaults}">${psShowDefaults ? '&#9662;' : '&#9656;'} Starting text for new reports <span>${filled} of ${defaults.length} filled in</span></button>
+        ${psShowDefaults ? `<p class="hint" style="margin:0.6rem 0 0.4rem">Each new report starts with these filled in, and the inspector can change them. Leave one blank to have inspectors fill it in.</p>
+          <div class="field-grid">${defaults.map((f) => fld(f.key, label(f))).join('')}</div>` : ''}
+      </div>
+    </div>`;
 
+  $('#ps-defaults-toggle').addEventListener('click', () => { psShowDefaults = !psShowDefaults; renderInfoSection(); });
+  if (!canEdit) return;
   $('#ps-name').addEventListener('input', (e) => {
     project.name = e.target.value;
     markDirty();
+    renderNav();
   });
   $$('[data-meta-key]', $('#ps-panel')).forEach((el) => {
     const evt = el.tagName === 'SELECT' ? 'change' : 'input';
     el.addEventListener(evt, () => {
       project.meta[el.dataset.metaKey] = el.value;
+      if (el.dataset.metaKey === 'ntpDate' || el.dataset.metaKey === 'contractLength') {
+        $('#ps-endinfo').innerHTML = psEndText();
+        renderNav();
+      }
       markDirty();
       schedulePreviewRefresh();
     });
+  });
+}
+
+// ---------- Contractors & Equipment ----------
+
+// Blank equipment rows mean "use the app's standard list" (see
+// makeBlankReport); any row typed in switches to the project's own list.
+function psCustomEquipment() {
+  return (project.defaultEquipmentLabels || []).some((l) => String(l || '').trim());
+}
+
+function renderCrewSection() {
+  const con = project.defaultContractors || (project.defaultContractors = []);
+  const eq = project.defaultEquipmentLabels || (project.defaultEquipmentLabels = []);
+  const custom = psCustomEquipment() || psCrewCustomOpen;
+  $('#ps-panel').innerHTML = `
+    ${psHead('Contractors & Equipment', 'The columns and rows of the crew table on the report. New reports start with these; inspectors can still rename them on a report.')}
+    <div class="ps-card">
+      <h3>Contractors (up to ${CONTRACTOR_COUNT} columns)</h3>
+      <div class="ps-slots">${Array.from({ length: CONTRACTOR_COUNT }, (_, i) => `<div class="ps-slot"><i>${i + 1}</i><input type="text" data-con="${i}" value="${escapeHtml(con[i] || '')}" placeholder="Empty column" aria-label="Contractor ${i + 1}"></div>`).join('')}</div>
+    </div>
+    <div class="ps-card">
+      <div class="ps-cardhead"><h3>Equipment and crew rows (${EQUIPMENT_ROW_COUNT})</h3>
+        <span class="ps-seg" role="group" aria-label="Equipment rows"><button type="button" data-eq="std" aria-pressed="${!custom}">Standard list</button><button type="button" data-eq="custom" aria-pressed="${custom}">My own</button></span></div>
+      ${custom
+        ? `<div class="ps-slots ps-slots-2">${Array.from({ length: EQUIPMENT_ROW_COUNT }, (_, i) => `<div class="ps-slot"><i>${i + 1}</i><input type="text" data-eqrow="${i}" value="${escapeHtml(eq[i] || '')}" placeholder="Empty row" aria-label="Row ${i + 1}"></div>`).join('')}</div>`
+        : `<p class="hint" style="margin:0">Every report uses the app's standard rows: ${DEFAULT_EQUIPMENT_LABELS.filter(Boolean).slice(0, 6).map(escapeHtml).join(', ')} and ${Math.max(0, DEFAULT_EQUIPMENT_LABELS.filter(Boolean).length - 6)} more. Pick "My own" to change them.</p>`}
+    </div>`;
+  const panel = $('#ps-panel');
+  $$('[data-con]', panel).forEach((el) => el.addEventListener('input', () => {
+    const i = Number(el.dataset.con);
+    while (con.length <= i) con.push('');
+    con[i] = el.value;
+    markDirty();
+    renderNav();
+    schedulePreviewRefresh();
+  }));
+  $$('[data-eqrow]', panel).forEach((el) => el.addEventListener('input', () => {
+    const i = Number(el.dataset.eqrow);
+    while (eq.length <= i) eq.push('');
+    eq[i] = el.value;
+    markDirty();
+    renderNav();
+    schedulePreviewRefresh();
+  }));
+  $$('[data-eq]', panel).forEach((btn) => btn.addEventListener('click', () => {
+    if (btn.dataset.eq === 'custom') {
+      // Start from the standard rows, ready to edit.
+      if (!psCustomEquipment()) project.defaultEquipmentLabels = DEFAULT_EQUIPMENT_LABELS.slice(0, EQUIPMENT_ROW_COUNT);
+      psCrewCustomOpen = true;
+    } else {
+      if (psCustomEquipment() && !confirm('Go back to the standard rows? The rows typed in here are cleared.')) return;
+      project.defaultEquipmentLabels = [];
+      psCrewCustomOpen = false;
+    }
+    markDirty();
+    renderCrewSection();
+    renderNav();
+    schedulePreviewRefresh();
+  }));
+}
+let psCrewCustomOpen = false;
+
+// ---------- Report Form ----------
+//
+// The same three settings the visual editor (required-fields.html) sets:
+// requiredFields (REQUIRED_FIELD_DEFS keys), hiddenFields (whole blocks,
+// ORDERABLE_FIELD_DEFS keys). Contractors and Equipment are one block on
+// the form, so hiding either hides both; each can be required on its own.
+
+function psFormRows() {
+  const rows = [];
+  REPORT_BUILDER_GROUPS.forEach((g) => {
+    const items = [];
+    g.keys.forEach((key) => {
+      if (key === 'contractorsEquipment') {
+        items.push({ req: 'contractors', hide: key, label: 'Contractors (at least one named)' });
+        items.push({ req: 'equipmentRows', hide: key, label: 'Equipment (a quantity entered)' });
+        return;
+      }
+      const def = REQUIRED_FIELD_DEFS.find((d) => d.key === key);
+      const od = ORDERABLE_FIELD_DEFS.find((d) => d.key === key);
+      if (def || od) items.push({ req: def ? key : null, hide: od ? key : null, label: (def || od).label });
+    });
+    if (items.length) rows.push({ group: g.label, items });
+  });
+  return rows;
+}
+
+function renderFormSection() {
+  const req = new Set(project.requiredFields || []);
+  const hid = new Set(project.hiddenFields || []);
+  $('#ps-panel').innerHTML = `
+    ${psHead('Report Form', 'What inspectors must fill in before they can generate a report, and what to leave off the form entirely.')}
+    <div class="ps-card">
+      ${psFormRows().map((g) => `<div class="ps-fgroup"><h4>${escapeHtml(g.group)}</h4>${g.items.map((it) => {
+        const v = it.hide && hid.has(it.hide) ? 'hid' : it.req && req.has(it.req) ? 'req' : 'opt';
+        const b = (val, text, cls) => `<button type="button" class="${cls || ''}" data-req="${it.req || ''}" data-hide="${it.hide || ''}" data-v="${val}" aria-pressed="${v === val}">${text}</button>`;
+        return `<div class="ps-frow${v === 'hid' ? ' ps-frow-hidden' : ''}"><span>${escapeHtml(it.label)}</span><span class="ps-seg" role="group" aria-label="${escapeHtml(it.label)}">${b('opt', 'Optional')}${it.req ? b('req', 'Required', 'ps-seg-req') : ''}${it.hide ? b('hid', 'Hidden', 'ps-seg-hid') : ''}</span></div>`;
+      }).join('')}</div>`).join('')}
+      <p class="hint" style="margin:0">To change the order of fields, or pick them by clicking the printed report, use the <a href="required-fields.html?project=${encodeURIComponent(project.id)}" id="ps-visual-link">visual editor</a>.</p>
+    </div>`;
+  $$('[data-v]', $('#ps-panel')).forEach((btn) => btn.addEventListener('click', () => {
+    const r = new Set(project.requiredFields || []);
+    const h = new Set(project.hiddenFields || []);
+    const { req: rk, hide: hk, v } = btn.dataset;
+    if (v === 'hid') {
+      h.add(hk);
+      // A hidden field can't be filled in, so it can't stay required.
+      if (hk === 'contractorsEquipment') { r.delete('contractors'); r.delete('equipmentRows'); } else r.delete(hk);
+    } else {
+      if (hk) h.delete(hk);
+      if (rk) { if (v === 'req') r.add(rk); else r.delete(rk); }
+    }
+    project.requiredFields = [...r];
+    project.hiddenFields = [...h];
+    markDirty();
+    renderFormSection();
+    renderNav();
+  }));
+}
+
+// ---------- Icon & Background ----------
+
+let psBgUrl = null;
+function renderLookSection() {
+  if (psBgUrl) { URL.revokeObjectURL(psBgUrl); psBgUrl = null; }
+  if (project.backgroundImage instanceof Blob) psBgUrl = URL.createObjectURL(project.backgroundImage);
+  const current = project.icon || '\u{1F4C1}';
+  $('#ps-panel').innerHTML = `
+    ${psHead('Icon & Background', 'How this project looks on the home screen.')}
+    <div class="ps-card">
+      <h3>Icon</h3>
+      <div class="ps-icons">${PROJECT_ICON_OPTIONS.map((ic) => `<button type="button" data-icon="${ic}" aria-pressed="${current === ic}" aria-label="Icon ${ic}">${ic}</button>`).join('')}</div>
+    </div>
+    <div class="ps-card">
+      <h3>Background photo</h3>
+      <div class="ps-bgprev"${psBgUrl ? ` style="background-image:url('${psBgUrl}')"` : ''}>${psBgUrl ? '' : 'No background. Add a photo of the site.'}</div>
+      <div class="ps-row">
+        <label class="btn-secondary ps-filebtn">${psBgUrl ? 'Replace Background' : 'Add Background'}<input type="file" accept="image/*" id="ps-bg-upload" hidden></label>
+        ${psBgUrl ? '<button type="button" class="btn-secondary" id="ps-bg-remove">Remove Background</button>' : ''}
+      </div>
+    </div>`;
+  $$('[data-icon]', $('#ps-panel')).forEach((btn) => btn.addEventListener('click', () => {
+    project.icon = btn.dataset.icon;
+    markDirty();
+    renderLookSection();
+    renderNav();
+  }));
+  $('#ps-bg-upload').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!/^image\//.test(file.type)) { alert('That file is not an image.'); return; }
+    try {
+      project.backgroundImage = await compressImage(await convertHeicIfNeeded(file), { maxDim: 1600, quality: 0.75 });
+      project.backgroundImageFetched = true;
+      project.backgroundImageVersion = Date.now(); // tells other devices it's a new photo (see pushProjectToCompany)
+      markDirty();
+      renderLookSection();
+      renderNav();
+    } catch (err) {
+      console.error(err);
+      alert(userError("Couldn't use that image: " + err.message, 'PROJECT_BACKGROUND'));
+    }
+  });
+  const rm = $('#ps-bg-remove');
+  if (rm) rm.addEventListener('click', () => {
+    project.backgroundImage = null;
+    project.backgroundImageFetched = true;
+    project.backgroundImageVersion = Date.now();
+    markDirty();
+    renderLookSection();
+    renderNav();
+  });
+}
+
+// ---------- Files & Backup ----------
+
+function renderFilesSection() {
+  $('#ps-panel').innerHTML = `
+    ${psHead('Files & Backup', 'Everything that moves this project in or out of the app.')}
+    <div class="ps-card">
+      <div class="ps-filerow"><div><b>Project Excel file</b><span>Download this project's info and pay items to edit in Excel or keep as a backup${canEdit ? ', and upload it again to update the project. Reports and Pay Apps aren\'t touched' : ''}.</span></div>
+        <div class="ps-row"><button type="button" class="btn-secondary" id="btn-download-project-file">Download</button>${canEdit ? '<label class="btn-secondary ps-filebtn">Upload<input type="file" id="f-reupload" accept=".xlsx,.xls" hidden></label>' : ''}</div></div>
+      <div class="ps-filerow"><div><b>Import old reports</b><span>Load filled-in Daily Work Report Excel files or .report files into this project. Photos come along. A Report No. already here asks before it's replaced.</span></div>
+        <label class="btn-secondary ps-filebtn">Choose Files<input type="file" id="f-import-reports" accept=".report,.xlsx" multiple hidden></label></div>
+      <div id="ir-log" class="ir-log" hidden></div>
+      <div class="ps-filerow"><div><b>Sync to a folder</b><span id="sync-folder-status">Saves a PDF of every report, a quantity sheet and the raw files to a folder on this computer.</span></div>
+        <button type="button" class="btn-secondary" id="btn-sync-folder">Sync Now</button></div>
+    </div>`;
+  wireFilesSection();
+  refreshSyncFolderStatus();
+}
+
+// ---------- Delete ----------
+
+function renderDeleteSection() {
+  const key = String((project.meta || {}).projectNo || project.name || '').trim();
+  $('#ps-panel').innerHTML = `
+    ${psHead('Delete Project', '')}
+    <div class="ps-card ps-dangercard">
+      <h3>This can't be undone</h3>
+      <p style="margin:0" id="ps-del-text">Deletes ${escapeHtml(project.name || 'this project')} and every report in it, for everyone in the company. Consider downloading a backup in Files &amp; Backup first.</p>
+      <label>Type <b>${escapeHtml(key)}</b> to confirm<input type="text" id="ps-del-confirm" autocomplete="off"></label>
+      <div class="ps-row"><button type="button" class="btn-danger" id="btn-delete-project" disabled>Delete This Project</button></div>
+    </div>`;
+  getReportsForProject(project.id).then((reports) => {
+    const t = $('#ps-del-text');
+    if (t && reports.length) t.innerHTML = `Deletes ${escapeHtml(project.name || 'this project')} and all ${reports.length} of its reports, for everyone in the company. Consider downloading a backup in Files &amp; Backup first.`;
+  });
+  $('#ps-del-confirm').addEventListener('input', (e) => {
+    $('#btn-delete-project').disabled = e.target.value.trim().toUpperCase() !== key.toUpperCase();
+  });
+  $('#btn-delete-project').addEventListener('click', async () => {
+    const btn = $('#btn-delete-project');
+    btn.disabled = true;
+    btn.textContent = 'Deleting...';
+    try {
+      await deleteProject(project.id);
+    } catch (err) {
+      // Still deleted locally regardless -- deleteProject only throws over a
+      // sync failure, after every local delete already happened.
+      console.error(err);
+      alert(userError(err.message, 'DELETE_PROJECT'));
+    }
+    await forgetSyncFolder(project.id);
+    dirty = false;
+    location.href = 'index.html';
   });
 }
 
@@ -461,177 +831,242 @@ function renderPayItemsTab() {
   });
 }
 
-// ---------- Contractors tab ----------
+// ---------- Files & Backup: wiring (moved from the project page) ----------
 
-function renderContractorsTab() {
-  const arr = project.defaultContractors || (project.defaultContractors = []);
-  const rowsHtml = Array.from(
-    { length: CONTRACTOR_COUNT },
-    (_, i) => `<label>Contractor ${i + 1} <input type="text" data-idx="${i}" value="${escapeHtml(arr[i] || '')}"></label>`
-  ).join('');
+async function refreshSyncFolderStatus() {
+  if (!project) return;
+  const btn = $('#btn-sync-folder');
+  const status = $('#sync-folder-status');
+  if (!folderSyncSupported()) {
+    btn.textContent = '⤓ Download Backup Zip';
+    status.textContent = 'This browser can’t write to a folder directly -- Sync downloads a backup zip instead.';
+    return;
+  }
+  const folderName = await getLinkedSyncFolderName(project.id);
+  if (!folderName) {
+    status.textContent = 'Not linked to a folder yet -- Sync will ask you to choose one.';
+    return;
+  }
+  const reports = await getReportsForProject(project.id);
+  const state = await getFolderSyncState(project.id);
+  const pending = reports.filter((r) => !isReportFolderSynced(r, state)).length;
+  status.textContent = pending > 0
+    ? `Linked to folder "${folderName}" -- ${pending} report(s) waiting to sync. New saves sync automatically from here on; click Sync to catch these up now.`
+    : `Linked to folder "${folderName}". Every report is up to date -- new saves sync automatically.`;
+}
 
-  $('#ps-panel').innerHTML = `
-    <div class="panel-tip-row"><button type="button" class="info-tip" data-tip="Up to ${CONTRACTOR_COUNT} contractor columns, fixed by the report template. Leave any blank -- they're just typed fresh on each report if left empty here." aria-label="What this does">i</button></div>
-    <div class="field-grid">${rowsHtml}</div>
-  `;
-  $$('#ps-panel [data-idx]').forEach((el) => {
-    el.addEventListener('input', () => {
-      const i = Number(el.dataset.idx);
-      while (arr.length <= i) arr.push('');
-      arr[i] = el.value;
-      markDirty();
-      schedulePreviewRefresh();
-    });
+function wireFilesSection() {
+  $('#btn-download-project-file').addEventListener('click', () => {
+    try {
+      downloadProjectDataFile(project);
+    } catch (err) {
+      console.error(err);
+      alert(userError("Couldn't build the project file: " + err.message, 'DOWNLOAD_PROJECT_FILE'));
+    }
+  });
+
+  const reupload = $('#f-reupload');
+  if (reupload) reupload.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    if (dirty) { alert('Save or undo your changes on this page first, then upload the file.'); return; }
+    try {
+      const parsed = await parseProjectDataFile(file);
+      // applyProjectUpdate keeps everything the file doesn't carry
+      // (required fields, icon, Pay Apps, pay item settings the file has
+      // no column for).
+      const candidate = await makeProjectFromParsedFile(parsed);
+      await saveProject(applyProjectUpdate(project, candidate));
+      project = await getProject(project.id);
+      renderActivePanel();
+      $('#project-name-sub').textContent = project.name;
+      alert('Project updated from ' + file.name + '.');
+    } catch (err) {
+      console.error(err);
+      alert(userError("Couldn't read that file: " + err.message, 'PARSE_EXCEL'));
+    }
+  });
+
+  $('#btn-sync-folder').addEventListener('click', async () => {
+    if (!project) return;
+    const btn = $('#btn-sync-folder');
+    const status = $('#sync-folder-status');
+    btn.disabled = true;
+    const originalLabel = btn.textContent;
+    try {
+      if (folderSyncSupported()) {
+        const result = await syncProjectToFolder(project, (done, total) => {
+          btn.textContent = `Syncing ${done}/${total}…`;
+        });
+        status.textContent = `Synced ${result.reportCount} report(s) to folder "${result.folderName}" just now.`;
+        // Nothing else updates the global out-of-sync banner (common.js) on
+        // its own -- without this, a manual sync from here leaves it showing
+        // the pre-sync count until the next full page load.
+        window.dispatchEvent(new CustomEvent('folder-sync-completed'));
+      } else {
+        const { blob, reportCount } = await buildProjectSyncZip(project, (done, total) => {
+          btn.textContent = `Building ${done}/${total}…`;
+        });
+        triggerDownload(blob, projectSyncZipFilename(project));
+        status.textContent = `Downloaded a backup zip with ${reportCount} report(s).`;
+      }
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        // User closed the folder picker -- not an error worth alerting over.
+      } else {
+        console.error(err);
+        alert(userError("Couldn't sync this project to a folder: " + err.message, 'FOLDER_SYNC'));
+      }
+    } finally {
+      btn.disabled = false;
+      btn.textContent = originalLabel;
+    }
+  });
+
+  $('#f-import-reports').addEventListener('change', async (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (files.length === 0) return;
+  
+    const log = $('#ir-log');
+    log.hidden = false;
+    log.innerHTML = '';
+    const onFileDone = (file, outcome) => {
+      const syncFailed = outcome.synced === false;
+      const detail = outcome.status === 'error' ? outcome.error
+        : outcome.status === 'skipped' ? `#${outcome.reportNo} — skipped`
+        : `#${outcome.reportNo}${outcome.photoCount ? `, ${outcome.photoCount} photo${outcome.photoCount === 1 ? '' : 's'}` : ''}${outcome.status === 'overwritten' ? ' — overwritten' : ''}${syncFailed ? ' — cloud sync failed, retry with Refresh' : ''}`;
+      const cls = outcome.status === 'error' ? 'ir-error' : syncFailed ? 'ir-syncfail' : outcome.status === 'skipped' ? 'ir-dupe' : 'ir-ok';
+      const icon = outcome.status === 'error' ? '✗' : (syncFailed || outcome.status === 'skipped') ? '⚠' : '✓';
+      log.appendChild(irLogRow(cls, icon, file.name, detail));
+      log.scrollTop = log.scrollHeight;
+    };
+  
+    const { added, overwritten, skipped, syncFailed, errors } = await importReportFilesIntoProject(files, undefined, onFileDone);
+  
+  
+    let msg = `Import complete.\n${added} report(s) added, ${overwritten} overwritten, ${skipped} skipped.`;
+    if (syncFailed > 0) msg = userError(msg + `\n\n${syncFailed} didn't make it to the company after retrying -- run Refresh on Company Management to finish syncing them.`, 'IMPORT_REPORT_SYNC');
+    if (errors.length > 0) msg = userError(msg + `\n\nIssues:\n${errors.join('\n')}`, 'IMPORT_REPORT_BUNDLES');
+    alert(msg);
   });
 }
 
-// ---------- Equipment tab ----------
+// Merges .report bundles AND Daily Work Report Excel files into THIS
+// project regardless of which project a .report's embedded project.json
+// names -- you're already looking at the project you want them in, so
+// that's used instead. Only ever report data, never project data;
+// mergeProjectRecord is deliberately never called here. Each file is
+// content-sniffed rather than trusted by extension (tryParseReportBundle
+// returns null for anything that isn't actually one of this app's own
+// bundles, .xlsx included, so it's safe to just try that first and fall
+// back to the Excel parser).
+//
+// A report already on file for the same Report No. is only touched after
+// `confirmOverwrite` approves it, and even then a photo slot the incoming
+// file leaves empty keeps whatever the existing report already had there
+// rather than being cleared -- the old assumption that an incoming file
+// "typically" has no photos of its own doesn't hold for an Excel import
+// the way it did for a selectively-synced .report bundle.
+//
+// `confirmOverwrite` is a parameter (defaulting to the real confirm()
+// dialog) so tests can drive the merge decision without a real dialog.
+// `onFileDone(file, outcome)` -- outcome one of 'added'/'overwritten'/
+// 'skipped'/'error' plus whatever detail applies -- is how the real UI
+// handler below drives its live per-file log; omitted (and the global
+// progress banner left untouched) when this is called from a test.
+async function importReportFilesIntoProject(files, confirmOverwrite = (msg) => confirm(msg), onFileDone = null) {
+  const existingReports = await getReportsForProject(project.id);
+  const existingByNo = new Map(existingReports.filter((r) => r.reportNo != null).map((r) => [String(r.reportNo), r]));
 
-function renderEquipmentTab() {
-  const arr = project.defaultEquipmentLabels || (project.defaultEquipmentLabels = []);
-  const rowsHtml = Array.from(
-    { length: EQUIPMENT_ROW_COUNT },
-    (_, i) =>
-      `<label>Row ${i + 1} <input type="text" data-idx="${i}" value="${escapeHtml(arr[i] || '')}" placeholder="${escapeHtml(DEFAULT_EQUIPMENT_LABELS[i] || '(blank)')}"></label>`
-  ).join('');
-
-  $('#ps-panel').innerHTML = `
-    <div class="panel-tip-row"><button type="button" class="info-tip" data-tip="${EQUIPMENT_ROW_COUNT} personnel/equipment rows, fixed by the template. Leave every row blank to use the app's standard list (shown as placeholder text) -- typing in any row switches every row to only what's entered here." aria-label="What this does">i</button></div>
-    <div class="field-grid">${rowsHtml}</div>
-  `;
-  $$('#ps-panel [data-idx]').forEach((el) => {
-    el.addEventListener('input', () => {
-      const i = Number(el.dataset.idx);
-      while (arr.length <= i) arr.push('');
-      arr[i] = el.value;
-      markDirty();
-      schedulePreviewRefresh();
-    });
-  });
-}
-
-// ---------- Import Reports tab ----------
-// A batch loader for a company's existing archive of Daily Work Report
-// Excel files -- built so hundreds of already-filled-out reports (from
-// before this app, or alongside it) can be loaded into this project rather
-// than retyped one at a time. Scoped to this one project deliberately (it
-// lives on Project Setup, not a company-wide page): there's no project
-// matching/creation to get wrong, every file uploaded here just becomes a
-// report under the project already open. Each field is read straight off
-// the file (parseDailyWorkReportSheet, render-report.js) and kept exactly
-// as found -- never overwritten with this project's own current settings --
-// so an imported report reflects the day it was actually filed. A Report
-// No. that collides with one already on file is imported anyway and
-// flagged in the results list; opening either one in the editor will show
-// the app's existing duplicate-Report-No. warning, same as it always has.
-
-function renderImportReportsTab() {
-  $('#ps-panel').innerHTML = `
-    <p class="hint" style="margin-top:0;">Upload Daily Work Report Excel files (one report per file, same layout this app prints) to load this project's existing report archive in. Every field comes straight from each file -- nothing here is backfilled from Project Info above. Photos embedded in the Photo Log sheet come in too.</p>
-    <div class="uz" id="uz-import-reports">
-      <input type="file" id="f-import-reports" accept=".xlsx" multiple>
-      <span class="uz-icon">&#128193;</span>
-      <span class="uz-lbl">Upload Daily Work Report Excel File(s)</span>
-    </div>
-    <div id="ir-log" class="ir-log" hidden></div>
-    <div id="ir-results"></div>
-  `;
-  $('#f-import-reports').addEventListener('change', handleImportReportsChange);
-}
-
-// parseReportExcelFile and reportFromImportedFields live in render-report.js
-// -- shared with project.html's own Import Reports upload zone, which takes
-// these same files now too. irLogRow (below) is the same one that zone uses.
-
-async function handleImportReportsChange(e) {
-  const files = Array.from(e.target.files || []);
-  e.target.value = '';
-  if (files.length === 0) return;
-
-  const log = $('#ir-log');
-  const results = $('#ir-results');
-  log.hidden = false;
-  log.innerHTML = '';
-  results.innerHTML = '';
-
-  const imported = [];
+  let added = 0;
+  let overwritten = 0;
+  let skipped = 0;
+  let syncFailed = 0;
   const errors = [];
-  const existingReportNos = new Set(
-    (await getReportsForProject(project.id)).map((r) => String(r.reportNo ?? '').trim()).filter(Boolean)
-  );
 
-  // Same global banner every join/sync/create-company flow already uses
-  // (see reportCompanyProgress in common.js) -- one line, ticking through
-  // "X of Y" rather than a fresh row per file, since a 150-file batch
-  // would otherwise turn the banner itself into the very wall of text
-  // it's meant to replace. The per-file detail (which file, pass/fail,
-  // duplicate or not) is what the log list below is for.
-  startProgressBanner();
-  if (typeof beginAuditBatch === 'function') beginAuditBatch('via Excel Import');
+  if (onFileDone) startProgressBanner();
+  if (typeof beginAuditBatch === 'function') beginAuditBatch('via Import');
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
-    progressStep('import-reports', 'Importing reports', `${i + 1} of ${files.length}`);
+    if (onFileDone) progressStep('import-reports', 'Importing reports', `${i + 1} of ${files.length}`);
     try {
-      const { fields, photos } = await parseReportExcelFile(file);
-      // Same size-capping every manually-uploaded photo already gets
-      // (report-editor.html) -- an imported archive is exactly the case
-      // this matters most for, since it's the one path that can add
-      // hundreds of full-size camera JPEGs to local storage/sync in one go.
-      const compressedPhotos = await Promise.all(photos.map((p) => (p ? compressImage(p) : null)));
-      const report = reportFromImportedFields(fields, compressedPhotos, project);
-      const key = String(report.reportNo ?? '').trim();
-      const isDupe = key !== '' && existingReportNos.has(key);
-      await saveReport(report);
-      if (key !== '') existingReportNos.add(key);
-      const photoCount = photos.filter(Boolean).length;
+      let incoming;
+      const bundle = await tryParseReportBundle(file);
+      if (bundle) {
+        incoming = bundle.report;
+      } else {
+        let parsed;
+        try {
+          parsed = await parseReportExcelFile(file);
+        } catch (err) {
+          throw new Error(`not a .report bundle or a recognized Daily Work Report Excel file (${err.message})`);
+        }
+        const compressedPhotos = await Promise.all(parsed.photos.map((p) => (p ? compressImage(p) : null)));
+        incoming = reportFromImportedFields(parsed.fields, compressedPhotos, project);
+      }
+      const existing = existingByNo.get(String(incoming.reportNo));
+
+      if (existing) {
+        const label = `Report #${incoming.reportNo}${incoming.date ? ' (' + incoming.date + ')' : ''}`;
+        const ok = confirmOverwrite(
+          `${label} already exists in this project (currently dated ${existing.date || 'undated'}).\n\nOverwrite it with the imported data? A photo slot the incoming file leaves empty keeps the existing report's photo there instead of being cleared.`
+        );
+        if (!ok) {
+          skipped++;
+          if (onFileDone) onFileDone(file, { status: 'skipped', reportNo: incoming.reportNo });
+          continue;
+        }
+        incoming.id = existing.id;
+        incoming.photos = (incoming.photos || []).map((p, i2) => p || (existing.photos && existing.photos[i2]) || null);
+        incoming.repSignatureImage = incoming.repSignatureImage || existing.repSignatureImage;
+        incoming.createdAt = existing.createdAt;
+        overwritten++;
+      } else {
+        added++;
+      }
+
+      incoming.projectId = project.id;
+      normalizeReport(incoming);
+      await saveReport(incoming);
+      existingByNo.set(String(incoming.reportNo), incoming);
       // saveReport already fired its own fire-and-forget sync push, but a
-      // 150-file batch is exactly the case where a handful of those can
-      // fail silently to the console and never be seen -- confirming (with
+      // big batch is exactly the case where a handful of those can fail
+      // silently to the console and never be seen -- confirming (with
       // retries) here means a failure shows up in this file's own log row
-      // instead of only as a mismatched report count on some other device,
-      // weeks later.
-      const synced = await confirmReportPushed(report);
-      imported.push({ file: file.name, reportNo: report.reportNo, dupe: isDupe, photoCount, synced });
-      const detail = [`#${report.reportNo}`];
-      if (photoCount) detail.push(`${photoCount} photo${photoCount === 1 ? '' : 's'}`);
-      if (isDupe) detail.push('duplicate Report No.');
-      if (!synced) detail.push('cloud sync failed — retry with Refresh on Company Management');
-      log.appendChild(irLogRow(
-        !synced ? 'ir-syncfail' : (isDupe ? 'ir-dupe' : 'ir-ok'),
-        !synced ? '⚠' : (isDupe ? '⚠' : '✓'),
-        file.name,
-        detail.join(', ')
-      ));
+      // instead of only as a mismatched report count on some other device.
+      const synced = await confirmReportPushed(incoming);
+      if (!synced) syncFailed++;
+      if (onFileDone) {
+        onFileDone(file, {
+          status: existing ? 'overwritten' : 'added',
+          reportNo: incoming.reportNo,
+          photoCount: (incoming.photos || []).filter(Boolean).length,
+          synced,
+        });
+      }
     } catch (err) {
+      console.error(err);
       errors.push(`${file.name}: ${err.message}`);
-      log.appendChild(irLogRow('ir-error', '✗', file.name, err.message));
+      if (onFileDone) onFileDone(file, { status: 'error', error: err.message });
     }
-    log.scrollTop = log.scrollHeight;
   }
   if (typeof endAuditBatch === 'function') endAuditBatch();
 
-  const dupeCount = imported.filter((r) => r.dupe).length;
-  const syncFailCount = imported.filter((r) => !r.synced).length;
-  const photoTotal = imported.reduce((sum, r) => sum + r.photoCount, 0);
-  if (errors.length) {
-    progressBannerError(userError(`${errors.length} of ${files.length} file(s) couldn't be imported -- see the list below.`, 'IMPORT_REPORT_BUNDLES'));
-  } else if (syncFailCount) {
-    progressBannerError(userError(`Imported ${imported.length} report(s), but ${syncFailCount} didn't make it to the company after retrying -- run Refresh on Company Management to finish syncing them.`, 'IMPORT_REPORT_SYNC'));
-  } else {
-    finishProgressBanner(`Imported ${imported.length} report(s)${photoTotal ? `, ${photoTotal} photo(s)` : ''}.`);
+  if (onFileDone) {
+    if (errors.length) {
+      progressBannerError(userError(`${errors.length} of ${files.length} file(s) couldn't be imported -- see the list below.`, 'IMPORT_REPORT_BUNDLES'));
+    } else if (syncFailed) {
+      progressBannerError(userError(`${added + overwritten} report(s) saved, but ${syncFailed} didn't make it to the company after retrying -- run Refresh on Company Management to finish syncing them.`, 'IMPORT_REPORT_SYNC'));
+    } else {
+      finishProgressBanner(`${added} added, ${overwritten} overwritten, ${skipped} skipped.`);
+    }
   }
 
-  results.innerHTML = `
-    <p class="hint" style="margin-top:0;">Imported ${imported.length} of ${files.length}${
-      photoTotal ? `, ${photoTotal} photo(s) pulled in with them` : ''
-    }${
-      dupeCount ? ` &mdash; ${dupeCount} flagged as a duplicate Report No. (opening one in the editor shows the same conflict warning as always)` : ''
-    }.</p>
-    ${syncFailCount ? `<p class="hint" style="color:var(--warn); margin-bottom:0.3rem;">${syncFailCount} saved locally but didn't sync to the company after retrying -- run <strong>Refresh</strong> on Company Management once this finishes to pick them back up (they're already listed above, flagged).</p>` : ''}
-    ${errors.length ? `<p class="hint" style="color:var(--danger); margin-bottom:0.3rem;">${errors.length} file(s) couldn't be imported:</p>
-    <ul class="hint" style="margin:0; padding-left:1.2rem;">${errors.map((msg) => `<li>${escapeHtml(msg)}</li>`).join('')}</ul>` : ''}
-  `;
+  return { added, overwritten, skipped, syncFailed, errors };
 }
+
 
 // ---------- Live previews ----------
 
@@ -672,31 +1107,12 @@ async function refreshReportPreview() {
   }
 }
 
-function refreshDashboardPreview() {
-  const frame = $('#ps-dash-frame');
-  if (!frame) return;
-  if (!frame.dataset.loaded) {
-    frame.dataset.loaded = '1';
-    frame.src = `project.html?id=${project.id}`;
-  } else {
-    try { frame.contentWindow.location.reload(); } catch (err) { frame.src = `project.html?id=${project.id}`; }
-  }
-}
-
-function sizeDashboardFrame() {
-  const wrap = $('#ps-dash-wrap');
-  const frame = $('#ps-dash-frame');
-  if (!wrap || !frame) return;
-  const scale = (wrap.clientWidth || 300) / PS_DASH_FRAME_W;
-  frame.style.transform = `scale(${scale})`;
-}
-
-window.addEventListener('resize', sizeDashboardFrame);
-
 // ---------- Init ----------
 
 async function init() {
   const idParam = queryParam('id');
+  const room = await getCompanyRoom();
+  isAdmin = !!(room && room.isAdmin);
   if (!idParam || idParam === 'new') {
     if (!(await companyCan('createProjects'))) {
       alert("You don't have permission to create projects.");
@@ -706,17 +1122,14 @@ async function init() {
     project = await makeProjectFromParsedFile({ meta: {}, payItemCatalog: [], contractors: [], equipmentLabels: [] });
     await saveProject(project);
     history.replaceState(null, '', `project-setup.html?id=${project.id}`);
+    canEdit = true; // whoever just created it sets it up
   } else {
     project = await getProject(idParam);
-    if (!project || !projectInScope(project, await getCompanyRoom())) {
+    if (!project || !projectInScope(project, room)) {
       location.href = 'index.html';
       return;
     }
-    if (!(await companyCan('editProjects'))) {
-      alert("You don't have permission to edit this project's setup.");
-      location.href = `project.html?id=${project.id}`;
-      return;
-    }
+    canEdit = await companyCan('editProjects');
   }
   if (!project.meta) project.meta = {};
 
@@ -724,16 +1137,16 @@ async function init() {
   renderBreadcrumb('#bb-trail', [
     { label: 'Home', href: 'index.html' },
     { label: project.name, href: `project.html?id=${project.id}` },
-    { label: 'Project Setup' },
+    { label: 'Settings' },
   ]);
 
-  [layout, logoBlob] = await Promise.all([loadPrintLayout(), getReportLogo()]);
+  // ?section=files etc. opens straight to a section (the project page's
+  // links use it).
+  const wanted = queryParam('section');
+  if (wanted) psSection = wanted;
 
-  renderTabs();
+  [layout, logoBlob] = await Promise.all([loadPrintLayout(), getReportLogo()]);
   renderActivePanel();
-  await refreshReportPreview();
-  refreshDashboardPreview();
-  sizeDashboardFrame();
 }
 
 // No 'company-data-pulled' listener here on purpose -- see the same note in
