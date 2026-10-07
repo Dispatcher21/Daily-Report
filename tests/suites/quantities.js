@@ -134,7 +134,7 @@ const text = (p, sel) => p.textContent(sel).then((t) => t.replace(/\s+/g, ' ').t
     await saveProject(pr);
   }, pid);
   await p.goto(`${B}/project-setup.html?id=${pid}`); await settle();
-  await p.click('[data-tab="payItems"]');
+  await p.click('[data-sec="pay"]');
   check('units to confirm', await text(p, '#psi-confirm-h'), 'Check 3 units');
   check('LUMP warns it will count in dollars', (await text(p, '.psi-confirm')).includes('count as dollars'), true);
   check('a LUMP item is not Lump Sum until confirmed', await p.evaluate(() => payItemKind(project.payItemCatalog.find((c) => c.itemNumber === '202-05'))), '');
@@ -183,9 +183,34 @@ const text = (p, sel) => p.textContent(sel).then((t) => t.replace(/\s+/g, ' ').t
   await p.fill('.rpi-open [data-f=qty]', '104');
   await Promise.all([p.waitForURL(/reports\.html/, { timeout: 30000 }), p.click('#btn-save-report')]);
 
+  // Project Settings: one page, a section at a time.
+  await p.goto(`${B}/project.html?id=${pid}`); await settle();
+  check('project page links to Settings', await p.getAttribute('#btn-project-settings', 'href'), `project-setup.html?id=${pid}`);
+  await p.goto(`${B}/project-setup.html?id=${pid}`); await settle();
+  check('settings sections', await p.$$eval('#ps-nav [data-sec]', (els) => els.map((e) => e.dataset.sec)), ['info', 'pay', 'crew', 'form', 'look', 'files', 'delete']);
+  check('contract end worked out', (await text(p, '#ps-endinfo')).startsWith('Ends '), true);
+  await p.click('[data-sec="form"]');
+  check('no print preview beside Report Form', await p.isVisible('#ps-right'), false);
+  await p.click('.ps-frow:has-text("Activity") [data-v="req"]');
+  await p.click('.ps-frow:has-text("Notes") [data-v="hid"]');
+  check('report form summary', await text(p, '[data-sec="form"] .psn-s'), '1 required · 1 hidden');
+  await p.click('#fsb-save');
+  await p.waitForFunction(() => document.querySelector('#fsb-status').textContent === 'Saved.', null, { timeout: 15000 });
+  check('report form saved', await p.evaluate(async (id) => { const pr = await getProject(id); return [pr.requiredFields, pr.hiddenFields]; }, pid), [['activity'], ['notes']]);
+  await p.click('[data-sec="delete"]');
+  check('delete needs the project number typed', await p.isDisabled('#btn-delete-project'), true);
+  await p.fill('#ps-del-confirm', 'demo-101');
+  check('then it unlocks', await p.isDisabled('#btn-delete-project'), false);
+  await p.evaluate(async (id) => { const pr = await getProject(id); pr.requiredFields = []; pr.hiddenFields = []; await saveProject(pr); }, pid);
+
+  // The tutorial is W.I.P.: no character or hand yet, labeled throughout.
+  await p.goto(`${B}/index.html`); await settle();
+  check('tutorial pages stamped W.I.P.', await p.evaluate(() => document.body.classList.contains('tutorial-wip') && document.querySelector('.tutorial-banner').textContent.includes('W.I.P.')), true);
+  check('no character or hand', [await p.isVisible('.tour-char'), await p.isVisible('.tour-hand')], [false, false]);
+
   // Phone width: nothing wider than the screen.
   await p.setViewportSize({ width: 390, height: 844 });
-  for (const page of [`quantity-sheet.html?project=${pid}`, `pay-apps.html?project=${pid}`, `quick-quantity.html?project=${pid}`, `project.html?id=${pid}`, `report-editor.html?project=${pid}&report=${rid}`]) {
+  for (const page of [`quantity-sheet.html?project=${pid}`, `pay-apps.html?project=${pid}`, `quick-quantity.html?project=${pid}`, `project.html?id=${pid}`, `report-editor.html?project=${pid}&report=${rid}`, `project-setup.html?id=${pid}`]) {
     await p.goto(`${B}/${page}`); await settle();
     if (page.startsWith('quantity-sheet')) { await p.click('[data-range="all"]'); await p.click('button.qs-row[data-item="502-01"]'); }
     check(`phone fits: ${page.split('?')[0]}`, await p.evaluate(() => document.documentElement.scrollWidth - innerWidth), 0);

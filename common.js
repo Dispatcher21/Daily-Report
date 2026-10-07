@@ -11,7 +11,7 @@ function escapeHtml(str) {
 
 // The app's version, shown at the bottom of every page as a link to the
 // patch notes. Bump it together with each new patch-notes.txt entry.
-const APP_VERSION = '0.054';
+const APP_VERSION = '0.055';
 document.addEventListener('DOMContentLoaded', () => {
   const main = document.querySelector('main');
   if (!main) return;
@@ -30,13 +30,15 @@ document.addEventListener('DOMContentLoaded', () => {
   const banner = document.createElement('div');
   banner.className = 'tutorial-banner';
   banner.innerHTML = `
-    <span><strong>Tutorial mode</strong> &middot; Example data only. Nothing you do here touches your real projects or is synced.</span>
+    <span><span class="wip-chip">W.I.P.</span> <strong>Tutorial mode</strong> &middot; Example data only, nothing here touches your real projects. The tutorial is still being built, so some parts are rough.</span>
     <span class="tutorial-banner-actions">
       <button type="button" class="tutorial-exit tutorial-tips" hidden>Tips</button>
       <a class="tutorial-exit" href="tutorial.html?exit=1">Exit tutorial</a>
     </span>`;
   const header = document.querySelector('.app-header');
   if (header) header.after(banner); else document.body.prepend(banner);
+  // "W.I.P." stamped faintly across every tutorial page.
+  document.body.classList.add('tutorial-wip');
   // The guided tour (character + pointer), only ever needed in tutorial mode.
   const tourScript = document.createElement('script');
   tourScript.src = 'tutorial-tour.js';
@@ -48,8 +50,8 @@ document.addEventListener('DOMContentLoaded', () => {
 // once, and either answer marks it 'done' so it never comes back. The
 // tutorial stays reachable from the menu and Settings afterward.
 const TUTORIAL_OFFER_KEY = 'dr-tutorial-offer';
-// The tutorial is still being finished, so only the test site offers it.
-const TUTORIAL_AVAILABLE = ['daily-report.john-sonnieriii.workers.dev', 'localhost', '127.0.0.1'].includes(location.hostname);
+// Offered everywhere, labeled W.I.P. while it's still being finished.
+const TUTORIAL_AVAILABLE = true;
 document.addEventListener('DOMContentLoaded', () => {
   if (!TUTORIAL_AVAILABLE || inTutorialMode() || !document.querySelector('#index-layout')) return;
   let pending = false;
@@ -61,8 +63,8 @@ document.addEventListener('DOMContentLoaded', () => {
   overlay.id = 'tutorial-offer-overlay';
   overlay.innerHTML = `
     <div class="modal-card" role="dialog" aria-labelledby="tutorial-offer-title">
-      <h2 id="tutorial-offer-title" style="margin:0 0 0.5rem;">Welcome! Want a quick tour?</h2>
-      <p style="margin:0 0 1.1rem;">The tutorial opens an example project with sample reports, photos, and approvals, so you can try everything without touching your own data. You can exit any time, and find it later in the menu or Settings.</p>
+      <h2 id="tutorial-offer-title" style="margin:0 0 0.5rem;">Welcome! Want a quick tour? <span class="wip-chip">W.I.P.</span></h2>
+      <p style="margin:0 0 1.1rem;">The tutorial opens an example project with sample reports, photos, and approvals, so you can try everything without touching your own data. It's still being built, so some parts are rough. You can exit any time, and find it later in the menu or Settings.</p>
       <div class="tutorial-offer-actions">
         <a class="btn-primary" href="tutorial.html" id="tutorial-offer-start">Start tutorial</a>
         <button type="button" class="btn-secondary" id="tutorial-offer-skip">Not now</button>
@@ -162,7 +164,7 @@ async function initHamburgerMenu() {
       <a class="hb-row" href="settings.html"><span class="hb-row-icon" aria-hidden="true">&#9881;&#65039;</span><span class="hb-row-label">Settings</span></a>
       ${inTutorialMode()
         ? '<a class="hb-row hb-danger" href="tutorial.html?exit=1"><span class="hb-row-icon" aria-hidden="true">&#127891;</span><span class="hb-row-label">Exit Tutorial</span></a>'
-        : `${TUTORIAL_AVAILABLE ? '<a class="hb-row" href="tutorial.html" id="hb-tutorial"><span class="hb-row-icon" aria-hidden="true">&#127891;</span><span class="hb-row-label">Start Tutorial</span></a>' : ''}
+        : `${TUTORIAL_AVAILABLE ? '<a class="hb-row" href="tutorial.html" id="hb-tutorial"><span class="hb-row-icon" aria-hidden="true">&#127891;</span><span class="hb-row-label">Start Tutorial <span class="wip-chip">W.I.P.</span></span></a>' : ''}
       <button type="button" class="hb-row hb-danger" id="hb-logout"><span class="hb-row-icon" aria-hidden="true">&#128682;</span><span class="hb-row-label">Log out</span></button>`}
     </div>
   `;

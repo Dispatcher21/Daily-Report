@@ -3,6 +3,23 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.055 -- 2026-10-07
+  - Project Settings is one page: a section list on the left (Project
+    Info, Pay Items, Contractors & Equipment, Report Form, Icon &
+    Background, Files & Backup, Delete Project), one section at a time,
+    with the printed report beside the sections that change it. The
+    project page's long settings panel is now a single Project Settings
+    button.
+  - Project Info shows when the contract ends and how many days are left.
+    The report starting text is folded away under one link.
+  - New Report Form section: choose Optional, Required or Hidden for each
+    report field.
+  - Files & Backup holds the project Excel file, importing old reports and
+    Sync to Folder. Deleting a project now asks you to type its number.
+  - The tutorial is now available to everyone, marked W.I.P. while it's
+    still being built (the guide character and pointer are hidden until
+    the new drawings are ready).
+
 0.054 -- 2026-10-07
   - Project Settings > Pay Items: one line per item, and each item's Unit
     is picked from a standard list (LF, SY, CY, TON, LS...) or "Other" to

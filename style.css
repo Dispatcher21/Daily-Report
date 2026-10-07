@@ -801,6 +801,17 @@ button.global-sync-banner:disabled { opacity: 0.7; cursor: default; }
 .tutorial-banner-actions { display: inline-flex; gap: 0.5rem; }
 button.tutorial-exit { background: none; font: inherit; font-weight: 700; cursor: pointer; }
 .tutorial-exit[hidden] { display: none; }
+/* "W.I.P." label on everything tutorial, and a faint diagonal stamp across
+   each tutorial page (never takes clicks). */
+.wip-chip {
+  display: inline-block; vertical-align: middle; font-size: 0.68rem; font-weight: 800; letter-spacing: 0.06em;
+  padding: 0.05rem 0.45rem; border-radius: 999px; background: #e0a100; color: #1d1600; line-height: 1.5;
+}
+body.tutorial-wip::after {
+  content: ''; position: fixed; inset: 0; z-index: 1100; pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='180'%3E%3Ctext x='20' y='120' transform='rotate(-24 130 90)' font-family='Arial, sans-serif' font-size='40' font-weight='800' fill='%23808080' fill-opacity='0.13'%3EW.I.P.%3C/text%3E%3C/svg%3E");
+}
+@media print { body.tutorial-wip::after { display: none; } }
 
 /* ---------- Guided tour (tutorial-tour.js) ----------
    The inspector sits bottom-right with an RPG-style dialogue box to its
@@ -872,6 +883,10 @@ button.tutorial-exit { background: none; font: inherit; font-weight: 700; cursor
   50% { transform: translate(0, 0); }
 }
 .tour-ring[hidden], .tour-hand[hidden] { display: none; }
+/* No character or hand for now (TOUR_SHOW_ART in tutorial-tour.js). */
+.tour-no-art .tour-char, .tour-hand.tour-no-art { display: none !important; }
+.tour-no-art .tour-box { margin-bottom: 0; }
+.tour-no-art .tour-box::after { display: none; }
 @media (prefers-reduced-motion: reduce) {
   .tour-hand, .tour-hand.tour-glide { animation: none; transition: none; }
   .tour-ring, .tour-ring.tour-glide { transition: none; }
@@ -3665,6 +3680,7 @@ input[type="date"] { min-width: 0; }
   cursor: pointer; min-height: var(--tap);
 }
 .settings-toggle:hover { border-color: var(--brand-light); }
+a.settings-toggle { text-decoration: none; box-sizing: border-box; }
 .settings-toggle .st-chevron { transition: transform 0.2s ease; color: var(--text-dim); }
 .settings-toggle[aria-expanded="true"] .st-chevron { transform: rotate(180deg); }
 /* Open, the toggle becomes this box's own header instead of a separate
