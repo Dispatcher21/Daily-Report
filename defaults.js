@@ -25,11 +25,11 @@ const DEFAULT_EQUIPMENT_LABELS = [
   '', '', '', '', '', '', '',
 ];
 const CONTRACTOR_COUNT = 6; // fixed by the template
-// How many pay item rows the printed table itself has room for -- not a cap
-// on how many a report can hold. A report can carry more; render-report.js
-// prints the first PAY_ITEM_ROW_COUNT in the table and lists the rest as
-// extra lines in the Summary of Work Performed box. Also the number of
-// blank rows a brand-new report starts with in the editor.
+// How many pay item rows the old printed template had (still how many
+// structured rows an imported Excel report is read from, see
+// parseDailyWorkReportSheet), and the number of blank rows a brand-new
+// report starts with. Not a cap: the printed table is now built to fit
+// however many there are (buildSummaryBox in render-report.js).
 const PAY_ITEM_ROW_COUNT = 6;
 
 function todayIso() {
@@ -543,6 +543,11 @@ async function makeBlankReport(nextReportNo, project, previous) {
       theoreticalQty: '',
       remarks: '',
     })),
+    // Tests Performed: { name (one of TEST_TYPES), note }. Checks Completed:
+    // { name (one of the project's checks), status 'done' | 'not' | 'na',
+    // note }. Both start empty; they're the day's own record.
+    tests: [],
+    checks: [],
     controllingItem: meta.controllingItem || '',
     commentsOnTime: meta.commentsOnTime || '',
     controllingItemTimeFrom: meta.controllingItemTimeFrom || '',
@@ -638,6 +643,8 @@ async function duplicateReport(source, nextReportNo, project) {
       qty: Array.isArray(row.qty) ? [...row.qty] : Array.from({ length: CONTRACTOR_COUNT }, () => ''),
     })),
     payItems: (source.payItems || []).map((it) => ({ ...it })),
+    tests: [],
+    checks: [],
     repSignatureImage: null,
     peSignatureImage: null,
     photos: [null, null, null, null, null, null],
@@ -912,6 +919,32 @@ function nextEstimateNo(billingEstimates) {
 // via the visual picker on required-fields.html. Shared here so that page,
 // report-editor.html's red-border highlighting, and its Generate Report gate
 // all agree on the same key -> label -> "is it actually filled in" logic.
+// ---------- Tests Performed and Checks Completed ----------
+
+// The standard test names an inspector picks from (report.tests[].name), so
+// the same test reads the same on every report and can be searched for.
+// Grouped only for the picker; the name alone is saved and printed.
+const TEST_TYPE_GROUPS = [
+  ['Soils & Base', ['Nuclear Density (Soil)', 'Sand Cone Density', 'Proctor (Moisture-Density)', 'Moisture Content', 'Atterberg Limits', 'Sieve Analysis (Gradation)', 'Dynamic Cone Penetrometer (DCP)', 'Plate Load Test', 'Proof Roll', 'Stabilization Content (Lime/Cement)', 'Pulverization']],
+  ['Concrete', ['Slump', 'Air Content', 'Concrete Temperature', 'Unit Weight', 'Cylinders Cast', 'Cylinder Breaks (Compressive Strength)', 'Beams Cast (Flexural)', 'Maturity Reading', 'Concrete Core']],
+  ['Asphalt', ['Mix Temperature', 'Mat Temperature', 'Nuclear Density (Asphalt)', 'Asphalt Core', 'Rolling Pattern', 'Binder Content', 'Tack Rate', 'Thickness Check', 'Straightedge / Smoothness']],
+  ['Pipe & Drainage', ['Mandrel (Deflection) Test', 'CCTV Video Inspection', 'Manhole Vacuum Test', 'Pipe Air Test', 'Leakage / Exfiltration Test', 'Joint Inspection']],
+  ['Structures & Other', ['Rebar Inspection', 'Bolt Torque', 'Pile Driving Log', 'Coating Thickness', 'Retroreflectivity', 'Water Line Pressure Test', 'Other (describe)']],
+];
+const TEST_TYPES = TEST_TYPE_GROUPS.flatMap(([, list]) => list);
+
+const CHECK_STATUS_LABELS = { done: 'Done', not: 'Not done', na: 'N/A' };
+
+// The checks an admin set up for the project (Project Settings > Checks).
+function projectChecks(project) {
+  return ((project && project.checks) || []).map((c) => String(c || '').trim()).filter(Boolean);
+}
+
+function reportCheckStatus(report, name) {
+  const c = ((report && report.checks) || []).find((x) => x && x.name === name);
+  return c ? c.status || '' : '';
+}
+
 const REQUIRED_FIELD_DEFS = [
   { key: 'activity', label: 'Activity', isEmpty: (r) => !String(r.activity || '').trim() },
   { key: 'notes', label: 'Notes', isEmpty: (r) => !String(r.notes || '').trim() },
@@ -943,6 +976,8 @@ const REQUIRED_FIELD_DEFS = [
   { key: 'tempHigh', label: 'High Temp', isEmpty: (r) => !String(r.tempHigh ?? '').trim() },
   { key: 'tempLow', label: 'Low Temp', isEmpty: (r) => !String(r.tempLow ?? '').trim() },
   { key: 'photos', label: 'Photos (at least one)', isEmpty: (r) => !Array.isArray(r.photos) || r.photos.every((p) => !p) },
+  { key: 'tests', label: 'Tests Performed (at least one)', isEmpty: (r) => !(r.tests || []).some((t) => t && t.name) },
+  { key: 'checks', label: 'Checks Completed (every check marked)', isEmpty: (r, p) => projectChecks(p).some((name) => !reportCheckStatus(r, name)) },
 ];
 
 // ---------- Field visibility & order (admin-configurable, per project) ----------
@@ -969,6 +1004,8 @@ const ORDERABLE_FIELD_DEFS = [
   // to independently show/hide/reorder/require for any of them.
   { key: 'workSummary', label: 'Summary of Work Performed', kind: 'simple' },
   { key: 'payItems', label: 'Pay Items', kind: 'block' },
+  { key: 'tests', label: 'Tests Performed', kind: 'block' },
+  { key: 'checks', label: 'Checks Completed', kind: 'block' },
   { key: 'controllingItem', label: 'Controlling Item', kind: 'simple' },
   { key: 'commentsOnTime', label: 'Comments on Time Charged', kind: 'simple' },
   { key: 'controllingItemTimeFrom', label: 'Controlling Item Time From', kind: 'simple' },
@@ -993,11 +1030,15 @@ const DEFAULT_FIELD_ORDER = ORDERABLE_FIELD_DEFS.map((d) => d.key);
 // its keys hidden simply doesn't render; keys within a group still render
 // in whatever order the admin set. Every ORDERABLE_FIELD_DEFS key must
 // appear in exactly one group here.
+// Tests Performed and Checks Completed sit right after Work Summary: they
+// print inside the Work Summary box, under the pay item table.
 const REPORT_BUILDER_GROUPS = [
-  { id: 'payItems', icon: '\u{1F4CA}', label: 'Pay Items', keys: ['payItems'], hint: "What was worked on today and how much. Stations, sizes and remarks print on the line under each item. The printed table has 6 lines; anything that doesn't fit lists at the end of the Summary of Work Performed." },
+  { id: 'payItems', icon: '\u{1F4CA}', label: 'Pay Items', keys: ['payItems'], hint: "What was worked on today and how much. Stations, sizes and remarks print on the line under each item. The printed table sits under the Work Summary and grows with the list; the text shrinks to fit when needed." },
   { id: 'overview', icon: '\u{1F4DD}', label: 'Overview', keys: ['activity', 'notes', 'representative', 'peName', 'ntpDate'] },
   { id: 'contractorsEquipment', icon: '\u{1F477}', label: 'Contractors & Equipment', keys: ['contractorsEquipment'], hint: '22 personnel/equipment rows are fixed by the template, but only ones already in use show by default -- use the "+" buttons to reveal more. You can rename any row, and quantities are per contractor tab.' },
   { id: 'workSummary', icon: '\u{270D}\u{FE0F}', label: 'Work Summary', keys: ['workSummary'] },
+  { id: 'tests', icon: '\u{1F9EA}', label: 'Tests Performed', keys: ['tests'], hint: 'Pick each test from the list so it has the same name on every report, then note the location, results or sample numbers. Prints under the pay items.' },
+  { id: 'checks', icon: '\u{2705}', label: 'Checks Completed', keys: ['checks'], hint: "This project's checks (set in Project Settings). Mark each one Done, Not done or N/A. Prints under the tests." },
   { id: 'controllingItem', icon: '\u{23F1}\u{FE0F}', label: 'Controlling Item & Time Charged', keys: ['controllingItem', 'commentsOnTime', 'controllingItemTimeFrom', 'controllingItemTimeTo'] },
   { id: 'siteConditions', icon: '\u{1F6A7}', label: 'Site Conditions', keys: ['workingConditions', 'trafficControlSelect', 'workBegin', 'workEnd'] },
   { id: 'weather', icon: '\u{1F324}\u{FE0F}', label: 'Weather', keys: ['weatherDesc', 'tempHigh', 'tempLow'] },
@@ -1040,7 +1081,7 @@ function getMissingRequiredFields(report, project) {
   const required = (project && project.requiredFields) || [];
   if (!report || isNoWorkDayReport(report) || isWeatherDayReport(report)) return [];
   const missing = REQUIRED_FIELD_DEFS.filter(
-    (def) => required.includes(def.key) && !isFieldHidden(project, def.key) && def.isEmpty(report)
+    (def) => required.includes(def.key) && !isFieldHidden(project, def.key) && def.isEmpty(report, project)
   );
   // Pay items whose catalog entry asks for remarks (Project Settings).
   if (!isFieldHidden(project, 'payItems')) {

@@ -1716,6 +1716,29 @@ label.rpi-qty { display: flex; flex-direction: row; align-items: stretch; gap: 0
 .rpi-manual { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; align-items: center; padding: 0.5rem 0.75rem; border-top: 1px solid var(--border); }
 .rpi-manual-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; gap: 0.5rem; align-items: end; width: 100%; }
 .rpi-manual-fields label { margin: 0; }
+
+/* Tests Performed / Checks Completed (report-editor.html) */
+.rtc { display: grid; gap: 0.55rem; }
+.rb-fit-warn { margin: 0.75rem 0; padding: 0.7rem 0.9rem; border-radius: var(--radius-sm); background: var(--warn-bg); border: 1.5px solid var(--warn-border); color: var(--warn); font-weight: 700; font-size: 0.9rem; }
+.rb-fit-warn[hidden] { display: none; }
+.rtc-list { display: grid; gap: 0.5rem; }
+.rtc-row { display: grid; grid-template-columns: minmax(0, 16rem) minmax(0, 1fr) auto; gap: 0.5rem; align-items: center; }
+.rtc-row select, .rtc-row input, .rtc-check input { min-height: 2.5rem; padding: 0.4rem 0.55rem; max-width: none; }
+.rtc-x { border: 0; background: none; color: var(--text-dim); font-size: 1.35rem; line-height: 1; padding: 0 0.35rem; cursor: pointer; }
+.rtc-x:hover { color: var(--danger); }
+.rtc-check { display: grid; grid-template-columns: minmax(0, 9rem) auto minmax(0, 1fr); gap: 0.6rem; align-items: center; padding: 0.45rem 0; border-top: 1px solid var(--border); }
+.rtc-check:first-child { border-top: 0; padding-top: 0; }
+.rtc-check b { min-width: 0; overflow-wrap: anywhere; }
+.rtc-seg button[aria-pressed="true"].rtc-done { background: var(--ok); color: var(--surface); }
+.rtc-seg button[aria-pressed="true"].rtc-not { background: var(--danger); color: var(--surface); }
+.rtc-seg button[aria-pressed="true"].rtc-na { background: var(--text-dim); color: var(--surface); }
+.rb-group-sum { font-size: 0.8rem; font-weight: 600; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.rb-group-sum.rb-group-sum-need { color: var(--warn); font-weight: 800; }
+@media (max-width: 520px) {
+  .rtc-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .rtc-row input { grid-column: 1 / -1; grid-row: 2; }
+  .rtc-check { grid-template-columns: minmax(0, 1fr); }
+}
 @media (max-width: 520px) {
   label.rpi-qty { width: 7.5rem; }
   .rpi-label { width: 100%; }

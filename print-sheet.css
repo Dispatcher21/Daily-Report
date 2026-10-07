@@ -62,3 +62,67 @@
   white-space: nowrap;
   transform-origin: center center;
 }
+
+/* The Work Summary box (render-report.js buildSummaryBox): summary text on
+   top, then the Pay Items / Tests Performed / Checks Completed tables at
+   the bottom. Everything is in em so fitSummaryBox scales it with one
+   font size. */
+.print-cell.rr-sbox {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  overflow: hidden;
+  white-space: normal;
+  line-height: 1.25;
+}
+.rr-sbox-text {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  white-space: pre-wrap;
+  padding: 1pt 3pt;
+  line-height: 1.25;
+}
+.rr-sbox-table {
+  flex: none;
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-weight: 400;
+  line-height: 1.15;
+}
+.rr-sbox-table caption {
+  caption-side: top;
+  text-align: left;
+  font-weight: 700;
+  font-size: 1.15em;
+  line-height: 1.4; /* about one template row */
+  padding: 0 3pt;
+  border-top: 2.25pt solid #000;
+  border-bottom: 0.75pt solid #000;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rr-sbox-table tr { height: 1.625em; }
+.rr-sbox-table th {
+  background: #d6d4cb;
+  font-weight: 700;
+  text-align: center;
+  border-bottom: 0.75pt solid #000;
+  padding: 0 2pt;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.rr-sbox-table td {
+  border-bottom: 0.75pt solid #000;
+  padding: 0 3pt;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rr-sbox-table th + th, .rr-sbox-table td + td { border-left: 0.75pt solid #000; }
+.rr-sbox-table tbody tr:last-child td { border-bottom: 0; }
+.rr-sbox-table td.rr-q { text-align: right; }
+.rr-sbox-table td.rr-st { text-align: center; font-weight: 700; }
+.rr-sbox-table tr.rr-det td { font-size: 0.8em; color: #333; border-left: 0; padding-left: 12pt; }

@@ -184,20 +184,11 @@ function renderSheetGrid(sheetData, coordValues, coordImages) {
           cellEl.style.fontSize = RR_NOWRAP_CELLS[coord] + 'pt';
         }
         if (RR_INDENT_CELLS[coord]) cellEl.style.paddingLeft = RR_INDENT_CELLS[coord] + 'pt';
-        if (coordValues.smallCells && coordValues.smallCells.has(coord)) {
-          cellEl.style.fontSize = RR_DETAIL_FONT_PT + 'pt';
-          cellEl.style.paddingLeft = '8pt';
+        if (coord === RR_WORK_SUMMARY_CELL && coordValues.summaryBox) {
+          buildSummaryBox(cellEl, text, coordValues.summaryBox);
+          grid.appendChild(cellEl);
+          continue;
         }
-        if (RR_PAY_ITEM_DESC_CELLS.has(coord)) {
-          cellEl.style.whiteSpace = 'pre-wrap';
-          cellEl.style.overflow = 'hidden';
-          cellEl.classList.add('rr-shrink-wrap');
-        }
-        // Work summary (I14): already wraps via the template's own cell
-        // style, but now that overflow pay items can be appended onto the
-        // end of it, a long combination needs the same shrink-to-fit safety
-        // net the pay item descriptions get, instead of silently clipping.
-        if (coord === RR_WORK_SUMMARY_CELL) cellEl.classList.add('rr-shrink-wrap');
         const rot = (styleData && styleData.align && styleData.align.rot) || 0;
         if (rot && text) {
           const span = document.createElement('span');
@@ -327,19 +318,18 @@ const RR_INDENT_CELLS = { K11: 10 };
 // The big "Summary of Work Performed" box.
 const RR_WORK_SUMMARY_CELL = 'I14';
 
-// The pay item Description cell (K28:O28, and one row per item below it)
-// isn't marked wrap-enabled in the template, so by default it inherits the
-// same "spill into the next cell" behaviour every other unwrapped label
-// gets -- fine when that neighbour is blank, but here it's the Quantity and
-// Unit columns, which always have their own real values. A long description
-// was rendering directly on top of them. Forced to wrap and clip to its own
-// column instead; fitWrappedText() below shrinks it further if it still
-// doesn't fit the row's fixed height.
-// A pay item's detail line (stations, sizes, remarks) under its own line.
-const RR_DETAIL_FONT_PT = 9;
-const RR_PAY_ITEM_DESC_CELLS = new Set(
-  Array.from({ length: PAY_ITEM_ROW_COUNT }, (_, i) => 'K' + (RR_PAY_ITEM_FIRST_ROW + i))
-);
+// Rows 14-33 of the template, columns I-Q, are one box (print-layout.json
+// merges them): the work summary text on top, then the day's Pay Items,
+// Tests Performed and Checks Completed tables stacked at the bottom, each
+// only as long as it needs to be and left out entirely when empty. The
+// whole box shrinks its text together (fitSummaryBox) from the template's
+// 12pt down to RR_SBOX_MIN_PT, always keeping at least
+// RR_SBOX_MIN_SUMMARY_LINES lines for the summary; anything still too much
+// is marked data-overflow for the editor to warn about.
+const RR_SBOX_MAX_PT = 12;
+const RR_SBOX_MIN_PT = 7;
+const RR_SBOX_MIN_SUMMARY_LINES = 3;
+const RR_SBOX_ROW_EM = 19.5 / 12; // a template row's height per pt of text
 
 function buildSheet1Values(report) {
   const v = Object.assign({}, LABEL_OVERRIDES);
@@ -375,51 +365,15 @@ function buildSheet1Values(report) {
   v['K11'] = report.workSummaryHeader || '';
   v['K12'] = report.trafficControlNote || '';
 
-  // The template's table only has PAY_ITEM_ROW_COUNT physical rows. An
-  // item with details (stations, side, location, calculator inputs,
-  // theoretical quantity, remarks -- see payItemDetailLine in defaults.js)
-  // takes two: its own line, then the details in smaller text on the line
-  // under it. Nothing is dropped: once an item doesn't fit whole, it and
-  // everything after it are listed at the end of the work summary box,
-  // same dash-separated style an inspector uses when writing overflow pay
-  // items in by hand.
-  const filledPayItems = (report.payItems || []).filter((it) => it.itemNumber || it.description);
-  const tableLines = [];
-  const overflowLines = [];
-  filledPayItems.forEach((it) => {
-    const detail = payItemDetailLine(it);
-    if (!overflowLines.length && tableLines.length + (detail ? 2 : 1) <= PAY_ITEM_ROW_COUNT) {
-      tableLines.push({ item: it });
-      if (detail) tableLines.push({ detail });
-    } else {
-      const line = [it.itemNumber, it.description, [it.qty, it.unit].filter(Boolean).join(' ')].filter(Boolean).join(' - ');
-      overflowLines.push(detail ? `${line} (${detail})` : line);
-    }
-  });
-
-  let workSummaryText = report.workSummary || '';
-  if (overflowLines.length > 0) {
-    workSummaryText += `${workSummaryText ? '\n\n' : ''}Pay Items (did not fit in table above):\n${overflowLines.join('\n')}`;
-  }
-  v[RR_WORK_SUMMARY_CELL] = workSummaryText;
-
-  // Detail lines print smaller (see renderSheetGrid); kept off the
+  v[RR_WORK_SUMMARY_CELL] = report.workSummary || '';
+  // The tables under the summary (see RR_SBOX_* above); kept off the
   // enumerable keys so nothing that walks the values sees it as a cell.
-  const smallCells = new Set();
-  Object.defineProperty(v, 'smallCells', { value: smallCells, enumerable: false });
-  tableLines.forEach((line, i) => {
-    const r = RR_PAY_ITEM_FIRST_ROW + i;
-    if (line.detail) {
-      v['K' + r] = line.detail;
-      smallCells.add('K' + r);
-      return;
-    }
-    const item = line.item;
-    v['I' + r] = item.itemNumber || '';
-    v['K' + r] = item.description || '';
-    v['P' + r] = item.qty != null && item.qty !== '' ? String(item.qty) : '';
-    v['Q' + r] = item.unit || '';
-  });
+  const payItems = (report.payItems || [])
+    .filter((it) => it && (it.itemNumber || it.description))
+    .map((it) => ({ itemNumber: it.itemNumber || '', description: it.description || '', qty: it.qty != null ? String(it.qty) : '', unit: it.unit || '', detail: payItemDetailLine(it) }));
+  const tests = (report.tests || []).filter((t) => t && t.name).map((t) => ({ name: t.name, note: t.note || '' }));
+  const checks = (report.checks || []).filter((c) => c && c.name && c.status).map((c) => ({ name: c.name, status: CHECK_STATUS_LABELS[c.status] || c.status, note: c.note || '' }));
+  Object.defineProperty(v, 'summaryBox', { value: { payItems, tests, checks }, enumerable: false });
 
   // Rows 34-41 alternate label row / value row: the 8pt label sits on one row
   // and its 12pt value on the row below. Controlling Item and Comments on Time
@@ -796,7 +750,7 @@ function renderReportPages(container, layout, report, logoBlob) {
     page.appendChild(grid);
     container.appendChild(page);
     fitRotatedText(page); // needs layout, so only after it's in the document
-    fitWrappedText(page);
+    fitSummaryBox(page);
     return { el: page, geom: pageGeometry(sheetData) };
   });
 }
@@ -817,18 +771,57 @@ function fitRotatedText(scope) {
   });
 }
 
-// Pay item descriptions are forced to wrap and clip inside their own column
-// (see RR_PAY_ITEM_DESC_CELLS) rather than spilling into Quantity/Unit. A
-// long one can still need more lines than the row's fixed height allows;
-// shrink it instead of silently losing whatever wraps past the clip.
-function fitWrappedText(scope) {
-  $$('.rr-shrink-wrap', scope).forEach((cell) => {
-    if (!cell.textContent.trim()) return;
-    let size = parseFloat(getComputedStyle(cell).fontSize);
-    while (cell.scrollHeight > cell.clientHeight + 0.5 && size > 6) {
-      size -= 0.5;
-      cell.style.fontSize = size + 'px';
+// The Work Summary box (RR_WORK_SUMMARY_CELL): the summary text, then each
+// table that has anything in it. Sizes are in em so fitSummaryBox can scale
+// the whole box by changing one font size.
+function buildSummaryBox(cellEl, text, box) {
+  cellEl.classList.add('rr-sbox');
+  cellEl.style.padding = '0';
+  const summary = document.createElement('div');
+  summary.className = 'rr-sbox-text';
+  summary.textContent = text;
+  cellEl.appendChild(summary);
+  const table = (caption, cols, rows) => {
+    const t = document.createElement('table');
+    t.className = 'rr-sbox-table';
+    t.innerHTML = `<caption>${escapeHtml(caption)}</caption><colgroup>${cols.map(([, w]) => `<col style="width:${w}%">`).join('')}</colgroup>`
+      + `<thead><tr>${cols.map(([h]) => `<th>${escapeHtml(h)}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody>`;
+    cellEl.appendChild(t);
+  };
+  const td = (val, cls) => `<td${cls ? ` class="${cls}"` : ''}>${escapeHtml(val)}</td>`;
+  if (box.payItems.length) {
+    table('Pay Items (Location and Description of each item required above):',
+      [['Item Number', 21], ['Item Description', 52], ['Quantity', 13.5], ['Unit', 13.5]],
+      box.payItems.map((it) => `<tr>${td(it.itemNumber)}${td(it.description)}${td(it.qty, 'rr-q')}${td(it.unit)}</tr>`
+        + (it.detail ? `<tr class="rr-det"><td></td><td colspan="3">${escapeHtml(it.detail)}</td></tr>` : '')));
+  }
+  if (box.tests.length) {
+    table('Tests Performed:', [['Test', 38], ['Location / Results', 62]],
+      box.tests.map((t) => `<tr>${td(t.name)}${td(t.note)}</tr>`));
+  }
+  if (box.checks.length) {
+    table('Checks Completed:', [['Check', 30], ['Status', 14], ['Results / Remarks', 56]],
+      box.checks.map((c) => `<tr>${td(c.name)}${td(c.status, 'rr-st')}${td(c.note)}</tr>`));
+  }
+}
+
+// Largest text size (12pt down to 7pt) at which the summary text still fits
+// above the tables with at least RR_SBOX_MIN_SUMMARY_LINES lines of room.
+// Needs layout, so only after the page is in the document.
+function fitSummaryBox(scope) {
+  $$('.rr-sbox', scope).forEach((box) => {
+    const text = box.querySelector('.rr-sbox-text');
+    let fits = false;
+    for (let pt = RR_SBOX_MAX_PT; pt >= RR_SBOX_MIN_PT - 0.001; pt -= 0.5) {
+      box.style.fontSize = pt + 'pt';
+      const lineH = parseFloat(getComputedStyle(text).lineHeight) || pt * 1.25;
+      if (text.clientHeight + 0.5 >= lineH * RR_SBOX_MIN_SUMMARY_LINES && text.scrollHeight <= text.clientHeight + 0.5) {
+        fits = true;
+        break;
+      }
     }
+    if (fits) delete box.dataset.overflow;
+    else box.dataset.overflow = '1';
   });
 }
 
@@ -877,7 +870,9 @@ const FIELD_HIGHLIGHT_REGIONS = {
   workSummaryHeader: { sheet: 1, coord: 'K11' },
   trafficControlNote: { sheet: 1, coord: 'K12' },
   workSummary: { sheet: 1, coord: RR_WORK_SUMMARY_CELL },
-  payItems: { sheet: 1, ranges: [{ fromCol: 'I', toCol: 'Q', fromRow: RR_PAY_ITEM_FIRST_ROW, toRow: RR_PAY_ITEM_FIRST_ROW + PAY_ITEM_ROW_COUNT - 1 }] },
+  // The tables are built to fit inside the Work Summary box now; this is
+  // just its lower part, where they usually land.
+  payItems: { sheet: 1, ranges: [{ fromCol: 'I', toCol: 'Q', fromRow: 26, toRow: 33 }] },
   controllingItem: { sheet: 1, coord: 'A35' },
   commentsOnTime: { sheet: 1, coord: 'I35' },
   controllingItemTimeFrom: { sheet: 1, coord: 'C35' },

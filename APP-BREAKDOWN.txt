@@ -313,6 +313,7 @@ project-setup.html
   Project Info (basics, contract time with the end date worked out,
   people, and "starting text for new reports" folded away), Pay Items,
   Contractors & Equipment (standard equipment rows unless "My own"),
+  Checks (project.checks, the list inspectors mark on each report),
   Report Form (Optional/Required/Hidden per field: requiredFields and
   hiddenFields, the same settings required-fields.html's visual editor
   sets; the order stays there), Icon & Background, Files & Backup
@@ -365,7 +366,10 @@ report-editor.html
   as payItem.calc), theoretical quantity and remarks (payItem.remarks);
   "X left of plan" counts every other report on the project. A catalog
   item's dailyLimit flags a bigger day; remarksRequired makes the remarks
-  a required field (getMissingRequiredFields).
+  a required field (getMissingRequiredFields). Tests Performed and Checks
+  Completed come right after Work Summary (renderTests/bindTests,
+  renderChecks/bindChecks): a test is picked from TEST_TYPES plus a free
+  note; each project check is marked Done / Not done / N/A with remarks.
 
 report-viewer.html
   Read-only printed-page preview of one report (renderPreview, reusing
@@ -529,9 +533,11 @@ defaults.js
   runPayItemCalc, mergePayItemSettings (a project file re-upload keeps
   settings the file has no column for), and payItemDetailLine (the line
   printed under an item: stations, side, location, calculator inputs,
-  theoretical, then remarks; render-report.js's buildSheet1Values puts it
-  on the table row under its item in smaller text, and an item that
-  doesn't fit whole goes to the Work Summary overflow).
+  theoretical, then remarks; printed in smaller text on the line under
+  its item). Also TEST_TYPE_GROUPS / TEST_TYPES (the standard test names
+  for report.tests), CHECK_STATUS_LABELS, projectChecks (project.checks,
+  set in Project Settings > Checks) and reportCheckStatus (report.checks:
+  { name, status done|not|na, note }).
 
 theme.js
   Light/dark theming + accent color derivation (deriveAccentVars,
@@ -666,7 +672,14 @@ render-report.js
   styles, and merges). renderReportPages is the entry point -- used by
   download.html/local-sync.js (feeding html2canvas -> PDF), report-viewer.html
   and report-editor.html (live/static preview), and required-fields.html
-  (click-target preview). The inverse direction -- parseReportExcelFile/
+  (click-target preview). print-layout.json merges the Work Summary and
+  the template's old pay item rows (I14:Q33) into one box:
+  buildSummaryBox draws the summary text on top and the Pay Items, Tests
+  Performed and Checks Completed tables (each only as long as it needs,
+  left out when empty) at the bottom; fitSummaryBox shrinks it all from
+  12pt to 7pt as needed, keeping 3 summary lines, and marks
+  data-overflow when even 7pt is too much (report-editor.html warns).
+  The inverse direction -- parseReportExcelFile/
   parseDailyWorkReportSheet/extractEmbeddedPhotos -- reads a hand-filled
   Daily Work Report Excel file back into a report record + its embedded
   photos, by walking the .xlsx's own OOXML relationships (workbook.xml ->

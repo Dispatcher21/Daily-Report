@@ -83,6 +83,8 @@
            (defaults.js) and rendered as collapsible cards here. -->
       <div id="rb-groups"></div>
 
+      <div class="rb-fit-warn" id="rb-fit-warn" hidden>&#9888;&#65039; Too much to fit in the Work Summary box on the printed report, even at the smallest text size. Shorten the work summary or move some pay items, tests or checks to another report. You can still generate it, but the bottom will be cut off.</div>
+
       <div class="export-bar">
         <div class="save-row">
           <button type="button" id="btn-save-report" class="btn-primary" disabled>Save</button>
@@ -455,6 +457,14 @@ function blockFieldBodyHtml(key, def) {
       <span class="sig-label">Signature</span>
       <canvas id="sig-rep" class="sig-pad" width="600" height="150"></canvas>
       <button type="button" class="btn-secondary" data-clear-sig="rep">Clear Signature</button>`;
+  } else if (key === 'tests') {
+    inner = `
+      <div class="rtc" id="rtests">
+        <div class="rtc-list" id="rtests-list"></div>
+        <button type="button" class="rpi-add" id="rtests-add">+ Add a test</button>
+      </div>`;
+  } else if (key === 'checks') {
+    inner = `<div class="rtc" id="rchecks"></div>`;
   } else if (key === 'photos') {
     inner = `<div id="photo-grid" class="photo-grid"></div>`;
   }
@@ -463,7 +473,7 @@ function blockFieldBodyHtml(key, def) {
   // word for word -- the group card's own header already says it, so
   // repeating it here just prints the same title twice in a row. Only the
   // tag (payItems' n/6 count), if any, still needs a header row of its own.
-  const dupesGroupLabel = key === 'contractorsEquipment' || key === 'payItems' || key === 'photos';
+  const dupesGroupLabel = ['contractorsEquipment', 'payItems', 'tests', 'checks', 'photos'].includes(key);
   const hd = dupesGroupLabel
     ? (tag ? `<div class="rb-field-hd">${tag}</div>` : '')
     : `<div class="rb-field-hd"><span>${escapeHtml(def.label)}</span>${tag}</div>`;
@@ -608,6 +618,7 @@ function renderGroups() {
             <span class="rb-icon">${group.icon}</span>
             <div class="rb-titles"><div class="t">${escapeHtml(group.label)}</div></div>
             ${group.id === 'payItems' ? '<span class="rpi-hd-sum" id="pay-items-tag"></span>' : ''}
+            ${group.id === 'tests' || group.id === 'checks' ? '<span class="rb-group-sum"></span>' : ''}
             ${group.hint ? `<button type="button" class="info-tip" data-tip="${escapeHtml(group.hint)}" aria-label="What this does">i</button>` : ''}
             <span class="rb-chev">&#9656;</span>
           </div>
@@ -808,6 +819,10 @@ async function refreshLivePreview() {
   wraps.forEach((wrap) => previewEl.appendChild(wrap));
   previewGrids = { 1: pages[0].el.querySelector('.print-grid'), 2: pages[1].el.querySelector('.print-grid') };
   Object.keys(FIELD_HIGHLIGHT_REGIONS).forEach((key) => addPreviewClickTarget(key, FIELD_HIGHLIGHT_REGIONS[key]));
+  // The Work Summary box marks itself when even its smallest text size
+  // can't hold everything (fitSummaryBox, render-report.js).
+  const fitWarn = $('#rb-fit-warn');
+  if (fitWarn) fitWarn.hidden = !pages[0].el.querySelector('.rr-sbox[data-overflow]');
   previewEl.scrollTop = scrollTop;
 }
 
@@ -844,6 +859,8 @@ function bindDynamicFields() {
   }
 
   if ($('#rpi')) bindPayItems();
+  if ($('#rtests')) bindTests();
+  if ($('#rchecks')) bindChecks();
 
   if ($('#photo-grid')) renderPhotoGrid();
   if ($('#sig-rep')) setupSignaturePad('#sig-rep', 'repSignatureImage');
@@ -1998,6 +2015,129 @@ function piAddManual() {
   scheduleSave();
   renderPayItemsStep();
   piFocusQty(piOpenIdx);
+}
+
+// ---------- Tests Performed ----------
+//
+// report.tests: [{ name, note }]. The name comes from TEST_TYPES
+// (defaults.js) so a test is named the same on every report; the note is
+// free text for location, results, sample numbers.
+
+function testOptionsHtml(selected) {
+  const known = TEST_TYPES.includes(selected);
+  return `<option value="">Pick a test</option>${selected && !known ? `<option selected>${escapeHtml(selected)}</option>` : ''}`
+    + TEST_TYPE_GROUPS.map(([group, list]) => `<optgroup label="${escapeHtml(group)}">${list.map((t) => `<option${t === selected ? ' selected' : ''}>${escapeHtml(t)}</option>`).join('')}</optgroup>`).join('');
+}
+
+function renderTests() {
+  if (!Array.isArray(report.tests)) report.tests = [];
+  $('#rtests-list').innerHTML = report.tests.length
+    ? report.tests.map((t, i) => `<div class="rtc-row">
+        <select data-ti="${i}" aria-label="Test">${testOptionsHtml(t.name)}</select>
+        <input type="text" data-tn="${i}" value="${escapeHtml(t.note || '')}" placeholder="Location, result, sample no..." aria-label="Test details" maxlength="200">
+        <button type="button" class="rtc-x" data-tx="${i}" aria-label="Remove test">&times;</button>
+      </div>`).join('')
+    : '<p class="rpi-empty">No tests today.</p>';
+  updateGroupSummary('tests');
+}
+
+function bindTests() {
+  renderTests();
+  const root = $('#rtests');
+  root.addEventListener('change', (e) => {
+    if (e.target.dataset.ti == null) return;
+    report.tests[Number(e.target.dataset.ti)].name = e.target.value;
+    updateGroupSummary('tests');
+    scheduleSave();
+  });
+  root.addEventListener('input', (e) => {
+    if (e.target.dataset.tn == null) return;
+    report.tests[Number(e.target.dataset.tn)].note = e.target.value;
+    scheduleSave();
+  });
+  root.addEventListener('click', (e) => {
+    const t = e.target.closest('button');
+    if (!t) return;
+    if (t.id === 'rtests-add') {
+      report.tests.push({ name: '', note: '' });
+      renderTests();
+      const sel = $$('#rtests-list select');
+      if (sel.length) sel[sel.length - 1].focus();
+      scheduleSave();
+    } else if (t.dataset.tx != null) {
+      report.tests.splice(Number(t.dataset.tx), 1);
+      renderTests();
+      scheduleSave();
+    }
+  });
+}
+
+// ---------- Checks Completed ----------
+//
+// The project's checks (Project Settings), each marked Done / Not done /
+// N/A with a remarks box. report.checks: [{ name, status, note }]; a check
+// later removed from the project still shows here (and prints) on a report
+// that already marked it.
+
+function reportCheck(name) {
+  if (!Array.isArray(report.checks)) report.checks = [];
+  let c = report.checks.find((x) => x && x.name === name);
+  if (!c) { c = { name, status: '', note: '' }; report.checks.push(c); }
+  return c;
+}
+
+function renderChecks() {
+  if (!Array.isArray(report.checks)) report.checks = [];
+  const names = projectChecks(project);
+  report.checks.forEach((c) => { if (c && c.name && c.status && !names.includes(c.name)) names.push(c.name); });
+  $('#rchecks').innerHTML = names.length
+    ? names.map((name) => {
+        const c = report.checks.find((x) => x && x.name === name) || {};
+        return `<div class="rtc-check${c.status ? '' : ' rtc-unmarked'}">
+          <b>${escapeHtml(name)}</b>
+          <span class="rpi-seg rtc-seg" role="group" aria-label="${escapeHtml(name)}">${['done', 'not', 'na'].map((st) => `<button type="button" class="rtc-${st}" data-ck="${escapeHtml(name)}" data-st="${st}" aria-pressed="${c.status === st}">${CHECK_STATUS_LABELS[st]}</button>`).join('')}</span>
+          <input type="text" data-cn="${escapeHtml(name)}" value="${escapeHtml(c.note || '')}" placeholder="Results / remarks" aria-label="${escapeHtml(name)} results or remarks" maxlength="200">
+        </div>`;
+      }).join('')
+    : `<p class="rpi-empty">This project has no checks yet. An admin adds them in Project Settings, under Checks.</p>`;
+  updateGroupSummary('checks');
+}
+
+function bindChecks() {
+  renderChecks();
+  const root = $('#rchecks');
+  root.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-ck]');
+    if (!b) return;
+    const c = reportCheck(b.dataset.ck);
+    c.status = c.status === b.dataset.st ? '' : b.dataset.st;
+    renderChecks();
+    scheduleSave();
+  });
+  root.addEventListener('input', (e) => {
+    if (!e.target.dataset.cn) return;
+    reportCheck(e.target.dataset.cn).note = e.target.value;
+    scheduleSave();
+  });
+}
+
+// A short line in a group's header: what's filled in, or what's missing.
+function updateGroupSummary(groupId) {
+  const el = $(`#rb-group-${groupId} .rb-group-sum`);
+  if (!el) return;
+  let text = '';
+  let need = false;
+  if (groupId === 'tests') {
+    const n = (report.tests || []).filter((t) => t && t.name).length;
+    text = n ? `${n} test${n === 1 ? '' : 's'}` : 'None';
+  } else if (groupId === 'checks') {
+    const names = projectChecks(project);
+    const left = names.filter((name) => !reportCheckStatus(report, name)).length;
+    text = !names.length ? '' : left ? `${left} of ${names.length} not marked` : 'All marked';
+    need = left > 0 && (project.requiredFields || []).includes('checks');
+  }
+  el.textContent = text;
+  el.classList.toggle('rb-group-sum-need', need);
 }
 
 // ---------- Photos ----------

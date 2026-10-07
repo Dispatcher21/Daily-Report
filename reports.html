@@ -363,7 +363,11 @@ function getFilteredSorted() {
     if (from && r.date < from) return false;
     if (to && r.date > to) return false;
     if (search) {
-      const hay = `${r.activity || ''} ${r.notes || ''}`.toLowerCase();
+      // Tests and pay items too, so "Slump" or "701-03" finds the days they were done.
+      const hay = [r.activity, r.notes, r.workSummary,
+        ...(r.tests || []).map((t) => t && `${t.name} ${t.note || ''}`),
+        ...(r.payItems || []).map((p) => p && `${p.itemNumber || ''} ${p.description || ''}`),
+      ].filter(Boolean).join(' ').toLowerCase();
       if (!hay.includes(search)) return false;
     }
     return true;
