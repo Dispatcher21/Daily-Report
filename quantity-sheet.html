@@ -94,6 +94,11 @@
     #qty-search { flex: 1 1 100%; }
     #qty-step .step-header .step-num, #qty-step .step-header .info-tip { display: none; }
   }
+  /* A phone: the status chip goes under the item instead of squeezing it. */
+  @media (max-width: 480px) {
+    .qs-row { grid-template-columns: minmax(0, 1fr); }
+    .qs-row > .qs-c-chk { order: 1; justify-self: start; }
+  }
   @media (prefers-reduced-motion: reduce) { .qs-chev { transition: none; } }
 </style>
 </head>

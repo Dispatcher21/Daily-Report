@@ -22,7 +22,7 @@
      sections that change it). */
   .ps-layout { display: grid; grid-template-columns: 15rem minmax(0, 1fr) minmax(300px, 400px); gap: 1.25rem; align-items: start; }
   .ps-layout.ps-noprint { grid-template-columns: 15rem minmax(0, 1fr); }
-  .ps-left { min-width: 0; display: grid; gap: 1rem; }
+  .ps-left { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
   .ps-right { min-width: 0; display: flex; flex-direction: column; gap: 0.5rem; position: sticky; top: 1rem; }
   .ps-right[hidden] { display: none; }
   .ps-right h3 { margin: 0; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim); }
@@ -92,8 +92,8 @@
   .ps-checkbox-label { flex-direction: row !important; align-items: center; gap: 0.5rem !important; }
   .ps-checkbox-label input { width: 1.35rem; flex-shrink: 0; }
   #ps-add-item { margin-bottom: 0.5rem; width: auto; }
-  .psi-list { display: grid; gap: 0.5rem; margin-bottom: 0.8rem; }
-  .psi-item { border: 1.5px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); }
+  .psi-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.5rem; margin-bottom: 0.8rem; }
+  .psi-item { min-width: 0; border: 1.5px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); }
   .psi-item.open { border-color: var(--brand-light); }
   .psi-line { display: flex; align-items: center; gap: 0.7rem; width: 100%; border: 0; background: none; color: var(--text); text-align: left; padding: 0.6rem 0.75rem; font: inherit; cursor: pointer; }
   .psi-num { font-weight: 800; flex: none; }
