@@ -2732,7 +2732,7 @@ function renderTeamLists() {
     <div class="cm-project-row" data-uid="${m.uid}">
       <div>
         <div class="cm-project-name">${escapeHtml(teamMemberName(m))}</div>
-        <div class="team-row-sub">${escapeHtml(m.email || '')}</div>
+        <div class="team-row-sub">${m.noAccount ? 'No account &middot; gets no projects until you give them some' : escapeHtml(m.email || '')}</div>
       </div>
       <div class="cm-project-actions">
         <button type="button" class="btn-sm" data-team-approve>Approve</button>
@@ -2746,8 +2746,8 @@ function renderTeamLists() {
     return `
     <div class="cm-project-row" data-uid="${m.uid}">
       <div>
-        <div class="cm-project-name">${escapeHtml(teamMemberName(m))}${me ? ' <span class="team-badge">You</span>' : ''}${off ? ' <span class="team-badge team-badge-off">Turned off</span>' : ''}</div>
-        <div class="team-row-sub">${escapeHtml(m.email || '')} &middot; ${m.role === 'admin' ? 'All projects' : escapeHtml(teamProjectSummary(m.projectIds))}</div>
+        <div class="cm-project-name">${escapeHtml(teamMemberName(m))}${me ? ' <span class="team-badge">You</span>' : ''}${m.noAccount ? ' <span class="team-badge">No account</span>' : ''}${off ? ' <span class="team-badge team-badge-off">Turned off</span>' : ''}</div>
+        <div class="team-row-sub">${m.noAccount ? 'Signed in on one device, no email' : escapeHtml(m.email || '')} &middot; ${m.role === 'admin' ? 'All projects' : escapeHtml(teamProjectSummary(m.projectIds))}</div>
       </div>
       <div class="team-controls">
         <select data-team-role aria-label="Role for ${escapeHtml(teamMemberName(m))}">${teamRoleOptions(m.role)}</select>
@@ -2776,7 +2776,9 @@ function renderTeamLists() {
 }
 
 async function renderTeam() {
-  const account = await getAccount().catch(() => null);
+  // Admins without an account manage the team too (see requireTeamAdmin).
+  const room0 = await getCompanyRoom();
+  const account = room0 && room0.isAdmin ? await getMemberIdentity().catch(() => null) : await getAccount().catch(() => null);
   $('#team-signed-out').hidden = !!account;
   $('#team-body').hidden = !account;
   if (!account) {
@@ -2857,7 +2859,9 @@ $('#team-pending').addEventListener('click', (e) => {
   const uid = row.dataset.uid;
   const m = teamState.members.find((x) => x.uid === uid);
   if (e.target.closest('[data-team-approve]')) {
-    teamChange(() => approveTeamMember(uid), `${teamMemberName(m)} approved as an Inspector with all projects. Change that below if needed.`);
+    teamChange(() => approveTeamMember(uid), m.noAccount
+      ? `${teamMemberName(m)} approved as an Inspector with no projects yet. Use Projects below to give them some.`
+      : `${teamMemberName(m)} approved as an Inspector with all projects. Change that below if needed.`);
   } else if (e.target.closest('[data-team-decline]')) {
     if (!confirm(`Decline ${teamMemberName(m)}'s request to join?`)) return;
     teamChange(() => removeTeamMember(uid), 'Request declined.');

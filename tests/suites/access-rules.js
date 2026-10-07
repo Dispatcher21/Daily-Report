@@ -35,13 +35,28 @@ const raw = (p, fn, arg) => p.evaluate(async ({ src, arg }) => {
   console.log('B joined');
   const mUid = await join(M, 'Mia', 'mia@example.com', 'miapass12');
   console.log('M joined');
-  await L.evaluate(async () => { await saveUserName('Lee'); await joinCompanyRoom('lock-pw-1'); });
+  // A device without an account: waits for an admin, even with the
+  // switch off, and gets only the projects it's given.
+  check('no-account device has to wait', await L.evaluate(async () => { await saveUserName('Lee'); return joinCompanyRoom('lock-pw-1').then(() => 'joined', (e) => e.code); }), 'pending-approval');
+  const lUid = await L.evaluate(() => window.FirebaseCore.auth.currentUser.uid);
+  check('waiting: nothing readable', await raw(L, `return (await fs.getDoc(fs.doc(db, 'companies', arg, 'reports', 'rep-p1'))).exists();`, code), 'permission-denied');
+  check('waiting: cannot let itself in', await raw(L, `await fs.updateDoc(fs.doc(db, 'companies', arg.code, 'members', arg.uid), { status: 'active', projectIds: null });`, { code, uid: lUid }), 'permission-denied');
+  check('admin sees it on Team, waiting, no account', await A.evaluate(async (uid) => { const m = (await listTeam()).members.find((x) => x.uid === uid); return [m.status, m.noAccount, m.role, m.projectIds]; }, lUid), ['pending', true, 'inspector', []]);
+  await A.evaluate(async (uid) => { await approveTeamMember(uid); await updateTeamMember(uid, { projectIds: ['p1'] }); }, lUid);
+  check('approved with P1: only P1 comes down, as an inspector', await L.evaluate(async () => { const r = await checkPendingApproval(); return [r.status, (await getAllProjects()).map((p) => p.id), await companyCan('createProjects'), await companyCan('editProjects')]; }), ['active', ['p1'], false, false]);
+  check('approved: still cannot open P2', await raw(L, `return (await fs.getDoc(fs.doc(db, 'companies', code, 'reports', 'rep-p2'))).exists();`), 'permission-denied');
+  check('approved: cannot widen its projects', await raw(L, `await fs.updateDoc(fs.doc(db, 'companies', code, 'members', arg), { projectIds: null });`, lUid), 'permission-denied');
+  // The admin password still gets an admin without an account in.
   const D = await device('D');
-  await D.evaluate(async () => { await saveUserName('Dee'); await joinCompanyRoom('lock-pw-1'); await unlockCompanyAdmin('lock-admin-1'); });
+  check('admin password while waiting: in as admin', await D.evaluate(async () => {
+    await saveUserName('Dee');
+    await joinCompanyRoom('lock-pw-1').catch(() => {});
+    await claimAdminWhilePending('lock-admin-1');
+    return [(await getCompanyRoom()).isAdmin, (await getAllProjects()).length, (await listTeam()).members.length > 0];
+  }), [true, 2, true]);
   console.log('L, D joined');
   await A.evaluate(async ({ bUid, mUid }) => { await updateTeamMember(bUid, { projectIds: ['p1'] }); await updateTeamMember(mUid, { role: 'manager' }); }, { bUid, mUid });
 
-  check('switch off: no-account device still reads', await raw(L, `return (await fs.getDocs(fs.collection(db, 'companies', code, 'reports'))).size;`), 2);
   check('only an admin can turn it on', await raw(Bp, `await fs.updateDoc(fs.doc(db, 'companies', code), { accountsRequired: true });`), 'permission-denied');
   await A.evaluate(() => setAccountsRequired(true));
 
@@ -52,7 +67,7 @@ const raw = (p, fn, arg) => p.evaluate(async ({ src, arg }) => {
   check('no-account device: told to sign in, still connected', [/requires everyone to sign in/.test(alerts.L), await L.evaluate(async () => !!(await getCompanyRoom()))], [true, true]);
   const N = await device('N');
   check('new device without account cannot join', await N.evaluate(() => joinCompanyRoom('lock-pw-1').then(() => 'joined', (e) => e.code)), 'account-required');
-  check('no-account device signs up and is back in', await L.evaluate(async () => { await createAccount({ name: 'Lee', email: 'lee@example.com', password: 'leepass12' }); await autoPullCompanyData(true); return [(await getMyMembership()).status, (await getAllReports()).length]; }), ['active', 2]);
+  check('no-account device signs up and is back in', await L.evaluate(async () => { await createAccount({ name: 'Lee', email: 'lee@example.com', password: 'leepass12' }); await autoPullCompanyData(true); return [(await getMyMembership()).status, (await getAllReports()).length]; }), ['active', 1]);
 
   // Restricted inspector.
   await Bp.evaluate(() => autoPullCompanyData(true));
@@ -141,15 +156,16 @@ const raw = (p, fn, arg) => p.evaluate(async ({ src, arg }) => {
     const uid = window.FirebaseCore.auth.currentUser.uid;
     return setDoc(doc(window.FirebaseCore.db, 'companies', code, 'members', uid), { uid, role: 'admin', status: 'active', projectIds: null }).then(() => 'ALLOWED', (e) => e.code);
   }, code), 'permission-denied');
-  check('admin-password device (from before) signs up as an inspector', await D.evaluate(async () => {
+  check('admin without an account (made admin before) keeps it after signing up', await D.evaluate(async () => {
     await createAccount({ name: 'Dee', email: 'dee@example.com', password: 'deepass12' });
     const room = await getCompanyRoom();
-    return [(await getMyMembership()).role, room.isAdmin];
-  }), ['inspector', false]);
+    const m = await getMyMembership();
+    return [m.role, room.isAdmin, !!m.noAccount];
+  }), ['admin', true, false]);
 
   // Switch off again: password-only access is back.
   await A.evaluate(() => setAccountsRequired(false));
-  check('switch off: no-account access is back', await raw(N, `return (await fs.getDocs(fs.collection(db, 'companies', arg, 'reports'))).size;`, code), 4);
+  check('switch off: a device without an account still needs approval', await raw(N, `return (await fs.getDoc(fs.doc(db, 'companies', arg, 'reports', 'rep-p1'))).exists();`, code), 'permission-denied');
   check('page errors', errs, []);
   console.log(fails ? `${fails} FAILED` : 'ALL PASSED');
   await browser.close();

@@ -106,6 +106,15 @@ applies its role and project limits to the device via applyMembership),
 the Team list functions (updateTeamMember, removeTeamMember,
 inviteTeamMember, approvals), and password changes.
 
+Devices without an account are members too (getMemberIdentity: the
+anonymous user id; the record has noAccount: true). Joining with the
+company password always makes one wait (status pending, inspector,
+projectIds []) until an admin approves it on Team and gives it projects;
+a device that joined before this gets the same waiting record on its next
+sync. claimAdminWhilePending lets whoever knows the admin password in as
+an admin (only while accounts aren't required). Linking an account to
+the device keeps the record and clears noAccount.
+
 Roles. admin, manager, inspector. Admins can do everything. What managers
 and inspectors may do comes from the Roles table in Settings > Company
 (rolePermissions on the company doc, falling back to built-in defaults;
@@ -113,8 +122,9 @@ rolePermissionsFor in firebase-sync.js, defaultPerm in the rules). Members
 can also be limited to certain projects (member.projectIds; null = all).
 
 Enforcement. The company doc's accountsRequired switch ("Require everyone
-to sign in"). Off: the old behavior, anyone signed in who knows the
-company password. On: firestore.rules (repo root, the official copy) only
+to sign in"). Off: the old behavior for accounts, anyone signed in with
+an account who knows the company password (devices without an account
+always need an approved member record, and get only its projects). On: firestore.rules (repo root, the official copy) only
 let active members in, apply project limits, and check the role table for
 creating projects, editing reports, approving, and so on. requireApproval
 makes new joiners wait for an admin. Pre-approved emails (invites/{email})

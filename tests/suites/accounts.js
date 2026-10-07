@@ -51,12 +51,13 @@ const field = (d, f) => { const v = d.fields && d.fields[f]; if (!v) return unde
   check('C: signed out -- no company, no name, no account', await C.evaluate(async () => [await getCompanyRoom(), await getUserName(), await getAccount()]), [null, '', null]);
   check('C: wrong password message', await C.evaluate(() => signInAccount({ email: 'bob@example.com', password: 'nope-nope' }).then(() => 'signed in?', (e) => e.message)), 'Email or password is incorrect.');
 
-  // D: no account, old way.
+  // D: no account. Waits for an admin, recorded on Team, nothing pulled.
   const D = await device('D');
-  const dRes = await D.evaluate(async () => { await saveUserName('Dana'); await joinCompanyRoom('emu-company-pw'); const room = await getCompanyRoom(); return [(await getAllProjects()).filter((p) => projectInScope(p, room)).length, await getAccount(), await companyCan('editProjects')]; });
-  check('D: legacy join still works (sees both projects, company-wide permissions)', dRes, [2, null, false]);
+  const dRes = await D.evaluate(async () => { await saveUserName('Dana'); const r = await joinCompanyRoom('emu-company-pw').then(() => 'joined', (e) => e.code); return [r, await getCompanyRoom(), (await getAllProjects()).length]; });
+  check('D: without an account, waits for an admin with nothing pulled', dRes, ['pending-approval', null, 0]);
   const members = await (await fetch(`http://127.0.0.1:8080/v1/projects/daily-reports-test/databases/(default)/documents/companies/${ids.code}/members`, { headers: { Authorization: 'Bearer owner' } })).json();
-  check('only account holders are members', (members.documents || []).length, 2);
+  const dDoc = (members.documents || []).find((d) => d.fields.displayName && d.fields.displayName.stringValue === 'Dana');
+  check('D is on the team list, waiting, with no projects', [(members.documents || []).length, dDoc && dDoc.fields.status.stringValue, dDoc && dDoc.fields.noAccount.booleanValue], [3, 'pending', true]);
   check('duplicate email message', await D.evaluate(() => createAccount({ name: 'X', email: 'alice@example.com', password: 'whatever12' }).then(() => 'created?', (e) => e.message)), 'That email already has an account. Sign in instead.');
   check('page errors', errs, []);
   console.log(fails ? `${fails} FAILED` : 'ALL PASSED');

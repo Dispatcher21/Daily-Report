@@ -32,7 +32,13 @@ const step = async (label, page, fn, arg) => {
   await step('save themes', A, () => saveCompanyThemes([{ id: 't1', name: 'Blue', accent: '#123456' }]));
   await step('push user layout', A, async () => pushUserLayout((await getCompanyRoom()).code, 'Alice'));
   await step('create custom setup (pointer doc)', A, () => createCustomRole({ name: 'Crew', password: 'crew-pw-1', permissions: {}, projectIds: ['proj-r'], adminPassword: 'rules-admin-1' }));
-  await step('join with company password', Bp, async () => { await saveUserName('Bob'); const r = await joinCompanyRoom('rules-pw-1'); return [r.name, (await getAllProjects()).length]; });
+  // A device without an account waits for an admin, who approves it here
+  // (the admin has no account either: the admin password made it one).
+  const bWait = await step('join with company password: waits for approval', Bp, async () => { await saveUserName('Bob'); return joinCompanyRoom('rules-pw-1').then(() => 'joined', (e) => e.code); });
+  if (bWait !== 'pending-approval') { fails++; console.log('FAIL B should have waited: ' + bWait); }
+  const bUid = await Bp.evaluate(() => window.FirebaseCore.auth.currentUser.uid);
+  await step('admin approves B with every project', A, async (uid) => { await approveTeamMember(uid); await updateTeamMember(uid, { projectIds: null }); return 'ok'; }, bUid);
+  await step('B checks again and is in', Bp, async () => { const r = await checkPendingApproval(); return [r.status, (await getAllProjects()).length]; });
   await step('B fetches the photo', Bp, async () => { const r = (await getReportsForProject('proj-r'))[0]; if (!r) return 'NO REPORT ON B'; const full = await fetchReportMedia(r); return { reports: (await getReportsForProject('proj-r')).length, photo: !!(full && full.photos && full.photos[0]) }; });
   await step('B sync now', Bp, async () => { await syncCompanyRoomNow(); return 'ok'; });
   await step('custom setup login', Bp, async () => { await leaveCompanyRoom(); await joinCompanyRoom('crew-pw-1'); return (await getCompanyRoom()).projectScope; });

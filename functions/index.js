@@ -385,7 +385,7 @@ exports.onMemberWritten = onDocumentWritten({ document: 'companies/{code}/member
   if (!joining && !approved) return; // most changes (names, roles) need no email
   const company = db().collection('companies').doc(event.params.code);
   const companyName = ((await company.get()).data() || {}).name || 'your company';
-  const who = after.displayName ? `${after.displayName}${after.email ? ` (${after.email})` : ''}` : (after.email || 'Someone');
+  const who = after.displayName ? `${after.displayName}${after.email ? ` (${after.email})` : after.noAccount ? ' (no account, one device)' : ''}` : (after.email || 'Someone');
 
   if (joining) {
     const admins = (await company.collection('members').where('role', '==', 'admin').get()).docs
