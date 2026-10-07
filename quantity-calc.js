@@ -19,6 +19,17 @@ function isLumpSumUnit(unit) {
   return /^lump\s*sum$|^l\.?s\.?$/i.test(String(unit || '').trim());
 }
 
+// The same question for a catalog item (or a row built from one here,
+// which carries isLump): an admin-confirmed unit (unitKind, see PAY_UNITS
+// in defaults.js) decides, so a "LUMP" item confirmed as Lump Sum counts
+// in dollars; an unconfirmed one still goes by its unit text alone.
+function isLumpSumItem(item) {
+  if (!item) return false;
+  if (typeof item.isLump === 'boolean') return item.isLump;
+  if (item.unitKind) return item.unitKind === 'LS';
+  return isLumpSumUnit(item.unit);
+}
+
 // A Lump Sum item isn't priced per unit the way "12 MILE @ $500/MILE" is --
 // its Unit Price on file already IS the total contract value for that one
 // item, and the "quantity" an inspector logs against it on a report is
@@ -26,14 +37,15 @@ function isLumpSumUnit(unit) {
 // $430,000 lump sum), not a multiplier. Multiplying either one by price
 // the way every other unit does produces nonsense figures (a $42K running
 // total on a $430K item was coming out as $18 BILLION before this).
+// `unit` is the unit text, or already a true/false "is Lump Sum".
 function contractTotalFor(unit, planned, unitPrice) {
   if (unitPrice == null) return null;
-  if (isLumpSumUnit(unit)) return unitPrice;
+  if (typeof unit === 'boolean' ? unit : isLumpSumUnit(unit)) return unitPrice;
   return planned != null ? planned * unitPrice : null;
 }
 function earnedTotalFor(unit, total, unitPrice) {
   if (unitPrice == null) return null;
-  return isLumpSumUnit(unit) ? total : total * unitPrice;
+  return (typeof unit === 'boolean' ? unit : isLumpSumUnit(unit)) ? total : total * unitPrice;
 }
 
 // Sums each pay item's quantity across a flat list of pay-item entries
@@ -77,12 +89,14 @@ function aggregatePayItemTotals(flatItems, payItemCatalog) {
     // Theoretical Qty -- otherwise every entry's theoreticalQty is blank and
     // this would show a misleading "0 overrun" for items that never use it.
     const overrun = cat && cat.theoretical ? Math.round((total - totalTheoreticalQty.get(key)) * 1000) / 1000 : null;
-    const contractTotal = contractTotalFor(unit, planned, unitPrice);
-    const earnedTotal = earnedTotalFor(unit, total, unitPrice);
+    const isLump = cat && cat.unitKind ? cat.unitKind === 'LS' : isLumpSumUnit(unit);
+    const contractTotal = contractTotalFor(isLump, planned, unitPrice);
+    const earnedTotal = earnedTotalFor(isLump, total, unitPrice);
     return {
       itemNumber: meta.itemNumber,
       description: (cat && cat.description) || meta.description,
       unit,
+      isLump,
       total,
       planned,
       // A Lump Sum item's raw "quantity" was never on a physical scale worth
@@ -95,7 +109,7 @@ function aggregatePayItemTotals(flatItems, payItemCatalog) {
       // project-wide quantity-weighted average regardless of this -- that
       // exclusion is about not mixing dollars into a physical-unit average,
       // which this doesn't change.
-      pct: isLumpSumUnit(unit)
+      pct: isLump
         ? (contractTotal != null && contractTotal > 0 ? earnedTotal / contractTotal : null)
         : (planned != null ? total / planned : null),
       unitPrice,
@@ -126,7 +140,8 @@ function fullPayItemCatalogOverview(flatItems, payItemCatalog) {
       if (hit) return hit;
       const planned = Number(cat.plannedQty) > 0 ? Number(cat.plannedQty) : null;
       const unitPrice = parsedUnitPrice(cat);
-      const contractTotal = contractTotalFor(cat.unit, planned, unitPrice);
+      const isLump = isLumpSumItem(cat);
+      const contractTotal = contractTotalFor(isLump, planned, unitPrice);
       // Untouched so far -- earnedTotal is trivially 0, so a Lump Sum item's
       // $-based pct (see aggregatePayItemTotals' own comment) is just 0 as
       // long as there's a contract value to measure 0 against.
@@ -134,12 +149,13 @@ function fullPayItemCatalogOverview(flatItems, payItemCatalog) {
         itemNumber: key,
         description: cat.description || '',
         unit: cat.unit || '',
+        isLump,
         total: 0,
         planned,
-        pct: isLumpSumUnit(cat.unit) ? (contractTotal != null && contractTotal > 0 ? 0 : null) : (planned != null ? 0 : null),
+        pct: isLump ? (contractTotal != null && contractTotal > 0 ? 0 : null) : (planned != null ? 0 : null),
         unitPrice,
         contractTotal,
-        earnedTotal: earnedTotalFor(cat.unit, 0, unitPrice),
+        earnedTotal: earnedTotalFor(isLump, 0, unitPrice),
         overrun: cat.theoretical ? 0 : null,
       };
     });
@@ -231,7 +247,7 @@ function overallPercentComplete(items) {
   let sumTotal = 0;
   let sumPlanned = 0;
   for (const it of items) {
-    if (it.planned != null && !isLumpSumUnit(it.unit)) {
+    if (it.planned != null && !isLumpSumItem(it)) {
       sumTotal += it.total;
       sumPlanned += it.planned;
     }

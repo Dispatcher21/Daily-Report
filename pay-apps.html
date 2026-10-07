@@ -244,7 +244,7 @@ function payAppBilledTotal(estimate) {
     const v = Number(value);
     if (!isFinite(v)) return;
     const price = item ? parsedUnitPrice(item) : null;
-    if (item && isLumpSumUnit(item.unit)) { total += v; any = true; }
+    if (item && isLumpSumItem(item)) { total += v; any = true; }
     else if (price != null) { total += v * price; any = true; }
   });
   return any ? total : null;
@@ -407,7 +407,7 @@ function payAppItems(...estimates) {
     itemNumber: it.itemNumber,
     description: it.description,
     unit: it.unit || '',
-    isLump: isLumpSumUnit(it.unit),
+    isLump: isLumpSumItem(it),
     price: it.unitPrice != null ? Number(it.unitPrice) : null,
     planned: it.planned,
     contractTotal: it.contractTotal,

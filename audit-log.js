@@ -196,20 +196,23 @@ function diffPayItemCatalog(before, after, out) {
   const byNumber = (list) => new Map((list || []).filter((it) => it.itemNumber).map((it) => [it.itemNumber, it]));
   const b = byNumber(before);
   const a = byNumber(after);
-  const flagLabels = { stations: 'Stations tracking', side: 'Side tracking', computed: 'Computed Qty', theoretical: 'Theoretical Qty' };
+  const flagLabels = { stations: 'Stations tracking', side: 'Side tracking', computed: 'Computed Qty', theoretical: 'Theoretical Qty', remarksRequired: 'Remarks required', payAppOnly: 'Pay App only' };
   for (const [num, bItem] of b) {
     const aItem = a.get(num);
     if (!aItem) {
       out.push({ label: `Pay Item Catalog ${num} removed`, from: bItem.description || '', to: '' });
       continue;
     }
-    const fieldLabels = { description: 'Description', unit: 'Unit', plannedQty: 'Per Plans Total', unitPrice: 'Unit Price' };
+    const fieldLabels = { description: 'Description', unit: 'Unit', unitKind: 'Unit type', plannedQty: 'Per Plans Total', unitPrice: 'Unit Price', dailyLimit: 'Daily limit' };
     for (const f of Object.keys(fieldLabels)) {
       if (fmtLeaf(bItem[f]) !== fmtLeaf(aItem[f])) out.push({ label: `Pay Item Catalog ${num} ${fieldLabels[f]}`, from: fmtLeaf(bItem[f]), to: fmtLeaf(aItem[f]) });
     }
     for (const f of Object.keys(flagLabels)) {
       if (!!bItem[f] !== !!aItem[f]) out.push({ label: `Pay Item Catalog ${num} ${flagLabels[f]}`, from: bItem[f] ? 'On' : 'Off', to: aItem[f] ? 'On' : 'Off' });
     }
+    const bCalcs = Array.isArray(bItem.calcs) ? bItem.calcs.join(', ') : 'All for the unit';
+    const aCalcs = Array.isArray(aItem.calcs) ? aItem.calcs.join(', ') : 'All for the unit';
+    if (bCalcs !== aCalcs) out.push({ label: `Pay Item Catalog ${num} Calculators`, from: bCalcs, to: aCalcs });
     const bLoc = (bItem.locations || []).join(', ');
     const aLoc = (aItem.locations || []).join(', ');
     if (bLoc !== aLoc) out.push({ label: `Pay Item Catalog ${num} Locations`, from: fmtLeaf(bLoc), to: fmtLeaf(aLoc) });

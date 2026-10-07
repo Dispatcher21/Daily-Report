@@ -1664,6 +1664,7 @@ label.rpi-qty { display: flex; flex-direction: row; align-items: stretch; gap: 0
 .rpi-body { display: grid; gap: 0.55rem; padding: 0.15rem 0.75rem 0.7rem; }
 .rpi-left { font-size: 0.82rem; color: var(--text-dim); }
 .rpi-over { color: var(--danger); }
+.rpi-warn { font-size: 0.82rem; font-weight: 700; color: var(--warn); }
 .rpi-row { display: flex; flex-wrap: wrap; gap: 0.45rem; align-items: center; }
 .rpi-label { width: 6.5rem; font-size: 0.82rem; font-weight: 700; color: var(--text-dim); flex: none; }
 .rpi-row input, .rpi-row select { min-height: 2.4rem; padding: 0.4rem 0.55rem; width: 7.5rem; }

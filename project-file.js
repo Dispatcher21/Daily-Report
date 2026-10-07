@@ -191,6 +191,20 @@ function parsePayItemsSheet(ws) {
   const cSide = findCol(['SIDE', 'TRACK SIDE']);
   const cComputed = findCol(['COMPUTED', 'COMPUTED QTY', 'CALC QTY']);
   const cTheoretical = findCol(['THEORETICAL', 'THEORETICAL QTY']);
+  // Newer optional columns. A column missing from the file leaves that
+  // setting undefined, so applyProjectUpdate keeps whatever the project
+  // already had instead of clearing it. UNIT TYPE: one of PAY_UNITS
+  // (defaults.js) or OTHER; blank means "match it from UNIT" (an admin
+  // confirms it in Project Settings). CALCULATORS: blank means every
+  // calculator for the unit; otherwise their names, one per line or comma
+  // separated. REMARKS REQUIRED / PAY APP ONLY: "Y". DAILY LIMIT: a number.
+  const cUnitType = findCol(['UNIT TYPE']);
+  const cCalcs = findCol(['CALCULATORS']);
+  const cRemarksReq = findCol(['REMARKS REQUIRED']);
+  const cDailyLimit = findCol(['DAILY LIMIT']);
+  const cPayAppOnly = findCol(['PAY APP ONLY']);
+  const yes = (c, row) => c !== -1 && row[c] != null && /^y(es)?$/i.test(String(row[c]).trim());
+  const calcIdByName = new Map(Object.entries(PAY_CALCS).map(([id, label]) => [label.toUpperCase(), id]));
 
   const items = [];
   for (let i = headerIdx + 1; i < rows.length; i++) {
@@ -209,7 +223,21 @@ function parsePayItemsSheet(ws) {
     const computed = cComputed !== -1 && row[cComputed] != null && /^y(es)?$/i.test(String(row[cComputed]).trim());
     const theoretical = cTheoretical !== -1 && row[cTheoretical] != null && /^y(es)?$/i.test(String(row[cTheoretical]).trim());
     if (!itemNumber && !description) continue;
-    items.push({ itemNumber, description, unit, plannedQty, unitPrice, stations, locations, side, computed, theoretical });
+    const item = { itemNumber, description, unit, plannedQty, unitPrice, stations, locations, side, computed, theoretical };
+    if (cUnitType !== -1) {
+      const t = row[cUnitType] != null ? String(row[cUnitType]).trim().toUpperCase() : '';
+      const kind = t === PAY_UNIT_OTHER ? PAY_UNIT_OTHER : payUnitDef(t) ? t : matchPayUnit(t);
+      if (kind) item.unitKind = kind;
+    }
+    if (cCalcs !== -1) {
+      const names = row[cCalcs] != null ? String(row[cCalcs]).split(/\r?\n|,/).map((n) => n.trim().toUpperCase()).filter(Boolean) : [];
+      if (names.length) item.calcs = names.map((n) => calcIdByName.get(n) || (PAY_CALCS[n.toLowerCase()] ? n.toLowerCase() : null)).filter(Boolean);
+      else item.calcs = null;
+    }
+    if (cRemarksReq !== -1) item.remarksRequired = yes(cRemarksReq, row);
+    if (cDailyLimit !== -1) item.dailyLimit = row[cDailyLimit] != null ? String(row[cDailyLimit]).trim() : '';
+    if (cPayAppOnly !== -1) item.payAppOnly = yes(cPayAppOnly, row);
+    items.push(item);
   }
   return items;
 }
@@ -353,7 +381,7 @@ async function buildPayAppQuantitiesWorkbook(payItemCatalog, billingEstimates) {
     const cat = catalogByNumber.get(num);
     const label = !cat
       ? '(item removed from catalog)'
-      : isLumpSumUnit(cat.unit)
+      : isLumpSumItem(cat)
         ? `${cat.description || ''} (Lump Sum, $)`.trim()
         : `${cat.description || ''} (${cat.unit || ''})`.trim();
     descRow.getCell(4 + i).value = label;
@@ -378,7 +406,7 @@ async function buildPayAppQuantitiesWorkbook(payItemCatalog, billingEstimates) {
       const cat = catalogByNumber.get(num);
       if (cat && total != null) {
         const unitPrice = cat.unitPrice !== '' && cat.unitPrice != null && isFinite(Number(cat.unitPrice)) ? Number(cat.unitPrice) : null;
-        const earned = earnedTotalFor(cat.unit, Number(total), unitPrice);
+        const earned = earnedTotalFor(isLumpSumItem(cat), Number(total), unitPrice);
         if (earned != null) { totalDollars += earned; anyPriced = true; }
       }
     });
@@ -518,15 +546,19 @@ function buildProjectDataWorkbook({ meta, payItemCatalog, contractors, equipment
   infoWs['!cols'] = [{ wch: 34 }, { wch: 32 }];
   XLSX.utils.book_append_sheet(wb, infoWs, PROJECT_INFO_SHEET);
 
-  const itemRows = [['ITEM NUMBER', 'DESCRIPTION', 'UNIT', 'PER PLANS TOTAL', 'UNIT PRICE', 'STATIONS', 'LOCATIONS', 'SIDE', 'COMPUTED', 'THEORETICAL']];
+  const itemRows = [['ITEM NUMBER', 'DESCRIPTION', 'UNIT', 'PER PLANS TOTAL', 'UNIT PRICE', 'STATIONS', 'LOCATIONS', 'SIDE', 'COMPUTED', 'THEORETICAL',
+    'UNIT TYPE', 'CALCULATORS', 'REMARKS REQUIRED', 'DAILY LIMIT', 'PAY APP ONLY']];
   (payItemCatalog || []).forEach((it) => {
     itemRows.push([
       it.itemNumber || '', it.description || '', it.unit || '', it.plannedQty || '', it.unitPrice || '',
       it.stations ? 'Y' : '', (it.locations || []).join('\n'), it.side ? 'Y' : '', it.computed ? 'Y' : '', it.theoretical ? 'Y' : '',
+      it.unitKind || '', Array.isArray(it.calcs) ? it.calcs.map((id) => PAY_CALCS[id] || id).join('\n') : '',
+      it.remarksRequired ? 'Y' : '', it.dailyLimit || '', it.payAppOnly ? 'Y' : '',
     ]);
   });
   const itemsWs = XLSX.utils.aoa_to_sheet(itemRows);
-  itemsWs['!cols'] = [{ wch: 14 }, { wch: 38 }, { wch: 8 }, { wch: 16 }, { wch: 12 }, { wch: 10 }, { wch: 24 }, { wch: 8 }, { wch: 10 }, { wch: 12 }];
+  itemsWs['!cols'] = [{ wch: 14 }, { wch: 38 }, { wch: 8 }, { wch: 16 }, { wch: 12 }, { wch: 10 }, { wch: 24 }, { wch: 8 }, { wch: 10 }, { wch: 12 },
+    { wch: 10 }, { wch: 24 }, { wch: 16 }, { wch: 12 }, { wch: 13 }];
   XLSX.utils.book_append_sheet(wb, itemsWs, PAY_ITEMS_SHEET);
 
   const contractorRows = [['CONTRACTOR NAME']];
@@ -565,11 +597,11 @@ function downloadProjectDataTemplate() {
       peName: 'NOTTA RE-AL ENJINIR',
     },
     payItemCatalog: [
-      { itemNumber: '618-01', description: 'Thermoplastic Pavement Marking 4in', unit: 'LF', plannedQty: '12000', unitPrice: '1.10', stations: true, locations: [], side: true, computed: false, theoretical: false },
-      { itemNumber: '618-02', description: 'Thermoplastic Pavement Marking 24in', unit: 'LF', plannedQty: '3500', unitPrice: '4.50', stations: false, locations: ['North Approach', 'Mid Span', 'South Approach'], side: false, computed: false, theoretical: false },
-      { itemNumber: '619-01', description: 'Raised Pavement Markers', unit: 'EA', plannedQty: '450', unitPrice: '3.25', stations: false, locations: [], side: false, computed: false, theoretical: false },
-      { itemNumber: '202-02-06100', description: 'Removal of Concrete Walks and Drives', unit: 'SQ YD', plannedQty: '500', unitPrice: '18.00', stations: true, locations: [], side: false, computed: true, theoretical: false },
-      { itemNumber: '502-01-00100', description: 'Asphalt Concrete', unit: 'TON', plannedQty: '2000', unitPrice: '95.00', stations: true, locations: [], side: true, computed: false, theoretical: true },
+      { itemNumber: '618-01', description: 'Thermoplastic Pavement Marking 4in', unit: 'LF', unitKind: 'LF', plannedQty: '12000', unitPrice: '1.10', stations: true, locations: [], side: true, computed: false, theoretical: false, calcs: ['stations', 'striping'] },
+      { itemNumber: '618-02', description: 'Thermoplastic Pavement Marking 24in', unit: 'LF', unitKind: 'LF', plannedQty: '3500', unitPrice: '4.50', stations: false, locations: ['North Approach', 'Mid Span', 'South Approach'], side: false, computed: false, theoretical: false },
+      { itemNumber: '619-01', description: 'Raised Pavement Markers', unit: 'EA', unitKind: 'EA', plannedQty: '450', unitPrice: '3.25', stations: false, locations: [], side: false, computed: false, theoretical: false },
+      { itemNumber: '202-02-06100', description: 'Removal of Concrete Walks and Drives', unit: 'SQ YD', unitKind: 'SY', plannedQty: '500', unitPrice: '18.00', stations: true, locations: [], side: false, computed: false, theoretical: false },
+      { itemNumber: '502-01-00100', description: 'Asphalt Concrete', unit: 'TON', unitKind: 'TON', plannedQty: '2000', unitPrice: '95.00', stations: true, locations: [], side: true, computed: false, theoretical: true, remarksRequired: true, dailyLimit: '400' },
     ],
     contractors: ['ABC Trucking', 'XYZ Barricades'],
     equipmentLabels: DEFAULT_EQUIPMENT_LABELS,

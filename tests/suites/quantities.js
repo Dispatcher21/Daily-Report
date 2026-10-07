@@ -121,6 +121,68 @@ const text = (p, sel) => p.textContent(sel).then((t) => t.replace(/\s+/g, ' ').t
   await Promise.all([p.waitForURL(/reports\.html/, { timeout: 30000 }), p.click('#btn-save-report')]);
   check('saved with remarks and calculator', await p.evaluate(async (id) => { const r = await getReport(id); const it = r.payItems.find((x) => x.itemNumber === '202-01'); return [it.remarks, it.calc.type, it.calc.w, it.qty]; }, rid), ['Saw cut first', 'area', '12', '93.333']);
 
+  // Units: Project Settings lists units to confirm, the confirmed unit picks
+  // the calculators, a LUMP item confirmed as Lump Sum counts in dollars,
+  // and the settings survive the project Excel file.
+  await p.evaluate(async (projectId) => {
+    const pr = await getProject(projectId);
+    pr.payItemCatalog.push({ itemNumber: '202-05', description: 'Removal of Structures', unit: 'LUMP', plannedQty: '', unitPrice: '8000' });
+    pr.payItemCatalog.push({ itemNumber: '203-01', description: 'Roadway Excavation', unit: 'CU YD', plannedQty: '1500', unitPrice: '18' });
+    pr.payItemCatalog.push({ itemNumber: '730-02', description: 'Sign Panel', unit: 'PANEL', plannedQty: '12', unitPrice: '650' });
+    const asphalt = pr.payItemCatalog.find((c) => c.itemNumber === '502-01');
+    Object.assign(asphalt, { dailyLimit: '100', remarksRequired: true });
+    await saveProject(pr);
+  }, pid);
+  await p.goto(`${B}/project-setup.html?id=${pid}`); await settle();
+  await p.click('[data-tab="payItems"]');
+  check('units to confirm', await text(p, '#psi-confirm-h'), 'Check 3 units');
+  check('LUMP warns it will count in dollars', (await text(p, '.psi-confirm')).includes('count as dollars'), true);
+  check('a LUMP item is not Lump Sum until confirmed', await p.evaluate(() => payItemKind(project.payItemCatalog.find((c) => c.itemNumber === '202-05'))), '');
+  await p.click('#psi-confirm-all');
+  check('suggested units confirmed, own unit left', await text(p, '#psi-confirm-h'), 'Check 1 unit');
+  check('unit tags', await p.$$eval('.psi-unit', (els) => els.slice(-3).map((e) => e.textContent.trim())), ['LUMP = LS', 'CU YD = CY', 'PANEL ?']);
+  await p.selectOption('[data-psi-guess]', 'OTHER'); await p.click('[data-psi-confirm]');
+  check('all confirmed', await p.$('#psi-confirm-h'), null);
+  const cy = await p.evaluate(() => project.payItemCatalog.findIndex((c) => c.itemNumber === '203-01'));
+  await p.click(`[data-psi-open="${cy}"]`);
+  check('calculators for CY', await p.$$eval('[data-psi-calc]', (els) => els.map((e) => e.textContent.trim())), ['Length × Width × Depth', 'Truck loads', 'Area × thickness']);
+  await p.click('[data-psi-calc="volume"]');
+  check('turning one off saves the rest', await p.evaluate((i) => project.payItemCatalog[i].calcs, cy), ['loads', 'thickness']);
+  check('LUMP confirmed counts in dollars', await p.evaluate(() => payItemKind(project.payItemCatalog.find((c) => c.itemNumber === '202-05'))), 'LS');
+  const roundTrip = await p.evaluate(() => {
+    const wb = buildProjectDataWorkbook({ meta: {}, payItemCatalog: project.payItemCatalog, contractors: [], equipmentLabels: [] });
+    const back = parsePayItemsSheet(XLSX.read(XLSX.write(wb, { type: 'array', bookType: 'xlsx' }), { type: 'array' }).Sheets[PAY_ITEMS_SHEET]);
+    const pick = (n) => back.find((x) => x.itemNumber === n);
+    // An older file (no new columns) keeps the project's settings on re-upload.
+    const old = mergePayItemSettings(project.payItemCatalog, [{ itemNumber: '502-01', description: 'Asphalt Concrete', unit: 'TON' }])[0];
+    return [pick('202-05').unitKind, pick('202-05').unit, pick('203-01').calcs, pick('730-02').unitKind, pick('502-01').dailyLimit, pick('502-01').remarksRequired, old.dailyLimit, old.remarksRequired];
+  });
+  check('settings survive the Excel file', roundTrip, ['LS', 'LUMP', ['loads', 'thickness'], 'OTHER', '100', true, '100', true]);
+  await p.click('#fsb-save');
+  await p.waitForFunction(() => document.querySelector('#fsb-status').textContent === 'Saved.', null, { timeout: 15000 });
+  check('saved', await p.evaluate(async (projectId) => (await getProject(projectId)).payItemCatalog.find((c) => c.itemNumber === '203-01').unitKind, pid), 'CY');
+
+  // The editor: the CY item's truck loads, the asphalt daily limit and
+  // required remarks.
+  await p.goto(`${B}/report-editor.html?project=${pid}&report=${rid}`); await settle();
+  await p.click('#rpi-add'); await p.fill('#rpi-search', '203-01'); await p.keyboard.press('Enter');
+  await p.click('.rpi-open [data-calcmenu]');
+  check('only the allowed calculators', await p.$$eval('.rpi-open [data-calc]', (els) => els.map((e) => e.textContent.trim())), ['Truck loads', 'Area × thickness']);
+  await p.click('.rpi-open [data-calc=loads]');
+  await p.fill('.rpi-open [data-c=loads]', '12'); await p.fill('.rpi-open [data-c=size]', '14');
+  check('truck loads', await p.inputValue('.rpi-open [data-f=qty]'), '168');
+  await p.click('.rpi-item:first-child [data-open]');
+  check('required remarks show on the item', await p.$eval('.rpi-open [data-f=remarks]', (e) => e.placeholder), 'Required for this item. Prints with it.');
+  await p.fill('.rpi-open [data-f=qty]', '150');
+  check('daily limit warning', await text(p, '.rpi-open [data-limit]'), "More than this item's daily limit of 100 TON. Double-check the quantity.");
+  await p.click('#btn-generate');
+  await p.waitForSelector('#rf-warning-overlay:not([hidden])', { timeout: 15000 }).catch(() => {});
+  check('remarks required blocks Generate', (await text(p, '#rf-warning-list')).includes('Remarks for pay item 502-01'), true);
+  await p.click('#rf-warning-close');
+  await p.fill('.rpi-open [data-f=remarks]', 'Tickets 4410 to 4418');
+  await p.fill('.rpi-open [data-f=qty]', '104');
+  await Promise.all([p.waitForURL(/reports\.html/, { timeout: 30000 }), p.click('#btn-save-report')]);
+
   // Phone width: nothing wider than the screen.
   await p.setViewportSize({ width: 390, height: 844 });
   for (const page of [`quantity-sheet.html?project=${pid}`, `pay-apps.html?project=${pid}`, `quick-quantity.html?project=${pid}`, `project.html?id=${pid}`, `report-editor.html?project=${pid}&report=${rid}`]) {

@@ -9,11 +9,13 @@ Everything waiting to be applied to the live Firebase project
 (`daily-reports-53c82`). Add to this list as you go; clear it once the
 owner has applied it.
 
-- **Functions deploy, all of them** (step 2 below): the functions now run
-  on Node.js 22 (Node 20 stops accepting deploys on 2026-10-30). No code
-  changes; every function is redeployed on the new runtime.
+- **Functions deploy: `weeklyRoundup` and `sendRoundupPreview`**: the
+  roundup's copy of quantity-calc.js now counts a pay item whose unit an
+  admin confirmed as Lump Sum (for example "LUMP") in dollars, the same as
+  the dashboards.
 
-(Last applied: 0.0521, 2026-10-06: rules with
+(Last applied: 0.053, 2026-10-06: every function on Node.js 22.
+0.0521, 2026-10-06: rules with
 separate approve and comment permissions; onCompanyUpdated redeployed.
 0.052: weeklyRoundup and sendRoundupPreview. 0.051: rules with the
 `problems` section; every email function.)

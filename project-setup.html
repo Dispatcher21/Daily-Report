@@ -48,6 +48,34 @@
   .ps-checkbox-label { flex-direction: row !important; align-items: center; gap: 0.5rem !important; }
   .ps-checkbox-label input { width: 1.35rem; flex-shrink: 0; }
   #ps-add-item { margin-bottom: 0.5rem; }
+  .psi-list { display: grid; gap: 0.5rem; margin-bottom: 0.8rem; }
+  .psi-item { border: 1.5px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); }
+  .psi-item.open { border-color: var(--brand-light); }
+  .psi-line { display: flex; align-items: center; gap: 0.7rem; width: 100%; border: 0; background: none; color: var(--text); text-align: left; padding: 0.6rem 0.75rem; font: inherit; cursor: pointer; }
+  .psi-num { font-weight: 800; flex: none; }
+  .psi-desc { flex: 1; min-width: 0; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .psi-chev { color: var(--text-dim); font-size: 0.8rem; }
+  .psi-unit { font-size: 0.75rem; font-weight: 800; border-radius: 999px; padding: 0.15rem 0.55rem; background: var(--surface-3); color: var(--text-dim); white-space: nowrap; }
+  .psi-unit-std { background: var(--brand-dim); color: var(--link); }
+  .psi-unit-need { background: var(--warn-bg); color: var(--warn); }
+  .psi-body { display: grid; gap: 0.3rem; padding: 0.85rem 0.85rem 0.8rem; border-top: 1px solid var(--border); }
+  .psi-sect { display: grid; gap: 0.1rem; }
+  .psi-sect h3 { margin: 0.2rem 0 0.4rem; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim); }
+  .psi-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.6rem; }
+  .psi-chip { border: 1.5px solid var(--border); background: var(--surface); color: var(--text); border-radius: 999px; padding: 0.3rem 0.75rem; font: inherit; font-weight: 700; font-size: 0.84rem; cursor: pointer; }
+  .psi-chip[aria-pressed="true"] { background: var(--brand); border-color: var(--brand); color: var(--on-brand); }
+  .psi-chip[aria-pressed="true"]::before { content: "\2713  "; }
+  .psi-confirm { border: 1.5px solid var(--warn-border); background: var(--warn-bg); border-radius: var(--radius); padding: 0.8rem 0.9rem; display: grid; gap: 0.6rem; margin-bottom: 0.9rem; }
+  .psi-confirm h2 { margin: 0; font-size: 1rem; color: var(--warn); }
+  .psi-confirm p { margin: 0; font-size: 0.86rem; color: var(--text-dim); }
+  .psi-crow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 14rem) auto; gap: 0.6rem; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.5rem 0.65rem; }
+  .psi-what { min-width: 0; }
+  .psi-what b { display: block; }
+  .psi-what span { font-size: 0.8rem; color: var(--text-dim); }
+  .psi-crow select { min-height: 0; padding: 0.45rem 0.55rem; }
+  .psi-note { grid-column: 1 / -1; font-size: 0.8rem; color: var(--warn); font-weight: 700; }
+  #psi-confirm-all { justify-self: start; }
+  @media (max-width: 560px) { .psi-crow { grid-template-columns: minmax(0, 1fr); } }
 
   @media (max-width: 900px) {
     .ps-layout { grid-template-columns: 1fr; }
@@ -251,62 +279,184 @@ function renderInfoTab() {
 
 // ---------- Pay Items tab ----------
 
-function renderPayItemsTab() {
-  const items = project.payItemCatalog || (project.payItemCatalog = []);
-  const rowsHtml = items
-    .map(
-      (it, i) => `
-    <div class="ps-item-row" data-idx="${i}">
+// One line per pay item; the open one shows its settings. Units come from
+// a fixed list (PAY_UNITS in defaults.js) plus "Other" for any unit of the
+// admin's own. Items from before the list (no unitKind) are gathered at the
+// top for an admin to confirm, with the app's best match suggested.
+let psOpenItem = null;
+
+function psUnitOptions(selected, withBlank) {
+  return (withBlank ? `<option value=""${!selected ? ' selected' : ''}>Pick one</option>` : '') +
+    PAY_UNITS.map((u) => `<option value="${u.k}"${selected === u.k ? ' selected' : ''}>${u.k} - ${escapeHtml(u.name)}</option>`).join('') +
+    `<option value="${PAY_UNIT_OTHER}"${selected === PAY_UNIT_OTHER ? ' selected' : ''}>Other (type your own)</option>`;
+}
+
+function psUnitChip(it) {
+  const text = it.unit || '';
+  if (!it.unitKind && !payItemUnitNeedsConfirm(it)) return `<span class="psi-unit psi-unit-std">${escapeHtml(text)}</span>`;
+  if (!it.unitKind) return `<span class="psi-unit psi-unit-need">${escapeHtml(text || 'No unit')} ?</span>`;
+  if (it.unitKind === PAY_UNIT_OTHER) return `<span class="psi-unit">${escapeHtml(text || 'Other')}</span>`;
+  const same = text.trim().toUpperCase() === it.unitKind;
+  return `<span class="psi-unit psi-unit-std">${escapeHtml(text || it.unitKind)}${same || !text ? '' : ` = ${it.unitKind}`}</span>`;
+}
+
+function psItemBodyHtml(it, i) {
+  const kind = it.unitKind && it.unitKind !== PAY_UNIT_OTHER ? it.unitKind : '';
+  const def = payUnitDef(kind || (!it.unitKind ? payItemKind(it, it.unit) : ''));
+  const isLS = (it.unitKind ? it.unitKind : payItemKind(it, it.unit)) === 'LS';
+  const allowed = Array.isArray(it.calcs) ? it.calcs : def ? def.calcs : [];
+  const calcChips = def && def.calcs.length
+    ? `<div class="psi-chips">${def.calcs.map((c) => `<button type="button" class="psi-chip" data-psi-calc="${c}" data-idx="${i}" aria-pressed="${allowed.includes(c)}">${escapeHtml(PAY_CALCS[c])}</button>`).join('')}</div>
+       ${kind === 'LS' && !(Number(it.unitPrice) > 0) ? '<span class="hint" style="margin:0">Percent complete needs the Lump Sum amount.</span>' : ''}`
+    : `<span class="hint" style="margin:0">None for this unit. Inspectors type the quantity.</span>`;
+  return `
+    <div class="psi-body">
       <div class="field-grid">
         <label>Item Number <input type="text" data-idx="${i}" data-field="itemNumber" value="${escapeHtml(it.itemNumber || '')}"></label>
-        <label>Unit <input type="text" data-idx="${i}" data-field="unit" value="${escapeHtml(it.unit || '')}"></label>
+        <label>Description <input type="text" data-idx="${i}" data-field="description" value="${escapeHtml(it.description || '')}"></label>
       </div>
-      <label>Description <input type="text" data-idx="${i}" data-field="description" value="${escapeHtml(it.description || '')}"></label>
       <div class="field-grid">
-        <label>Per Plans Total <input type="number" inputmode="decimal" data-idx="${i}" data-field="plannedQty" value="${escapeHtml(it.plannedQty || '')}"></label>
-        <label>Unit Price <input type="number" inputmode="decimal" step="0.01" data-idx="${i}" data-field="unitPrice" value="${escapeHtml(it.unitPrice || '')}"></label>
+        <label>Unit <select data-idx="${i}" data-psi-unit>${psUnitOptions(it.unitKind || (payItemUnitNeedsConfirm(it) ? '' : payItemKind(it, it.unit)), payItemUnitNeedsConfirm(it))}</select>
+          ${payItemUnitNeedsConfirm(it) ? '<span class="hint" style="margin:0">Pick what this unit means (see the list above).</span>' : ''}</label>
+        <label>Prints on the report as <input type="text" data-idx="${i}" data-field="unit" value="${escapeHtml(it.unit || '')}">
+          <span class="hint" style="margin:0">${it.unitKind === PAY_UNIT_OTHER ? 'Your own unit: inspectors type the quantity, no calculators.' : 'Keeps the contract\'s wording, like LUMP or TONS.'}</span></label>
       </div>
-      <label class="ps-checkbox-label"><input type="checkbox" data-idx="${i}" data-field="stations" ${it.stations ? 'checked' : ''}> Track Start/Stop Station on this item</label>
-      <label class="ps-checkbox-label"><input type="checkbox" data-idx="${i}" data-field="side" ${it.side ? 'checked' : ''}> Track Side (Lt/Rt/Ctr) on this item</label>
-      <label class="ps-checkbox-label"><input type="checkbox" data-idx="${i}" data-field="computed" ${it.computed ? 'checked' : ''}> Compute Qty from Length × Width on this item</label>
-      <label class="ps-checkbox-label"><input type="checkbox" data-idx="${i}" data-field="theoretical" ${it.theoretical ? 'checked' : ''}> Track Theoretical Qty / Overrun on this item</label>
-      <label class="ps-checkbox-label"><input type="checkbox" data-idx="${i}" data-field="payAppOnly" ${it.payAppOnly ? 'checked' : ''}> Pay App only -- hide from the inspector's report form, quantity set only by a recorded Pay App</label>
-      <label>Locations (one per line, leave blank if not used)<textarea data-idx="${i}" data-field="locations" rows="2">${escapeHtml((it.locations || []).join('\n'))}</textarea></label>
-      <button type="button" class="text-btn ps-remove-item" data-idx="${i}" style="color:var(--danger);">&times; Remove This Pay Item</button>
-    </div>`
-    )
-    .join('');
+      <div class="field-grid">
+        ${isLS
+          ? `<label>Lump Sum amount ($) <input type="number" inputmode="decimal" step="0.01" data-idx="${i}" data-field="unitPrice" value="${escapeHtml(it.unitPrice || '')}"><span class="hint" style="margin:0">Inspectors log dollars earned toward this.</span></label><div></div>`
+          : `<label>Per Plans Total <input type="number" inputmode="decimal" data-idx="${i}" data-field="plannedQty" value="${escapeHtml(it.plannedQty || '')}"></label>
+             <label>Unit Price <input type="number" inputmode="decimal" step="0.01" data-idx="${i}" data-field="unitPrice" value="${escapeHtml(it.unitPrice || '')}"></label>`}
+      </div>
+      <div class="psi-sect"><h3>Calculators inspectors can use</h3>${calcChips}</div>
+      <div class="psi-sect"><h3>Ask inspectors for</h3>
+        <label class="ps-checkbox-label"><input type="checkbox" data-idx="${i}" data-field="stations" ${it.stations ? 'checked' : ''}> Start and stop station</label>
+        <label class="ps-checkbox-label"><input type="checkbox" data-idx="${i}" data-field="side" ${it.side ? 'checked' : ''}> Side (Lt / Rt / Ctr)</label>
+        <label class="ps-checkbox-label"><input type="checkbox" data-idx="${i}" data-field="theoretical" ${it.theoretical ? 'checked' : ''}> Theoretical quantity (shows over or under)</label>
+        <label class="ps-checkbox-label"><input type="checkbox" data-idx="${i}" data-field="remarksRequired" ${it.remarksRequired ? 'checked' : ''}> Remarks, required before the report can be generated</label>
+        ${!it.unitKind && it.computed ? `<label class="ps-checkbox-label"><input type="checkbox" data-idx="${i}" data-field="computed" checked> Length × Width (from before units; confirm the unit to use its calculators instead)</label>` : ''}
+        <label>Locations (one per line, leave blank if not used)<textarea data-idx="${i}" data-field="locations" rows="2">${escapeHtml((it.locations || []).join('\n'))}</textarea></label>
+      </div>
+      <div class="psi-sect"><h3>Checks</h3>
+        <label>Warn when one day's quantity is over <input type="number" inputmode="decimal" data-idx="${i}" data-field="dailyLimit" value="${escapeHtml(it.dailyLimit || '')}" placeholder="No limit" style="max-width:12rem"></label>
+        <label class="ps-checkbox-label"><input type="checkbox" data-idx="${i}" data-field="payAppOnly" ${it.payAppOnly ? 'checked' : ''}> Pay App only (hidden from the report form; the quantity comes from Pay Apps)</label>
+      </div>
+      <button type="button" class="text-btn ps-remove-item" data-idx="${i}" style="color:var(--danger);justify-self:start">&times; Remove This Pay Item</button>
+    </div>`;
+}
+
+function renderPayItemsTab() {
+  const items = project.payItemCatalog || (project.payItemCatalog = []);
+  const pending = items.map((it, i) => ({ it, i })).filter(({ it }) => payItemUnitNeedsConfirm(it) && (it.itemNumber || it.description));
+  const confirmHtml = pending.length ? `
+    <section class="psi-confirm" aria-labelledby="psi-confirm-h">
+      <h2 id="psi-confirm-h">Check ${pending.length} unit${pending.length === 1 ? '' : 's'}</h2>
+      <p>These units were typed in before the app had a unit list. Pick what each one means so inspectors get the right calculators. Nothing changes until you confirm and save, and the report still prints the unit as typed.</p>
+      ${pending.map(({ it, i }) => {
+        const guess = matchPayUnit(it.unit);
+        return `<div class="psi-crow">
+          <div class="psi-what"><b>${escapeHtml(it.itemNumber || '(no number)')} &middot; typed as "${escapeHtml(it.unit || '')}"</b><span>${escapeHtml(it.description || '')}</span></div>
+          <select data-psi-guess="${i}" aria-label="What ${escapeHtml(it.unit || 'this unit')} means">${psUnitOptions(guess, !guess)}</select>
+          <button type="button" class="btn-sm" data-psi-confirm="${i}">Confirm</button>
+          ${guess === 'LS' && payItemKind(it, it.unit) !== 'LS' ? '<div class="psi-note">Lump Sum: once confirmed, quantities on this item count as dollars on the dashboards and Pay Apps.</div>' : ''}
+        </div>`;
+      }).join('')}
+      ${pending.filter(({ it }) => matchPayUnit(it.unit)).length > 1 ? '<button type="button" class="btn-secondary" id="psi-confirm-all">Confirm all suggested</button>' : ''}
+    </section>` : '';
+
+  const rowsHtml = items.map((it, i) => {
+    const open = psOpenItem === i;
+    return `<div class="psi-item${open ? ' open' : ''}" data-idx="${i}">
+      <button type="button" class="psi-line" data-psi-open="${i}" aria-expanded="${open}"><span class="psi-num">${escapeHtml(it.itemNumber || 'New item')}</span><span class="psi-desc">${escapeHtml(it.description || '')}</span>${psUnitChip(it)}<span class="psi-chev">${open ? '&#9662;' : '&#9656;'}</span></button>
+      ${open ? psItemBodyHtml(it, i) : ''}
+    </div>`;
+  }).join('');
 
   $('#ps-panel').innerHTML = `
-    <div class="panel-tip-row"><button type="button" class="info-tip" data-tip="Same fields as the PAY ITEMS sheet. Enabling Stations, Side, Computed, Theoretical, and/or Locations lets this item be logged more than once per report (different segments/sides/measurements the same day)." aria-label="What this does">i</button></div>
-    ${rowsHtml || '<p class="hint">No pay items yet.</p>'}
+    <div class="panel-tip-row"><button type="button" class="info-tip" data-tip="Same settings as the PAY ITEMS sheet in the project file. Stations, Side, Theoretical and Locations let an item be logged more than once per report (different segments, sides or spots the same day)." aria-label="What this does">i</button></div>
+    ${confirmHtml}
+    <div class="psi-list">${rowsHtml || '<p class="hint">No pay items yet.</p>'}</div>
     <button type="button" class="btn-secondary" id="ps-add-item">+ Add Pay Item</button>
   `;
 
   const panel = $('#ps-panel');
+  const changed = (rerender) => {
+    markDirty();
+    schedulePreviewRefresh();
+    if (rerender) renderPayItemsTab();
+  };
   $$('[data-field]', panel).forEach((el) => {
     const evt = el.type === 'checkbox' ? 'change' : 'input';
     el.addEventListener(evt, () => {
-      const idx = Number(el.dataset.idx);
+      const item = items[Number(el.dataset.idx)];
       const field = el.dataset.field;
-      const item = items[idx];
-      if (el.type === 'checkbox') item[field] = el.checked; // stations, side, computed, theoretical
+      if (el.type === 'checkbox') item[field] = el.checked;
       else if (field === 'locations') item.locations = el.value.split('\n').map((s) => s.trim()).filter(Boolean);
       else item[field] = el.value;
-      markDirty();
-      schedulePreviewRefresh();
+      // The line at the top of the item shows the number, description and unit.
+      if (['itemNumber', 'description', 'unit'].includes(field)) {
+        const line = panel.querySelector(`[data-psi-open="${el.dataset.idx}"]`);
+        if (line) {
+          line.querySelector('.psi-num').textContent = item.itemNumber || 'New item';
+          line.querySelector('.psi-desc').textContent = item.description || '';
+          line.querySelector('.psi-unit').outerHTML = psUnitChip(item);
+        }
+      }
+      changed(false);
     });
   });
+  // Confirming or changing a unit: what it means, never the printed text
+  // (unless there was none).
+  const setKind = (i, kind) => {
+    const item = items[i];
+    item.unitKind = kind || undefined;
+    if (!kind) delete item.unitKind;
+    if (kind && kind !== PAY_UNIT_OTHER && !String(item.unit || '').trim()) item.unit = kind;
+    delete item.calcs;
+  };
+  $$('[data-psi-unit]', panel).forEach((el) => el.addEventListener('change', () => { setKind(Number(el.dataset.idx), el.value); changed(true); }));
+  $$('[data-psi-confirm]', panel).forEach((btn) => btn.addEventListener('click', () => {
+    const i = Number(btn.dataset.psiConfirm);
+    const v = panel.querySelector(`[data-psi-guess="${i}"]`).value;
+    if (!v) { alert('Pick what this unit means first.'); return; }
+    setKind(i, v);
+    changed(true);
+  }));
+  const all = $('#psi-confirm-all');
+  if (all) all.addEventListener('click', () => {
+    pending.forEach(({ i }) => {
+      const v = panel.querySelector(`[data-psi-guess="${i}"]`).value;
+      if (v) setKind(i, v);
+    });
+    changed(true);
+  });
+  $$('[data-psi-open]', panel).forEach((btn) => btn.addEventListener('click', () => {
+    const i = Number(btn.dataset.psiOpen);
+    psOpenItem = psOpenItem === i ? null : i;
+    renderPayItemsTab();
+  }));
+  $$('[data-psi-calc]', panel).forEach((btn) => btn.addEventListener('click', () => {
+    const item = items[Number(btn.dataset.idx)];
+    const def = payUnitDef(item.unitKind && item.unitKind !== PAY_UNIT_OTHER ? item.unitKind : payItemKind(item, item.unit));
+    if (!def) return;
+    const on = new Set(Array.isArray(item.calcs) ? item.calcs : def.calcs);
+    if (on.has(btn.dataset.psiCalc)) on.delete(btn.dataset.psiCalc);
+    else on.add(btn.dataset.psiCalc);
+    // Every one on is the default: stored as no list at all.
+    const list = def.calcs.filter((c) => on.has(c));
+    if (list.length === def.calcs.length) delete item.calcs;
+    else item.calcs = list;
+    changed(true);
+  }));
   $$('.ps-remove-item', panel).forEach((btn) => {
     btn.addEventListener('click', () => {
       items.splice(Number(btn.dataset.idx), 1);
-      renderPayItemsTab();
-      markDirty();
-      schedulePreviewRefresh();
+      psOpenItem = null;
+      changed(true);
     });
   });
   $('#ps-add-item').addEventListener('click', () => {
-    items.push({ itemNumber: '', description: '', unit: '', plannedQty: '', unitPrice: '', stations: false, locations: [], side: false, computed: false, theoretical: false, payAppOnly: false });
+    items.push({ itemNumber: '', description: '', unit: '', plannedQty: '', unitPrice: '', stations: false, locations: [], side: false, computed: false, theoretical: false, payAppOnly: false, unitKind: PAY_UNIT_OTHER });
+    psOpenItem = items.length - 1;
     renderPayItemsTab();
   });
 }

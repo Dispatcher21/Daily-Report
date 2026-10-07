@@ -25,7 +25,7 @@ function qtyItems(project, extraItemNumbers) {
     itemNumber: it.itemNumber,
     description: it.description || '',
     unit: it.unit || '',
-    isLump: isLumpSumUnit(it.unit),
+    isLump: isLumpSumItem(it),
     price: it.unitPrice != null ? Number(it.unitPrice) : null,
     planned: it.planned,
     contract: it.contractTotal,

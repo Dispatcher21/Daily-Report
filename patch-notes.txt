@@ -3,6 +3,23 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.054 -- 2026-10-07
+  - Project Settings > Pay Items: one line per item, and each item's Unit
+    is picked from a standard list (LF, SY, CY, TON, LS...) or "Other" to
+    type your own. The report still prints the unit as the contract has
+    it (LUMP, TONS). Units from before are listed at the top to confirm;
+    a LUMP item counts as dollars only once confirmed as Lump Sum.
+  - Choose which calculators inspectors can use on each item, require
+    remarks before a report can be generated, and set a daily limit that
+    flags an unusually large day.
+  - New calculators: pipe joints, striping lines, miles, acres, truck
+    loads, area x thickness, tons from yards, tack rate, crew hours, and
+    a count with +1 / -1.
+  - The project Excel file carries the new settings (UNIT TYPE,
+    CALCULATORS, REMARKS REQUIRED, DAILY LIMIT, PAY APP ONLY). Older files
+    still load, and re-uploading one keeps the settings it doesn't have.
+    Pay App only no longer gets lost in a download and re-upload.
+
 0.053 -- 2026-10-06
   - Report editor: Pay Items is now the first section and starts open.
     Each item is one line; tap it to open just that one. Add items from a

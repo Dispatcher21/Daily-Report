@@ -55,9 +55,12 @@ const outbox = async (to) => {
   check('both projects listed', [has('Highway 12'), has('Bridge 4')], [true, true]);
   check('Bob: 2 reports, 17.5 hours', has('Bob') && /Bob[^\n]*2 reports[^\n]*17\.5/.test(m.text), true);
   check('pay item used', has('201') && has('Clearing'), true);
-  check('days left (100 - 35 = 65)', has('65'), true);
+  // Days since the start date depend on today (in UTC or the test
+  // account's own time zone, which can be a day behind around midnight).
+  const daysSince = (iso) => [0, 1].map((back) => Math.floor((Date.now() - back * 86400000 - Date.parse(iso + 'T00:00:00Z')) / 86400000));
+  check('days left (100 minus days since NTP)', daysSince('2026-09-01').some((d) => has(`${100 - d}`)), true);
   check('alert: pay item over plan', has('Item 201 Clearing is over plan: 12 of 10 AC (120%)'), true);
-  check('alert: past contract time', has('Past contract time by 7 days'), true);
+  check('alert: past contract time', daysSince('2026-07-01').some((d) => has(`Past contract time by ${d - 90} days`)), true);
   check('no links', !!m && !/https?:|href=|<a\s/i.test(m.text + m.html), true);
   require('fs').writeFileSync(`${OUT}/roundup-preview.html`, m ? m.html : '');
   await A.click('#account-roundup'); await A.waitForTimeout(800);
