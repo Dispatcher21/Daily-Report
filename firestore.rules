@@ -43,18 +43,25 @@ service cloud.firestore {
     function defaultPerm(role, key) {
       return role == 'manager' ? key != 'membersCanCreateProjects' : key == 'membersCanEditOwnReports';
     }
+    // People without an account (who only get this far while accounts
+    // aren't required) follow the "No account" column instead (company
+    // permissions), whatever their role, with everything off by default.
     function can(code, key) {
       return memberActive(code) && (hasAccount() || !enforced(code)) && (me(code).role == 'admin'
-        || company(code).get('rolePermissions', {}).get(me(code).role, {}).get(key, defaultPerm(me(code).role, key)) == true);
+        || (hasAccount()
+          ? company(code).get('rolePermissions', {}).get(me(code).role, {}).get(key, defaultPerm(me(code).role, key))
+          : company(code).get('permissions', {}).get(key, false)) == true);
     }
     // Commenting used to come with approving: a role whose comment setting
     // was never saved keeps whatever its approve setting says.
     function canComment(code, key, approveKey) {
       return memberActive(code) && (hasAccount() || !enforced(code)) && (me(code).role == 'admin'
-        || commentPerm(company(code).get('rolePermissions', {}).get(me(code).role, {}), me(code).role, key, approveKey));
+        || (hasAccount()
+          ? commentPerm(company(code).get('rolePermissions', {}).get(me(code).role, {}), key, approveKey, defaultPerm(me(code).role, approveKey))
+          : commentPerm(company(code).get('permissions', {}), key, approveKey, false)));
     }
-    function commentPerm(rolePerms, role, key, approveKey) {
-      return rolePerms.get(key, rolePerms.get(approveKey, defaultPerm(role, approveKey))) == true;
+    function commentPerm(perms, key, approveKey, fallback) {
+      return perms.get(key, perms.get(approveKey, fallback)) == true;
     }
     // Once accounts are required, permission `key` per the role table;
     // before that, anyone signed in (the old password-only behavior).

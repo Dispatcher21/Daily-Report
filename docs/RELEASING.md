@@ -9,7 +9,11 @@ Everything waiting to be applied to the live Firebase project
 (`daily-reports-53c82`). Add to this list as you go; clear it once the
 owner has applied it.
 
-(Nothing pending.)
+- `firestore.rules`: people without an account follow the "No account"
+  column of Settings > Roles instead of the Inspector column (`can` and
+  `canComment`). Before publishing, check that column on the live company:
+  anything unchecked there is taken away from people without an account.
+  (Branch `claude/kind-ramanujan-ymxdyq`.)
 
 (Last applied: 0.057, 2026-10-07: rules for devices without an account
 (approval, assigned projects only); onMemberWritten. 0.054, 2026-10-07: weeklyRoundup and sendRoundupPreview

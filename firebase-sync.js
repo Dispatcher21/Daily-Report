@@ -979,7 +979,7 @@ async function refreshMembership({ joined = false } = {}) {
   try { timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch { /* older browsers */ }
   await writeAccountProfile(account.uid, { email: account.email, displayName: name, companyCode: room.code, companyName: room.name || '', pendingCompanyCode: null, ...(timeZone ? { timeZone } : {}) });
   const companyData = ((await getDoc(doc(db, 'companies', room.code)).catch(() => null)) || { data: () => ({}) }).data() || {};
-  await applyMembership(member, companyData);
+  await applyMembership(member, companyData, account.noAccount);
   return member;
 }
 
@@ -1271,14 +1271,16 @@ async function cancelTeamInvite(email) {
 
 // A member record's role and project access, as this device's settings
 // (the same ones companyCan/projectInScope already read).
-async function applyMembership(member, companyData = {}) {
+// People without an account follow the "No account" column of Settings >
+// Roles (the company-wide permissions) rather than their role's.
+async function applyMembership(member, companyData = {}, noAccount = false) {
   const role = MEMBER_ROLES.includes(member.role) ? member.role : 'inspector';
   const before = await getCompanyRoom();
   const scopeBefore = before && !before.isAdmin ? before.projectScope : null;
   const scope = role !== 'admin' && Array.isArray(member.projectIds) ? member.projectIds : null;
   await saveSetting(COMPANY_ROLE_ID_SETTING, null);
   await saveSetting(COMPANY_ADMIN_SETTING, role === 'admin');
-  if (role !== 'admin') await saveSetting(COMPANY_PERMISSIONS_SETTING, rolePermissionsFor(companyData, role));
+  if (role !== 'admin') await saveSetting(COMPANY_PERMISSIONS_SETTING, noAccount ? fillPermissions(companyData.permissions) : rolePermissionsFor(companyData, role));
   await saveSetting(COMPANY_PROJECT_SCOPE_SETTING, scope);
   if (JSON.stringify(scopeBefore) !== JSON.stringify(scope)) {
     // Different projects now: the next pull reads everything allowed from

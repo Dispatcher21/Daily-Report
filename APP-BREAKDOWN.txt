@@ -121,7 +121,11 @@ the device keeps the record and clears noAccount.
 Roles. admin, manager, inspector. Admins can do everything. What managers
 and inspectors may do comes from the Roles table in Settings > Company
 (rolePermissions on the company doc, falling back to built-in defaults;
-rolePermissionsFor in firebase-sync.js, defaultPerm in the rules). Members
+rolePermissionsFor in firebase-sync.js, defaultPerm in the rules).
+Non-admins without an account follow the table's "No account" column
+instead, whatever their role (the company doc's permissions, everything
+off unless set; decided by the sign-in, not the member record, in both
+applyMembership and the rules' can/canComment). Members
 can also be limited to certain projects (member.projectIds; null = all).
 
 Enforcement. The company doc's accountsRequired switch ("Require everyone

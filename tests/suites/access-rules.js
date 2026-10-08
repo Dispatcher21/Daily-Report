@@ -55,6 +55,19 @@ const raw = (p, fn, arg) => p.evaluate(async ({ src, arg }) => {
     return [(await getCompanyRoom()).isAdmin, (await getAllProjects()).length, (await listTeam()).members.length > 0];
   }), [true, 2, true]);
   console.log('L, D joined');
+  // People without an account follow the No account column, not the Inspector one.
+  check('no account: own reports off by default, though Inspectors have it', await L.evaluate(async () => (await getReportPermissionContext()).canEditOwn), false);
+  await A.evaluate(() => updateCompanyPermissions({ membersCanEditOwnReports: true }));
+  const lRep = await L.evaluate(async () => { await autoPullCompanyData(true); const r = await makeBlankReport(7, await getProject('p1'), null); r.date = '2026-10-07'; await saveReport(r); return (await confirmReportSyncStatus(await getReport(r.id))) === 'synced' && r.id; });
+  const lEdit = () => L.evaluate(async (id) => { await autoPullCompanyData(true); const r = await getReport(id); const shown = canEditReportWithContext(r, await getReportPermissionContext()); r.notes = 'edit ' + Date.now(); await saveReport(r); return [shown, await confirmReportSyncStatus(await getReport(id))]; }, lRep);
+  check('no account column on: can edit own report', await lEdit(), [true, 'synced']);
+  await A.evaluate(() => updateRolePermission('inspector', 'membersCanEditOwnReports', false));
+  check('inspector column off: no-account person unaffected', await lEdit(), [true, 'synced']);
+  await A.evaluate(async () => { await updateRolePermission('inspector', 'membersCanEditOwnReports', true); await updateCompanyPermissions({ membersCanEditOwnReports: false }); });
+  check('no account column off: blocked, though Inspectors have it', await lEdit(), [false, 'failed']);
+  // Gone again, so the report counts below stay as they were.
+  await raw(A, `await fs.deleteDoc(fs.doc(db, 'companies', code, 'reports', arg));`, lRep);
+  await L.evaluate((id) => deleteReportLocalOnly(id), lRep);
   await A.evaluate(async ({ bUid, mUid }) => { await updateTeamMember(bUid, { projectIds: ['p1'] }); await updateTeamMember(mUid, { role: 'manager' }); }, { bUid, mUid });
 
   check('only an admin can turn it on', await raw(Bp, `await fs.updateDoc(fs.doc(db, 'companies', code), { accountsRequired: true });`), 'permission-denied');
