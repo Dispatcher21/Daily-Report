@@ -248,7 +248,7 @@ async function renderPreview() {
     const pages = renderReportPages(previewEl, layout, sampleReport, logoBlob);
     const targetWidth = Math.min(previewEl.clientWidth || 600, 640);
     pages.forEach(({ el }) => scalePreviewPage(el, targetWidth));
-    previewGrids = { 1: pages[0].el.querySelector('.print-grid'), 2: pages[1].el.querySelector('.print-grid') };
+    previewGrids = printGridsBySheet(pages);
 
     Object.keys(FIELD_HIGHLIGHT_REGIONS).forEach((key) => addClickTarget(key, FIELD_HIGHLIGHT_REGIONS[key]));
     refreshAllClickTargetStates();
@@ -343,7 +343,7 @@ const RF_BLOCK_NOTES = {
   payItems: 'Pay item catalog picker + selected items list',
   trafficControlSelect: 'In Place / Attention Required',
   repSignatureImage: 'Signature pad',
-  photos: '6-slot photo grid',
+  photos: '10-slot photo grid',
 };
 
 function reorderCardHtml(key, stepNum) {

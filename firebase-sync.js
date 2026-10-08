@@ -52,7 +52,17 @@ async function getBytesIfExists(storageRef, getBytesFn) {
 
 const FIRESTORE_SDK = 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
 const STORAGE_SDK = 'https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js';
-const REPORT_PHOTO_SLOTS = 6;
+// Which photo slots a report doc says are filled. The first 6 live in
+// photoSlots; slots 7-10 (added later) live in their own extraPhotoSlots
+// field, because an app version from before them rewrites photoSlots as
+// exactly 6 entries on every save. A separate field is one an older
+// version just carries along untouched, so photos 7-10 survive a
+// teammate on an older version editing the report.
+const LEGACY_PHOTO_SLOTS = 6;
+function remotePhotoSlots(data) {
+  const first = Array.from({ length: LEGACY_PHOTO_SLOTS }, (_, i) => !!(data.photoSlots && data.photoSlots[i]));
+  return [...first, ...(data.extraPhotoSlots || [])];
+}
 
 // Stamped onto a locally-cached project/report during pullAllCompanyData's
 // reconciliation pass when it turns out not to belong to the company just
@@ -2602,7 +2612,7 @@ async function pushReportToCompany(code, report) {
   // below is otherwise a full overwrite of photoSlots/hasSignature.
   const existingDoc = await getDoc(doc(db, 'companies', code, 'reports', report.id));
   const existingData = existingDoc.exists() ? existingDoc.data() : {};
-  const existingPhotoSlots = existingData.photoSlots || [];
+  const existingPhotoSlots = remotePhotoSlots(existingData);
 
   const photos = report.photos || [];
   const photosFetched = report.photosFetched || photos.map(() => true);
@@ -2615,9 +2625,11 @@ async function pushReportToCompany(code, report) {
   const photoUploads = photos.map((photo, i) => {
     if (!photosFetched[i]) return Promise.resolve(); // unknown locally -- don't touch it
     const photoRef = ref(storage, reportPhotoPath(code, report.id, i));
-    return photo
-      ? uploadBytes(photoRef, photo, { contentType: photo.type || 'image/jpeg' })
-      : deleteObject(photoRef).catch(() => {}); // wasn't there -- nothing to remove
+    if (photo) return uploadBytes(photoRef, photo, { contentType: photo.type || 'image/jpeg' });
+    // Only a slot the doc says was filled has anything to remove; asking
+    // Storage to delete every empty slot on every save was 10 paid
+    // operations a save for nothing.
+    return existingPhotoSlots[i] ? deleteObject(photoRef).catch(() => {}) : Promise.resolve();
   });
 
   const sigRef = ref(storage, reportSignaturePath(code, report.id));
@@ -2633,7 +2645,15 @@ async function pushReportToCompany(code, report) {
   // never pushed, so they're excluded here the same as the real blob fields.
   const { photos: _photos, photosFetched: _pf, repSignatureImage: _sig, signatureFetched: _sf, peSignatureImage: _peSig, thumbnail: _thumb, thumbnailBack: _thumbBack, thumbnailAt: _thumbAt, pendingPush: _pp, ...rest } = report;
   const data = JSON.parse(JSON.stringify(rest));
-  data.photoSlots = photos.map((p, i) => (photosFetched[i] ? !!p : !!existingPhotoSlots[i]));
+  const slots = photos.map((p, i) => (photosFetched[i] ? !!p : !!existingPhotoSlots[i]));
+  while (slots.length < LEGACY_PHOTO_SLOTS) slots.push(false);
+  data.photoSlots = slots.slice(0, LEGACY_PHOTO_SLOTS);
+  // Only written once a report has used an extra slot: adding a new field
+  // to every report would make an approval or comment write look like it
+  // changed more than it did (firestore.rules' approvalOnly/commentsOnly).
+  const extra = slots.slice(LEGACY_PHOTO_SLOTS);
+  if (extra.some(Boolean) || 'extraPhotoSlots' in existingData) data.extraPhotoSlots = extra;
+  else delete data.extraPhotoSlots;
   data.hasSignature = signatureFetched ? !!report.repSignatureImage : !!existingData.hasSignature;
   await setDoc(doc(db, 'companies', code, 'reports', report.id), data);
 }
@@ -2812,14 +2832,16 @@ async function pullAllCompanyData(code, onProgress) {
 
     const report = { ...data, id: d.id, companyCode: code };
     delete report.photoSlots;
+    delete report.extraPhotoSlots;
     delete report.hasSignature;
 
     const existing = existingReportsById.get(d.id) || null;
 
     report.photos = [];
     report.photosFetched = [];
-    for (let slot = 0; slot < REPORT_PHOTO_SLOTS; slot++) {
-      const remoteHasPhoto = !!(data.photoSlots && data.photoSlots[slot]);
+    const remoteSlots = remotePhotoSlots(data);
+    for (let slot = 0; slot < REPORT_PHOTO_COUNT; slot++) {
+      const remoteHasPhoto = !!remoteSlots[slot];
       const alreadyFetched = existing && existing.photosFetched && existing.photosFetched[slot] && existing.photos && existing.photos[slot];
       if (!remoteHasPhoto) {
         report.photos.push(null);
@@ -2972,14 +2994,16 @@ async function pullDeltaCompanyData(code, onProgress, cursor) {
 
     const report = { ...data, id: d.id, companyCode: code };
     delete report.photoSlots;
+    delete report.extraPhotoSlots;
     delete report.hasSignature;
 
     const existing = await getReport(d.id, { includeDeleted: true }); // see full pull's identical comment above
 
     report.photos = [];
     report.photosFetched = [];
-    for (let slot = 0; slot < REPORT_PHOTO_SLOTS; slot++) {
-      const remoteHasPhoto = !!(data.photoSlots && data.photoSlots[slot]);
+    const remoteSlots = remotePhotoSlots(data);
+    for (let slot = 0; slot < REPORT_PHOTO_COUNT; slot++) {
+      const remoteHasPhoto = !!remoteSlots[slot];
       const alreadyFetched = existing && existing.photosFetched && existing.photosFetched[slot] && existing.photos && existing.photos[slot];
       if (!remoteHasPhoto) {
         report.photos.push(null);

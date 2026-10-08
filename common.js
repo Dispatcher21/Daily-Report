@@ -11,7 +11,7 @@ function escapeHtml(str) {
 
 // The app's version, shown at the bottom of every page as a link to the
 // patch notes. Bump it together with each new patch-notes.txt entry.
-const APP_VERSION = '0.0591';
+const APP_VERSION = '0.0612';
 document.addEventListener('DOMContentLoaded', () => {
   const main = document.querySelector('main');
   if (!main) return;

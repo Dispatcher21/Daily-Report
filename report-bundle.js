@@ -22,8 +22,6 @@
 //   photos/photoN.jpg -- one real file per filled photo slot (1-indexed)
 //   signature.png     -- the representative's signature, if signed
 
-const PHOTO_SLOT_COUNT = 6;
-
 // Returns null (rather than throwing) when `blob` isn't a zip at all or
 // isn't one of ours -- callers use this to fall back to the plain-JSON
 // backup format, since a file picked for Import could be either.
@@ -48,7 +46,7 @@ async function tryParseReportBundle(blob) {
   const report = JSON.parse(fflate.strFromU8(files['report.json']));
 
   report.photos = [];
-  for (let i = 1; i <= PHOTO_SLOT_COUNT; i++) {
+  for (let i = 1; i <= REPORT_PHOTO_COUNT; i++) {
     const entry = files[`photos/photo${i}.jpg`];
     report.photos.push(entry ? new Blob([entry], { type: 'image/jpeg' }) : null);
   }

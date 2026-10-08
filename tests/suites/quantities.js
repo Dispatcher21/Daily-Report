@@ -17,8 +17,38 @@ const text = (p, sel) => p.textContent(sel).then((t) => t.replace(/\s+/g, ' ').t
   await p.goto(`${B}/tutorial.html`);
   await p.waitForURL(/index\.html/, { timeout: 90000 });
   await p.waitForTimeout(1000);
-  const pid = await p.evaluate(async () => (await getAllProjects())[0].id);
+  const pid = await p.evaluate(async () => (await getAllProjects()).find((pr) => pr.meta.projectNo === 'DEMO-101').id);
+  check('example projects, DEMO-101 first', await p.evaluate(async () => (await getAllProjects()).map((pr) => pr.meta.projectNo)), ['DEMO-101', 'DEI-0001', 'NYC-1984', 'PAW-0048', 'OZ-1900', 'MOR-0001', 'TAT-0042', 'SHIRE-007']);
   const settle = () => p.waitForTimeout(1500);
+
+  // The welcome asks inspector or manager. Picking one switches the
+  // example company to that role's default permissions (the page reloads to
+  // show it), and the tours after that only play that role's lines.
+  await p.waitForSelector('.tour-root', { timeout: 15000 });
+  await p.evaluate(() => tour.finishTyping()); // a tap while typing only finishes the line
+  await p.click('.tour-next');
+  check('welcome asks for a role', [await p.isVisible('.tour-choose-inspector'), await p.isVisible('.tour-choose-manager'), await p.isVisible('.tour-choose-guided')], [true, true, false]);
+  await p.click('.tour-choose-inspector');
+  await p.waitForSelector('.tour-choose-guided', { timeout: 15000 });
+  await p.evaluate(() => tour.finishTyping());
+  check('then the inspector welcome, walkthrough or explore', (await text(p, '.tour-text')).includes('everyday field work'), true);
+  await settle();
+  const homeLines = () => p.evaluate(() => tourStepsForPage('index.html').map((s) => s.say));
+  await p.click('#hamburger-btn');
+  check('inspector: no Manager Dashboard, Manager page or approving', [await p.isVisible('#md-overview-step'), await p.isVisible('#hb-manager-row'), await p.evaluate(() => companyCan('approveReports')), (await homeLines()).some((t) => t.includes('Manager Dashboard'))], [false, false, false, false]);
+  check('inspector walkthrough: project page leads to New Report, editor ends at Generate', await p.evaluate(() => [tourStepsForPage('project.html').slice(-1)[0].say.includes('Tap New Report'), tourStepsForPage('report-editor.html').slice(-1)[0].say.includes('Generate Report')]), [true, true]);
+  await p.click('.tour-choose-explore');
+  // Same for a manager (straight to the role switch the button makes).
+  await p.evaluate(async () => { sessionStorage.setItem('dr-tour-role', 'manager'); await applyTutorialRole('manager'); });
+  await p.reload(); await settle();
+  await p.click('#hamburger-btn');
+  check('manager: Manager Dashboard, Manager page and approving', [await p.isVisible('#md-overview-step'), await p.isVisible('#hb-manager-row'), await p.evaluate(() => companyCan('approveReports')), (await homeLines()).some((t) => t.includes('Manager Dashboard'))], [true, true, true, true]);
+  check('manager walkthrough: new project, then reviews with the emails, no Pay Apps', await p.evaluate(() => {
+    const lines = ['index.html', 'project-setup.html', 'manager.html', 'report-viewer.html'].flatMap((pg) => tourStepsForPage(pg).map((st) => st.say));
+    return [lines.some((t) => t.includes('Add Project')), lines.some((t) => t.includes('emails the inspector')), lines.some((t) => t.includes('weekly roundup')), lines.some((t) => /Pay App/.test(t))];
+  }), [true, true, true, false]);
+  // The rest of this suite is about quantities: back to the admin view.
+  await p.evaluate(() => saveSetting(COMPANY_ADMIN_SETTING, true));
 
   // Project page cards.
   await p.goto(`${B}/project.html?id=${pid}`); await settle();
@@ -78,7 +108,13 @@ const text = (p, sel) => p.textContent(sel).then((t) => t.replace(/\s+/g, ' ').t
   // Log Quantities: running totals, day arrows.
   await p.goto(`${B}/quick-quantity.html?project=${pid}`); await settle();
   const today = await p.inputValue('#f-date');
-  check('editing today\'s report', await text(p, '#date-context'), "Editing Report #19's quantities.");
+  // The example reports end yesterday, leaving today open for the tour's
+  // new report.
+  check('today has no report yet', (await text(p, '#date-context')).startsWith('No report for this day yet.'), true);
+  const lastDate = await p.evaluate(async (projectId) => (await getReportsForProject(projectId)).find((r) => String(r.reportNo) === '19').date, pid);
+  await p.fill('#f-date', lastDate); await p.dispatchEvent('#f-date', 'change');
+  await p.waitForFunction(() => document.querySelector('#date-context').textContent.startsWith('Editing'), null, { timeout: 5000 }).catch(() => {});
+  check('editing the last report', await text(p, '#date-context'), "Editing Report #19's quantities.");
   const row = '.qq-row[data-item-number="502-01"]';
   check('asphalt to date', (await text(p, `${row} .qq-progress`)).startsWith('To date 440 of 650 TON · 210 left'), true);
   await p.fill(`${row} .qq-qty`, '400');
@@ -261,6 +297,18 @@ const text = (p, sel) => p.textContent(sel).then((t) => t.replace(/\s+/g, ' ').t
   await p.goto(`${B}/index.html`); await settle();
   check('tutorial pages stamped W.I.P.', await p.evaluate(() => document.body.classList.contains('tutorial-wip') && document.querySelector('.tutorial-banner').textContent.includes('W.I.P.')), true);
   check('no character or hand', [await p.isVisible('.tour-char'), await p.isVisible('.tour-hand')], [false, false]);
+
+  // No Work Day / Weather Day: one tap on the button, one on the reason.
+  const nw = await ctx.newPage();
+  await nw.addInitScript(() => sessionStorage.setItem('dr-tutorial', '1')); // tutorial mode is per tab
+  nw.on('pageerror', (e) => errs.push(e.message));
+  nw.on('dialog', (d) => d.accept()); // "Replace the notes?" when switching Weather Day to No Work Day
+  await nw.goto(`${B}/report-editor.html?project=${pid}&report=new`); await nw.waitForTimeout(2000);
+  await nw.click('#btn-weather-day'); await nw.click('#blank-day-overlay [data-reason="0"]'); await nw.waitForTimeout(800);
+  check('Weather Day: marker, no hours, reason in the summary, time comment', await nw.evaluate(() => [report.notes, report.hours, report.workBegin, report.workSummary.startsWith('No work performed due to rain.'), report.commentsOnTime]), ['WEATHER DAY', 0, '', true, 'Weather day (rain). Recommend no time charged.']);
+  await nw.click('#btn-no-work-day'); await nw.click('#blank-day-overlay [data-reason="5"]'); await nw.waitForTimeout(500);
+  check('No Work Day: reason added ahead of the summary', await nw.evaluate(() => [report.notes, report.workSummary.split('\n')[0]]), ['NO WORK DAY', 'No work performed. Holiday.']);
+  await nw.close();
 
   // Phone width: nothing wider than the screen.
   await p.setViewportSize({ width: 390, height: 844 });
