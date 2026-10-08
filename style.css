@@ -4251,3 +4251,10 @@ body.has-page-bg .hero-chip:not([class*="st-"]) { background: rgba(10,20,30,0.62
   .payapp-row { grid-template-columns: 2rem minmax(0, 1fr) auto; gap: 0.45rem; font-size: 0.84rem; }
   .w-photo-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* Photo cards: the title sits lower on the new cards, so keep it on the
+   dark part of the fade (it fades to the card colour only below the
+   title) and give the white text a shadow, readable on any photo. */
+.hub-card.has-bg .hc-bg-img, .hub-card.has-bg .hc-bg-fade { height: 68%; }
+.hub-card.has-bg .hc-bg-fade { background: linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.6) 55%, rgba(0,0,0,0.45) 75%, var(--surface) 100%); }
+.hub-card.has-bg .hc-icon, .hub-card.has-bg .hc-title { text-shadow: 0 1px 3px rgba(0,0,0,0.8), 0 0 10px rgba(0,0,0,0.45); }
