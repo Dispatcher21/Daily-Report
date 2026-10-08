@@ -184,9 +184,9 @@ the arrows to move between months, and tap a day to see what was done.
 [4]
 Emotion: pointing
 Points at: project card
-These are your projects. DEMO-101 is a normal drainage job. The others
-are... less normal. Each card opens that project's dashboard, reports,
-and quantities.
+These are your projects. Each card opens that project's dashboard,
+reports, and quantities. We'll tour DEMO-101, a storm drain job in
+Derry. Ignore the balloons.
 
 [5]
 Emotion: surprised
