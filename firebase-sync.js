@@ -2665,7 +2665,10 @@ function reportLockConflict(report, remote) {
   // An unlock made after the company copy last changed (an older unlock
   // from before a re-approval doesn't count).
   const unlocking = status === 'unlocked' && (report.unlockedAt || 0) > (remote.updatedAt || 0);
-  if (status !== 'approved' && !unlocking) return true;
+  // Likewise a reviewer sending it back after the approval (the rules
+  // decide whether this person may).
+  const sentBack = status === 'changes_requested' && (report.updatedAt || 0) > (remote.updatedAt || 0);
+  if (status !== 'approved' && !unlocking && !sentBack) return true;
   const skip = new Set([...REVIEW_FIELDS, 'photos', 'photosFetched', 'repSignatureImage', 'signatureFetched', 'peSignatureImage',
     'thumbnail', 'thumbnailBack', 'thumbnailAt', 'pendingPush', 'photoSlots', 'extraPhotoSlots', 'hasSignature', 'companyCode']);
   const pick = (obj) => {
