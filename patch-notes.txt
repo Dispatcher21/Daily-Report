@@ -3,6 +3,19 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.0601 -- 2026-10-08
+  - No Work Day and Weather Day: after tapping the button, pick the
+    reason (waiting on materials, holiday, rain, wet site, high wind, and
+    so on). The report fills itself in: no hours or work times, and a
+    Work Summary sentence with the reason. A Weather Day also adds the
+    day's conditions and "Recommend no time charged" under Comments on
+    Time Charged. "Other" lets you type your own reason. All of it stays
+    editable.
+  - Printed report: long pay item descriptions and remarks, test results
+    and check remarks wrap onto the next line instead of being cut off.
+  - Tutorial: No Work Day and Weather Day reasons are in the Work Summary,
+    not Notes.
+
 0.060 -- 2026-10-08
   - Tutorial asks whether you're an inspector or a manager, and shows the
     app the way that role sees it, with a walkthrough for each:
