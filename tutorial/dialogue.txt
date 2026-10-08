@@ -520,8 +520,8 @@ was out there with you.
 [4]
 Emotion: neutral
 Points at: no work day button
-No work on site today? No Work Day or Weather Day fills in the whole day
-for you in one tap.
+No work on site today? Tap No Work Day or Weather Day, then pick the
+reason, and the whole day is filled in for you.
 
 [5]
 Emotion: pointing

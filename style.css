@@ -3816,3 +3816,7 @@ a.settings-toggle { text-decoration: none; box-sizing: border-box; }
 .qp-chk-ahead { background: var(--danger-bg); color: var(--danger); }
 .qp-prog-text { font-size: 0.8rem; color: var(--text-dim); font-variant-numeric: tabular-nums; }
 @media (min-width: 1100px) { .qp-prog-text { white-space: nowrap; } }
+
+/* No Work Day / Weather Day reason picker (report-editor.html). */
+.blank-day-reasons { display: grid; grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr)); gap: 0.5rem; margin: 0.9rem 0 0.6rem; }
+.blank-day-reasons .btn-secondary { margin: 0; width: 100%; }

@@ -1032,19 +1032,112 @@ function renderEditor() {
     if (reportDirty && !confirm('You have unsaved changes. Leave without saving?')) e.preventDefault();
   });
 
-  $('#btn-no-work-day').onclick = () => markBlankDay(NO_WORK_DAY_NOTE);
-  $('#btn-weather-day').onclick = async () => {
-    markBlankDay(WEATHER_DAY_NOTE);
+  $('#btn-no-work-day').onclick = () => pickBlankDayReason(NO_WORK_DAY_NOTE);
+  $('#btn-weather-day').onclick = () => pickBlankDayReason(WEATHER_DAY_NOTE);
+}
+
+// ---------- No Work Day / Weather Day ----------
+// One tap on the button, one tap on a reason, and the day is filled in:
+// the Notes marker and zeroed hours (markBlankDay), a Work Summary
+// sentence with the reason, no work begin/end times, and for a Weather
+// Day the fetched conditions plus a time-charged comment. Everything stays
+// editable afterward. "Other" fills the plain sentence and puts the cursor
+// in Work Summary to say more.
+const BLANK_DAY_REASONS = {
+  [NO_WORK_DAY_NOTE]: {
+    title: '\u{1F6AB} No Work Day',
+    ask: 'Why was there no work today?',
+    reasons: [
+      ['Contractor did not work', 'The contractor did not work today.'],
+      ['Waiting on materials', 'The contractor was waiting on materials.'],
+      ['Waiting on others', 'Work was on hold, waiting on a utility or another contractor.'],
+      ['Equipment breakdown', 'Work stopped for an equipment breakdown.'],
+      ['Suspended by engineer or owner', 'Work was suspended by the engineer or owner.'],
+      ['Holiday', 'Holiday.'],
+      ['Other', ''],
+    ],
+  },
+  [WEATHER_DAY_NOTE]: {
+    title: '\u{26C5} Weather Day',
+    ask: 'What weather stopped work?',
+    reasons: [
+      ['Rain', 'rain'],
+      ['Wet site after rain', 'wet site conditions after rain'],
+      ['Storms or lightning', 'storms and lightning'],
+      ['High wind', 'high wind'],
+      ['Snow or ice', 'snow and ice'],
+      ['Extreme heat', 'extreme heat'],
+      ['Too cold', 'cold temperatures'],
+      ['Other', ''],
+    ],
+  },
+};
+
+function pickBlankDayReason(noteText) {
+  const cfg = BLANK_DAY_REASONS[noteText];
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'blank-day-overlay';
+  overlay.innerHTML = `
+    <div class="modal-card blank-day-card" role="dialog" aria-labelledby="blank-day-title">
+      <h2 id="blank-day-title" style="margin:0 0 0.25rem;">${cfg.title}</h2>
+      <p style="margin:0;">${escapeHtml(cfg.ask)}</p>
+      <div class="blank-day-reasons">
+        ${cfg.reasons.map(([label], i) => `<button type="button" class="btn-secondary" data-reason="${i}">${escapeHtml(label)}</button>`).join('')}
+      </div>
+      <button type="button" class="text-btn" id="blank-day-cancel">Cancel</button>
+    </div>`;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.querySelector('#blank-day-cancel').onclick = close;
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+  overlay.querySelectorAll('[data-reason]').forEach((btn) => {
+    btn.onclick = () => {
+      close();
+      const [label, detail] = cfg.reasons[Number(btn.dataset.reason)];
+      applyBlankDay(noteText, label === 'Other' ? '' : detail).catch(console.error);
+    };
+  });
+}
+
+async function applyBlankDay(noteText, detail) {
+  if (!markBlankDay(noteText)) return;
+  const setField = (key, value) => {
+    report[key] = value;
+    const el = $(`#f-${key}`); // may not exist -- the field could be hidden for this project
+    if (el) el.value = value;
+  };
+  // Nobody worked, so no work hours on the form either (they otherwise
+  // come from the project's defaults or the inspectors' time).
+  setField('workBegin', '');
+  setField('workEnd', '');
+  let sentence;
+  if (noteText === WEATHER_DAY_NOTE) {
     // A Weather Day is specifically about the weather, so pull the actual
-    // conditions for the report's date right away instead of leaving that
-    // for a separate manual step -- same fetch as the Weather group's own
-    // button, just triggered here too. Only if that button (and the
-    // Location it depends on) actually exist for this project/report.
+    // conditions for the report's date right away -- same fetch as the
+    // Weather group's own button, when this project has one.
     if ($('#btn-fetch-weather')) {
       setGroupOpen('weather', true);
       await fetchWeatherForReport();
     }
-  };
+    const temps = report.tempHigh !== '' && report.tempHigh != null && report.tempLow !== '' && report.tempLow != null
+      ? `, high ${report.tempHigh}, low ${report.tempLow}` : '';
+    const conditions = report.weatherDesc ? ` Conditions: ${report.weatherDesc}${temps}.` : '';
+    sentence = detail ? `No work performed due to ${detail}.${conditions}` : `No work performed due to weather.${conditions}`;
+    if (!String(report.commentsOnTime || '').trim()) {
+      setField('commentsOnTime', `Weather day${detail ? ` (${detail})` : ''}. Recommend no time charged.`);
+    }
+  } else {
+    sentence = detail ? `No work performed. ${detail}` : 'No work performed.';
+  }
+  // Ahead of anything already in Work Summary, rather than replacing it.
+  const existing = String(report.workSummary || '').trim();
+  setField('workSummary', existing && !existing.startsWith(sentence) ? `${sentence}\n${existing}` : sentence);
+  scheduleSave();
+  if (!detail) {
+    const el = $('#f-workSummary');
+    if (el) { setGroupOpen('workSummary', true); el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+  }
 }
 
 // Shared by the No Work Day and Weather Day buttons -- both fill Notes with
@@ -1052,7 +1145,7 @@ function renderEditor() {
 function markBlankDay(noteText) {
   const existing = (report.notes || '').trim();
   if (existing && existing.toUpperCase() !== noteText) {
-    if (!confirm(`This report already has notes. Replace them with "${noteText}"?`)) return;
+    if (!confirm(`This report already has notes. Replace them with "${noteText}"?`)) return false;
   }
   report.notes = noteText;
   const notesEl = $('#f-notes'); // may not exist -- Notes could be hidden/reordered for this project
@@ -1071,6 +1164,7 @@ function markBlankDay(noteText) {
   report.hours = 0;
   renderInspectors();
   scheduleSave();
+  return true;
 }
 
 // ---------- Time worked / hours calculator ----------

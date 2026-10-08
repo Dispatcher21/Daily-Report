@@ -298,6 +298,18 @@ const text = (p, sel) => p.textContent(sel).then((t) => t.replace(/\s+/g, ' ').t
   check('tutorial pages stamped W.I.P.', await p.evaluate(() => document.body.classList.contains('tutorial-wip') && document.querySelector('.tutorial-banner').textContent.includes('W.I.P.')), true);
   check('no character or hand', [await p.isVisible('.tour-char'), await p.isVisible('.tour-hand')], [false, false]);
 
+  // No Work Day / Weather Day: one tap on the button, one on the reason.
+  const nw = await ctx.newPage();
+  await nw.addInitScript(() => sessionStorage.setItem('dr-tutorial', '1')); // tutorial mode is per tab
+  nw.on('pageerror', (e) => errs.push(e.message));
+  nw.on('dialog', (d) => d.accept()); // "Replace the notes?" when switching Weather Day to No Work Day
+  await nw.goto(`${B}/report-editor.html?project=${pid}&report=new`); await nw.waitForTimeout(2000);
+  await nw.click('#btn-weather-day'); await nw.click('#blank-day-overlay [data-reason="0"]'); await nw.waitForTimeout(800);
+  check('Weather Day: marker, no hours, reason in the summary, time comment', await nw.evaluate(() => [report.notes, report.hours, report.workBegin, report.workSummary.startsWith('No work performed due to rain.'), report.commentsOnTime]), ['WEATHER DAY', 0, '', true, 'Weather day (rain). Recommend no time charged.']);
+  await nw.click('#btn-no-work-day'); await nw.click('#blank-day-overlay [data-reason="5"]'); await nw.waitForTimeout(500);
+  check('No Work Day: reason added ahead of the summary', await nw.evaluate(() => [report.notes, report.workSummary.split('\n')[0]]), ['NO WORK DAY', 'No work performed. Holiday.']);
+  await nw.close();
+
   // Phone width: nothing wider than the screen.
   await p.setViewportSize({ width: 390, height: 844 });
   for (const page of [`quantity-sheet.html?project=${pid}`, `pay-apps.html?project=${pid}`, `quick-quantity.html?project=${pid}`, `project.html?id=${pid}`, `report-editor.html?project=${pid}&report=${rid}`, `project-setup.html?id=${pid}`]) {

@@ -435,18 +435,23 @@ async function seedTutorialProject(def, progress) {
     report.weatherDesc = day.weather;
     report.tempHigh = String(day.hi);
     report.tempLow = String(day.lo);
-    report.workBegin = '7:00 AM';
-    report.workEnd = '3:30 PM';
     const working = !day.notes;
+    // A No Work Day or Weather Day reads the way the editor's buttons
+    // write one (report-editor.html applyBlankDay): no work hours, "No work
+    // performed" leading the Work Summary, and for weather, the
+    // time-charged comment.
+    report.workBegin = working ? '7:00 AM' : '';
+    report.workEnd = working ? '3:30 PM' : '';
     report.hours = working ? '16' : ''; // both inspectors' hours
     report.inspectors = [{ name: TUTORIAL_USER, hours: working ? '8' : '', timeEntries: [{ start: working ? '07:00' : '', end: working ? '15:30' : '' }] }];
     if (working) report.inspectors.push({ name: def.helpers[i % def.helpers.length], hours: '8', timeEntries: [{ start: '07:00', end: '15:30' }] });
     report.representative = report.inspectors.map((insp) => insp.name).join(', '); // kept in step with the list, as the editor does
     report.trafficControlSelect = working ? (day.traffic || 'IN_PLACE') : null;
-    report.commentsOnTime = day.trafficNote || '';
+    report.commentsOnTime = day.trafficNote || (day.notes === WEATHER_DAY_NOTE ? 'Weather day. Recommend no time charged.' : '');
     report.workSummaryHeader = day.activity || '';
     report.trafficControlNote = day.short || ''; // the line under Work Summary
-    report.workSummary = day.summary || '';
+    report.workSummary = working ? day.summary || ''
+      : [`No work performed${day.notes === WEATHER_DAY_NOTE ? ' due to weather' : ''}.`, day.summary].filter(Boolean).join(' ');
     report.controllingItem = day.controlling || '';
     report.workingConditions = day.conditions || '';
     if (day.tests) report.tests = day.tests.map(([name, note]) => ({ name, note }));
