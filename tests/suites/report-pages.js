@@ -28,6 +28,21 @@ const step = async (label, page, fn, arg, expect) => {
     return 'ok';
   });
 
+  // The Storage emulator stalls an upload now and then (see README); a
+  // push that hasn't landed in 45 seconds gets another try instead of
+  // hanging the suite until the runner's timeout.
+  const addPushHelper = (page) => page.evaluate(() => {
+    window.pushWithRetry = async (id) => {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const done = await Promise.race([confirmReportPushed(await getReport(id)), new Promise((r) => setTimeout(() => r('stalled'), 45000))]);
+        if (done !== 'stalled') return done;
+      }
+      return 'stalled';
+    };
+  });
+  await addPushHelper(A);
+  await addPushHelper(Bp);
+
   await step('a new report has 10 photo slots', A, async () => {
     const r = await makeBlankReport(1, await getProject('proj-p'), null);
     return [r.photos.length, r.photosFetched.length];
@@ -50,7 +65,7 @@ const step = async (label, page, fn, arg, expect) => {
     r2.id = 'rep-2'; r2.date = '2026-10-07';
     r2.photos[0] = await jpeg('#0f0');
     await saveReport(r2);
-    return [await confirmReportPushed(await getReport('rep-1')), await confirmReportPushed(await getReport('rep-2'))];
+    return [await pushWithRetry('rep-1'), await pushWithRetry('rep-2')];
   }, undefined, [true, true]);
 
   await step('report docs: photoSlots stays 6 long, extra slots only where used', A, async () => {
@@ -99,7 +114,7 @@ const step = async (label, page, fn, arg, expect) => {
     const r = await fetchReportMedia(await getReport('rep-1'));
     r.photos[8] = null; r.photosFetched[8] = true;
     await saveReport(r);
-    return confirmReportPushed(await getReport('rep-1'));
+    return pushWithRetry('rep-1');
   }, undefined, true);
   await step('B no longer has photo 9', Bp, async () => {
     await autoPullCompanyData(true);
@@ -160,7 +175,7 @@ const step = async (label, page, fn, arg, expect) => {
     plain: [[1, 2], ''],
     gap: [[1, 2], [[1, 2, 3, 4, 5, 6]]],
     lateSlot: [[1, 2], [[2, 10]]],
-    eight: [[1, 2, 3], [[1, 2, 3, 4, 5, 6], [7, 8]], true],
+    eight: [[1, 3, 2], [[1, 2, 3, 4], [5, 6, 7, 8]], true],
     longFew: [[1, 3], [[1, 2, 9]], '(Continued on page 2)', [false, false], true],
     longMany: [[1, 3, 2], [[1, 2, 3, 4], [5, 6, 7]], '(Continued on page 2)', [false, false, false], true],
     tooLong: [[1, 3], [false, true]],

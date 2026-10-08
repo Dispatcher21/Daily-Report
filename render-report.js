@@ -852,14 +852,15 @@ function pageGeometry(sheetData) {
 
 // Appends one report's sheet-pages (each a .sheet-page div) into
 // `container` and returns them paired with their page geometry and which
-// sheet each is (RR_SHEET_*). Page 1 is always the work report. Then:
-//   - the summary fits: the photo log, exactly as the template lays it
-//     out; with more than 6 photos (or any in slots 7-10 that don't fit
-//     beside the rest), the photos are packed in order and the Summary and
-//     Photos page follows with the rest, its summary box left blank.
-//   - the summary runs over: the Summary and Photos page is page 2, with
-//     the rest of the summary and the first 4 photos; the photo log only
-//     follows, with the rest, when there are more than 4.
+// sheet each is (RR_SHEET_*). Page 1 is always the work report. Whenever
+// the Summary and Photos page prints, it's page 2 and the photos start
+// on it: photos 1-4 there, the rest on the photo log after it.
+//   - the summary runs over, or there are more than 6 photos: the Summary
+//     and Photos page (the rest of the summary, or a blank box when it
+//     all fit on page 1), then the photo log only when there are more
+//     than 4 photos.
+//   - otherwise: the photo log, exactly as the template lays it out; a
+//     photo in slots 7-10 moves up into a free box beside the rest.
 const RR_SHEET_WORK_REPORT = 1;
 const RR_SHEET_PHOTO_LOG = 2;
 const RR_SHEET_SUMMARY_PHOTOS = 3;
@@ -895,15 +896,14 @@ function renderReportPages(container, layout, report, logoBlob) {
   const perSummaryPage = RR_CONT_PHOTO_COORDS.length;
   const perLog = PHOTO_COORDS.length;
 
-  if (cont) {
+  if (cont || photos.length > perLog) {
     pages.push(summaryPhotos(cont, photos.slice(0, perSummaryPage)));
     if (photos.length > perSummaryPage) pages.push(photoLog(photos.slice(perSummaryPage)));
   } else if (photos.every((p) => p.slot < perLog)) {
     // The everyday case, untouched: each photo in its own numbered box.
     pages.push(renderPage(RR_SHEET_PHOTO_LOG, layout.dailyPhotoLog, buildSheet2Values(report), buildSheet2Images(report), false));
   } else {
-    pages.push(photoLog(photos.slice(0, perLog)));
-    if (photos.length > perLog) pages.push(summaryPhotos(null, photos.slice(perLog)));
+    pages.push(photoLog(photos));
   }
   return pages;
 }
