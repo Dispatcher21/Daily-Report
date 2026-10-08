@@ -117,12 +117,13 @@
 .rr-sbox-table td {
   border-bottom: 0.75pt solid #000;
   padding: 0 3pt;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* Long descriptions, remarks and results wrap onto more lines rather
+     than being cut off; the row grows (its height is only a minimum). */
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .rr-sbox-table th + th, .rr-sbox-table td + td { border-left: 0.75pt solid #000; }
 .rr-sbox-table tbody tr:last-child td { border-bottom: 0; }
-.rr-sbox-table td.rr-q { text-align: right; }
+.rr-sbox-table td.rr-q { text-align: right; white-space: nowrap; }
 .rr-sbox-table td.rr-st { text-align: center; font-weight: 700; }
 .rr-sbox-table tr.rr-det td { font-size: 0.8em; color: #333; border-left: 0; padding-left: 12pt; }
