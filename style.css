@@ -3537,10 +3537,10 @@ input[type="date"] { min-width: 0; }
    got noisy fast, both across several overlapping project lines and within
    one project once report dates cluster close together. */
 .trend-dot { fill: transparent; stroke: none; }
-/* Same gold already used for a favorited project (.hc-favorite.is-fav) --
-   a Pay App marker borrows that "starred/significant" meaning rather than
-   inventing a new color for it. */
-.trend-star { fill: #f5c518; stroke: none; }
+/* Fill comes inline from the series color (see renderTrendSvg), so a Pay
+   App marker matches its own line. The thin card-colored outline keeps the
+   star's shape readable where it sits on top of that same-colored line. */
+.trend-star { fill: var(--brand); stroke: var(--surface); stroke-width: 1; }
 
 /* Shown under the chart only when it's drawing 2+ colored series (see
    renderTrendSvg) -- a single line already reads fine with no key. */

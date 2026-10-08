@@ -453,7 +453,7 @@ function renderTrendSvg(container, series, opts) {
   }).join('');
 
   const singlePlainSeries = series.length === 1 && !series[0].color;
-  const starRadius = daysMode ? 7 : singlePlainSeries ? 6 : 5;
+  const starRadius = daysMode ? 5.5 : singlePlainSeries ? 5 : 4.5;
   // Two Pay Apps close together in time (a handful of days, on a chart
   // spanning the project's whole history) land close enough in pixels that
   // their star markers overlap into one unreadable blob -- indistinguishable
@@ -512,14 +512,16 @@ function renderTrendSvg(container, series, opts) {
         : `${s.label ? s.label + ' — ' : ''}${when}${p.payApp ? ' — Pay App' : ''}: ${p.pct != null ? (p.pct * 100).toFixed(1) + '% complete' : 'no target set yet'}${p.earned != null ? ', ' + fmtMoney(p.earned) + ' earned' : ''}`;
       const titleTag = `<title>${escapeHtml(tip)}</title>`;
       // A Pay App point is a real jump, not routine report-by-report growth
-      // -- marked with a star instead of a dot, in the same gold already
-      // used for a favorited project, and left visible even in daysMode
+      // -- marked with a star instead of a dot, filled in its own line's
+      // color (a gold star on every line read as louder than the lines
+      // themselves, and didn't say which project it belonged to), and left
+      // visible even in daysMode
       // (where ordinary dots go invisible-but-still-hoverable to cut
       // clutter across several overlapping project lines): a Pay App is
       // the rarer, more significant event of the two, worth standing out
       // rather than blending into the noise-reduction rule made for dots.
       if (p.payApp) {
-        return `<polygon points="${starPoints(starXs[i], cy, starRadius)}" class="trend-star">${titleTag}</polygon>`;
+        return `<polygon points="${starPoints(starXs[i], cy, starRadius)}" class="trend-star" style="fill:${color}">${titleTag}</polygon>`;
       }
       // Lines (and, for a single project, the area under them) only -- a
       // visible dot at every report date got noisy fast, both across
