@@ -4,7 +4,12 @@
 // real one. Dates are relative to today so the example always looks
 // current: about four weeks of weekday reports ending today.
 
-const TUTORIAL_USER = 'Tutorial User';
+// The example people, all named with civil puns. TUTORIAL_USER is "you"
+// (the reports' author and Representative); a second inspector from
+// TUTORIAL_INSPECTORS helps on each working day, taking turns.
+const TUTORIAL_USER = 'Phil Dirt';
+const TUTORIAL_INSPECTORS = ['Barry Cade', 'Cole Patch', 'Manny Hole', 'Dusty Rhodes', 'Mac Adam'];
+const TUTORIAL_ENGINEER = 'Ken Crete, P.E.';
 const TUTORIAL_COMPANY = { code: 'TUTORIAL', name: 'Example Construction Co.' };
 
 // Each report's day: what was worked on, which pay items were logged, and
@@ -20,10 +25,10 @@ const TUTORIAL_DAYS = [
   { activity: 'Drain pipe, catch basin', summary: 'Installed 110 LF of pipe and set Catch Basin CB-1 at Sta. 12+30.', pay: [['701-03', 110], ['702-01', 1]], weather: 'Sunny', hi: 88, lo: 71, photos: ['Catch basin CB-1 set', 'Pipe connection at CB-1'], approval: 'approved', traffic: 'ATTENTION_REQUIRED', trafficNote: 'Two drums knocked down overnight near Sta. 11+00; replaced by 7:30 AM.' },
   { activity: 'Drain pipe installation', summary: 'Installed 140 LF of pipe to Sta. 13+80. Inspector verified grade with a laser at 50 ft intervals.', pay: [['701-03', 140]], weather: 'Partly cloudy', hi: 86, lo: 70, photos: ['Checking pipe grade'], approval: 'approved' },
   { activity: '', notes: 'NO WORK DAY - contractor waiting on catch basin delivery', weather: 'Sunny', hi: 85, lo: 69 },
-  { activity: 'Catch basins', summary: 'Set Catch Basins CB-2 and CB-3 at Sta. 14+20 and 15+60. Grouted pipe connections.', pay: [['702-01', 2]], weather: 'Overcast', hi: 82, lo: 70, photos: ['Catch basin CB-2', 'Grouting pipe connection'], approval: 'changes_requested', comment: { author: 'Jordan Lee, P.E.', text: 'Please add the catch basin rim elevations to this report before I approve it.' } },
+  { activity: 'Catch basins', summary: 'Set Catch Basins CB-2 and CB-3 at Sta. 14+20 and 15+60. Grouted pipe connections.', pay: [['702-01', 2]], weather: 'Overcast', hi: 82, lo: 70, photos: ['Catch basin CB-2', 'Grouting pipe connection'], approval: 'changes_requested', comment: { author: TUTORIAL_ENGINEER, text: 'Please add the catch basin rim elevations to this report before I approve it.' } },
   { activity: 'Drain pipe installation', summary: 'Installed 152 LF of pipe, Sta. 15+60 to 17+12.', pay: [['701-03', 152]], weather: 'Sunny', hi: 89, lo: 72, photos: ['Pipe installation, Sta. 16+00'], approval: 'approved' },
   { activity: 'Drain pipe, catch basin', summary: 'Installed 120 LF of pipe and set Catch Basin CB-4 at Sta. 18+30. Storm drain mainline complete to Sta. 18+30.', pay: [['701-03', 120], ['702-01', 1], ['713-01', 6000]], weather: 'Sunny', hi: 90, lo: 73, photos: ['Catch basin CB-4', 'Mainline complete'], approval: 'approved' },
-  { activity: 'Base course', summary: 'Placed and compacted crushed stone base, Sta. 10+00 to 13+50.', pay: [['202-01', 280]], weather: 'Partly cloudy', hi: 87, lo: 71, photos: ['Placing stone base'], pinComment: { author: 'Jordan Lee, P.E.', text: 'Is this the area where the water service was found? Please confirm it was reconnected.', page: 0, x: 0.62, y: 0.38 } },
+  { activity: 'Base course', summary: 'Placed and compacted crushed stone base, Sta. 10+00 to 13+50.', pay: [['202-01', 280]], weather: 'Partly cloudy', hi: 87, lo: 71, photos: ['Placing stone base'], pinComment: { author: TUTORIAL_ENGINEER, text: 'Is this the area where the water service was found? Please confirm it was reconnected.', page: 0, x: 0.62, y: 0.38 } },
   { activity: 'Base course', summary: 'Placed and compacted stone base, Sta. 13+50 to 18+00. Proof-rolled; one soft spot at Sta. 16+20 undercut and replaced.', pay: [['202-01', 300]], weather: 'Sunny', hi: 88, lo: 72, photos: ['Proof-rolling base', 'Soft spot undercut'] },
   { activity: 'Asphalt paving', summary: 'Placed first lift of asphalt, Sta. 10+00 to 14+00. Mat temperature and density checked every 200 ft.', pay: [['502-01', 118]], weather: 'Sunny', hi: 89, lo: 73, photos: ['Paving first lift', 'Checking mat temperature'] },
   { activity: 'Asphalt paving', summary: 'Placed first lift of asphalt, Sta. 14+00 to 18+30.', pay: [['502-01', 126], ['713-01', 4000]], weather: 'Partly cloudy', hi: 87, lo: 72, photos: ['Paving, Sta. 16+00'] },
@@ -113,7 +118,7 @@ async function seedTutorialData(onProgress) {
       ntpDate: dates[0],
       contractLength: '120',
       representative: TUTORIAL_USER,
-      peName: 'Jordan Lee, P.E.',
+      peName: TUTORIAL_ENGINEER,
       activity: '', notes: '', workSummaryHeader: '', trafficControlNote: '', workSummary: '',
       controllingItem: '', commentsOnTime: '', controllingItemTimeFrom: '', controllingItemTimeTo: '',
       workingConditions: '', trafficControlSelect: 'IN_PLACE', workBegin: '7:00 AM', workEnd: '3:30 PM',
@@ -146,8 +151,9 @@ async function seedTutorialData(onProgress) {
     report.workBegin = '7:00 AM';
     report.workEnd = '3:30 PM';
     const working = !day.notes;
-    report.hours = working ? '8' : '';
+    report.hours = working ? '16' : ''; // both inspectors' hours
     report.inspectors = [{ name: TUTORIAL_USER, hours: working ? '8' : '', timeEntries: [{ start: working ? '07:00' : '', end: working ? '15:30' : '' }] }];
+    if (working) report.inspectors.push({ name: TUTORIAL_INSPECTORS[i % TUTORIAL_INSPECTORS.length], hours: '8', timeEntries: [{ start: '07:00', end: '15:30' }] });
     report.trafficControlSelect = working ? (day.traffic || 'IN_PLACE') : null;
     report.commentsOnTime = day.trafficNote || '';
     report.workSummaryHeader = day.activity || '';
@@ -194,7 +200,7 @@ async function seedTutorialData(onProgress) {
     id: crypto.randomUUID(), estimateNo: '2', date: dates[16], note: 'Pay Application 2',
     itemTotals: { '201-01': 15000, '202-01': 1230, '502-01': 300, '701-03': 746, '702-01': 4, '713-01': 19500 },
     approvalStatus: 'changes_requested', updatedAt: Date.now(),
-    comments: [{ id: crypto.randomUUID(), author: 'Jordan Lee, P.E.', text: 'Asphalt (502-01) is higher than the tickets I have. Can you double check it?', createdAt: Date.now() - 7200000 }],
+    comments: [{ id: crypto.randomUUID(), author: TUTORIAL_ENGINEER, text: 'Asphalt (502-01) is higher than the tickets I have. Can you double check it?', createdAt: Date.now() - 7200000 }],
   }];
   await saveProject(fresh);
   return project.id;
