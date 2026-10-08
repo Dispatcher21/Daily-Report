@@ -110,7 +110,9 @@ const step = async (label, page, fn, arg, expect) => {
   // ---------- Printed pages ----------
   await A.addStyleTag({ url: `${B}/print-sheet.css` });
   await A.addScriptTag({ url: `${B}/render-report.js` });
-  const pageCases = await step('printed page counts', A, async () => {
+  // Each case: which sheets print, in order (1 work report, 2 photo log,
+  // 3 Summary and Photos), and the photo numbers each later page shows.
+  await step('which pages print, and in what order', A, async () => {
     const layout = await loadPrintLayout();
     const jpeg = await new Promise((r) => { const c = document.createElement('canvas'); c.width = 40; c.height = 30; c.toBlob(r, 'image/jpeg'); });
     const sandbox = document.createElement('div');
@@ -119,40 +121,49 @@ const step = async (label, page, fn, arg, expect) => {
     const project = await getProject('proj-p');
     const para = 'Placed Type B base course from Sta. 12+00 to Sta. 18+50, left lane; compaction verified at three locations per lot. ';
     const items = Array.from({ length: 16 }, (_, i) => ({ itemNumber: `40${i}-01`, description: `Item ${i}`, qty: 10 + i, unit: 'TON', startStation: '10+00', endStation: '12+00' }));
+    const photos = (...slots) => Array.from({ length: 10 }, (_, i) => (slots.includes(i + 1) ? jpeg : null));
     const make = async (fields) => Object.assign(await makeBlankReport(1, project, null), fields);
-    const run = async (r) => {
+    const run = async (fields) => {
       sandbox.innerHTML = '';
-      const pages = renderReportPages(sandbox, layout, r, null);
-      const boxes = pages.map((p) => p.el.querySelector('.rr-sbox'));
+      const pages = renderReportPages(sandbox, layout, await make(fields), null);
+      const text = (el) => el.textContent.replace(/\s+/g, ' ');
+      const nums = (el) => [...text(el).matchAll(/PHOTO NO\. (\d+)/g)].map((m) => Number(m[1])).filter((n, i, a) => a.indexOf(n) === i);
       return {
-        pages: pages.length,
-        overflow: boxes.map((b) => !!(b && b.dataset.overflow)),
-        note: !!pages[0].el.querySelector('.rr-sbox-note'),
-        sameSize: pages.length < 3 || (pages[2].geom.pageW === pages[1].geom.pageW && pages[2].geom.pageH === pages[1].geom.pageH && pages[2].geom.drawH <= pages[1].geom.pageH),
-        lastPage: pages.length > 2 ? pages[2].el.textContent.replace(/\s+/g, ' ') : '',
+        sheets: pages.map((p) => p.sheet),
+        photoNos: pages.slice(1).map((p) => nums(p.el).length === 6 && p.el.querySelectorAll('img').length === 0 ? 'blank log' : nums(p.el)),
+        note: (pages[0].el.querySelector('.rr-sbox-note') || {}).textContent || '',
+        overflow: pages.map((p) => !!p.el.querySelector('.rr-sbox[data-overflow]')),
+        sameSize: pages.every((p) => p.geom.pageH === pages[1].geom.pageH || p.sheet === 1),
+        text: pages.slice(1).map((p) => text(p.el)),
       };
     };
-    const plain = await run(await make({ workSummary: para, photos: [jpeg, jpeg, jpeg, jpeg, jpeg, jpeg, null, null, null, null] }));
-    const extra = await run(await make({ workSummary: para, photos: [null, null, null, null, null, null, null, null, null, jpeg] }));
-    const longTables = await run(await make({ workSummary: para.repeat(3), payItems: items }));
-    const longText = await run(await make({ workSummary: para.repeat(60), payItems: items.slice(0, 3) }));
+    const plain = await run({ workSummary: para, photos: photos(1, 2, 3, 4, 5, 6) });
+    const gap = await run({ workSummary: para, photos: photos(1, 3) });
+    const lateSlot = await run({ workSummary: para, photos: photos(2, 10) });
+    const eight = await run({ workSummary: para, photos: photos(1, 2, 3, 4, 5, 6, 7, 8) });
+    const longFew = await run({ workSummary: para.repeat(3), payItems: items, photos: photos(1, 2, 9) });
+    const longMany = await run({ workSummary: para.repeat(60), payItems: items.slice(0, 3), photos: photos(1, 2, 3, 4, 5, 6, 7) });
     // Too much even for the extra page: its box flags itself, which is what
     // the report editor's warning looks for.
-    const tooLong = await run(await make({ workSummary: para.repeat(200) }));
+    const tooLong = await run({ workSummary: para.repeat(200) });
     sandbox.remove();
     return {
-      plain: [plain.pages, plain.note],
-      extra: [extra.pages, extra.note, extra.sameSize, extra.lastPage.includes('PHOTO NO. 10')],
-      longTables: [longTables.pages, longTables.note, longTables.overflow[0], longTables.overflow[2], longTables.lastPage.includes('Item 15')],
-      longText: [longText.pages, longText.note, longText.overflow[0], longText.overflow[2], longText.lastPage.includes('Item 2')],
-      tooLong: [tooLong.pages, tooLong.overflow[0], tooLong.overflow[2]],
+      plain: [plain.sheets, plain.note],
+      gap: [gap.sheets, gap.photoNos],
+      lateSlot: [lateSlot.sheets, lateSlot.photoNos],
+      eight: [eight.sheets, eight.photoNos, eight.sameSize],
+      longFew: [longFew.sheets, longFew.photoNos, longFew.note, longFew.overflow, longFew.text[0].includes('Item 15')],
+      longMany: [longMany.sheets, longMany.photoNos, longMany.note, longMany.overflow, longMany.text[0].includes('Item 2')],
+      tooLong: [tooLong.sheets, tooLong.overflow],
     };
   }, undefined, {
-    plain: [2, false],
-    extra: [3, false, true, true],
-    longTables: [3, true, false, false, true],
-    longText: [3, true, false, false, true],
-    tooLong: [3, false, true],
+    plain: [[1, 2], ''],
+    gap: [[1, 2], [[1, 2, 3, 4, 5, 6]]],
+    lateSlot: [[1, 2], [[2, 10]]],
+    eight: [[1, 2, 3], [[1, 2, 3, 4, 5, 6], [7, 8]], true],
+    longFew: [[1, 3], [[1, 2, 9]], '(Continued on page 2)', [false, false], true],
+    longMany: [[1, 3, 2], [[1, 2, 3, 4], [5, 6, 7]], '(Continued on page 2)', [false, false, false], true],
+    tooLong: [[1, 3], [false, true]],
   });
 
   console.log('page errors:', JSON.stringify(errs));

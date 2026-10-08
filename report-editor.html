@@ -468,7 +468,7 @@ function blockFieldBodyHtml(key, def) {
     inner = `<div class="rtc" id="rchecks"></div>`;
   } else if (key === 'photos') {
     inner = `<div id="photo-grid" class="photo-grid"></div>
-      <p class="hint" style="margin:0.5rem 0 0;">Photos 7 to 10 print on an extra page after the Photo Log.</p>`;
+      <p class="hint" style="margin:0.5rem 0 0;">Up to 10 photos. More than 6, or a work summary too long for page 1, adds a Summary and Photos page.</p>`;
   }
   // contractorsEquipment, payItems, and photos are each the lone field in a
   // REPORT_BUILDER_GROUPS group whose own label is this field's label,
@@ -680,7 +680,7 @@ function groupIdForKey(key) {
 
 let previewLayout = null;
 let previewLogoBlob = null;
-let previewGrids = null; // { 1: gridEl, 2: gridEl }, set after each render
+let previewGrids = null; // { sheet: gridEl } (printGridsBySheet), set after each render
 let previewRenderToken = 0;
 
 function scalePreviewPage(pageEl, targetWidthPx) {
@@ -819,8 +819,9 @@ async function refreshLivePreview() {
 
   previewEl.innerHTML = '';
   wraps.forEach((wrap) => previewEl.appendChild(wrap));
-  previewGrids = { 1: pages[0].el.querySelector('.print-grid'), 2: pages[1].el.querySelector('.print-grid') };
+  previewGrids = printGridsBySheet(pages);
   Object.keys(FIELD_HIGHLIGHT_REGIONS).forEach((key) => addPreviewClickTarget(key, FIELD_HIGHLIGHT_REGIONS[key]));
+  Object.keys(SUMMARY_PAGE_HIGHLIGHT_REGIONS).forEach((key) => addPreviewClickTarget(key, SUMMARY_PAGE_HIGHLIGHT_REGIONS[key]));
   // A Summary box marks itself when even its smallest text size can't hold
   // everything (fitSummaryBox, render-report.js). The work report's box
   // continues onto the Summary and Photos page, so this only shows once

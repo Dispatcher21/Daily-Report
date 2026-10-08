@@ -511,18 +511,15 @@ function buildSheet2Images(report) {
   return imgs;
 }
 
-// ---------- Summary and Photos page (page 3, only when needed) ----------
+// ---------- Summary and Photos page (only when needed) ----------
 //
 // Not part of the Excel template: the template only has the work report
-// and the 6-photo log. This page prints when the Work Summary box can't
-// hold everything (the rest of it continues here) or when photos 7-10 are
-// filled in. Its layout is built from the photo log's own (same header,
-// same columns), with rows 9 on replaced: the top half is one Summary box,
-// the bottom half is photos 7-10 in a 2x2 grid.
-const RR_CONT_PAGE_NO = 3;
+// and the 6-photo log. Its layout is built from the photo log's own (same
+// header, same columns), with rows 9 on replaced: the top half is one
+// Summary box, the bottom half is 4 photos in a 2x2 grid. Which pages
+// print, and in what order, is up to renderReportPages.
 const RR_CONT_SUMMARY_CELL = 'A10';
 const RR_CONT_PHOTO_COORDS = ['A13', 'H13', 'A16', 'H16'];
-const RR_CONT_FIRST_PHOTO = PHOTO_COORDS.length; // photos[6] is Photo No. 7
 
 // Rows 9-16 (label, summary, gap, label, photos, gap, label, photos) share
 // the 728.4pt the photo log gives rows 9-61, so the page keeps the same
@@ -586,11 +583,7 @@ function summaryPhotoSheet(layout) {
 function buildSummaryPhotoValues(report, cont) {
   const v = Object.assign(buildSheet2Values(report), {
     A1: "RESIDENT INSPECTOR'S DAILY REPORT (CONTINUED)",
-    A9: 'SUMMARY OF WORK PERFORMED (CONTINUED)',
-  });
-  RR_CONT_PHOTO_COORDS.forEach((coord, i) => {
-    const { col, row } = parseCoord(coord);
-    v[colIndexToLetter(col - 1) + (row - 1)] = `PHOTO NO. ${RR_CONT_FIRST_PHOTO + i + 1}`;
+    A9: cont ? 'SUMMARY OF WORK PERFORMED (CONTINUED)' : 'SUMMARY OF WORK PERFORMED',
   });
   v[RR_CONT_SUMMARY_CELL] = cont ? cont.text : '';
   const box = cont || { payItems: [], tests: [], checks: [] };
@@ -598,17 +591,19 @@ function buildSummaryPhotoValues(report, cont) {
   return v;
 }
 
-function buildSummaryPhotoImages(report) {
-  const imgs = {};
-  RR_CONT_PHOTO_COORDS.forEach((coord, i) => {
-    const blob = (report.photos || [])[RR_CONT_FIRST_PHOTO + i];
-    if (blob) imgs[coord] = blob;
+// Photos laid into a page's boxes in order, each labeled with its own
+// number from the editor ("PHOTO NO. 9"), so nothing is renumbered when
+// photos move up to fill the page; boxes left over print unlabeled.
+// `photos` is [{ blob, slot }], filled slots only.
+function placePhotos(values, coords, photos) {
+  const images = {};
+  coords.forEach((coord, i) => {
+    const { col, row } = parseCoord(coord);
+    const p = photos[i];
+    values[colIndexToLetter(col - 1) + (row - 1)] = p ? `PHOTO NO. ${p.slot + 1}` : '';
+    if (p) images[coord] = p.blob;
   });
-  return imgs;
-}
-
-function reportHasExtraPhotos(report) {
-  return (report.photos || []).slice(RR_CONT_FIRST_PHOTO).some(Boolean);
+  return images;
 }
 
 // ---------- Embedded photos -> Report.photos (inverse of buildSheet2Images) ----------
@@ -831,11 +826,22 @@ function pageGeometry(sheetData) {
 }
 
 // Appends one report's sheet-pages (each a .sheet-page div) into
-// `container`: the work report and the photo log always, then the Summary
-// and Photos page when the work summary runs over or photos 7-10 are
-// filled in. Returns the page elements paired with their page geometry.
+// `container` and returns them paired with their page geometry and which
+// sheet each is (RR_SHEET_*). Page 1 is always the work report. Then:
+//   - the summary fits: the photo log, exactly as the template lays it
+//     out; with more than 6 photos (or any in slots 7-10 that don't fit
+//     beside the rest), the photos are packed in order and the Summary and
+//     Photos page follows with the rest, its summary box left blank.
+//   - the summary runs over: the Summary and Photos page is page 2, with
+//     the rest of the summary and the first 4 photos; the photo log only
+//     follows, with the rest, when there are more than 4.
+const RR_SHEET_WORK_REPORT = 1;
+const RR_SHEET_PHOTO_LOG = 2;
+const RR_SHEET_SUMMARY_PHOTOS = 3;
+const RR_CONT_PAGE_NO = 2; // where a run-over summary continues
+
 function renderReportPages(container, layout, report, logoBlob) {
-  const renderPage = (sheetData, values, images, withLogo) => {
+  const renderPage = (sheet, sheetData, values, images, withLogo) => {
     const page = document.createElement('div');
     page.className = 'sheet-page';
     const grid = renderSheetGrid(sheetData, values, images);
@@ -846,19 +852,44 @@ function renderReportPages(container, layout, report, logoBlob) {
     container.appendChild(page);
     fitRotatedText(page); // needs layout, so only after it's in the document
     fitSummaryBox(page);
-    return { el: page, geom: pageGeometry(sheetData) };
+    return { el: page, geom: pageGeometry(sheetData), sheet };
+  };
+  const photoLog = (photos) => {
+    const values = buildSheet2Values(report);
+    return renderPage(RR_SHEET_PHOTO_LOG, layout.dailyPhotoLog, values, placePhotos(values, PHOTO_COORDS, photos), false);
+  };
+  const summaryPhotos = (cont, photos) => {
+    const values = buildSummaryPhotoValues(report, cont);
+    return renderPage(RR_SHEET_SUMMARY_PHOTOS, summaryPhotoSheet(layout), values, placePhotos(values, RR_CONT_PHOTO_COORDS, photos), false);
   };
 
   const values1 = buildSheet1Values(report);
-  const pages = [
-    renderPage(layout.dailyWorkReport, values1, buildSheet1Images(report), true),
-    renderPage(layout.dailyPhotoLog, buildSheet2Values(report), buildSheet2Images(report), false),
-  ];
+  const pages = [renderPage(RR_SHEET_WORK_REPORT, layout.dailyWorkReport, values1, buildSheet1Images(report), true)];
   const cont = continueSummaryBox(pages[0].el, values1[RR_WORK_SUMMARY_CELL], values1.summaryBox);
-  if (cont || reportHasExtraPhotos(report)) {
-    pages.push(renderPage(summaryPhotoSheet(layout), buildSummaryPhotoValues(report, cont), buildSummaryPhotoImages(report), false));
+  const photos = (report.photos || []).map((blob, slot) => ({ blob, slot })).filter((p) => p.blob);
+  const perSummaryPage = RR_CONT_PHOTO_COORDS.length;
+  const perLog = PHOTO_COORDS.length;
+
+  if (cont) {
+    pages.push(summaryPhotos(cont, photos.slice(0, perSummaryPage)));
+    if (photos.length > perSummaryPage) pages.push(photoLog(photos.slice(perSummaryPage)));
+  } else if (photos.every((p) => p.slot < perLog)) {
+    // The everyday case, untouched: each photo in its own numbered box.
+    pages.push(renderPage(RR_SHEET_PHOTO_LOG, layout.dailyPhotoLog, buildSheet2Values(report), buildSheet2Images(report), false));
+  } else {
+    pages.push(photoLog(photos.slice(0, perLog)));
+    if (photos.length > perLog) pages.push(summaryPhotos(null, photos.slice(perLog)));
   }
   return pages;
+}
+
+// Each printed sheet's grid, keyed by RR_SHEET_*, for the previews that
+// lay click targets over FIELD_HIGHLIGHT_REGIONS (a sheet that didn't
+// print is just missing).
+function printGridsBySheet(pages) {
+  const grids = {};
+  pages.forEach(({ el, sheet }) => { grids[sheet] = el.querySelector('.print-grid'); });
+  return grids;
 }
 
 // When the work report's Summary box can't hold everything even at its
@@ -866,8 +897,8 @@ function renderReportPages(container, layout, report, logoBlob) {
 // page, rebuilding the box on `page` in place. The box's content is read
 // as one sequence (the summary text word by word, then each Pay Item,
 // Test and Check row) and page 1 keeps the longest start of it that fits
-// at RR_SBOX_SPLIT_PT; the rest continues on page 3, under the same
-// table headings. The smallest sizes are for squeezing a little extra
+// at RR_SBOX_SPLIT_PT; the rest continues on the Summary and Photos page
+// (page 2), under the same table headings. The smallest sizes are for squeezing a little extra
 // onto one page, not for a page that's continued anyway. Returns what goes
 // on the continuation ({ text, payItems, tests, checks }), or null when
 // nothing needs to move.
@@ -1086,4 +1117,9 @@ const FIELD_HIGHLIGHT_REGIONS = {
   tempHigh: { sheet: 1, coord: 'D41' },
   tempLow: { sheet: 1, coord: 'F41' },
   photos: { sheet: 2, ranges: [{ fromCol: 'A', toCol: 'O', fromRow: 8, toRow: 46 }] },
+};
+// The same, for the Summary and Photos page when it prints.
+const SUMMARY_PAGE_HIGHLIGHT_REGIONS = {
+  workSummary: { sheet: RR_SHEET_SUMMARY_PHOTOS, coord: RR_CONT_SUMMARY_CELL },
+  photos: { sheet: RR_SHEET_SUMMARY_PHOTOS, ranges: [{ fromCol: 'A', toCol: 'M', fromRow: 12, toRow: 16 }] },
 };
