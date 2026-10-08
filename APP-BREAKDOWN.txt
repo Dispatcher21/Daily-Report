@@ -185,6 +185,50 @@ download/upload moved to pay-apps.html. quick-quantity.html is titled
 old By Estimate, Detail Log and Excel preview views were removed from the
 screen; the Excel file still has its By Day and Detail Log sheets.
 
+Home, project and Manager pages (redesigned 2026-10-08; where the file
+entries below for index.html and project.html disagree, this wins).
+All three use the full window (body.page-wide) and, on phones, tabs
+instead of one long column (body[data-tab]/[data-mtab]).
+- Dashboards are widget boards (dashboard-layout.js's createWidgetBoard):
+  people add, remove, resize, reorder and build their own widgets. Each
+  person's layout is saved per board ('home', 'project') in the
+  dashboardWidgets:<board>:<user> setting (storage.js getDashboardWidgets/
+  saveDashboardWidgets) and synced with the rest of their layout as the
+  homeWidgets/projectWidgets fields of userLayouts (pushUserLayout/
+  pullUserLayout). index.html's widget types are MD_WIDGETS, project.html's
+  PD_WIDGETS.
+- Home: projects sit to the right of the Manager Dashboard. Inspectors see
+  what needs them instead (renderMyWork: reports sent back or unlocked,
+  and a This Week line). The header's New Report button asks which project
+  (page-ui.js openNewReportPicker). Folders are made and changed without
+  dragging: each card's menu, or Organize mode (tap cards, then Move to
+  folder / New folder / Take out / Earlier / Later), opened by the toolbar or a long press.
+  A folder opens in place with a breadcrumb back. Mouse drag still works.
+- manager.html is a review inbox: reports and Pay Apps waiting on this
+  person (managed projects, or everything for admins), with filters, a
+  preview pane (Approve, Request Changes, Comment, Open Full) that moves
+  on to the next item, and bulk approve for pending reports with nothing
+  flagged (reportFlags). People without approve rights get "My Reviews"
+  instead (sent back, waiting, recently approved, Ask to Unlock); the
+  menu row is labelled to match (common.js #hb-manager-row).
+
+Approval locks (added 2026-10-08). An approved report or Pay App can't be
+edited until a Manager or admin unlocks it. approvalStatus gains
+'unlocked'; the unlock is recorded in unlockedBy/unlockedByUid/unlockedAt/
+unlockReason, and a request to unlock in unlockRequest {by, byUid, at,
+note} (storage.js REVIEW_FIELDS, isApprovedLocked, unlockReport,
+requestReportUnlock, declineReportUnlock, unlockPayApp). Saving an
+approved report throws LockedRecordError; saving a report that was sent
+back or unlocked sets it back to 'pending' with resubmittedAt. Enforced in
+four places: the pages (report-editor's #locked-banner, report-viewer,
+pay-apps, quick-quantity, project-setup's import), storage.js saveReport,
+the sync push guards (firebase-sync.js reportLockConflict: a stale device
+keeps its copy as a draft and takes the cloud's approved copy;
+protectApprovedPayApps: approved Pay Apps in the cloud win, the overruled
+copy is kept in the payAppConflict:<project>:<payApp> setting), and for
+reports only, firestore.rules (unlockedOrReview). Pay Apps live in the
+project document's array, so the rules can't lock them one by one.
+
 
 DATA MODEL
 
@@ -687,6 +731,20 @@ dashboard-widgets.js
   (the "that's about 3x a football field" comparisons), and
   setupCollapsibleSteps (generic collapsible-card wiring used by several
   pages).
+
+dashboard-layout.js
+  The widget board behind the home and project dashboards
+  (createWidgetBoard: edit mode, add sheet, resize, reorder, remove with
+  Undo, reset, mouse drag, per-person saving) plus helpers the widgets
+  share: widgetRangeStart, reportInspectorHours, reportPhotoCount,
+  projectContractTimeline, scheduleStatusFor, paceChartSvg (progress vs
+  contract time with an on-pace line and Pay App stars), workdaysSince.
+
+page-ui.js
+  Small shared UI pieces for the redesigned pages: openSheet/closeSheet (a
+  centred panel on desktop, a bottom sheet on phones), showToast (with an
+  optional Undo), and openNewReportPicker (the "which project?" list
+  behind the New Report button).
 
 render-report.js
   Report -> printed-page DOM rendering, driven entirely by print-layout.json

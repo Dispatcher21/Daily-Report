@@ -3,6 +3,41 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+Next release -- on the test site, version number to be picked
+  - Home page redesign. Uses the whole window: for managers, the
+    Manager Dashboard on the left and your projects on the right. On
+    phones, tabs switch between Projects and Dashboard.
+  - Dashboards are made of widgets. Tap Edit Dashboard to add, remove,
+    resize or reorder them, or make your own (pick what to count, the
+    date range and how to split it). Your layout follows your account to
+    other devices. The project page's dashboard works the same way.
+  - Inspectors see what needs them at the top of the home page: reports
+    sent back for changes or unlocked, and this week's reports.
+  - New Report button at the top of the home page: pick the project and
+    start writing.
+  - Folders without dragging: each project card has a menu (Put in a
+    folder, Take out, favorites, move earlier or later), and Organize lets you tap several
+    projects and put them in a folder at once. A long press on a phone
+    starts Organize. Folders open in place, with a back link. Dragging
+    with a mouse still works.
+  - Project page redesign: a header with the project's status, day of
+    the contract, days left and percent complete; the Workspace (new
+    report, reports, quantities, Pay Apps, recent reports, project info)
+    next to the dashboard.
+  - Progress Over Time now runs from NTP to the completion date with a
+    dashed on-pace line, so ahead or behind is easy to see. Pay App
+    stars are kept.
+  - Manager page is now a review inbox: everything waiting on you, with
+    a preview to approve, send back with a note, or comment without
+    leaving the page. The next item opens on its own. Reports with
+    nothing flagged can be approved together.
+  - Approved reports and Pay Apps are locked. Nobody can change them
+    until a Manager or admin unlocks them (with a reason). The author can
+    ask for an unlock from the report or from My Reviews. Edits after an
+    unlock send it back for approval, marked Resubmitted.
+  - Inspectors get a My Reviews page (in the menu): what was sent back,
+    what's waiting, and what was approved recently.
+
 0.0612 -- 2026-10-08
   - Reports hold up to 10 photos (was 6).
   - New Summary and Photos page, printed only when it's needed. When the

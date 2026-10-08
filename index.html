@@ -62,7 +62,7 @@
   #company-theme-decal.decal-pos-bottom-right { right: 1rem; bottom: 1rem; }
 </style>
 </head>
-<body>
+<body class="page-wide">
 
 <div id="company-theme-bg" aria-hidden="true"></div>
 <div id="company-theme-bg-fade" aria-hidden="true" hidden></div>
@@ -74,104 +74,55 @@
   </button>
   <div>
     <h1>Daily Work Reports</h1>
-    <div class="app-sub">Field inspection reporting </div>
+    <div class="app-sub">Field inspection reporting</div>
   </div>
-  <span></span>
+  <button type="button" class="hdr-new" id="hdr-new"><span aria-hidden="true">+</span><span class="lbl"> New Report</span></button>
 </header>
 
 <main>
-  <div class="index-layout" id="index-layout">
-
-    <div class="index-dashboard-col" id="manager-dashboard-col" hidden>
-      <button type="button" class="md-mobile-toggle" id="md-mobile-toggle" aria-expanded="false" aria-controls="md-body">
-        <span>&#128202; Manager Dashboard</span>
-        <span class="md-mobile-toggle-chev">&#9656;</span>
-      </button>
-
-      <div class="md-body" id="md-body">
-      <div class="md-topbar">
-        <div class="eyebrow" style="margin-top:0;">Manager Dashboard</div>
-        <button type="button" class="btn-secondary" id="md-manage-btn">&#9881;&#65039; Manage Included Projects</button>
-      </div>
-
-      <div class="md-manage-panel" id="md-manage-panel" hidden>
-        <div class="panel-tip-row"><button type="button" class="info-tip" data-tip="Uncheck a project to leave it out of every stat below -- it still works normally everywhere else. This is just your own view of the dashboard; nobody else's is affected." aria-label="What this does">i</button></div>
-        <div id="md-project-checks"></div>
-      </div>
-
-      <div class="dash-box">
-      <div class="step" id="md-overview-step">
-        <div class="step-header">
-          <span class="step-num">OVERVIEW</span>
-          <h2>Portfolio</h2>
-        </div>
-        <div class="step-body" id="md-stats"></div>
-      </div>
-      <div class="empty-state" id="md-empty" hidden style="padding:1.25rem;">No projects included yet -- use "Manage Included Projects" above to add some.</div>
-
-      <div id="md-content">
-        <div class="step step-collapsible" id="md-trend-step" hidden>
-          <div class="step-header"><span class="step-num">TREND</span><h2>Progress Over Time</h2><button type="button" class="info-tip" data-tip="Each included project's own percent complete, weighted by planned quantity within that project -- lined up by days since that project's own NTP Date (day 0) rather than the calendar, so pace is comparable side by side. Projects without an NTP Date on file aren't shown here." aria-label="What this does">i</button></div>
-          <div class="step-body">
-            <div id="md-trend-chart"></div>
-            <p class="hint" id="md-trend-hint" hidden style="margin-top:0.5rem;">Only one dated point on file so far for every included project with an NTP Date &mdash; a trend line will appear once at least one has more than one date to compare.</p>
-          </div>
-        </div>
-
-        <div class="step step-collapsible" id="md-calendar-step" hidden>
-          <div class="step-header"><span class="step-num">CALENDAR</span><h2>Report Activity</h2><button type="button" class="info-tip" data-tip="Every dated report across included projects, one color-coded pill per project. Click a day for details and links into that day's report(s)." aria-label="What this does">i</button></div>
-          <div class="step-body">
-            <div class="mdcal-legend" id="md-cal-legend"></div>
-            <div class="weather-calendar" id="md-calendar"></div>
-          </div>
-        </div>
-
-        <div class="step-pair">
-        <div class="step step-collapsible collapsed">
-          <div class="step-header"><span class="step-num">TEAM</span><h2>Hours per Employee</h2><button type="button" class="info-tip" data-tip="By Representative on file -- pick a range above to change the window this covers." aria-label="What this does">i</button></div>
-          <div class="step-body">
-            <div class="segmented view-tabs" id="md-hours-range" style="margin-bottom:0.75rem;">
-              <button type="button" data-range="total" aria-pressed="false">Total</button>
-              <button type="button" data-range="30" aria-pressed="true">Last 30 Days</button>
-              <button type="button" data-range="7" aria-pressed="false">Last 7 Days</button>
-              <button type="button" data-range="week" aria-pressed="false">Current Week</button>
-            </div>
-            <div class="md-bars" id="md-hours-bars"></div>
-            <p class="hint" id="md-hours-empty" hidden style="margin:0;">No hours logged in this range.</p>
-          </div>
-        </div>
-
-        <div class="step step-collapsible collapsed">
-          <div class="step-header"><span class="step-num">STATUS</span><h2>Projects: Ahead / Behind</h2></div>
-          <div class="step-body">
-            <div class="md-projlist" id="md-proj-status"></div>
-            <p class="hint" id="md-proj-status-empty" hidden style="margin:0;">No included project has enough data on file to classify yet -- needs an NTP Date, Total Contract Length, and at least one priced pay item.</p>
-          </div>
-        </div>
-        </div>
-
-        <div class="step step-collapsible collapsed">
-          <div class="step-header"><span class="step-num">ACTIVITY</span><h2>Recent Reports</h2></div>
-          <div class="step-body">
-            <div class="md-feed" id="md-feed"></div>
-            <p class="hint" id="md-feed-empty" hidden style="margin:0;">No reports on file yet.</p>
-          </div>
-        </div>
-      </div>
-      </div>
-      </div>
+  <div class="phone-tabs">
+    <div class="segmented" id="phone-tabs">
+      <button type="button" data-tab="projects" aria-pressed="true">Projects</button>
+      <button type="button" data-tab="dashboard" aria-pressed="false">Dashboard</button>
     </div>
+  </div>
 
-    <div class="index-projects-col">
-      <div class="unsaved-drafts" id="unsaved-drafts" hidden>
-        <div class="eyebrow">Unsaved Reports</div>
-        <div id="unsaved-drafts-list"></div>
-      </div>
+  <div class="top-col" id="top-col">
+    <div class="unsaved-drafts" id="unsaved-drafts" hidden>
+      <div class="eyebrow">Unsaved Reports</div>
+      <div id="unsaved-drafts-list"></div>
+    </div>
+    <div id="home-attention" hidden>
+      <div class="eyebrow">Needs Your Attention</div>
+      <div class="attn-grid" id="home-attention-list"></div>
+    </div>
+    <div id="home-week" hidden>
+      <div class="eyebrow">This Week</div>
+      <div class="week-line" id="home-week-line"></div>
+    </div>
+  </div>
 
+  <div class="home-split" id="home-split">
+    <section class="dash-col" id="manager-dashboard-col" aria-label="Manager Dashboard" hidden>
       <div class="eyebrow eyebrow-row">
-        <span>Your Projects</span>
-        <button type="button" class="text-btn" id="btn-reorder-toggle" aria-pressed="false">Reorder</button>
+        <span>Manager Dashboard</span>
+        <span class="er-tools">
+          <button type="button" class="text-btn" id="md-included-btn">Included Projects</button>
+          <button type="button" class="text-btn" id="md-edit-btn" aria-pressed="false">Edit Dashboard</button>
+        </span>
       </div>
+      <div class="edit-banner" id="md-edit-banner" hidden>
+        <span class="grow"><b>Editing your dashboard.</b> Move, resize or remove widgets, or add new ones. Only your view changes.</span>
+        <button type="button" class="btn-secondary" id="md-reset-btn">Reset to Default</button>
+        <button type="button" class="btn-secondary" id="md-add-btn">+ Add a Widget</button>
+        <button type="button" class="btn-primary" id="md-done-btn">Done</button>
+      </div>
+      <div class="empty-state" id="md-empty" hidden style="padding:1.25rem;margin-bottom:1rem;">No projects included yet. Use "Included Projects" above to add some.</div>
+      <div class="widgets" id="md-widgets"></div>
+    </section>
+
+    <section class="proj-col" id="proj-col" aria-label="Your Projects">
+      <div class="eyebrow eyebrow-row" id="proj-eyebrow"><span>Your Projects</span></div>
       <div id="hub-grid" class="hub-grid"></div>
 
       <!-- ADD PROJECT PANEL (revealed in place, no separate page) -->
@@ -205,11 +156,19 @@
           </div>
         </div>
       </div>
-    </div>
-
+    </section>
   </div>
-
 </main>
+
+<div class="org-bar" id="org-bar" hidden>
+  <span class="count" id="org-count">Tap cards to pick them</span>
+  <button type="button" id="org-move">Move to folder</button>
+  <button type="button" id="org-new">New folder</button>
+  <button type="button" id="org-left" aria-label="Move earlier">&#9664; Earlier</button>
+  <button type="button" id="org-right" aria-label="Move later">Later &#9654;</button>
+  <button type="button" id="org-out" hidden>Take out</button>
+  <button type="button" class="done" id="org-done">Done</button>
+</div>
 
 <div class="modal-overlay" id="md-day-detail-overlay" hidden>
   <div class="modal-card ddm-card mddm-card">
@@ -218,40 +177,6 @@
       <button type="button" class="ddm-close" id="mddm-close" aria-label="Close">&times;</button>
     </div>
     <div id="mddm-body"></div>
-  </div>
-</div>
-
-<div class="modal-overlay" id="folder-modal-overlay" hidden>
-  <div class="modal-card folder-modal-card">
-    <div class="folder-modal-header">
-      <h2 id="folder-modal-title"></h2>
-      <div class="folder-modal-header-actions">
-        <button type="button" class="text-btn" id="folder-modal-rename">Rename</button>
-        <button type="button" class="inline-edit-pencil" id="folder-bg-pencil" title="Edit folder background" aria-label="Edit folder background">&#9998;</button>
-      </div>
-    </div>
-
-    <div class="folder-bg-controls" id="folder-bg-controls" hidden>
-      <div class="segmented" id="folder-bg-type">
-        <button type="button" data-bg-type="none">No Background</button>
-        <button type="button" data-bg-type="color">Colour</button>
-        <button type="button" data-bg-type="image">Image</button>
-      </div>
-      <div class="color-swatches" id="folder-bg-color-controls" hidden>
-        <input type="color" id="folder-bg-color" class="swatch swatch-custom" value="#1c3d5a">
-      </div>
-      <div class="uz" id="folder-bg-image-controls" hidden>
-        <input type="file" id="folder-f-bg" accept="image/*">
-        <span class="uz-icon">&#128444;</span>
-        <span class="uz-lbl">Upload Background Image</span>
-      </div>
-    </div>
-
-    <div class="hub-grid" id="folder-modal-grid"></div>
-    <div class="folder-modal-footer">
-      <button type="button" class="btn-sm btn-sm-danger" id="folder-modal-delete">Delete Folder</button>
-      <button type="button" class="btn-secondary" id="folder-modal-close">Close</button>
-    </div>
   </div>
 </div>
 
@@ -264,46 +189,49 @@
 <script src="setup-share.js"></script>
 <script src="quantity-calc.js"></script>
 <script src="dashboard-widgets.js"></script>
+<script src="page-ui.js"></script>
+<script src="dashboard-layout.js"></script>
 <script type="module" src="firebase-init.js"></script>
 <script src="firebase-sync.js"></script>
 <script>
 let pendingParsed = null;
 let hubCardBgUrls = [];
 
-// ---------- Home screen: project folders + drag to organize ----------
+// ---------- Home screen: projects, folders, organizing ----------
 //
-// Keyed by name and synced to the company when one's set (see storage.js's
-// getProjectLayout/syncUserLayout header comments), same as favorites --
-// this device just reads/writes the local copy; firebase-sync.js pushes
-// and pulls it in the background. Drag is built on Pointer Events rather
-// than native HTML5 drag-and-drop, which barely
-// works on touch -- this app's real use is mostly phones/tablets in the
-// field, so native DnD would have made the feature effectively
-// desktop-only. See wireHubGridInteractions/hubDragPointerDown below.
+// The layout (order, folders, folder backgrounds) is per person and synced
+// to the company when one's set (see storage.js's getProjectLayout and
+// syncUserLayout); this device just reads/writes the local copy.
+//
+// Three ways to organize, so it works on any device:
+// - Each card's ⋯ menu: favorite, put in a folder, take out, move earlier
+//   or later.
+// - Organize (or press and hold a card on a touch screen): pick several
+//   cards, then use the bar along the bottom.
+// - With a mouse, drag a card onto another card or folder, or between two.
+// Holding a card on a phone used to start a drag; that never worked well
+// inside the installed app, so a hold now starts Organize instead.
 
-let currentHubLayout = null; // the exact layout last rendered -- mutated in place by drag/folder actions, then persisted
+let currentHubLayout = null; // the exact layout last rendered -- mutated in place by organize actions, then persisted
 let currentProjectsById = new Map();
 let currentCountByProject = new Map();
+let currentLastReportByProject = new Map();
 let currentFavoriteSet = new Set();
+let openFolderId = null; // a folder shown in place of the main grid, or null
+let hubOrganizing = false;
+let hubPicked = []; // ids (project or folder) picked while organizing
 
-// Reorder mode: a standalone alternative to holding a card, for phones
-// where the PWA's touch handling doesn't leave long-press-to-drag reliably
-// working. Toggled by #btn-reorder-toggle; while on, every card gets its
-// own up/down buttons instead (see reorderBtnsHtml) and dragging/navigating
-// off a card are both disabled so a tap can't be mistaken for either.
-let hubReorderMode = false;
+const FOLDER_COLORS = ['#1c3d5a', '#0b7a6c', '#8a5209', '#a13d4f', '#6b4fa8', '#4f5c68'];
 
-function reorderBtnsHtml(id, reorderMode, isFirst, isLast) {
-  if (!reorderMode) return '';
-  return `
-        <div class="hc-reorder-btns">
-          <button type="button" class="hc-reorder-btn" data-reorder="up" data-reorder-id="${id}" ${isFirst ? 'disabled' : ''} aria-label="Move up">&#9650;</button>
-          <button type="button" class="hc-reorder-btn" data-reorder="down" data-reorder-id="${id}" ${isLast ? 'disabled' : ''} aria-label="Move down">&#9660;</button>
-        </div>`;
+function lastReportHtml(projectId) {
+  const last = currentLastReportByProject.get(projectId);
+  if (!last) return '';
+  const label = last === todayIso() ? 'Report today' : `Last ${escapeHtml(shortDateLabel(last))}`;
+  return `<span class="hc-last${workdaysSince(last) >= 3 ? ' stale' : ''}">${label}</span>`;
 }
 
-function projectCardHtml(p, countByProject, favoriteSet, { unfolderable = false, reorderMode = false, isFirst = false, isLast = false } = {}) {
-  const n = countByProject.get(p.id) || 0;
+function projectCardHtml(p) {
+  const n = currentCountByProject.get(p.id) || 0;
   const countLabel = n === 1 ? '1 report' : `${n} reports`;
   let bgHtml = '';
   if (p.backgroundImage) {
@@ -311,64 +239,50 @@ function projectCardHtml(p, countByProject, favoriteSet, { unfolderable = false,
     hubCardBgUrls.push(url);
     bgHtml = `<img class="hc-bg-img" src="${url}" alt=""><div class="hc-bg-fade"></div>`;
   }
-  const isFav = favoriteSet.has(p.id);
-  // Reorder mode swaps the card's tag from <a> to <div> so tapping it can't
-  // navigate away -- the up/down buttons (the same move finishDrag makes via
-  // drag-and-drop, which doesn't hold reliably as a PWA on mobile) become
-  // the only thing a tap does.
-  const tag = reorderMode ? 'div' : 'a';
-  const hrefAttr = reorderMode ? '' : ` href="project.html?id=${p.id}"`;
+  const isFav = currentFavoriteSet.has(p.id);
+  const picked = hubPicked.includes(p.id);
+  // While organizing, a tap picks the card instead of opening the project.
+  const tag = hubOrganizing ? 'div' : 'a';
+  const hrefAttr = hubOrganizing ? ' role="button" tabindex="0"' : ` href="project.html?id=${p.id}"`;
   return `
-      <${tag} class="hub-card${p.backgroundImage ? ' has-bg' : ''}"${hrefAttr} draggable="false" data-drag-id="${p.id}" data-drag-type="project">
+      <${tag} class="hub-card${p.backgroundImage ? ' has-bg' : ''}${picked ? ' org-picked' : ''}"${hrefAttr} draggable="false" data-drag-id="${p.id}" data-drag-type="project">
         ${bgHtml}
-        ${unfolderable ? `<button type="button" class="hc-unfolder" data-unfolder-id="${p.id}" title="Take out of this folder">&times;</button>` : ''}
+        <span class="hc-check" aria-hidden="true">${picked ? '&#10003;' : ''}</span>
         <button type="button" class="hc-favorite${isFav ? ' is-fav' : ''}" data-favorite-id="${p.id}" title="${isFav ? 'Remove from favorites' : 'Add to favorites'}">&#9733;</button>
         <span class="hc-icon">${p.icon || '&#128193;'}</span>
         <div class="hc-title">${escapeHtml(p.name)}</div>
         <div class="hc-desc">${escapeHtml(p.meta.projectName || '')}</div>
-        <div class="hc-count">${countLabel}</div>
-        ${reorderBtnsHtml(p.id, reorderMode, isFirst, isLast)}
+        <div><span class="hc-count">${countLabel}</span>${lastReportHtml(p.id)}</div>
+        <button type="button" class="hc-more" data-menu-id="${p.id}" aria-label="Options for ${escapeAttr(p.name)}">&#8943;</button>
       </${tag}>`;
 }
 
 // A folder's background IMAGE is purely local -- stored directly as a
-// Blob on the layout entry itself (folder.backgroundImage), same as how a
-// project's own background photo is stored, just never uploaded anywhere.
-// The folder's organization/name/order/background TYPE and colour do sync
-// now (see storage.js's getProjectLayout header comment and
-// firebase-sync.js's pushUserLayout, which strips backgroundImage before
-// syncing) -- a Blob can't survive the JSON round-trip to Firestore, and
-// syncing actual photos would mean uploading them to Storage per person,
-// a bigger feature than what was asked for here.
+// Blob on the layout entry itself (folder.backgroundImage), never uploaded
+// (see firebase-sync.js's stripLayoutForSync). Its name, order, background
+// type and colour do sync.
 //
 // Instead of one big icon, shows a small grid of the projects actually
-// inside -- each tile labelled with that project's number (its icon if
-// it has none) -- so the card reads as "a folder holding these specific
-// things," the way a phone's own folder icon previews a few of the apps
-// inside it, rather than just a generic folder glyph.
-function folderCardHtml(folder, projectsById, favoriteSet, { reorderMode = false, isFirst = false, isLast = false } = {}) {
-  const isFav = favoriteSet.has(folder.id);
-  const members = folder.projectIds.map((id) => projectsById.get(id)).filter(Boolean);
+// inside, each tile labelled with that project's number (its icon if it
+// has none), the way a phone's own folder icon previews the apps inside.
+function folderCardHtml(folder) {
+  const isFav = currentFavoriteSet.has(folder.id);
+  const picked = hubPicked.includes(folder.id);
+  const members = folder.projectIds.map((id) => currentProjectsById.get(id)).filter(Boolean);
   const n = members.length;
-  // Always at most 8 cells (a clean 4x2), never a ragged row -- when
-  // there are more than 8 projects, the 8th cell becomes the "+N" count
-  // instead of a real tile. The card has the width for 4 across; see
-  // .folder-preview-grid.
+  // Always at most 8 cells (a clean 4x2); with more than 8 projects the 8th
+  // cell becomes the "+N" count instead of a real tile.
   const maxTiles = 8;
   const shown = n > maxTiles ? members.slice(0, maxTiles - 1) : members;
   const overflow = n - shown.length;
   const tileHtml = (p) => {
     const num = p.meta && p.meta.projectNo ? `#${p.meta.projectNo}` : '';
     const icon = p.icon || '\u{1F4C1}';
-    // Icon is the primary visual, centered and large; the project number
-    // (when there is one) sits as a small centered caption underneath it.
     return num
-      ? `<div class="folder-preview-tile" title="${escapeHtml(p.name)}"><span class="fp-tile-icon">${icon}</span><span class="fp-tile-num">${escapeHtml(num)}</span></div>`
-      : `<div class="folder-preview-tile" title="${escapeHtml(p.name)}"><span class="fp-tile-icon">${icon}</span></div>`;
+      ? `<div class="folder-preview-tile" title="${escapeAttr(p.name)}"><span class="fp-tile-icon">${icon}</span><span class="fp-tile-num">${escapeHtml(num)}</span></div>`
+      : `<div class="folder-preview-tile" title="${escapeAttr(p.name)}"><span class="fp-tile-icon">${icon}</span></div>`;
   };
-  const tiles =
-    shown.map(tileHtml).join('') +
-    (overflow > 0 ? `<div class="folder-preview-tile folder-preview-more">+${overflow}</div>` : '');
+  const tiles = shown.map(tileHtml).join('') + (overflow > 0 ? `<div class="folder-preview-tile folder-preview-more">+${overflow}</div>` : '');
 
   const hasBg = folder.backgroundType === 'image' && folder.backgroundImage;
   let bgHtml = '';
@@ -378,17 +292,18 @@ function folderCardHtml(folder, projectsById, favoriteSet, { reorderMode = false
     hubCardBgUrls.push(url);
     bgHtml = `<img class="hc-bg-img" src="${url}" alt=""><div class="hc-bg-fade"></div>`;
   } else if (folder.backgroundType === 'color' && folder.backgroundColor) {
-    styleAttr = ` style="background:${folder.backgroundColor};"`;
+    styleAttr = ` style="background:${escapeAttr(folder.backgroundColor)};"`;
   }
   const hasAnyBg = hasBg || folder.backgroundType === 'color';
   return `
-      <div class="hub-card folder-card${hasAnyBg ? ' has-bg' : ''}" data-drag-id="${folder.id}" data-drag-type="folder" data-open-folder="${folder.id}"${styleAttr}>
+      <div class="hub-card folder-card${hasAnyBg ? ' has-bg' : ''}${picked ? ' org-picked' : ''}" role="button" tabindex="0" data-drag-id="${folder.id}" data-drag-type="folder" data-open-folder="${folder.id}"${styleAttr}>
         ${bgHtml}
+        <span class="hc-check" aria-hidden="true">${picked ? '&#10003;' : ''}</span>
         <button type="button" class="hc-favorite${isFav ? ' is-fav' : ''}" data-favorite-id="${folder.id}" title="${isFav ? 'Remove from favorites' : 'Add to favorites'}">&#9733;</button>
         <div class="folder-preview-grid">${tiles}</div>
         <div class="hc-title">${escapeHtml(folder.name)}</div>
         <div class="hc-desc">${n} project${n === 1 ? '' : 's'}</div>
-        ${reorderBtnsHtml(folder.id, reorderMode, isFirst, isLast)}
+        <button type="button" class="hc-more" data-menu-id="${folder.id}" aria-label="Options for ${escapeAttr(folder.name)}">&#8943;</button>
       </div>`;
 }
 
@@ -413,11 +328,11 @@ async function buildHubLayout(projects, favoriteSet) {
   const reconciled = [];
   for (const entry of saved) {
     if (entry.type === 'project') {
-      if (!existingIds.has(entry.id)) continue;
+      if (!existingIds.has(entry.id) || placed.has(entry.id)) continue;
       placed.add(entry.id);
       reconciled.push(entry);
     } else if (entry.type === 'folder') {
-      const kept = entry.projectIds.filter((id) => existingIds.has(id));
+      const kept = entry.projectIds.filter((id) => existingIds.has(id) && !placed.has(id));
       kept.forEach((id) => placed.add(id));
       if (kept.length === 0) continue; // every project in it is gone -- drop the folder
       if (kept.length === 1) {
@@ -431,10 +346,27 @@ async function buildHubLayout(projects, favoriteSet) {
     if (!placed.has(p.id)) reconciled.push({ type: 'project', id: p.id });
   }
 
-  if (JSON.stringify(saved) !== JSON.stringify(reconciled)) {
+  if (JSON.stringify(stripLayoutForCompare(saved)) !== JSON.stringify(stripLayoutForCompare(reconciled))) {
     saveProjectLayout(reconciled).catch((err) => console.error('project layout reconcile:', err));
   }
   return reconciled;
+}
+
+// A folder's background image is a Blob, which JSON can't compare.
+function stripLayoutForCompare(layout) {
+  return layout.map((e) => (e.type === 'folder' ? { ...e, backgroundImage: !!e.backgroundImage } : e));
+}
+
+function folderEntry(folderId) {
+  return (currentHubLayout || []).find((e) => e.type === 'folder' && e.id === folderId) || null;
+}
+function folderOfProject(projectId) {
+  return (currentHubLayout || []).find((e) => e.type === 'folder' && e.projectIds.includes(projectId)) || null;
+}
+// The ids shown right now, in order: the top level, or one open folder.
+function currentViewIds() {
+  const folder = openFolderId && folderEntry(openFolderId);
+  return folder ? folder.projectIds.slice() : (currentHubLayout || []).map((e) => e.id);
 }
 
 async function renderProjectCards() {
@@ -449,8 +381,10 @@ async function renderProjectCards() {
   const favoriteSet = new Set(favoriteIds);
   const projectsById = new Map(projects.map((p) => [p.id, p]));
   const countByProject = new Map();
+  const lastByProject = new Map();
   for (const r of reports) {
     countByProject.set(r.projectId, (countByProject.get(r.projectId) || 0) + 1);
+    if (r.date && r.date > (lastByProject.get(r.projectId) || '')) lastByProject.set(r.projectId, r.date);
   }
 
   // Re-rendered on every project add/save, so previous cards' background
@@ -462,20 +396,30 @@ async function renderProjectCards() {
   currentHubLayout = layout;
   currentProjectsById = projectsById;
   currentCountByProject = countByProject;
+  currentLastReportByProject = lastByProject;
   currentFavoriteSet = favoriteSet;
+  if (openFolderId && !folderEntry(openFolderId)) openFolderId = null;
+  hubPicked = hubPicked.filter((id) => projectsById.has(id) || folderEntry(id));
+
+  const folder = openFolderId && folderEntry(openFolderId);
+  const orgBtn = `<button type="button" class="text-btn" id="btn-organize" aria-pressed="${hubOrganizing}">${hubOrganizing ? 'Done' : 'Organize'}</button>`;
+  $('#proj-eyebrow').innerHTML = folder
+    ? `<span class="crumbs"><button type="button" class="text-btn" id="crumb-back" data-drop-out="1">&#8249; Your Projects</button><span aria-hidden="true">/</span><b>${escapeHtml(folder.name)}</b></span>
+       <span class="er-tools">${orgBtn}<button type="button" class="text-btn" id="btn-folder-settings">Folder Settings</button></span>`
+    : `<span>Your Projects</span><span class="er-tools">${projects.length ? orgBtn : ''}</span>`;
+  $('#proj-col').classList.toggle('organizing', hubOrganizing);
 
   const grid = $('#hub-grid');
-  grid.classList.toggle('reorder-mode', hubReorderMode);
-  const cards = layout
-    .map((entry, i) => {
-      const opts = { reorderMode: hubReorderMode, isFirst: i === 0, isLast: i === layout.length - 1 };
-      if (entry.type === 'folder') return folderCardHtml(entry, projectsById, favoriteSet, opts);
-      const p = projectsById.get(entry.id);
-      return p ? projectCardHtml(p, countByProject, favoriteSet, opts) : '';
-    })
-    .join('');
+  const cards = folder
+    ? folder.projectIds.map((id) => projectsById.get(id)).filter(Boolean).map(projectCardHtml).join('')
+    : layout.map((entry) => {
+        if (entry.type === 'folder') return folderCardHtml(entry);
+        const p = projectsById.get(entry.id);
+        return p ? projectCardHtml(p) : '';
+      }).join('');
   const canCreate = await companyCan('createProjects');
-  grid.innerHTML = cards + (canCreate && !hubReorderMode ? `<div class="hub-card add-card" id="btn-add-project">+ Add Project</div>` : '');
+  const showAdd = canCreate && !hubOrganizing && !folder;
+  grid.innerHTML = cards + (showAdd ? `<div class="hub-card add-card" id="btn-add-project" role="button" tabindex="0">+ Add Project</div>` : '');
   if (projects.length === 0) {
     grid.insertAdjacentHTML(
       'afterbegin',
@@ -484,26 +428,346 @@ async function renderProjectCards() {
         : '<div class="empty-state" style="grid-column:1/-1;">No projects yet -- ask an admin to add one.</div>'
     );
   }
-  if (canCreate && !hubReorderMode) $('#btn-add-project').addEventListener('click', showAddProjectPanel);
+  if (showAdd) $('#btn-add-project').addEventListener('click', showAddProjectPanel);
+  renderOrganizeBar();
 }
 
-// ---------- Drag controller ----------
-//
-// Long-press (not an immediate drag on movement) is what lets a normal
-// touch swipe keep scrolling the page right up until someone deliberately
-// holds a card -- same reasoning a phone home screen uses for "jiggle
-// mode." Works identically with a mouse, just via a short hold instead of
-// a distinct gesture, so the exact same code path covers both.
-const HUB_LONG_PRESS_MS = 280;
-const HUB_MOVE_CANCEL_PX = 10;
-const HUB_COMBINE_ZONE = 0.55; // fraction of a card's box, centered, that counts as "drop ON this card" rather than "beside it"
+// ---------- Changing the layout ----------
 
+async function commitLayout() {
+  await saveProjectLayout(currentHubLayout);
+  await renderProjectCards();
+}
+
+// Takes a project out of wherever it is (top level or a folder). A folder
+// left with one project dissolves into a plain card, same as always.
+function detachProject(layout, projectId) {
+  const idx = layout.findIndex((e) => e.type === 'project' && e.id === projectId);
+  if (idx !== -1) { layout.splice(idx, 1); return idx; }
+  const fIdx = layout.findIndex((e) => e.type === 'folder' && e.projectIds.includes(projectId));
+  if (fIdx === -1) return layout.length;
+  const f = layout[fIdx];
+  f.projectIds = f.projectIds.filter((id) => id !== projectId);
+  if (f.projectIds.length === 1) layout.splice(fIdx, 1, { type: 'project', id: f.projectIds[0] });
+  else if (f.projectIds.length === 0) layout.splice(fIdx, 1);
+  return fIdx + 1;
+}
+
+async function moveProjectsToFolder(projectIds, folderId) {
+  const layout = currentHubLayout;
+  const target = folderEntry(folderId);
+  if (!target) return;
+  projectIds.forEach((pid) => {
+    if (target.projectIds.includes(pid)) return;
+    detachProject(layout, pid);
+    target.projectIds.push(pid);
+  });
+  await commitLayout();
+}
+
+async function takeProjectsOutOfFolders(projectIds) {
+  const layout = currentHubLayout;
+  projectIds.forEach((pid) => {
+    const f = folderOfProject(pid);
+    if (!f) return;
+    const at = detachProject(layout, pid);
+    layout.splice(Math.min(at, layout.length), 0, { type: 'project', id: pid });
+  });
+  await commitLayout();
+}
+
+// One step earlier or later among whatever's shown with it (the top level,
+// or the folder it's in).
+async function nudgeEntry(id, direction) {
+  const folder = folderOfProject(id);
+  const list = folder ? folder.projectIds : currentHubLayout;
+  const idx = folder ? list.indexOf(id) : list.findIndex((e) => e.id === id);
+  const j = idx + (direction === 'up' ? -1 : 1);
+  if (idx === -1 || j < 0 || j >= list.length) {
+    showToast(direction === 'up' ? 'Already first' : 'Already last');
+    return;
+  }
+  [list[idx], list[j]] = [list[j], list[idx]];
+  await commitLayout();
+}
+
+// ---------- Organize mode ----------
+
+function setOrganizing(on, firstId) {
+  hubOrganizing = !!on;
+  hubPicked = on && firstId ? [firstId] : [];
+  renderProjectCards();
+}
+
+function renderOrganizeBar() {
+  const bar = $('#org-bar');
+  bar.hidden = !hubOrganizing;
+  if (!hubOrganizing) return;
+  const n = hubPicked.length;
+  const pickedProjects = hubPicked.filter((id) => currentProjectsById.has(id));
+  $('#org-count').textContent = n ? `${n} picked` : 'Tap cards to pick them';
+  $('#org-move').disabled = pickedProjects.length === 0 || n !== pickedProjects.length;
+  $('#org-new').disabled = n > 0 && n !== pickedProjects.length;
+  $('#org-left').disabled = n !== 1;
+  $('#org-right').disabled = n !== 1;
+  $('#org-out').hidden = !pickedProjects.some((id) => folderOfProject(id));
+}
+
+function wireOrganizeBar() {
+  $('#org-done').addEventListener('click', () => setOrganizing(false));
+  $('#org-move').addEventListener('click', () => openFolderPicker(hubPicked.filter((id) => currentProjectsById.has(id))));
+  $('#org-new').addEventListener('click', () => openFolderEditor(null, hubPicked.filter((id) => currentProjectsById.has(id))));
+  $('#org-left').addEventListener('click', () => nudgeEntry(hubPicked[0], 'up'));
+  $('#org-right').addEventListener('click', () => nudgeEntry(hubPicked[0], 'down'));
+  $('#org-out').addEventListener('click', async () => {
+    const ids = hubPicked.filter((id) => folderOfProject(id));
+    hubOrganizing = false;
+    hubPicked = [];
+    await takeProjectsOutOfFolders(ids);
+    showToast('Taken out of the folder');
+  });
+}
+
+// ---------- Menus and sheets ----------
+
+function openProjectMenu(projectId) {
+  const p = currentProjectsById.get(projectId);
+  if (!p) return;
+  const fav = currentFavoriteSet.has(projectId);
+  const folder = folderOfProject(projectId);
+  openSheet(`
+    <h3 class="sheet-title">${p.icon || '&#128193;'} ${escapeHtml(p.name)}</h3>
+    <p class="sheet-sub">${escapeHtml(p.meta.projectNo || '')}${folder ? `${p.meta.projectNo ? ' · ' : ''}In ${escapeHtml(folder.name)}` : ''}</p>
+    <div class="sheet-list">
+      <a class="sheet-item" href="report-editor.html?project=${p.id}&report=new"><span class="ic">&#9999;&#65039;</span>New report for today</a>
+      <a class="sheet-item" href="project.html?id=${p.id}"><span class="ic">&#128194;</span>Open project</a>
+      <hr class="sheet-sep">
+      <button type="button" class="sheet-item" data-m="fav"><span class="ic">&#11088;</span>${fav ? 'Remove from favorites' : 'Add to favorites'}</button>
+      <button type="button" class="sheet-item" data-m="move"><span class="ic">&#128193;</span>${folder ? 'Move to another folder' : 'Put in a folder'}<span class="after">&#8250;</span></button>
+      ${folder ? `<button type="button" class="sheet-item" data-m="out"><span class="ic">&#8617;&#65039;</span>Take out of ${escapeHtml(folder.name)}</button>` : ''}
+      <button type="button" class="sheet-item" data-m="up"><span class="ic">&#9664;&#65039;</span>Move earlier</button>
+      <button type="button" class="sheet-item" data-m="down"><span class="ic">&#9654;&#65039;</span>Move later</button>
+      <hr class="sheet-sep">
+      <button type="button" class="sheet-item" data-m="org"><span class="ic">&#9745;&#65039;</span>Organize several&hellip;</button>
+    </div>`, {
+    onMount: (card) => card.addEventListener('click', async (e) => {
+      const b = e.target.closest('[data-m]');
+      if (!b) return;
+      const m = b.dataset.m;
+      if (m === 'move') return openFolderPicker([projectId]);
+      closeSheet();
+      if (m === 'fav') { await toggleFavoriteProject(projectId); await renderProjectCards(); showToast(fav ? 'Removed from favorites' : 'Added to favorites'); }
+      if (m === 'out') { await takeProjectsOutOfFolders([projectId]); showToast(`Taken out of ${folder.name}`); }
+      if (m === 'up' || m === 'down') await nudgeEntry(projectId, m);
+      if (m === 'org') setOrganizing(true, projectId);
+    }),
+  });
+}
+
+function openFolderMenu(folderId) {
+  const folder = folderEntry(folderId);
+  if (!folder) return;
+  const fav = currentFavoriteSet.has(folderId);
+  openSheet(`
+    <h3 class="sheet-title">&#128193; ${escapeHtml(folder.name)}</h3>
+    <p class="sheet-sub">${folder.projectIds.length} projects</p>
+    <div class="sheet-list">
+      <button type="button" class="sheet-item" data-m="open"><span class="ic">&#128194;</span>Open folder</button>
+      <button type="button" class="sheet-item" data-m="edit"><span class="ic">&#9881;&#65039;</span>Folder settings<span class="after">name, background, projects</span></button>
+      <button type="button" class="sheet-item" data-m="fav"><span class="ic">&#11088;</span>${fav ? 'Remove from favorites' : 'Add to favorites'}</button>
+      <button type="button" class="sheet-item" data-m="up"><span class="ic">&#9664;&#65039;</span>Move earlier</button>
+      <button type="button" class="sheet-item" data-m="down"><span class="ic">&#9654;&#65039;</span>Move later</button>
+    </div>`, {
+    onMount: (card) => card.addEventListener('click', async (e) => {
+      const b = e.target.closest('[data-m]');
+      if (!b) return;
+      const m = b.dataset.m;
+      if (m === 'edit') return openFolderEditor(folderId);
+      closeSheet();
+      if (m === 'open') openFolder(folderId);
+      if (m === 'fav') { await toggleFavoriteProject(folderId); await renderProjectCards(); }
+      if (m === 'up' || m === 'down') await nudgeEntry(folderId, m);
+    }),
+  });
+}
+
+function openFolderPicker(projectIds) {
+  if (!projectIds.length) return;
+  const folders = (currentHubLayout || []).filter((e) => e.type === 'folder');
+  const current = projectIds.length === 1 ? folderOfProject(projectIds[0]) : null;
+  const label = projectIds.length === 1 ? escapeHtml(currentProjectsById.get(projectIds[0]).name) : `${projectIds.length} projects`;
+  const anyInFolder = projectIds.some((id) => folderOfProject(id));
+  openSheet(`
+    <h3 class="sheet-title">Put in a folder</h3>
+    <p class="sheet-sub">${label}</p>
+    <div class="sheet-list">
+      ${folders.map((f) => `<button type="button" class="sheet-item${current && current.id === f.id ? ' current' : ''}" data-f="${f.id}"><span class="ic">&#128193;</span>${escapeHtml(f.name)}<span class="after">${current && current.id === f.id ? 'Current' : `${f.projectIds.length} projects`}</span></button>`).join('')}
+      <button type="button" class="sheet-item" data-f="__new"><span class="ic">&#10133;</span>New folder&hellip;</button>
+      ${anyInFolder ? '<hr class="sheet-sep"><button type="button" class="sheet-item" data-f="__none"><span class="ic">&#8617;&#65039;</span>Not in a folder</button>' : ''}
+    </div>`, {
+    onMount: (card) => card.addEventListener('click', async (e) => {
+      const b = e.target.closest('[data-f]');
+      if (!b) return;
+      const v = b.dataset.f;
+      if (v === '__new') return openFolderEditor(null, projectIds);
+      closeSheet();
+      hubOrganizing = false;
+      hubPicked = [];
+      if (v === '__none') {
+        await takeProjectsOutOfFolders(projectIds);
+        showToast('Taken out of the folder');
+      } else {
+        const name = folderEntry(v).name;
+        await moveProjectsToFolder(projectIds, v);
+        showToast(`Moved to ${name}`);
+      }
+    }),
+  });
+}
+
+// New folder (folderId null) or an existing one's settings: name,
+// background, which projects are in it, and Delete.
+function openFolderEditor(folderId, preselect = []) {
+  const existing = folderId ? folderEntry(folderId) : null;
+  let bgType = existing ? (existing.backgroundType || 'none') : 'none';
+  let color = existing && existing.backgroundColor ? existing.backgroundColor : FOLDER_COLORS[0];
+  let image = existing ? existing.backgroundImage || null : null;
+  const chosen = new Set(existing ? existing.projectIds : preselect.filter((id) => currentProjectsById.has(id)));
+  // Every project, in the order they show on the home screen.
+  const order = [];
+  (currentHubLayout || []).forEach((e) => { if (e.type === 'folder') order.push(...e.projectIds); else order.push(e.id); });
+  const rows = order.map((id) => {
+    const p = currentProjectsById.get(id);
+    if (!p) return '';
+    const other = folderOfProject(id);
+    const note = other && (!existing || other.id !== existing.id) ? `<span class="in">now in ${escapeHtml(other.name)}</span>` : '';
+    return `<label><input type="checkbox" data-pid="${id}"${chosen.has(id) ? ' checked' : ''}><span>${p.icon || '&#128193;'}</span>${escapeHtml(p.name)}${note}</label>`;
+  }).join('');
+  openSheet(`
+    <h3 class="sheet-title">${existing ? 'Folder Settings' : 'New Folder'}</h3>
+    <p class="sheet-sub">${existing ? 'Name, background and what’s inside.' : 'Name it, then tick the projects that go in it (at least 2).'}</p>
+    <div class="sheet-field"><label class="lbl" for="fe-name">Name</label><input type="text" id="fe-name" maxlength="40" value="${existing ? escapeAttr(existing.name) : ''}" placeholder="e.g. Lafayette District"></div>
+    <div class="sheet-field"><span class="lbl">Background</span>
+      <div class="segmented" id="fe-bg">
+        <button type="button" data-bg="none">No Background</button>
+        <button type="button" data-bg="color">Colour</button>
+        <button type="button" data-bg="image">Image</button>
+      </div>
+      <div class="swatch-row" id="fe-colors">${FOLDER_COLORS.map((c) => `<button type="button" style="background:${c}" data-c="${c}" aria-label="Colour ${c}"></button>`).join('')}<input type="color" id="fe-color-custom" aria-label="Pick any colour"></div>
+      <div class="uz" id="fe-image" style="margin:0;"><input type="file" id="fe-file" accept="image/*"><span class="uz-icon">&#128444;</span><span class="uz-lbl" id="fe-image-lbl">Upload Background Image</span><span class="uz-hint">Kept on this device only</span></div>
+    </div>
+    <div class="sheet-field"><span class="lbl">Projects in this folder</span><div class="checklist">${rows}</div></div>
+    <p class="hint" id="fe-error" hidden style="color:var(--danger);margin:0 0 0.5rem;"></p>
+    <div id="fe-confirm"></div>
+    <div class="sheet-actions">
+      ${existing ? '<button type="button" class="btn-sm btn-sm-danger" id="fe-del" style="margin-right:auto;">Delete Folder</button>' : ''}
+      <button type="button" class="btn-secondary" id="fe-cancel">Cancel</button>
+      <button type="button" class="btn-primary" id="fe-save">${existing ? 'Save' : 'Create Folder'}</button>
+    </div>`, {
+    wide: true,
+    onMount: (card) => {
+      const sync = () => {
+        $$('#fe-bg button', card).forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.bg === bgType)));
+        $('#fe-colors', card).hidden = bgType !== 'color';
+        $('#fe-image', card).hidden = bgType !== 'image';
+        $$('#fe-colors [data-c]', card).forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.c === color)));
+        $('#fe-color-custom', card).value = /^#[0-9a-f]{6}$/i.test(color) ? color : '#1c3d5a';
+        $('#fe-image-lbl', card).textContent = image ? 'Image chosen (tap to change)' : 'Upload Background Image';
+        $('#fe-image', card).classList.toggle('has', !!image);
+      };
+      sync();
+      card.addEventListener('click', (e) => {
+        const bg = e.target.closest('[data-bg]');
+        if (bg) { bgType = bg.dataset.bg; sync(); }
+        const c = e.target.closest('[data-c]');
+        if (c) { color = c.dataset.c; sync(); }
+      });
+      $('#fe-color-custom', card).addEventListener('change', (e) => { color = e.target.value; sync(); });
+      $('#fe-file', card).addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        e.target.value = '';
+        if (!file) return;
+        if (!/^image\//.test(file.type)) { showToast('That file is not an image.'); return; }
+        image = await capImageDimensions(await convertHeicIfNeeded(file));
+        sync();
+      });
+      $('#fe-cancel', card).addEventListener('click', closeSheet);
+      $('#fe-save', card).addEventListener('click', async () => {
+        const name = $('#fe-name', card).value.trim();
+        const picked = $$('[data-pid]:checked', card).map((x) => x.dataset.pid);
+        const err = !name ? 'Give the folder a name.' : picked.length < 2 ? 'A folder needs at least 2 projects.' : '';
+        $('#fe-error', card).textContent = err;
+        $('#fe-error', card).hidden = !err;
+        if (err) return;
+        if (bgType === 'image' && !image) bgType = existing && existing.backgroundType === 'image' ? 'image' : 'none';
+        const layout = currentHubLayout;
+        let folder = existing;
+        if (!folder) {
+          // Goes where the first ticked project was.
+          const firstIdx = layout.findIndex((e) => (e.type === 'project' && picked.includes(e.id)) || (e.type === 'folder' && e.projectIds.some((id) => picked.includes(id))));
+          folder = { type: 'folder', id: crypto.randomUUID(), name, projectIds: [] };
+          layout.splice(firstIdx === -1 ? layout.length : firstIdx, 0, folder);
+        }
+        folder.name = name;
+        folder.backgroundType = bgType;
+        folder.backgroundColor = bgType === 'color' ? color : (folder.backgroundColor || undefined);
+        folder.backgroundImage = bgType === 'image' ? image : null;
+        // Unticked projects come out next to the folder; ticked ones move in.
+        folder.projectIds.slice().forEach((pid) => {
+          if (picked.includes(pid)) return;
+          folder.projectIds = folder.projectIds.filter((x) => x !== pid);
+          layout.splice(layout.indexOf(folder) + 1, 0, { type: 'project', id: pid });
+        });
+        picked.forEach((pid) => {
+          if (folder.projectIds.includes(pid)) return;
+          detachProject(layout, pid);
+          folder.projectIds.push(pid);
+        });
+        if (!layout.includes(folder)) layout.push(folder); // its old spot dissolved while moving projects around
+        closeSheet();
+        hubOrganizing = false;
+        hubPicked = [];
+        await commitLayout();
+        showToast(existing ? 'Folder saved' : `Created ${name}`);
+      });
+      const del = $('#fe-del', card);
+      if (del) del.addEventListener('click', () => {
+        $('#fe-confirm', card).innerHTML = `<div class="confirm-box">Delete the "${escapeHtml(existing.name)}" folder? Its projects go back to the main list. Nothing is actually deleted.
+          <div class="sheet-actions" style="margin-top:0.5rem;"><button type="button" class="btn-secondary" id="fe-no">Keep It</button><button type="button" class="btn-sm btn-sm-danger" id="fe-yes">Delete Folder</button></div></div>`;
+        $('#fe-no', card).addEventListener('click', () => { $('#fe-confirm', card).innerHTML = ''; });
+        $('#fe-yes', card).addEventListener('click', async () => {
+          const layout = currentHubLayout;
+          const idx = layout.findIndex((e) => e.id === existing.id);
+          layout.splice(idx, 1, ...existing.projectIds.map((id) => ({ type: 'project', id })));
+          if (openFolderId === existing.id) openFolderId = null;
+          closeSheet();
+          await commitLayout();
+          showToast('Folder deleted. Its projects are still here.');
+        });
+      });
+    },
+  });
+}
+
+function openFolder(folderId) {
+  openFolderId = folderId;
+  hubPicked = [];
+  renderProjectCards().then(() => $('#proj-col').scrollIntoView({ behavior: 'smooth', block: 'start' }));
+}
+
+// ---------- Mouse drag ----------
+//
+// Mouse and pen only. Drop a project onto another project to make a folder
+// of the two, onto a folder to put it in, or beside a card to reorder.
+// Inside an open folder, drop onto "Your Projects" to take it out.
+const HUB_MOVE_ARM_PX = 6;
+const HUB_COMBINE_ZONE = 0.55; // fraction of a card's box, centered, that counts as "drop ON this card" rather than "beside it"
 let hubDrag = null; // active drag state, or null
 let hubDragSuppressClick = false; // consumed once by the next click after any armed drag, so it can't also navigate/open
 
 function clearHoverClasses() {
-  $$('.drop-combine, .drop-before, .drop-after', $('#hub-grid')).forEach((el) => {
-    el.classList.remove('drop-combine', 'drop-before', 'drop-after');
+  $$('.drop-combine, .drop-before, .drop-after, .drop-hot').forEach((el) => {
+    el.classList.remove('drop-combine', 'drop-before', 'drop-after', 'drop-hot');
   });
 }
 
@@ -511,8 +775,15 @@ function updateHoverTarget(x, y) {
   // .drag-ghost is pointer-events:none, so elementFromPoint already sees
   // straight through it to whatever's actually underneath.
   const el = document.elementFromPoint(x, y);
-  const targetCard = el && el.closest && el.closest('.hub-card[data-drag-id]');
   clearHoverClasses();
+  const out = el && el.closest && el.closest('[data-drop-out]');
+  if (out && hubDrag.type === 'project') {
+    hubDrag.hoverEl = out;
+    hubDrag.hoverZone = 'out';
+    out.classList.add('drop-hot');
+    return;
+  }
+  const targetCard = el && el.closest && el.closest('#hub-grid .hub-card[data-drag-id]');
   if (!targetCard || targetCard.dataset.dragId === hubDrag.id) {
     hubDrag.hoverEl = null;
     hubDrag.hoverZone = null;
@@ -522,9 +793,9 @@ function updateHoverTarget(x, y) {
   const cx = rect.left + rect.width / 2;
   const cy = rect.top + rect.height / 2;
   const withinCombineZone = Math.abs(x - cx) < (rect.width * HUB_COMBINE_ZONE) / 2 && Math.abs(y - cy) < (rect.height * HUB_COMBINE_ZONE) / 2;
-  // Only a PROJECT being dragged can combine into a folder -- a dragged
-  // folder only ever reorders, keeping folders one level deep on purpose.
-  const canCombine = hubDrag.type === 'project' && withinCombineZone;
+  // Only a PROJECT can combine, and only on the top level -- folders stay
+  // one level deep on purpose.
+  const canCombine = hubDrag.type === 'project' && !openFolderId && withinCombineZone;
   hubDrag.hoverEl = targetCard;
   if (canCombine) {
     hubDrag.hoverZone = 'combine';
@@ -537,103 +808,66 @@ function updateHoverTarget(x, y) {
 
 async function finishDrag() {
   const drag = hubDrag;
-  const grid = $('#hub-grid');
-  grid.classList.remove('dragging');
+  $('#hub-grid').classList.remove('dragging');
   drag.card.classList.remove('drag-source');
   drag.ghost.remove();
   clearHoverClasses();
   hubDrag = null;
+  if (!drag.hoverEl || !drag.hoverZone) return; // dropped on empty space -- nothing moved
 
-  if (!drag.hoverEl || !drag.hoverZone) return; // dropped on empty space -- no-op, nothing moved
-
+  const layout = currentHubLayout;
+  if (drag.hoverZone === 'out') {
+    await takeProjectsOutOfFolders([drag.id]);
+    showToast('Taken out of the folder');
+    return;
+  }
   const targetId = drag.hoverEl.dataset.dragId;
   const targetType = drag.hoverEl.dataset.dragType;
-  const layout = currentHubLayout;
 
   if (drag.hoverZone === 'combine') {
     if (targetType === 'project') {
-      const name = prompt('Name this folder:', '');
-      if (!name || !name.trim()) return; // cancelled -- leave both cards exactly where they were
-      const targetIdx = layout.findIndex((e) => e.id === targetId);
-      const folder = { type: 'folder', id: crypto.randomUUID(), name: name.trim(), projectIds: [targetId, drag.id] };
-      const without = layout.filter((e) => e.id !== drag.id && e.id !== targetId);
-      without.splice(Math.min(targetIdx, without.length), 0, folder);
-      currentHubLayout = without;
-    } else {
-      const without = layout.filter((e) => e.id !== drag.id);
-      const folderEntry = without.find((e) => e.id === targetId);
-      if (!folderEntry) return;
-      folderEntry.projectIds.push(drag.id);
-      currentHubLayout = without;
+      openFolderEditor(null, [targetId, drag.id]);
+      return;
     }
-  } else {
-    // Reorder -- the same move works whether a project or a folder is
-    // the one being dragged.
-    const draggedEntry = layout.find((e) => e.id === drag.id);
-    const without = layout.filter((e) => e.id !== drag.id);
-    const targetIdx = without.findIndex((e) => e.id === targetId);
-    without.splice(drag.hoverZone === 'before' ? targetIdx : targetIdx + 1, 0, draggedEntry);
-    currentHubLayout = without;
+    await moveProjectsToFolder([drag.id], targetId);
+    showToast(`Moved to ${folderEntry(targetId).name}`);
+    return;
   }
 
-  await saveProjectLayout(currentHubLayout);
-  await renderProjectCards();
+  // Reorder within whatever's shown: the top level or the open folder.
+  const folder = openFolderId && folderEntry(openFolderId);
+  if (folder) {
+    const without = folder.projectIds.filter((id) => id !== drag.id);
+    const at = without.indexOf(targetId);
+    without.splice(drag.hoverZone === 'before' ? at : at + 1, 0, drag.id);
+    folder.projectIds = without;
+  } else {
+    const draggedEntry = layout.find((e) => e.id === drag.id);
+    const without = layout.filter((e) => e.id !== drag.id);
+    const at = without.findIndex((e) => e.id === targetId);
+    without.splice(drag.hoverZone === 'before' ? at : at + 1, 0, draggedEntry);
+    currentHubLayout = without;
+  }
+  await commitLayout();
 }
 
-// Reorder-mode's up/down buttons -- a plain array swap with a neighbour,
-// same top-level move finishDrag makes for a 'before'/'after' drop, just
-// driven by a tap instead of a drag gesture.
-async function moveHubEntry(id, direction) {
-  const layout = currentHubLayout;
-  const idx = layout.findIndex((e) => e.id === id);
-  if (idx === -1) return;
-  const swapWith = direction === 'up' ? idx - 1 : idx + 1;
-  if (swapWith < 0 || swapWith >= layout.length) return;
-  [layout[idx], layout[swapWith]] = [layout[swapWith], layout[idx]];
-  await saveProjectLayout(layout);
-  await renderProjectCards();
-}
-
-function hubDragPointerDown(e) {
-  if (hubReorderMode) return; // up/down buttons are driving the layout instead
-  if (e.button !== undefined && e.button !== 0) return; // left mouse only; touch/pen report undefined
-  if (e.target.closest('[data-favorite-id], [data-unfolder-id]')) return; // let those buttons work normally
-  const card = e.target.closest('.hub-card[data-drag-id]');
+function hubPointerDown(e) {
+  if (e.target.closest('[data-favorite-id], [data-menu-id]')) return; // let those buttons work normally
+  const card = e.target.closest('#hub-grid .hub-card[data-drag-id]');
   if (!card) return;
+  if (e.pointerType === 'touch') return hubTouchHold(e, card);
+  if (hubOrganizing) return; // taps pick cards instead
+  if (e.button !== 0) return; // left mouse only
 
-  // Touch needs a deliberate hold before anything counts as a drag -- pick
-  // it up too eagerly and a normal scroll swipe gets hijacked instead.
-  // Mouse (and pen) has no such conflict, so requiring the same hold there
-  // just made the drag never start: a mouse user presses and immediately
-  // starts moving in one motion, same as dragging anything else on a
-  // desktop, and that movement was being read as "not a drag, just a
-  // click" and cancelled before the hold timer ever got a chance to fire.
-  const isTouch = e.pointerType === 'touch';
-
-  const grid = $('#hub-grid');
   const pointerId = e.pointerId;
   const startX = e.clientX;
   const startY = e.clientY;
   let armed = false;
-  let scrolling = false;
-  let lastY = e.clientY;
-
-  // The browser decides how to handle a touch (scroll it, or hand it to
-  // us) the instant it starts, based on touch-action at that moment -- by
-  // the time our long-press timer fires below, a default touch-action
-  // has usually already let the browser claim it as a scroll (or, near
-  // the top of the page, a pull-to-refresh), and there's no taking it
-  // back after the fact. Taking touch-action away up front avoids that
-  // race, at the cost of no longer getting scrolling for free: if this
-  // pointer turns out to be a scroll and not a hold, onMove below
-  // forwards it manually instead.
-  if (isTouch) card.style.touchAction = 'none';
 
   function arm() {
-    if (armed) return;
     armed = true;
     hubDragSuppressClick = true;
-    grid.classList.add('dragging');
+    $('#hub-grid').classList.add('dragging');
     card.classList.add('drag-source');
     const rect = card.getBoundingClientRect();
     const ghost = card.cloneNode(true);
@@ -643,192 +877,55 @@ function hubDragPointerDown(e) {
     ghost.style.top = `${rect.top}px`;
     ghost.style.width = `${rect.width}px`;
     document.body.appendChild(ghost);
-    hubDrag = {
-      id: card.dataset.dragId,
-      type: card.dataset.dragType,
-      card,
-      ghost,
-      offsetX: startX - rect.left,
-      offsetY: startY - rect.top,
-      hoverEl: null,
-      hoverZone: null,
-    };
+    hubDrag = { id: card.dataset.dragId, type: card.dataset.dragType, card, ghost, offsetX: startX - rect.left, offsetY: startY - rect.top, hoverEl: null, hoverZone: null };
   }
-
-  const longPressTimer = isTouch ? setTimeout(arm, HUB_LONG_PRESS_MS) : null;
-
   function onMove(ev) {
     if (ev.pointerId !== pointerId) return;
-    if (scrolling) {
-      ev.preventDefault();
-      window.scrollBy(0, lastY - ev.clientY);
-      lastY = ev.clientY;
-      return;
-    }
     if (!armed) {
-      if (Math.hypot(ev.clientX - startX, ev.clientY - startY) <= HUB_MOVE_CANCEL_PX) return;
-      if (isTouch) {
-        // Moved before the hold armed it -- this was a scroll, not a
-        // drag. touch-action:none (above) means the browser won't do
-        // that scroll for us, so take over forwarding the rest of this
-        // same touch's movement to the page ourselves.
-        clearTimeout(longPressTimer);
-        card.style.touchAction = '';
-        scrolling = true;
-        lastY = ev.clientY;
-        ev.preventDefault();
-        window.scrollBy(0, startY - ev.clientY);
-        return;
-      }
-      arm(); // mouse/pen -- the movement itself is the go-ahead
+      if (Math.hypot(ev.clientX - startX, ev.clientY - startY) <= HUB_MOVE_ARM_PX) return;
+      arm();
     }
     ev.preventDefault();
     hubDrag.ghost.style.left = `${ev.clientX - hubDrag.offsetX}px`;
     hubDrag.ghost.style.top = `${ev.clientY - hubDrag.offsetY}px`;
     updateHoverTarget(ev.clientX, ev.clientY);
   }
-
   function onUp(ev) {
     if (ev.pointerId !== pointerId) return;
-    if (longPressTimer) clearTimeout(longPressTimer);
-    cleanup();
-    if (armed) finishDrag();
-  }
-
-  function cleanup() {
-    card.style.touchAction = '';
     window.removeEventListener('pointermove', onMove);
     window.removeEventListener('pointerup', onUp);
     window.removeEventListener('pointercancel', onUp);
+    if (armed) finishDrag();
   }
-
   window.addEventListener('pointermove', onMove, { passive: false });
   window.addEventListener('pointerup', onUp);
   window.addEventListener('pointercancel', onUp);
 }
 
-// ---------- Folder modal ----------
-
-let openFolderId = null;
-
-function currentFolderEntry(folderId) {
-  return (currentHubLayout || []).find((e) => e.type === 'folder' && e.id === folderId);
-}
-
-function renderFolderModalGrid() {
-  const folder = currentFolderEntry(openFolderId);
-  if (!folder) {
-    closeFolderModal();
-    return;
+// Touch: press and hold a card to start Organize with it picked. Moving
+// first (a scroll) or lifting early cancels it; the page scrolls normally.
+const HUB_HOLD_MS = 480;
+function hubTouchHold(e, card) {
+  if (hubOrganizing) return;
+  const startX = e.clientX, startY = e.clientY, pointerId = e.pointerId;
+  const timer = setTimeout(() => {
+    cleanup();
+    hubDragSuppressClick = true;
+    if (navigator.vibrate) { try { navigator.vibrate(15); } catch (err) { /* not supported */ } }
+    setOrganizing(true, card.dataset.dragId);
+  }, HUB_HOLD_MS);
+  function onMove(ev) {
+    if (ev.pointerId === pointerId && Math.hypot(ev.clientX - startX, ev.clientY - startY) > 10) cleanup();
   }
-  $('#folder-modal-title').textContent = folder.name;
-  $('#folder-modal-grid').innerHTML = folder.projectIds
-    .map((id) => currentProjectsById.get(id))
-    .filter(Boolean)
-    .map((p) => projectCardHtml(p, currentCountByProject, currentFavoriteSet, { unfolderable: true }))
-    .join('');
-  renderFolderBgControls(folder);
-}
-
-function setFolderBgType(type) {
-  $$('#folder-bg-type button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.bgType === type)));
-  $('#folder-bg-color-controls').hidden = type !== 'color';
-  $('#folder-bg-image-controls').hidden = type !== 'image';
-}
-$('#folder-bg-type').addEventListener('click', async (e) => {
-  const btn = e.target.closest('button');
-  if (!btn) return;
-  const folder = currentFolderEntry(openFolderId);
-  if (!folder) return;
-  const type = btn.dataset.bgType;
-  setFolderBgType(type);
-  if (type === 'none') {
-    folder.backgroundType = 'none';
-    folder.backgroundImage = null;
-    await saveProjectLayout(currentHubLayout);
-    await renderProjectCards();
-  } else if (type === 'color' && folder.backgroundType !== 'color') {
-    folder.backgroundType = 'color';
-    folder.backgroundColor = folder.backgroundColor || '#1c3d5a';
-    folder.backgroundImage = null;
-    await saveProjectLayout(currentHubLayout);
-    await renderProjectCards();
+  function cleanup() {
+    clearTimeout(timer);
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', cleanup);
+    window.removeEventListener('pointercancel', cleanup);
   }
-  // 'image' alone doesn't commit anything yet -- waits for an actual file.
-});
-
-function renderFolderBgControls(folder) {
-  const type = folder.backgroundType || 'none';
-  setFolderBgType(type);
-  $('#folder-bg-color').value = folder.backgroundColor || '#1c3d5a';
-}
-
-$('#folder-bg-color').addEventListener('change', async (e) => {
-  const folder = currentFolderEntry(openFolderId);
-  if (!folder) return;
-  folder.backgroundType = 'color';
-  folder.backgroundColor = e.target.value;
-  folder.backgroundImage = null;
-  await saveProjectLayout(currentHubLayout);
-  await renderProjectCards();
-});
-
-$('#folder-f-bg').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  e.target.value = '';
-  if (!file) return;
-  if (!/^image\//.test(file.type)) { alert('That file is not an image.'); return; }
-  const folder = currentFolderEntry(openFolderId);
-  if (!folder) return;
-  folder.backgroundType = 'image';
-  folder.backgroundImage = await capImageDimensions(await convertHeicIfNeeded(file));
-  await saveProjectLayout(currentHubLayout);
-  await renderProjectCards();
-});
-
-// `originEl` (the folder card that was tapped) is what lets the popup
-// visibly grow out of that exact card instead of just appearing --
-// --modal-dx/--modal-dy (see style.css) are the offset from the viewport
-// centre (where the flex-centred modal card naturally sits) to that
-// card's centre, so the opening transform starts right on top of it.
-function openFolderModal(folderId, originEl) {
-  openFolderId = folderId;
-  renderFolderModalGrid();
-  // Collapsed by default every time a folder is opened -- most opens are
-  // just to look at what's inside, not to re-theme it, so this is one
-  // more click rather than a segmented control everyone has to look past.
-  $('#folder-bg-controls').hidden = true;
-  $('#folder-bg-pencil').hidden = false;
-  const overlay = $('#folder-modal-overlay');
-  const card = $('.folder-modal-card', overlay);
-  if (originEl) {
-    const rect = originEl.getBoundingClientRect();
-    card.style.setProperty('--modal-dx', `${rect.left + rect.width / 2 - window.innerWidth / 2}px`);
-    card.style.setProperty('--modal-dy', `${rect.top + rect.height / 2 - window.innerHeight / 2}px`);
-  } else {
-    card.style.removeProperty('--modal-dx');
-    card.style.removeProperty('--modal-dy');
-  }
-  overlay.hidden = false;
-  // Force a layout flush so the browser registers the (offset, shrunk,
-  // transparent) starting state before the class flip below -- adding
-  // .modal-visible in the same tick as removing [hidden] would otherwise
-  // skip straight to the end state with no transition to animate through.
-  overlay.offsetHeight;
-  overlay.classList.add('modal-visible');
-}
-
-function closeFolderModal() {
-  const overlay = $('#folder-modal-overlay');
-  if (overlay.hidden) return;
-  overlay.classList.remove('modal-visible');
-  // transitionend is the clean path; the timeout is a fallback so the
-  // overlay can never get stuck invisible-but-still-blocking-clicks if a
-  // transition doesn't fire (reduced motion, a re-render racing it, etc).
-  const finish = () => { overlay.hidden = true; };
-  overlay.addEventListener('transitionend', finish, { once: true });
-  setTimeout(finish, 300);
-  openFolderId = null;
+  window.addEventListener('pointermove', onMove);
+  window.addEventListener('pointerup', cleanup);
+  window.addEventListener('pointercancel', cleanup);
 }
 
 function wireHubGridInteractions() {
@@ -841,11 +938,21 @@ function wireHubGridInteractions() {
       e.stopPropagation();
       return;
     }
-    const reorderBtn = e.target.closest('[data-reorder]');
-    if (reorderBtn) {
+    const card = e.target.closest('.hub-card[data-drag-id]');
+    if (hubOrganizing) {
+      if (!card) return;
+      e.preventDefault();
+      const id = card.dataset.dragId;
+      hubPicked = hubPicked.includes(id) ? hubPicked.filter((x) => x !== id) : hubPicked.concat(id);
+      await renderProjectCards();
+      return;
+    }
+    const menuBtn = e.target.closest('[data-menu-id]');
+    if (menuBtn) {
       e.preventDefault();
       e.stopPropagation();
-      if (!reorderBtn.disabled) await moveHubEntry(reorderBtn.dataset.reorderId, reorderBtn.dataset.reorder);
+      const id = menuBtn.dataset.menuId;
+      if (currentProjectsById.has(id)) openProjectMenu(id); else openFolderMenu(id);
       return;
     }
     const favBtn = e.target.closest('[data-favorite-id]');
@@ -857,90 +964,31 @@ function wireHubGridInteractions() {
       return;
     }
     const folderCard = e.target.closest('[data-open-folder]');
-    if (folderCard) openFolderModal(folderCard.dataset.openFolder, folderCard);
+    if (folderCard) openFolder(folderCard.dataset.openFolder);
   });
-
-  $('#btn-reorder-toggle').addEventListener('click', async () => {
-    hubReorderMode = !hubReorderMode;
-    const btn = $('#btn-reorder-toggle');
-    btn.setAttribute('aria-pressed', String(hubReorderMode));
-    btn.textContent = hubReorderMode ? 'Done' : 'Reorder';
-    await renderProjectCards();
+  grid.addEventListener('keydown', (e) => {
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[role="button"].hub-card')) {
+      e.preventDefault();
+      e.target.click();
+    }
   });
-
-  grid.addEventListener('pointerdown', hubDragPointerDown);
-  // Without this, a touch long-press on a project card (an <a> link)
-  // races our own long-press-to-drag timer against the browser's native
-  // "Open in new tab / Copy Link" callout -- CSS alone
-  // (-webkit-touch-callout/user-select, below) stops most of it, but
-  // Android Chrome still shows its own context menu unless the event
-  // itself is blocked here too.
+  grid.addEventListener('pointerdown', hubPointerDown);
+  // A long press on a card (a link) would otherwise race the browser's own
+  // "Open in new tab / Copy Link" menu on Android.
   grid.addEventListener('contextmenu', (e) => {
     if (e.target.closest('.hub-card[data-drag-id]')) e.preventDefault();
   });
 
-  $('#folder-modal-close').addEventListener('click', closeFolderModal);
-  $('#folder-modal-overlay').addEventListener('click', (e) => {
-    if (e.target.id === 'folder-modal-overlay') closeFolderModal();
+  // The section label row is redrawn on every render, so its buttons are
+  // handled here rather than wired one by one.
+  $('#proj-eyebrow').addEventListener('click', (e) => {
+    if (e.target.closest('#btn-organize')) setOrganizing(!hubOrganizing);
+    else if (e.target.closest('#crumb-back')) { openFolderId = null; hubPicked = []; renderProjectCards(); }
+    else if (e.target.closest('#btn-folder-settings')) openFolderEditor(openFolderId);
   });
-
-  $('#folder-bg-pencil').addEventListener('click', () => {
-    $('#folder-bg-controls').hidden = false;
-    $('#folder-bg-pencil').hidden = true;
-  });
-
-  $('#folder-modal-rename').addEventListener('click', async () => {
-    const folder = currentFolderEntry(openFolderId);
-    if (!folder) return;
-    const name = prompt('Rename folder:', folder.name);
-    if (!name || !name.trim()) return;
-    folder.name = name.trim();
-    await saveProjectLayout(currentHubLayout);
-    $('#folder-modal-title').textContent = folder.name;
-    await renderProjectCards();
-  });
-
-  $('#folder-modal-delete').addEventListener('click', async () => {
-    const folder = currentFolderEntry(openFolderId);
-    if (!folder) return;
-    if (!confirm(`Delete the "${folder.name}" folder? Its projects go back to the main list -- nothing is actually deleted.`)) return;
-    const idx = currentHubLayout.findIndex((e) => e.id === folder.id);
-    currentHubLayout.splice(idx, 1, ...folder.projectIds.map((id) => ({ type: 'project', id })));
-    await saveProjectLayout(currentHubLayout);
-    closeFolderModal();
-    await renderProjectCards();
-  });
-
-  $('#folder-modal-grid').addEventListener('click', async (e) => {
-    const favBtn = e.target.closest('[data-favorite-id]');
-    if (favBtn) {
-      e.preventDefault();
-      e.stopPropagation();
-      await toggleFavoriteProject(favBtn.dataset.favoriteId);
-      renderFolderModalGrid();
-      await renderProjectCards();
-      return;
-    }
-    const unfolderBtn = e.target.closest('[data-unfolder-id]');
-    if (!unfolderBtn) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const folder = currentFolderEntry(openFolderId);
-    if (!folder) return;
-    const pid = unfolderBtn.dataset.unfolderId;
-    folder.projectIds = folder.projectIds.filter((id) => id !== pid);
-    const folderIdx = currentHubLayout.findIndex((e2) => e2.id === folder.id);
-    if (folder.projectIds.length === 0) {
-      currentHubLayout.splice(folderIdx, 1);
-    } else if (folder.projectIds.length === 1) {
-      currentHubLayout.splice(folderIdx, 1, { type: 'project', id: folder.projectIds[0] });
-    }
-    currentHubLayout.push({ type: 'project', id: pid });
-    await saveProjectLayout(currentHubLayout);
-    const stillOpen = currentHubLayout.some((e2) => e2.id === folder.id);
-    if (stillOpen) renderFolderModalGrid();
-    else closeFolderModal();
-    await renderProjectCards();
+  wireOrganizeBar();
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && hubOrganizing && !sheetIsOpen()) setOrganizing(false);
   });
 }
 
@@ -960,7 +1008,7 @@ async function renderUnsavedDrafts() {
 
   $('#unsaved-drafts-list').innerHTML = visible.map((d) => {
     const project = projectById.get(d.projectId);
-    const reportLabel = `Report #${escapeHtml(String(d.data.reportNo ?? '?'))}${d.data.date ? ` (${escapeHtml(d.data.date)})` : ''}${project ? ` — ${escapeHtml(project.name)}` : ' (project no longer available)'}`;
+    const reportLabel = `Report #${escapeHtml(String(d.data.reportNo ?? '?'))}${d.data.date ? ` (${escapeHtml(d.data.date)})` : ''}${project ? `, ${escapeHtml(project.name)}` : ' (project no longer available)'}`;
     const finishBtn = project
       ? `<button type="button" class="btn-primary draft-finish" data-project="${d.projectId}" data-report="${d.reportId}">Finish Report</button>`
       : '';
@@ -989,59 +1037,98 @@ async function renderUnsavedDrafts() {
   });
 }
 
+// ---------- For people without the Manager Dashboard ----------
+//
+// Reports sent back to them, and how their week is going. Both computed from
+// what's already on this device.
+function isMyReport(r, uid, userName) {
+  if (r.createdByUid) return !!uid && r.createdByUid === uid;
+  return !!userName && r.createdBy === userName;
+}
+
+async function renderMyWork() {
+  const showDash = !$('#manager-dashboard-col').hidden;
+  const attnEl = $('#home-attention');
+  const weekEl = $('#home-week');
+  if (showDash) { attnEl.hidden = true; weekEl.hidden = true; return; }
+  const room = await getCompanyRoom();
+  const uid = currentAccountUid();
+  const userName = await getUserName();
+  const [projects, reports] = await Promise.all([getAllProjects(), getAllReports()]);
+  const byId = new Map(projects.filter((p) => projectInScope(p, room)).map((p) => [p.id, p]));
+  const mine = reports.filter((r) => byId.has(r.projectId) && !r.deleted && isMyReport(r, uid, userName));
+
+  const items = [];
+  mine.filter((r) => r.approvalStatus === 'changes_requested' || r.approvalStatus === 'unlocked').forEach((r) => {
+    const p = byId.get(r.projectId);
+    const note = (r.comments || []).slice().reverse().find((c) => c.author && c.author !== userName);
+    const what = r.approvalStatus === 'unlocked' ? 'Unlocked so you can make changes' : 'Changes requested';
+    items.push(`<div class="attn-item"><span class="ai-icon">${r.approvalStatus === 'unlocked' ? '&#128275;' : '&#8617;&#65039;'}</span>
+      <span class="ai-text">${what}: Report #${escapeHtml(String(r.reportNo ?? '?'))}, ${escapeHtml(p.name)}${note ? `<small>${escapeHtml(note.author)}: "${escapeHtml(note.text)}"</small>` : `<small>${escapeHtml(r.date || '')}</small>`}</span>
+      <a class="btn-secondary" href="report-editor.html?project=${r.projectId}&report=${r.id}">Fix Report</a></div>`);
+  });
+  attnEl.hidden = items.length === 0;
+  $('#home-attention-list').innerHTML = items.join('');
+
+  // Since Sunday, same as the Hours widget's "Current Week".
+  const weekStart = widgetRangeStart('week');
+  const filed = mine.filter((r) => r.date && r.date >= weekStart);
+  let hours = 0;
+  reports.filter((r) => byId.has(r.projectId) && !r.deleted && r.date && r.date >= weekStart).forEach((r) => {
+    reportInspectorHours(r).forEach((x) => { if (userName && x.name === userName) hours += x.hours; });
+  });
+  const today = todayIso();
+  const todays = mine.filter((r) => r.date === today);
+  weekEl.hidden = byId.size === 0;
+  $('#home-week-line').innerHTML = `
+    <span><b>${filed.length}</b> report${filed.length === 1 ? '' : 's'} filed</span>
+    <span><b>${Math.round(hours * 10) / 10}</b> hours logged</span>
+    <span>Today: <b>${todays.length ? `${todays.length} report${todays.length === 1 ? '' : 's'} saved` : 'no report saved yet'}</b></span>
+    <button type="button" class="btn-primary" id="btn-start-today">Start Today's Report</button>`;
+}
+
 // ---------- Manager Dashboard ----------
-// Admin-only, opt-in per company (see Company Management -- Manager
-// Dashboard toggle). Combined stats/charts across every INCLUDED project
-// (see getManagerDashboardConfig's excludedProjectIds) -- computed the same
-// way project.html computes its own per-project dashboard, reusing the
-// shared ring/stat-card/animation pieces in dashboard-widgets.js so both
-// dashboards look and behave identically.
+// For admins, and anyone given "Members can view the Manager Dashboard".
+// Combined figures across every INCLUDED project (see Included Projects),
+// computed the same way project.html computes its own, reusing the shared
+// ring/stat-card/animation pieces in dashboard-widgets.js. Laid out as
+// widgets each person can arrange (dashboard-layout.js).
 
-let mdScopedProjects = []; // every project this device can see, for the checklist
+let mdScopedProjects = []; // every project this device can see, for the Included Projects list
 let mdExcluded = new Set();
+let mdData = null; // { included, reports, projectStats } from the last load
+let mdBoard = null;
+let mdFocusProjectId = null; // a project picked out on the progress chart
+let mdCalendarMonth = null; // the month the calendar was last showing
 
-function mdScheduleStatus(project, overall, today) {
-  const ntpDate = (project.meta || {}).ntpDate;
-  const contractLength = parseInt((project.meta || {}).contractLength, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(ntpDate || '') || !Number.isFinite(contractLength) || contractLength <= 0 || overall == null) return null;
-  const daysSinceNtp = daysBetween(ntpDate, today);
-  if (!Number.isFinite(daysSinceNtp)) return null;
-  const timeFrac = daysSinceNtp / contractLength;
-  // Same 3-tier judgement as project.html's own Schedule Used ring.
-  if (overall + 0.05 >= timeFrac) return 'ok';
-  if (overall + 0.2 >= timeFrac) return 'warn';
-  return 'danger';
+function mdScheduleStatus(project, overall) {
+  return scheduleStatusFor(overall, projectContractTimeline(project));
+}
+
+// One color per project, shared by the progress chart and the calendar, so
+// the same project is always the same color on both -- indexed by position
+// in the *full* included list, not whatever subset one widget works from.
+function mdProjectColor(project, included) {
+  const i = included.findIndex((p) => p.id === project.id);
+  return TREND_LINE_COLORS[(i < 0 ? 0 : i) % TREND_LINE_COLORS.length];
 }
 
 async function renderManagerDashboard() {
   const room = await getCompanyRoom();
   const col = $('#manager-dashboard-col');
-  if (!room) { col.hidden = true; return; }
-  // Admin always sees it (companyCan short-circuits true for an admin room
-  // regardless of the permission's actual value); anyone else needs the
-  // "Members can view the Manager Dashboard" permission granted in Company
-  // Management, same as every other member permission.
-  if (!(await companyCan('viewManagerDashboard'))) { col.hidden = true; return; }
-  col.hidden = false;
-  let rememberedExpanded = false;
-  try {
-    rememberedExpanded = !!localStorage.getItem(MD_MOBILE_EXPANDED_KEY);
-  } catch (e) {}
-  setMdMobileExpanded(rememberedExpanded);
+  // Admin always sees it (companyCan short-circuits true for an admin room);
+  // anyone else needs the "Members can view the Manager Dashboard" permission.
+  const show = !!room && (await companyCan('viewManagerDashboard'));
+  col.hidden = !show;
+  $('#home-split').classList.toggle('has-dash', show);
+  document.body.classList.toggle('has-dash', show);
+  if (!show) return;
 
-  // Anyone who can see the dashboard (the companyCan check above -- admin
-  // or a member with the permission granted) can also curate their own
-  // view of it; #md-manage-btn has no separate visibility gate of its own.
-
-  // Per-person, not shared -- getManagerDashboardExcludedProjectIds
-  // returns null the first time this person sees the dashboard (never
-  // customized), in which case the old shared company-wide list (whatever
-  // an admin had already curated before this became per-person) is their
-  // starting point, same idea as getProjectLayout's own null fallback.
+  // Per person. null the first time this person sees the dashboard, in which
+  // case the old shared company-wide list is their starting point.
   let excludedProjectIds = await getManagerDashboardExcludedProjectIds();
-  // Offline (or the read fails), nothing is left out for now rather than
-  // the whole dashboard failing to show; the company list is tried again
-  // next time, since nothing here saves.
+  // Offline (or the read fails), nothing is left out for now rather than the
+  // whole dashboard failing to show.
   if (excludedProjectIds === null) {
     excludedProjectIds = (await getManagerDashboardConfig().catch(() => ({}))).excludedProjectIds || [];
   }
@@ -1049,83 +1136,162 @@ async function renderManagerDashboard() {
   const [allProjects, allReports] = await Promise.all([getAllProjects(), getAllReports()]);
   mdScopedProjects = allProjects.filter((p) => projectInScope(p, room));
   mdExcluded = new Set(excludedProjectIds);
-  renderMdChecklist();
-
   const included = mdScopedProjects.filter((p) => !mdExcluded.has(p.id));
   const includedIds = new Set(included.map((p) => p.id));
-  const reports = allReports.filter((r) => includedIds.has(r.projectId));
+  const reports = allReports.filter((r) => includedIds.has(r.projectId) && !r.deleted);
 
-  $('#md-empty').hidden = included.length > 0;
-  $('#md-content').hidden = included.length === 0;
-  $('#md-overview-step').hidden = included.length === 0;
-  if (included.length === 0) { $('#md-stats').innerHTML = ''; return; }
-
-  const today = todayIso();
   // Same pay-item math as project.html's own dashboard, computed once per
-  // included project and shared by the stat cards and the ahead/behind
-  // list below rather than redone twice.
+  // included project and shared by every widget that needs it.
   const projectStats = included.map((project) => {
     const projReports = reports.filter((r) => r.projectId === project.id);
     const flatItems = effectivePayItemFlatEntries(projReports, project.billingEstimates);
     const items = fullPayItemCatalogOverview(flatItems, project.payItemCatalog || []);
     const overall = overallPercentComplete(items);
     const { totalContract, totalEarned } = contractValueSummary(items);
-    return { project, overall, totalContract, totalEarned, status: mdScheduleStatus(project, overall, today) };
+    return { project, overall, totalContract, totalEarned, status: mdScheduleStatus(project, overall) };
   });
 
-  renderMdStats(projectStats, reports);
-  renderMdTrendChart(projectStats, included, reports, today);
-  renderMdCalendar(included, reports);
-  renderMdHoursBars(reports);
-  renderMdProjectStatus(projectStats);
-  renderMdFeed(reports);
+  const [canReports, canPayApps, managedIds] = await Promise.all([companyCan('approveReports'), companyCan('approvePayApps'), getManagedProjectIds()]);
+  mdData = { included, reports, projectStats, allReports, canReports, canPayApps, managedIds: new Set(managedIds) };
+  $('#md-included-btn').textContent = mdExcluded.size ? `Included Projects (${included.length} of ${mdScopedProjects.length})` : 'Included Projects';
+  $('#md-empty').hidden = included.length > 0;
 
-  setupCollapsibleSteps($('#manager-dashboard-col'));
-  fitDashboardValues();
-  animateDashboardFills();
-}
-
-function renderMdChecklist() {
-  $('#md-project-checks').innerHTML = mdScopedProjects.map((p) => `
-    <label class="md-check-row">
-      <input type="checkbox" data-md-project="${p.id}"${mdExcluded.has(p.id) ? '' : ' checked'}>
-      <span>${escapeHtml(p.name)}</span>
-    </label>`).join('');
-
-  $$('[data-md-project]', $('#md-project-checks')).forEach((cb) => {
-    cb.addEventListener('change', async () => {
-      const id = cb.dataset.mdProject;
-      const nextExcluded = new Set(mdExcluded);
-      if (cb.checked) nextExcluded.delete(id); else nextExcluded.add(id);
-      cb.disabled = true;
-      try {
-        await saveManagerDashboardExcludedProjectIds([...nextExcluded]);
-        await renderManagerDashboard();
-      } catch (err) {
-        console.error(err);
-        cb.checked = !cb.checked; // revert
-        alert(userError("Couldn't save that: " + err.message, 'MANAGER_DASHBOARD_PROJECTS'));
-        cb.disabled = false;
-      }
+  if (!mdBoard) {
+    mdBoard = createWidgetBoard({
+      board: 'home',
+      container: $('#md-widgets'),
+      editBtn: $('#md-edit-btn'),
+      banner: $('#md-edit-banner'),
+      addBtn: $('#md-add-btn'),
+      resetBtn: $('#md-reset-btn'),
+      doneBtn: $('#md-done-btn'),
+      types: MD_WIDGETS,
+      defaults: () => [
+        { type: 'attention', size: 'full' },
+        { type: 'overview', size: 'full' },
+        { type: 'calendar', size: 'half' },
+        { type: 'trend', size: 'half' },
+        { type: 'hours', size: 'half', config: { range: '30' } },
+        { type: 'feed', size: 'half' },
+      ],
+      customBuilder: openMdWidgetBuilder,
+      onRendered: () => { fitDashboardValues(); animateDashboardFills(); },
     });
+    await mdBoard.load();
+  }
+  mdBoard.render();
+}
+
+// ----- Widgets -----
+
+const MD_WIDGETS = {
+  attention: {
+    tag: 'TO DO', title: 'Needs Attention', icon: '\u{1F514}', size: 'full',
+    desc: 'Reports and Pay Apps waiting for approval, projects with no recent report, and projects behind schedule.',
+    render: () => mdAttentionHtml(),
+  },
+  overview: {
+    tag: 'OVERVIEW', title: 'Portfolio', icon: '\u{1F4CA}', size: 'full',
+    desc: 'Contract value earned, active projects, reports this week, projects behind, earned to date.',
+    render: () => (mdData.included.length ? mdStatsHtml() : '<p class="hint" style="margin:0;">No projects included.</p>'),
+  },
+  calendar: {
+    tag: 'CALENDAR', title: 'Report Activity', icon: '\u{1F4C5}', size: 'half',
+    desc: 'Every report on a month calendar, one label per project. Tap a day for its reports.',
+    render: (body) => mdRenderCalendar(body),
+  },
+  trend: {
+    tag: 'TREND', title: 'Progress vs. Contract Time', icon: '\u{1F4C8}', size: 'half',
+    desc: 'Each project’s percent complete against how much of its contract time is used, with Pay App stars.',
+    render: () => mdPaceChartHtml(),
+  },
+  hours: {
+    tag: 'TEAM', title: 'Hours per Employee', icon: '⏱️', size: 'half',
+    desc: 'Hours logged by each inspector, for a range you pick.',
+    render: (body, w) => mdHoursHtml(w),
+  },
+  status: {
+    tag: 'STATUS', title: 'Projects: Ahead / Behind', icon: '\u{1F6A6}', size: 'half',
+    desc: 'Every project with an NTP Date and contract length, marked on pace, slightly behind or behind.',
+    render: () => mdStatusHtml(),
+  },
+  feed: {
+    tag: 'ACTIVITY', title: 'Recent Reports', icon: '\u{1F4C4}', size: 'half',
+    desc: 'The latest reports filed, newest first.',
+    render: () => mdFeedHtml(),
+  },
+  deadlines: {
+    tag: 'SCHEDULE', title: 'Contract Deadlines', icon: '⏳', size: 'half',
+    desc: 'Each project’s contract completion date and the days left, soonest first.',
+    render: () => mdDeadlinesHtml(),
+  },
+  weather: {
+    tag: 'WEATHER', title: 'Weather Days', icon: '\u{1F327}️', size: 'half',
+    desc: 'Days with weather-flagged reports in the last 30 days, by project.',
+    render: () => mdWeatherHtml(),
+  },
+  payapps: {
+    tag: 'PAY APPS', title: 'Latest Pay Apps', icon: '\u{1F4B5}', size: 'half',
+    desc: 'Each project’s most recent Pay App and its approval status.',
+    render: () => mdPayAppsHtml(),
+  },
+  custom: {
+    tag: 'CUSTOM', title: 'Your Widget', icon: '\u{1F6E0}️', size: 'half',
+    desc: 'Pick what to count, the time range, the projects and how to show it.',
+    render: (body, w) => mdCustomHtml(w.config || {}),
+  },
+};
+
+function mdAttentionHtml() {
+  const { included, reports, projectStats, canReports, canPayApps, managedIds } = mdData;
+  const items = [];
+  const item = (icon, text, sub, href, btn) => `<div class="attn-item"><span class="ai-icon">${icon}</span><span class="ai-text">${text}${sub ? `<small>${sub}</small>` : ''}</span><a class="btn-secondary" href="${href}">${btn}</a></div>`;
+  // Approvals only count projects this person manages, same as the Manager page.
+  const managed = (id) => managedIds.has(id);
+  if ((canReports || canPayApps) && managedIds.size === 0) {
+    items.push(item('&#128221;', 'Choose the projects you manage', 'Their reports and Pay Apps then come to you for approval.', 'manager.html', 'Choose'));
+  }
+  if (canReports) {
+    const waiting = reports.filter((r) => managed(r.projectId) && (!r.approvalStatus || r.approvalStatus === 'pending'));
+    if (waiting.length) {
+      const names = [...new Set(waiting.map((r) => (included.find((p) => p.id === r.projectId) || {}).name))].slice(0, 3);
+      items.push(item('&#9989;', `${waiting.length} report${waiting.length === 1 ? '' : 's'} waiting for your approval`, escapeHtml(names.join(', ')), 'manager.html', 'Review'));
+    }
+    const asks = reports.filter((r) => managed(r.projectId) && r.approvalStatus === 'approved' && r.unlockRequest);
+    if (asks.length) items.push(item('&#128275;', `${asks.length} request${asks.length === 1 ? '' : 's'} to unlock an approved report`, '', 'manager.html', 'Review'));
+  }
+  if (canPayApps) {
+    const pending = [];
+    included.filter((p) => managed(p.id)).forEach((p) => (p.billingEstimates || []).forEach((e) => { if (!e.approvalStatus || e.approvalStatus === 'pending') pending.push({ p, e }); }));
+    if (pending.length) {
+      items.push(item('&#128178;', `${pending.length} Pay App${pending.length === 1 ? '' : 's'} waiting for approval`, escapeHtml(pending.slice(0, 3).map(({ p, e }) => `${p.name} #${e.estimateNo}`).join(', ')), 'manager.html', 'Review'));
+    }
+  }
+  // Quiet projects: had a report in the last 30 days, but none in 3+
+  // workdays. Projects that finished or haven't started don't nag.
+  const monthAgo = widgetRangeStart('30');
+  included.forEach((p) => {
+    const dates = reports.filter((r) => r.projectId === p.id && r.date).map((r) => r.date).sort();
+    const last = dates[dates.length - 1];
+    if (!last || last < monthAgo) return;
+    const gap = workdaysSince(last);
+    if (gap >= 3) items.push(item('&#9200;', `No report from ${escapeHtml(p.name)} in ${gap} workdays`, `Last report ${escapeHtml(shortDateLabel(last))}`, `project.html?id=${p.id}`, 'Open Project'));
   });
+  const behind = projectStats.filter((s) => s.status === 'danger');
+  if (behind.length) {
+    items.push(`<div class="attn-item"><span class="ai-icon">&#128201;</span><span class="ai-text">${behind.length} project${behind.length === 1 ? ' is' : 's are'} behind schedule<small>${escapeHtml(behind.map((s) => s.project.name).join(', '))}</small></span>${mdBoard && mdBoard.has('trend') ? '<button type="button" class="btn-secondary" data-md-goto="trend">See Chart</button>' : ''}</div>`);
+  }
+  return items.length ? `<div class="attn-grid">${items.join('')}</div>` : '<p class="attn-empty">Nothing needs your attention right now.</p>';
 }
 
-function mdWeekAgoIso() {
-  const d = new Date();
-  d.setDate(d.getDate() - 6);
-  return d.toISOString().slice(0, 10);
-}
-
-function renderMdStats(projectStats, reports) {
-  const dated = reports.filter((r) => r.date);
-  const weekAgo = mdWeekAgoIso();
-  const reportsThisWeek = dated.filter((r) => r.date >= weekAgo).length;
+function mdStatsHtml() {
+  const { projectStats, reports } = mdData;
+  const weekAgo = widgetRangeStart('7');
+  const reportsThisWeek = reports.filter((r) => r.date && r.date >= weekAgo).length;
 
   let aheadOnPace = 0, slightlyBehind = 0, behind = 0, classified = 0;
   let totalContractSum = 0, hasContract = false;
   let totalEarnedSum = 0, hasEarned = false;
-
   projectStats.forEach(({ totalContract, totalEarned, status }) => {
     if (totalContract != null) { totalContractSum += totalContract; hasContract = true; }
     if (totalEarned != null) { totalEarnedSum += totalEarned; hasEarned = true; }
@@ -1134,105 +1300,35 @@ function renderMdStats(projectStats, reports) {
     else if (status === 'danger') behind++;
     if (status) classified++;
   });
-
   const portfolioPct = hasContract && hasEarned && totalContractSum > 0 ? totalEarnedSum / totalContractSum : null;
 
-  const ringsRow = dashGridRow([
+  const cards = [
     portfolioPct != null ? ringCardHtml(
       portfolioPct, '% of Contract Value Earned', 'Included projects, combined',
       'Earned to date divided by total contract value, across every included project. A dollar-based figure (includes Lump Sum items) -- not the same measure as a project\'s own Estimated Pay Item Usage, which is quantity-based and excludes Lump Sum.'
     ) : '',
-  ]);
-
-  // Kept visually separate (its own always-full-width row) rather than a
-  // tile in the grid below, same reasoning as project.html's own dashboard.
-  const contractRow = hasContract
-    ? `<div class="dash-contract-row" data-tip="Sum of Total Contract Value across included projects." tabindex="0">
-        <span class="dc-label">Total Contract Value</span>
-        <span class="dc-value">${escapeHtml(fmtMoney(totalContractSum))}</span>
-      </div>`
-    : '';
-
-  const tilesRow = dashGridRow([
     statCard(projectStats.length, 'Active Projects', mdExcluded.size ? `${mdExcluded.size} excluded from this view` : '', 'Projects currently included in this dashboard.', null, 'int'),
     statCard(reportsThisWeek, 'Reports This Week', '', 'Dated reports in the last 7 days, across included projects.', null, 'int'),
     classified > 0 ? statCard(
-      behind, 'Projects Behind Schedule',
-      `${aheadOnPace} ahead/on pace · ${slightlyBehind} slightly behind`,
+      behind, 'Projects Behind Schedule', `${aheadOnPace} ahead/on pace · ${slightlyBehind} slightly behind`,
       'More of the contract\'s days have elapsed than work completed, by more than 20%. Only counts projects with an NTP Date, Total Contract Length, and at least one priced pay item.',
       null, 'int'
     ) : '',
     hasEarned ? statCard(
-      totalEarnedSum, 'Earned to Date',
-      portfolioPct != null ? `${(portfolioPct * 100).toFixed(1)}% of contract value` : '',
-      'Sum of Earned to Date across included projects.',
-      portfolioPct, 'money'
+      totalEarnedSum, 'Earned to Date', hasContract ? `of ${fmtMoney(totalContractSum)} contract value` : '',
+      'Sum of Earned to Date across included projects.', portfolioPct, 'money'
     ) : '',
-  ]);
-
-  $('#md-stats').innerHTML = ringsRow + contractRow + tilesRow;
+  ].filter(Boolean);
+  return `<div class="overview-row">${cards.join('')}</div>`;
 }
 
-// One color per project, shared by the Trend chart and the Calendar below
-// it, so the same project is always the same color on both -- indexed by
-// position in the *full* included list, not whatever filtered subset a
-// given widget happens to work from (the Trend chart only plots projects
-// with an NTP Date, so indexing off its own filtered array would shift
-// every color after the first project missing one, out of sync with the
-// Calendar's own colors for those same projects).
-function mdProjectColor(project, included) {
-  const i = included.findIndex((p) => p.id === project.id);
-  return TREND_LINE_COLORS[(i < 0 ? 0 : i) % TREND_LINE_COLORS.length];
-}
-
-// One line per included project, each its own color -- each project's
-// progressOverTime points are already its own quantity-weighted percent
-// complete (same math as project.html's own trend chart), so unlike a
-// combined portfolio figure, these don't need to be blended through dollar
-// value first to make sense side by side -- every line just is that
-// project's own real progress. Positioned by days since each project's own
-// NTP Date rather than the calendar, and normalized to that project's own
-// elapsed range (day 0 = NTP, .maxDay = today) rather than one range shared
-// across every project -- otherwise a project running far longer than the
-// rest would set the scale and squash everyone else's whole history into a
-// sliver near the left edge. A project with no NTP Date on file has no
-// day-0 to anchor to, so it's left out of this chart (it still counts
-// everywhere else on the dashboard).
-function renderMdTrendChart(projectStats, included, reports, today) {
-  const step = $('#md-trend-step');
-  const withNtp = included.filter((project) => /^\d{4}-\d{2}-\d{2}$/.test((project.meta || {}).ntpDate || ''));
-  const series = withNtp.map((project) => {
-    const ntpDate = project.meta.ntpDate;
-    const points = progressOverTime(reports.filter((r) => r.projectId === project.id && r.date), project.payItemCatalog || [], project.billingEstimates)
-      .map((p) => ({ ...p, day: Math.max(0, daysBetween(ntpDate, p.date)) }));
-    // The line should always reach all the way back to NTP (day 0, 0%
-    // complete) even when the earliest dated report came well after it --
-    // nothing done yet as of NTP is a safe assumption, and without this the
-    // line would start wherever the first report happened to land instead.
-    if (points.length && points[0].day > 0) {
-      points.unshift({ date: ntpDate, day: 0, pct: 0, earned: 0, synthetic: true });
-    }
-    return { label: project.name, color: mdProjectColor(project, included), points, maxDay: daysBetween(ntpDate, today) };
-  }).filter((s) => s.points.length > 0);
-
-  step.hidden = series.length === 0;
-  if (series.length === 0) return;
-
-  $('#md-trend-hint').hidden = series.some((s) => s.points.length > 1);
-  renderTrendSvg($('#md-trend-chart'), series, { h: 150, xAxis: 'daysSinceStart' });
-}
-
-// ---------- Manager Dashboard calendar ----------
+// ----- Report Activity calendar -----
 //
-// Portfolio-wide version of project.html's own weather calendar: same grid
-// (reuses its .wcal-month/.wcal-weekdays/.wcal-grid/.wcal-day CSS directly),
-// same click-a-day-for-detail model, but one cell can hold a report from
-// more than one project, so each gets its own color pill instead of a
-// weather/activity icon. State is stashed on these module-level vars rather
-// than threaded through as click-handler arguments, since the delegated
-// listener (wired once, below) fires long after this function returns.
+// Portfolio-wide version of project.html's weather calendar: same grid
+// (.wcal-* CSS), same click-a-day-for-detail model, but one cell can hold a
+// report from more than one project, so each gets its own color pill.
 const MDCAL_WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-const MDCAL_MAX_PILLS = 4; // beyond this a cell shows "+N more" rather than growing the cell indefinitely -- text chips take real room, unlike the plain dots this started as
+const MDCAL_MAX_PILLS = 4; // beyond this a cell shows "+N more" rather than growing the cell indefinitely
 let mdCalendarByDate = new Map(); // date -> Map(projectId -> report)
 let mdCalendarProjectById = new Map();
 let mdCalendarColorByProjectId = new Map();
@@ -1242,48 +1338,41 @@ function mdReportHasPhotos(r) {
 }
 
 // Project names run long ("PR#214 - GNOEC - Safety Bay Incident Ahead
-// Signs") and a pill has maybe 90px to work with -- most of this app's real
-// project names put the short, recognizable part (a PO/contract number, or
-// a short site name) before the first " - ", so that's what shows on the
-// pill itself; the full name is still the pill's title tooltip and is
-// spelled out in full in the legend and the day-detail modal.
+// Signs"), so a pill shows the short part before the first " - "; the full
+// name is the pill's tooltip and is spelled out in the legend and day detail.
 function mdShortProjectLabel(name) {
   const first = (name || '').split(' - ')[0].trim() || name || '';
   return first.length > 20 ? first.slice(0, 19) + '…' : first;
 }
 
-function renderMdCalendar(included, reports) {
-  const step = $('#md-calendar-step');
+function mdRenderCalendar(body) {
+  const { included, reports } = mdData;
   const dated = reports.filter((r) => r.date);
-  step.hidden = dated.length === 0;
-  if (dated.length === 0) return;
-
-  // mdProjectColor is the same lookup the Trend chart above uses, so a
-  // project already plotted there keeps the exact same color here.
+  if (!dated.length) { body.innerHTML = '<p class="hint" style="margin:0;">No dated reports yet.</p>'; return; }
   mdCalendarColorByProjectId = new Map(included.map((p) => [p.id, mdProjectColor(p, included)]));
   mdCalendarProjectById = new Map(included.map((p) => [p.id, p]));
-
-  $('#md-cal-legend').innerHTML = included.map((p) => `
-    <span class="mdcal-legend-item"><span class="mdcal-legend-swatch" style="background:${mdCalendarColorByProjectId.get(p.id)}"></span>${escapeHtml(p.name)}</span>`).join('');
-
   mdCalendarByDate = new Map();
   dated.forEach((r) => {
     if (!mdCalendarByDate.has(r.date)) mdCalendarByDate.set(r.date, new Map());
     const dayMap = mdCalendarByDate.get(r.date);
     if (!dayMap.has(r.projectId)) dayMap.set(r.projectId, r); // first report found wins -- same project shouldn't file twice in a day
   });
-
+  body.innerHTML = `
+    <div class="weather-calendar" id="md-calendar"></div>
+    <div class="mdcal-legend">${included.map((p) => `<span class="mdcal-legend-item"><span class="mdcal-legend-swatch" style="background:${mdCalendarColorByProjectId.get(p.id)}"></span>${escapeHtml(p.name)}</span>`).join('')}</div>`;
+  const cal = body.querySelector('#md-calendar');
+  if (mdCalendarMonth) cal.dataset.month = mdCalendarMonth; // keep the month someone paged to across redraws
   const months = [...new Set(dated.map((r) => r.date.slice(0, 7)))].sort();
-  renderMonthPager($('#md-calendar'), {
+  renderMonthPager(cal, {
     firstMonth: months[0],
     lastMonth: [months[months.length - 1], todayIso().slice(0, 7)].sort().pop(),
     renderMonth: mdCalendarMonthHtml,
   });
 }
 
-// One month's weekday row + day grid for the Report Activity calendar
-// (renderMonthPager in dashboard-widgets.js shows one month at a time).
+// One month's weekday row + day grid (renderMonthPager shows one at a time).
 function mdCalendarMonthHtml(mk) {
+  mdCalendarMonth = mk;
   const [y, m] = mk.split('-').map(Number);
   const first = new Date(y, m - 1, 1);
   const daysInMonth = new Date(y, m, 0).getDate();
@@ -1299,12 +1388,10 @@ function mdCalendarMonthHtml(mk) {
     const projectIds = [...dayMap.keys()];
     const shown = projectIds.slice(0, MDCAL_MAX_PILLS);
     const extra = projectIds.length - shown.length;
-    const pills = shown
-      .map((pid) => {
-        const project = mdCalendarProjectById.get(pid);
-        return `<span class="mdcal-pill" style="background:${mdCalendarColorByProjectId.get(pid)}" title="${escapeHtml(project ? project.name : '')}">${escapeHtml(mdShortProjectLabel(project ? project.name : ''))}</span>`;
-      })
-      .join('') + (extra > 0 ? `<span class="mdcal-pill-more">+${extra} more</span>` : '');
+    const pills = shown.map((pid) => {
+      const project = mdCalendarProjectById.get(pid);
+      return `<span class="mdcal-pill" style="background:${mdCalendarColorByProjectId.get(pid)}" title="${escapeAttr(project ? project.name : '')}">${escapeHtml(mdShortProjectLabel(project ? project.name : ''))}</span>`;
+    }).join('') + (extra > 0 ? `<span class="mdcal-pill-more">+${extra} more</span>` : '');
     cells.push(`
       <div class="wcal-day wcal-clickable" tabindex="0" data-date="${iso}" data-cal-date="${iso}">
         <span class="wcal-day-num">${d}</span>
@@ -1328,13 +1415,12 @@ function openMdDayDetailModal(date) {
   $('#mddm-body').innerHTML = [...dayMap.entries()].map(([projectId, r]) => {
     const project = mdCalendarProjectById.get(projectId);
     const color = mdCalendarColorByProjectId.get(projectId);
-
     let body;
     if (isNoWorkDayReport(r) || isWeatherDayReport(r)) {
       body = `<div class="ddm-badge">${isNoWorkDayReport(r) ? '&#128683; No Work Day' : '&#9925; Weather Day'}</div>`;
     } else {
       const isAttention = r.trafficControlSelect === 'ATTENTION_REQUIRED';
-      const temps = (r.tempHigh || r.tempLow) ? `${r.tempHigh || '—'}°/${r.tempLow || '—'}°F` : '';
+      const temps = (r.tempHigh || r.tempLow) ? `${r.tempHigh || '--'}°/${r.tempLow || '--'}°F` : '';
       const activity = (r.activity || '').trim();
       const activityText = reportActivityText(r); // falls back to Work Summary's first line when Activity is blank
       body = [
@@ -1344,7 +1430,6 @@ function openMdDayDetailModal(date) {
         mdDayDetailRow('Hours', r.hours),
       ].filter(Boolean).join('') || '<p class="hint" style="margin:0;">Nothing logged beyond the report itself.</p>';
     }
-
     return `
       <div class="mddm-block">
         <div class="mddm-block-header"><span class="mdcal-legend-swatch" style="background:${color}"></span>${escapeHtml(project ? project.name : 'Unknown project')}</div>
@@ -1359,172 +1444,306 @@ function openMdDayDetailModal(date) {
   }).join('<hr class="mddm-sep">');
   $('#md-day-detail-overlay').hidden = false;
 }
-$('#md-calendar').addEventListener('click', (e) => {
-  const cell = e.target.closest('.wcal-clickable[data-cal-date]');
-  if (cell) openMdDayDetailModal(cell.dataset.calDate);
-});
-$('#md-calendar').addEventListener('keydown', (e) => {
-  if (e.key !== 'Enter' && e.key !== ' ') return;
-  const cell = e.target.closest('.wcal-clickable[data-cal-date]');
-  if (!cell) return;
-  e.preventDefault();
-  openMdDayDetailModal(cell.dataset.calDate);
-});
-$('#mddm-close').addEventListener('click', () => { $('#md-day-detail-overlay').hidden = true; });
-$('#md-day-detail-overlay').addEventListener('click', (e) => {
-  if (e.target === $('#md-day-detail-overlay')) $('#md-day-detail-overlay').hidden = true;
-});
 
-let mdHoursReports = []; // last reports renderMdHoursBars saw -- so the range picker can re-render without a re-fetch
-let mdHoursRange = '30'; // 'total' | '30' | '7' | 'week'
-
-// null (Total) means no cutoff at all. 'week' is since the most recent
-// Sunday, not a rolling 7 days -- getDay() is 0 on Sunday, so subtracting
-// today's own getDay() always lands on that week's Sunday (today itself,
-// if today IS Sunday).
-function mdHoursCutoffIso(range) {
-  const now = new Date();
-  if (range === 'total') return null;
-  if (range === 'week') {
-    const sunday = new Date(now);
-    sunday.setDate(now.getDate() - now.getDay());
-    return sunday.toISOString().slice(0, 10);
-  }
-  const cutoff = new Date(now);
-  cutoff.setDate(cutoff.getDate() - (range === '7' ? 7 : 30));
-  return cutoff.toISOString().slice(0, 10);
+// ----- Progress vs. Contract Time -----
+//
+// Each included project's own percent complete (progressOverTime -- the
+// same math as its project page) against how much of its contract time had
+// passed at that point, so ahead and behind read straight off the on-pace
+// diagonal. Projects without an NTP Date and Total Contract Length aren't
+// plotted; they still count everywhere else.
+function mdPaceSeries() {
+  const { included, reports } = mdData;
+  return included.map((project) => {
+    const tl = projectContractTimeline(project);
+    if (!tl) return null;
+    const dated = reports.filter((r) => r.projectId === project.id && r.date);
+    const points = progressOverTime(dated, project.payItemCatalog || [], project.billingEstimates)
+      .filter((p) => p.pct != null)
+      .map((p) => ({ date: p.date, pct: p.pct, payApp: p.payApp, frac: Math.max(0, daysBetween(tl.ntp, p.date)) / tl.length }));
+    if (!points.length) return null;
+    // The line starts at NTP (0%) even when the first report came later.
+    if (points[0].frac > 0) points.unshift({ date: tl.ntp, pct: 0, frac: 0 });
+    return { id: project.id, label: project.name, color: mdProjectColor(project, included), points };
+  }).filter(Boolean);
 }
 
-function renderMdHoursBars(reports) {
-  mdHoursReports = reports;
-  const cutoffIso = mdHoursCutoffIso(mdHoursRange);
+function mdPaceChartHtml() {
+  const series = mdPaceSeries();
+  if (!series.length) return '<p class="hint" style="margin:0;">No included project has an NTP Date, Total Contract Length and pay item progress on file yet.</p>';
+  const focus = series.find((s) => s.id === mdFocusProjectId);
+  return paceChartSvg(series, { focusLabel: focus ? focus.label : null })
+    + `<div class="lg-row">${series.map((s) => `<button type="button" class="lg-chip${focus && focus.id !== s.id ? ' dim' : ''}" data-md-focus="${s.id}" aria-pressed="${!!focus && focus.id === s.id}"><span class="dot" style="background:${s.color}"></span>${escapeHtml(s.label)}</button>`).join('')}</div>`
+    + `<div class="trend-legend" style="margin-top:0.4rem;">${PACE_STAR_KEY}<span class="trend-legend-item">Above the dashed line is ahead of pace, below is behind. Tap a project to pick it out.</span></div>`;
+}
 
+// ----- Hours per Employee -----
+function mdHoursHtml(w) {
+  const range = (w.config && w.config.range) || '30';
+  const from = range === 'total' ? '' : widgetRangeStart(range);
   const totals = new Map();
-  reports.forEach((r) => {
-    if (!r.date || (cutoffIso && r.date < cutoffIso)) return;
-    // Split by individual inspector, not report.representative (a display-
-    // only "A, B" string joined for the printed report) -- each inspector
-    // logs their own Hours (see defaults.js's report.inspectors), and this
-    // chart is specifically hours per person. A report saved before the
-    // multi-inspector feature shipped (or never reopened since) has no
-    // inspectors array at all; that falls back to the old single
-    // representative/hours pair as one entry.
-    const inspectors = Array.isArray(r.inspectors) && r.inspectors.length
-      ? r.inspectors
-      : [{ name: r.representative, hours: r.hours }];
-    inspectors.forEach((insp) => {
-      const hours = Number(insp.hours) || 0;
-      if (hours <= 0) return;
-      const name = (insp.name || '').trim() || 'Unassigned';
-      totals.set(name, (totals.get(name) || 0) + hours);
-    });
+  mdData.reports.forEach((r) => {
+    if (!r.date || (from && r.date < from)) return;
+    // By individual inspector, not report.representative (a display-only
+    // "A, B" string) -- each inspector logs their own Hours.
+    reportInspectorHours(r).forEach(({ name, hours }) => totals.set(name, (totals.get(name) || 0) + hours));
   });
-
-  const sorted = [...totals.entries()].sort((a, b) => b[1] - a[1]);
-  $('#md-hours-empty').hidden = sorted.length > 0;
-  const activeRangeBtn = $(`#md-hours-range button[data-range="${mdHoursRange}"]`);
-  $('#md-hours-empty').textContent = mdHoursRange === 'total'
-    ? 'No hours logged yet.'
-    : `No hours logged in the selected range (${activeRangeBtn.textContent}).`;
-  const max = sorted.length ? sorted[0][1] : 1;
-  // The value used to sit inside .md-bar-fill itself (right-aligned via
-  // padding), which worked while every bar had room for its own label but
-  // fell apart for a small value against a large max -- the fill shrinks
-  // down to a few percent width, nowhere near enough to hold "3.0h", so the
-  // (light, meant-to-sit-on-the-dark-fill) text spilled out onto the light
-  // track behind it and read as nearly invisible. A plain label to the
-  // right of the whole track, like .md-proj-pct next door, always has room
-  // for it regardless of how short the bar is.
-  $('#md-hours-bars').innerHTML = sorted.map(([name, hours]) => `
-    <div class="md-bar-row">
-      <span class="md-bar-name">${escapeHtml(name)}</span>
-      <div class="md-bar-track"><div class="md-bar-fill" style="width:0%" data-target-width="${Math.max(4, (hours / max) * 100)}"></div></div>
-      <span class="md-bar-value" data-count-target="${hours}" data-count-fmt="hours">0.0h</span>
-    </div>`).join('');
+  const opts = [['total', 'Total'], ['30', 'Last 30 Days'], ['7', 'Last 7 Days'], ['week', 'Current Week']];
+  const rows = [...totals.entries()].sort((a, b) => b[1] - a[1]).map(([n, h]) => [escapeHtml(n), h]);
+  return `<div class="segmented view-tabs" style="margin-bottom:0.75rem;">${opts.map(([v, l]) => `<button type="button" data-md-range="${v}" aria-pressed="${v === range}">${l}</button>`).join('')}</div>`
+    + (rows.length ? widgetBarRows(rows, (h) => `${h.toFixed(1)}h`) : `<p class="hint" style="margin:0;">No hours logged in this range.</p>`);
 }
 
-$('#md-hours-range').addEventListener('click', (e) => {
-  const btn = e.target.closest('button');
-  if (!btn) return;
-  mdHoursRange = btn.dataset.range;
-  $$('#md-hours-range button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.range === mdHoursRange)));
-  renderMdHoursBars(mdHoursReports);
-  // renderManagerDashboard's own animateDashboardFills call already covers
-  // a fresh full render -- this button only re-renders this one card, so
-  // it needs its own animation pass for the new bars' [data-target-width]/
-  // [data-count-target] to actually fill in rather than sit frozen at 0.
-  animateDashboardFills();
-});
-
-function renderMdProjectStatus(projectStats) {
-  const rows = projectStats.filter((r) => r.status != null);
-  $('#md-proj-status-empty').hidden = rows.length > 0;
-  // Furthest behind (lowest % complete relative to schedule) first --
-  // pct-complete alone is an imperfect stand-in for that ranking, but the
-  // status dot already carries the real ahead/behind judgement, and a
-  // secondary sort has to pick something.
-  rows.sort((a, b) => (a.overall ?? 0) - (b.overall ?? 0));
-  $('#md-proj-status').innerHTML = rows.map(({ project, overall, status }) => `
+function mdStatusHtml() {
+  const rows = mdData.projectStats.filter((r) => r.status != null);
+  if (!rows.length) return '<p class="hint" style="margin:0;">No included project has enough data on file to classify yet -- needs an NTP Date, Total Contract Length, and at least one priced pay item.</p>';
+  const order = { danger: 0, warn: 1, ok: 2 };
+  rows.sort((a, b) => (order[a.status] - order[b.status]) || ((a.overall ?? 0) - (b.overall ?? 0)));
+  return `<div class="md-projlist">${rows.map(({ project, overall, status }) => `
     <div class="md-proj-row">
-      <span class="md-proj-dot md-proj-dot-${status}"></span>
+      <span class="md-proj-dot md-proj-dot-${status}" title="${SCHEDULE_STATUS_LABELS[status]}"></span>
       <span class="md-proj-name">${escapeHtml(project.name)}</span>
       <span class="md-proj-pct">${Math.round((overall || 0) * 100)}%</span>
-    </div>`).join('');
+    </div>`).join('')}</div>`;
 }
 
-function renderMdFeed(reports) {
+function mdFeedHtml() {
   const projectById = new Map(mdScopedProjects.map((p) => [p.id, p]));
-  const sorted = reports.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 10);
-  $('#md-feed-empty').hidden = sorted.length > 0;
-  $('#md-feed').innerHTML = sorted.map((r) => {
+  const sorted = mdData.reports.slice().sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 10);
+  if (!sorted.length) return '<p class="hint" style="margin:0;">No reports on file yet.</p>';
+  return `<div class="md-feed">${sorted.map((r) => {
     const project = projectById.get(r.projectId);
     const isAdverse = ADVERSE_WEATHER_RE.test(r.weatherDesc || '');
-    // "Filed by" and "Inspectors" are two different things that used to get
-    // collapsed into one -- representative is a display string joining
-    // every inspector logged on the report (their own Hours, see
-    // defaults.js's report.inspectors), not who actually saved it. That
-    // showed "filed by John Sonnier, Alex Flores" for a report Alex was
-    // simply listed on, never touched himself. The device that actually
-    // saved it is lastEditedBy/createdBy.
+    // "Filed by" is who saved it (lastEditedBy/createdBy); "Inspectors" is
+    // everyone logged on the report. Only worth naming both when they differ.
     const filer = r.lastEditedBy || r.createdBy || 'Unknown';
     const inspectors = (r.representative || '').trim();
-    // Skip the second clause entirely when it's just the filer's own name
-    // again (the common case: one inspector on site who also files their
-    // own report) -- only worth calling out when it adds information.
-    const inspectorsHtml = inspectors && inspectors !== filer
-      ? ` &middot; Inspectors: ${escapeHtml(inspectors)}`
-      : '';
+    const inspectorsHtml = inspectors && inspectors !== filer ? ` &middot; Inspectors: ${escapeHtml(inspectors)}` : '';
     return `
       <div class="md-feed-row">
-        <span class="md-feed-date">${escapeHtml(r.date || '—')}</span>
-        <span class="md-feed-body"><strong>${escapeHtml(project ? project.name : 'Unknown project')}</strong> &middot; filed by ${escapeHtml(filer)}${inspectorsHtml}${isAdverse ? '<span class="md-feed-flag">weather-flagged</span>' : ''}</span>
+        <span class="md-feed-date">${escapeHtml(r.date || '--')}</span>
+        <span class="md-feed-body"><a href="report-viewer.html?project=${r.projectId}&report=${r.id}"><strong>${escapeHtml(project ? project.name : 'Unknown project')}</strong></a> &middot; filed by ${escapeHtml(filer)}${inspectorsHtml}${isAdverse ? '<span class="md-feed-flag">weather-flagged</span>' : ''}</span>
       </div>`;
-  }).join('');
+  }).join('')}</div>`;
 }
 
-$('#md-manage-btn').addEventListener('click', () => {
-  $('#md-manage-panel').hidden = !$('#md-manage-panel').hidden;
-});
-
-// Collapsed by default on the mobile stacked layout on every visit (that's
-// the point -- most mobile visits want the project list, not this), but a
-// deliberate tap to open it is remembered so someone who *does* want it on
-// their phone isn't stuck re-opening it every single time. Device-local by
-// design, like the theme/accent picks in Settings -- not a company setting.
-const MD_MOBILE_EXPANDED_KEY = 'md-mobile-dashboard-expanded';
-function setMdMobileExpanded(expanded) {
-  const col = $('#manager-dashboard-col');
-  col.classList.toggle('md-expanded', expanded);
-  $('#md-mobile-toggle').setAttribute('aria-expanded', String(expanded));
+function mdDeadlinesHtml() {
+  const rows = mdData.included.map((p) => ({ p, tl: projectContractTimeline(p) })).filter((x) => x.tl)
+    .map(({ p, tl }) => ({ p, tl, left: tl.length - tl.day })).sort((a, b) => a.left - b.left);
+  if (!rows.length) return '<p class="hint" style="margin:0;">No included project has an NTP Date and Total Contract Length on file.</p>';
+  return `<div class="md-projlist">${rows.map(({ p, tl, left }) => `
+    <div class="md-proj-row">
+      <span class="md-proj-name">${p.icon || ''} ${escapeHtml(p.name)}</span>
+      <span class="md-proj-pct" style="${left < 30 ? 'color:var(--danger);font-weight:700;' : ''}">${escapeHtml(new Date(tl.end + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }))} · ${left >= 0 ? `${left} days left` : `${-left} days over`}</span>
+    </div>`).join('')}</div>`;
 }
-$('#md-mobile-toggle').addEventListener('click', () => {
-  const expanded = !$('#manager-dashboard-col').classList.contains('md-expanded');
-  setMdMobileExpanded(expanded);
-  try {
-    if (expanded) localStorage.setItem(MD_MOBILE_EXPANDED_KEY, '1');
-    else localStorage.removeItem(MD_MOBILE_EXPANDED_KEY);
-  } catch (e) {}
-});
+
+function mdWeatherHtml() {
+  const from = widgetRangeStart('30');
+  const byProject = new Map();
+  mdData.reports.forEach((r) => {
+    if (!r.date || r.date < from || !ADVERSE_WEATHER_RE.test(r.weatherDesc || '')) return;
+    byProject.set(r.projectId, (byProject.get(r.projectId) || new Set()).add(r.date));
+  });
+  const rows = [...byProject.entries()].map(([id, days]) => {
+    const p = mdData.included.find((x) => x.id === id);
+    return [`${p && p.icon ? p.icon + ' ' : ''}${escapeHtml(p ? mdShortProjectLabel(p.name) : '')}`, days.size];
+  }).sort((a, b) => b[1] - a[1]);
+  return rows.length ? widgetBarRows(rows, (n) => `${n} day${n === 1 ? '' : 's'}`) : '<p class="hint" style="margin:0;">No weather-flagged reports in the last 30 days.</p>';
+}
+
+function mdPayAppsHtml() {
+  const rows = mdData.included.map((p) => ({ p, e: sortedEstimates(p.billingEstimates).pop() })).filter((x) => x.e);
+  if (!rows.length) return '<p class="hint" style="margin:0;">No Pay Apps recorded on included projects yet.</p>';
+  const chip = (e) => e.approvalStatus === 'approved' ? '<span class="status-chip ok">&#128274; Approved</span>'
+    : e.approvalStatus === 'changes_requested' ? '<span class="status-chip chg">Changes Requested</span>'
+    : '<span class="status-chip wait">Pending</span>';
+  return rows.map(({ p, e }) => `
+    <a class="payapp-row" href="pay-apps.html?project=${p.id}&estimate=${encodeURIComponent(e.id)}">
+      <span class="n">#${escapeHtml(e.estimateNo || '?')}</span>
+      <span>${escapeHtml(p.name)} <span class="m">· ${escapeHtml(shortDateLabel(e.date))}</span></span>
+      ${chip(e)}
+    </a>`).join('');
+}
+
+// ----- Make your own -----
+const MD_MEASURES = { reports: 'Reports filed', hours: 'Hours logged', photos: 'Photos taken', weather: 'Weather-flagged days', earned: 'Earned to date' };
+const MD_SHOWS = { total: 'One big number', project: 'A bar per project', person: 'A bar per inspector' };
+
+function mdScopeOptions() {
+  const opts = [['all', 'All included projects']];
+  (currentHubLayout || []).filter((e) => e.type === 'folder').forEach((f) => opts.push(['folder:' + f.id, '\u{1F4C1} ' + f.name]));
+  mdData.included.forEach((p) => opts.push(['project:' + p.id, (p.icon ? p.icon + ' ' : '') + p.name]));
+  return opts;
+}
+function mdScopeIds(scope) {
+  const all = mdData.included.map((p) => p.id);
+  if (!scope || scope === 'all') return new Set(all);
+  const [kind, id] = scope.split(':');
+  if (kind === 'folder') { const f = folderEntry(id); return new Set(f ? f.projectIds.filter((x) => all.includes(x)) : []); }
+  return new Set(all.includes(id) ? [id] : []);
+}
+
+function mdCustomHtml(c) {
+  const measure = MD_MEASURES[c.measure] ? c.measure : 'reports';
+  const show = MD_SHOWS[c.show] ? c.show : 'project';
+  const ids = mdScopeIds(c.scope);
+  const scopeLabel = (mdScopeOptions().find((o) => o[0] === (c.scope || 'all')) || [null, 'Projects no longer included'])[1];
+  const projectName = (id) => { const p = mdData.included.find((x) => x.id === id); return p ? mdShortProjectLabel(p.name) : ''; };
+  if (measure === 'earned') {
+    const stats = mdData.projectStats.filter((s) => ids.has(s.project.id) && s.totalEarned != null);
+    const note = `<p class="w-note">${escapeHtml(MD_MEASURES.earned)} · ${escapeHtml(scopeLabel)}</p>`;
+    if (show === 'total') return `<div class="dash-card" style="margin:0;"><span class="dc-value">${escapeHtml(fmtMoney(stats.reduce((s, x) => s + x.totalEarned, 0)))}</span><span class="dc-label">${escapeHtml(MD_MEASURES.earned)}</span></div>${note}`;
+    return widgetBarRows(stats.map((s) => [escapeHtml(projectName(s.project.id)), s.totalEarned]).sort((a, b) => b[1] - a[1]), fmtMoney) + note;
+  }
+  const from = widgetRangeStart(c.range);
+  const rs = mdData.reports.filter((r) => ids.has(r.projectId) && r.date && (!from || r.date >= from));
+  const valueOf = (r) => measure === 'reports' ? 1 : measure === 'photos' ? reportPhotoCount(r) : measure === 'weather' ? (ADVERSE_WEATHER_RE.test(r.weatherDesc || '') ? 1 : 0) : reportInspectorHours(r).reduce((s, x) => s + x.hours, 0);
+  const fmt = measure === 'hours' ? (v) => `${v.toFixed(1)}h` : (v) => String(Math.round(v));
+  const note = `<p class="w-note">${escapeHtml(MD_MEASURES[measure])}, ${escapeHtml(WIDGET_RANGE_LABELS[c.range] || 'all time')} · ${escapeHtml(scopeLabel)}</p>`;
+  if (show === 'total') {
+    return `<div class="dash-card" style="margin:0;"><span class="dc-value">${escapeHtml(fmt(rs.reduce((s, r) => s + valueOf(r), 0)))}</span><span class="dc-label">${escapeHtml(MD_MEASURES[measure])}</span></div>${note}`;
+  }
+  const totals = new Map();
+  rs.forEach((r) => {
+    if (show === 'project') { totals.set(r.projectId, (totals.get(r.projectId) || 0) + valueOf(r)); return; }
+    if (measure === 'hours') { reportInspectorHours(r).forEach((x) => totals.set(x.name, (totals.get(x.name) || 0) + x.hours)); return; }
+    const who = (r.createdBy || 'Unknown').trim() || 'Unknown';
+    totals.set(who, (totals.get(who) || 0) + valueOf(r));
+  });
+  const rows = [...totals.entries()].filter((e) => e[1] > 0).map(([k, v]) => [escapeHtml(show === 'project' ? projectName(k) : k), v]).sort((a, b) => b[1] - a[1]);
+  return widgetBarRows(rows, fmt) + note;
+}
+
+function openMdWidgetBuilder(existing, onSave) {
+  const c = Object.assign({ title: '', measure: 'reports', range: '30', scope: 'all', show: 'project' }, existing ? existing.config : {});
+  const sel = (id, options, value) => `<select id="${id}">${options.map(([k, l]) => `<option value="${escapeAttr(k)}"${k === value ? ' selected' : ''}>${escapeHtml(l)}</option>`).join('')}</select>`;
+  openSheet(`
+    <h3 class="sheet-title">${existing ? 'Edit Widget' : 'Make a Widget'}</h3>
+    <p class="sheet-sub">Pick what to count, when, for which projects, and how to show it.</p>
+    <div class="sheet-field"><label class="lbl" for="wb-title">Title</label><input type="text" id="wb-title" maxlength="40" value="${escapeAttr(c.title)}" placeholder="e.g. Photos This Month"></div>
+    <div class="wb-grid">
+      <div class="sheet-field"><label class="lbl" for="wb-measure">Count</label>${sel('wb-measure', Object.entries(MD_MEASURES), c.measure)}</div>
+      <div class="sheet-field"><label class="lbl" for="wb-range">Time range</label>${sel('wb-range', [['7', 'Last 7 days'], ['30', 'Last 30 days'], ['month', 'This month'], ['all', 'All time']], c.range)}</div>
+      <div class="sheet-field"><label class="lbl" for="wb-scope">Projects</label>${sel('wb-scope', mdScopeOptions(), c.scope)}</div>
+      <div class="sheet-field"><label class="lbl" for="wb-show">Show as</label>${sel('wb-show', Object.entries(MD_SHOWS), c.show)}</div>
+    </div>
+    <div class="sheet-field"><span class="lbl">Preview</span><div class="step wb-preview"><div class="step-header"><span class="step-num">CUSTOM</span><h2 id="wb-ptitle"></h2></div><div class="step-body" id="wb-prev"></div></div></div>
+    <div class="sheet-actions"><button type="button" class="btn-secondary" id="wb-cancel">Cancel</button><button type="button" class="btn-primary" id="wb-save">${existing ? 'Save' : 'Add to Dashboard'}</button></div>`, {
+    wide: true,
+    onMount: (card) => {
+      const read = () => {
+        c.title = $('#wb-title', card).value.trim();
+        ['measure', 'range', 'scope', 'show'].forEach((k) => { c[k] = $('#wb-' + k, card).value; });
+        const earned = c.measure === 'earned';
+        $('#wb-range', card).disabled = earned;
+        $$('#wb-show option', card).forEach((o) => { o.disabled = earned && o.value === 'person'; });
+        if (earned && c.show === 'person') { c.show = 'project'; $('#wb-show', card).value = 'project'; }
+        $('#wb-ptitle', card).textContent = c.title || MD_MEASURES[c.measure];
+        $('#wb-prev', card).innerHTML = mdCustomHtml(c);
+      };
+      read();
+      card.addEventListener('input', read);
+      card.addEventListener('change', read);
+      $('#wb-cancel', card).addEventListener('click', closeSheet);
+      $('#wb-save', card).addEventListener('click', () => {
+        read();
+        closeSheet();
+        onSave({ ...c, title: c.title || MD_MEASURES[c.measure] });
+      });
+    },
+  });
+}
+
+// ----- Included Projects -----
+function openMdIncludedSheet() {
+  const rows = mdScopedProjects.map((p) => `<label><input type="checkbox" data-md-project="${p.id}"${mdExcluded.has(p.id) ? '' : ' checked'}><span>${p.icon || '&#128193;'}</span>${escapeHtml(p.name)}</label>`).join('');
+  openSheet(`
+    <h3 class="sheet-title">Included Projects</h3>
+    <p class="sheet-sub">Untick a project to leave it out of every number on this dashboard. It still works normally everywhere else, and only your view changes.</p>
+    <div class="checklist">${rows}</div>
+    <div class="sheet-actions"><button type="button" class="btn-primary" id="md-inc-done">Done</button></div>`, {
+    onMount: (card) => {
+      card.addEventListener('change', async (e) => {
+        const cb = e.target.closest('[data-md-project]');
+        if (!cb) return;
+        const id = cb.dataset.mdProject;
+        const next = new Set(mdExcluded);
+        if (cb.checked) next.delete(id); else next.add(id);
+        cb.disabled = true;
+        try {
+          await saveManagerDashboardExcludedProjectIds([...next]);
+          await renderManagerDashboard();
+        } catch (err) {
+          console.error(err);
+          cb.checked = !cb.checked; // revert
+          alert(userError("Couldn't save that: " + err.message, 'MANAGER_DASHBOARD_PROJECTS'));
+        }
+        cb.disabled = false;
+      });
+      $('#md-inc-done', card).addEventListener('click', closeSheet);
+    },
+  });
+}
+
+function wireManagerDashboard() {
+  $('#md-included-btn').addEventListener('click', openMdIncludedSheet);
+  // Everything inside the widgets is redrawn often, so it's handled here.
+  const widgets = $('#md-widgets');
+  widgets.addEventListener('click', (e) => {
+    const day = e.target.closest('.wcal-clickable[data-cal-date]');
+    if (day) return openMdDayDetailModal(day.dataset.calDate);
+    const range = e.target.closest('[data-md-range]');
+    if (range) {
+      const wid = range.closest('[data-wid]').dataset.wid;
+      const w = mdBoard.widgets.find((x) => x.id === wid);
+      w.config = { ...(w.config || {}), range: range.dataset.mdRange };
+      mdBoard.persist();
+      mdBoard.rerender(wid);
+      return;
+    }
+    const focus = e.target.closest('[data-md-focus]');
+    if (focus) {
+      mdFocusProjectId = mdFocusProjectId === focus.dataset.mdFocus ? null : focus.dataset.mdFocus;
+      const wel = focus.closest('[data-wid]');
+      mdBoard.rerender(wel.dataset.wid);
+      return;
+    }
+    const go = e.target.closest('[data-md-goto]');
+    if (go) {
+      const el = widgets.querySelector(`[data-type="${go.dataset.mdGoto}"]`);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  });
+  widgets.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const cell = e.target.closest('.wcal-clickable[data-cal-date]');
+    if (!cell) return;
+    e.preventDefault();
+    openMdDayDetailModal(cell.dataset.calDate);
+  });
+  $('#mddm-close').addEventListener('click', () => { $('#md-day-detail-overlay').hidden = true; });
+  $('#md-day-detail-overlay').addEventListener('click', (e) => {
+    if (e.target === $('#md-day-detail-overlay')) $('#md-day-detail-overlay').hidden = true;
+  });
+}
+
+// Phones: Projects / Dashboard switch. Remembered per device.
+const HOME_TAB_KEY = 'home-phone-tab';
+function setHomeTab(tab) {
+  document.body.dataset.tab = tab;
+  $$('#phone-tabs button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tab === tab)));
+  try { localStorage.setItem(HOME_TAB_KEY, tab); } catch (e) { /* private mode */ }
+}
+function wirePhoneTabs() {
+  let tab = 'projects';
+  try { tab = localStorage.getItem(HOME_TAB_KEY) || 'projects'; } catch (e) { /* private mode */ }
+  setHomeTab(tab === 'dashboard' ? 'dashboard' : 'projects');
+  $('#phone-tabs').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-tab]');
+    if (b) setHomeTab(b.dataset.tab);
+  });
+}
 
 function showAddProjectPanel() {
   $('#add-project-panel').hidden = false;
@@ -1725,18 +1944,24 @@ async function applyCompanyThemeVisuals() {
   await handleIncomingSetup();
   await adoptOrphanReportsIfAny();
   wireHubGridInteractions();
+  wireManagerDashboard();
+  wirePhoneTabs();
+  $('#hdr-new').addEventListener('click', openNewReportPicker);
+  $('#home-week-line').addEventListener('click', (e) => { if (e.target.closest('#btn-start-today')) openNewReportPicker(); });
   await renderProjectCards();
   await renderUnsavedDrafts();
   await renderManagerDashboard();
+  await renderMyWork();
   wireAutoPull();
 })();
 
 // A background auto-pull (see wireAutoPull/autoPullCompanyData in
 // firebase-sync.js) landed new project/report data -- refresh the list so a
 // teammate's new project shows up without a manual reload.
-window.addEventListener('company-data-pulled', () => {
+window.addEventListener('company-data-pulled', async () => {
   renderProjectCards();
-  renderManagerDashboard();
+  await renderManagerDashboard();
+  renderMyWork();
   applyCompanyThemeVisuals();
 });
 
