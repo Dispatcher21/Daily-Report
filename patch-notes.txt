@@ -3,6 +3,21 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.060 -- 2026-10-08
+  - Tutorial asks whether you're an inspector or a manager, and shows the
+    app the way that role sees it, with a walkthrough for each:
+    - Inspectors write a whole report, section by section, generate the
+      PDF, then fix a report the engineer sent back.
+    - Managers set up a new project, then review a report: approve it,
+      request changes, or comment, plus the emails those send and the
+      weekly roundup.
+    Short lines, and you can skip or explore on your own any time.
+  - Tutorial has eight example projects, each a different kind of job
+    (drainage, building, geotech, bridge, road, park, sewer, high-rise),
+    all very obviously made up, with plenty of jokes in the reports.
+  - Menu: the Manager link no longer shows for people who can't approve
+    anything.
+
 0.0591 -- 2026-10-08
   - Works with no signal: once the app has been opened with internet, it
     opens offline from the Home Screen, including the Reports page and

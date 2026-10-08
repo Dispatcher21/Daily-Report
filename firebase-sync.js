@@ -563,7 +563,6 @@ const ROLE_PERMISSIONS = {
     membersCanEditOwnReports: true,
     membersCanEditAnyReport: true,
     membersCanEditProjects: true,
-    membersCanCreateProjects: true,
     membersCanViewManagerDashboard: true,
     membersCanApproveReports: true,
     membersCanApprovePayApps: true,

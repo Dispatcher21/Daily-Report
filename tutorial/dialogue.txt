@@ -224,7 +224,8 @@ Let's look inside the example project. Tap DEMO-101 to continue the tour!
 Emotion: pointing
 Points at: add project card
 For: manager
-Let's set up a new job. Tap + Add Project, then Set Up Manually.
+Let's set up a new job. Tap + Add Project, then Set Up Manually. (At
+your company, an admin may need to turn this on for managers.)
 
 
 === PROJECT PAGE (project.html) ===

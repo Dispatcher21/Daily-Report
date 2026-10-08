@@ -99,7 +99,7 @@ const raw = (p, fn, arg) => p.evaluate(async ({ src, arg }) => {
   // Manager.
   await M.evaluate(() => autoPullCompanyData(true));
   check("manager edits Alice's report", await M.evaluate(async () => { const r = await getReport('rep-p2'); r.notes = 'reviewed'; await saveReport(r); return confirmReportSyncStatus(await getReport('rep-p2')); }), 'synced');
-  check('manager can create projects by default', await raw(M, `await fs.setDoc(fs.doc(db, 'companies', code, 'projects', 'p9'), { id: 'p9', name: 'P9' });`), 'ok');
+  check('manager cannot create projects', await raw(M, `await fs.setDoc(fs.doc(db, 'companies', code, 'projects', 'p9'), { id: 'p9', name: 'P9' });`), 'permission-denied');
 
   // The role table (Settings > Roles), enforced by the server.
   const commentOn = (id) => `const ref = fs.doc(db, 'companies', code, 'reports', '${id}'); const cur = (await fs.getDoc(ref)).data(); await fs.updateDoc(ref, { comments: [...(cur.comments || []), { id: 'c' + Date.now(), author: 'Bob', text: 'hi', createdAt: Date.now() }], updatedAt: Date.now() });`;
@@ -110,11 +110,9 @@ const raw = (p, fn, arg) => p.evaluate(async ({ src, arg }) => {
   await A.evaluate(() => updateRolePermission('manager', 'membersCanEditAnyReport', false));
   check('roles: managers not allowed to edit any report -> blocked', await raw(M, `await fs.updateDoc(fs.doc(db, 'companies', code, 'reports', 'rep-p2'), { notes: 'Mia edit' });`), 'permission-denied');
   await A.evaluate(() => updateRolePermission('manager', 'membersCanEditAnyReport', true));
-  await A.evaluate(() => updateRolePermission('manager', 'membersCanCreateProjects', false));
-  check('roles: managers not allowed to create projects -> blocked', await raw(M, `await fs.setDoc(fs.doc(db, 'companies', code, 'projects', 'p8'), { id: 'p8', name: 'P8' });`), 'permission-denied');
-  check("manager's device picks up the new role settings", await M.evaluate(async () => { await autoPullCompanyData(true); return companyCan('createProjects'); }), false);
   await A.evaluate(() => updateRolePermission('manager', 'membersCanCreateProjects', true));
-  check('roles: allowed again -> can', await raw(M, `await fs.setDoc(fs.doc(db, 'companies', code, 'projects', 'p8'), { id: 'p8', name: 'P8' });`), 'ok');
+  check('roles: managers allowed to create projects -> can', await raw(M, `await fs.setDoc(fs.doc(db, 'companies', code, 'projects', 'p8'), { id: 'p8', name: 'P8' });`), 'ok');
+  check("manager's device picks up the new role settings", await M.evaluate(async () => { await autoPullCompanyData(true); return companyCan('createProjects'); }), true);
   await A.evaluate(() => updateRolePermission('inspector', 'membersCanApproveReports', false));
   // Approving and commenting are separate permissions.
   const approveIt = (id) => `await fs.updateDoc(fs.doc(db, 'companies', code, 'reports', '${id}'), { approvalStatus: 'approved', approvalBy: 'Bob', approvalByUid: 'b', updatedAt: Date.now() });`;

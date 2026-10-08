@@ -39,7 +39,7 @@ const field = (d, f) => { const v = d.fields && d.fields[f]; if (!v) return unde
   // A (admin) makes Bob a manager limited to P1 -- straight in the database for now (the roster screen is Slice 2).
   await A.evaluate(async ([code, uid]) => { const { db } = window.FirebaseCore; const { doc, setDoc } = await import(FIRESTORE_SDK); await setDoc(doc(db, 'companies', code, 'members', uid), { role: 'manager', projectIds: ['p1'] }, { merge: true }); }, [ids.code, bUid]);
   await Bp.evaluate(() => autoPullCompanyData(true));
-  check('B: picks up manager role', await Bp.evaluate(async () => [await companyCan('approveReports'), await companyCan('createProjects')]), [true, true]);
+  check('B: picks up manager role', await Bp.evaluate(async () => [await companyCan('approveReports'), await companyCan('createProjects')]), [true, false]);
   check('B: sees only P1 now', await Bp.evaluate(async () => { const room = await getCompanyRoom(); return (await getAllProjects()).filter((p) => projectInScope(p, room)).map((p) => p.name); }), ['P1 Bridge']);
 
   // C: fresh device, signs in as Bob -- no company password.

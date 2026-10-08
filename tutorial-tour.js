@@ -341,13 +341,18 @@ function setTourRole(role) {
 
 // Makes the example company show what this role really sees: the tutorial
 // user stops being an admin and gets the role's default permissions, the
-// same as someone who joined a company with that role. Only ever the
-// tutorial's own database (isTutorialMode), never the real one. False if
-// this page can't do it (no firebase-sync.js), and nothing is changed.
+// same as someone who joined a company with that role. One exception: a
+// manager may create projects here (off by default, an admin turns it on
+// in Settings > Roles), so the manager tour can show building one. Only
+// ever the tutorial's own database (isTutorialMode), never the real one.
+// False if this page can't do it (no firebase-sync.js), and nothing is
+// changed.
 async function applyTutorialRole(role) {
   if (!isTutorialMode() || typeof rolePermissionsFor !== 'function') return false;
+  const perms = rolePermissionsFor(null, role);
+  if (role === 'manager') perms.membersCanCreateProjects = true;
   await saveSetting(COMPANY_ADMIN_SETTING, false);
-  await saveSetting(COMPANY_PERMISSIONS_SETTING, rolePermissionsFor(null, role));
+  await saveSetting(COMPANY_PERMISSIONS_SETTING, perms);
   return true;
 }
 
