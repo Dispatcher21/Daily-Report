@@ -35,6 +35,14 @@
 
 <main>
 
+  <div class="lock-box" id="locked-banner" hidden>
+    <span class="li" aria-hidden="true">&#128274;</span>
+    <span class="lt"><b>This report is approved and locked.</b> <span id="locked-banner-who"></span>
+      <small id="locked-banner-help">Nobody can change it until a manager or admin unlocks it.</small></span>
+    <button type="button" class="btn-sm" id="btn-ask-unlock" hidden>Ask to Unlock</button>
+    <button type="button" class="btn-sm" id="btn-unlock" hidden>&#128275; Unlock for Edits</button>
+  </div>
+
   <div class="warn" id="readonly-banner" hidden>
     You don't have permission to edit reports for this company &mdash; ask an admin to unlock this, or open Company Management to change it.
   </div>
@@ -153,6 +161,7 @@
 <script src="render-report.js"></script>
 <script type="module" src="firebase-init.js"></script>
 <script src="firebase-sync.js"></script>
+<script src="page-ui.js"></script>
 <script>
 const projectId = queryParam('project');
 let project = null;
@@ -249,14 +258,60 @@ function applyRequiredFieldHighlights() {
   return missing;
 }
 
+// Approved means locked (see storage.js's isApprovedLocked). Authors can
+// ask for it to be unlocked; managers and admins can unlock it here.
+async function showLockedBanner() {
+  $('#locked-banner').hidden = false;
+  const who = [report.approvalBy ? `Approved by ${report.approvalBy}.` : '', report.unlockRequest ? 'You\u2019ve asked for it to be unlocked.' : ''].filter(Boolean).join(' ');
+  $('#locked-banner-who').textContent = who;
+  const canApprove = await companyCan('approveReports');
+  const uid = currentAccountUid();
+  const me = await getUserName();
+  const isAuthor = report.createdByUid ? !!uid && report.createdByUid === uid : !!me && report.createdBy === me;
+  $('#btn-unlock').hidden = !canApprove;
+  $('#btn-ask-unlock').hidden = canApprove || !isAuthor || !!report.unlockRequest;
+}
+
+function lockedReasonSheet({ title, sub, label, placeholder, action, onSubmit }) {
+  openSheet(`
+    <h3 class="sheet-title">${title}</h3>
+    <p class="sheet-sub">${sub}</p>
+    <div class="sheet-field"><label class="lbl" for="lock-why">${label}</label><textarea id="lock-why" rows="3" placeholder="${placeholder}"></textarea></div>
+    <div class="sheet-actions"><button type="button" class="btn-secondary" id="lock-no">Cancel</button><button type="button" class="btn-primary" id="lock-yes">${action}</button></div>`, {
+    onMount: (card) => {
+      $('#lock-no', card).addEventListener('click', closeSheet);
+      $('#lock-yes', card).addEventListener('click', async () => {
+        const why = $('#lock-why', card).value.trim();
+        if (!why) { $('#lock-why', card).closest('.sheet-field').classList.add('needs'); return; }
+        $('#lock-yes', card).disabled = true;
+        try { await onSubmit(why); closeSheet(); } catch (err) { console.error(err); alert(userError("Couldn't save that: " + err.message, 'REPORT_UNLOCK')); $('#lock-yes', card).disabled = false; }
+      });
+    },
+  });
+}
+
+$('#btn-ask-unlock').addEventListener('click', () => lockedReasonSheet({
+  title: 'Ask to Unlock', sub: 'Say what needs changing. Your manager sees it on the Manager page and can unlock the report for you.',
+  label: 'What needs changing?', placeholder: 'e.g. Forgot to log 12 LF of pipe', action: 'Send Request',
+  onSubmit: async (why) => { report = await requestReportUnlock(report.id, why); showLockedBanner(); showToast('Request sent'); },
+}));
+$('#btn-unlock').addEventListener('click', () => lockedReasonSheet({
+  title: 'Unlock this report?', sub: 'It can be changed again, goes back to Pending, and locks again once it\u2019s approved. The reason is saved as a comment and emailed to its author.',
+  label: 'Why?', placeholder: 'e.g. Quantities need correcting', action: '&#128275; Unlock for Edits',
+  onSubmit: async (why) => { await unlockReport(report.id, why); location.reload(); },
+}));
+
 // Disables every form control except navigation/print, for a member who
 // isn't allowed to edit an already-saved report -- creating a brand new one
 // is always allowed regardless (see init()), this only applies once a
 // report already exists.
 function lockReportEditor() {
-  $('#readonly-banner').hidden = false;
+  // An approved report gets its own explanation (and a way to get it
+  // unlocked) instead of the generic no-permission one.
+  if (isApprovedLocked(report)) showLockedBanner();
+  else $('#readonly-banner').hidden = false;
   $$('main input, main textarea, main select, main button').forEach((el) => {
-    if (el.id === 'btn-generate') return; // viewing/printing isn't an edit
+    if (el.id === 'btn-generate' || el.id === 'btn-ask-unlock' || el.id === 'btn-unlock') return; // viewing/printing isn't an edit, and the lock banner's own buttons stay usable
     el.disabled = true;
   });
   // The signature pad draws from raw pointer events on a <canvas>, not a

@@ -558,6 +558,7 @@ $('#btn-save-quantities').addEventListener('click', async () => {
     let report = currentReport;
     if (report) {
       const ctx = await getReportPermissionContext();
+      if (isApprovedLocked(report)) throw new Error("That date's report is approved and locked. Ask a manager to unlock it first.");
       if (!canEditReportWithContext(report, ctx)) throw new Error("You don't have permission to edit that date's report.");
       for (const entry of entries) {
         const idx = report.payItems.findIndex((pi) => pi.itemNumber === entry.itemNumber);

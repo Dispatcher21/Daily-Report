@@ -9,7 +9,17 @@ Everything waiting to be applied to the live Firebase project
 (`daily-reports-53c82`). Add to this list as you go; clear it once the
 owner has applied it.
 
-(Nothing pending.)
+- **Rules: approved reports are locked.** `firestore.rules` now refuses
+  changes to an approved report's content (from any app version, in both
+  sign-in modes) until a Manager or admin unlocks it. Comments and
+  unlock requests still go through. Publish before the app that has the
+  Unlock button goes live, so old phones can't overwrite approved
+  reports.
+
+Future idea, not scheduled: move Pay Apps out of the project document
+into their own records (`companies/{code}/payApps`). Then the rules could
+lock approved Pay Apps the same way they lock reports. Today the lock is
+in the app plus a sync guard that keeps the cloud's approved copy.
 
 (Last applied: 0.057, 2026-10-07: rules for devices without an account
 (approval, assigned projects only); onMemberWritten. 0.054, 2026-10-07: weeklyRoundup and sendRoundupPreview

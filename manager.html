@@ -15,15 +15,15 @@
 <link rel="stylesheet" href="style.css">
 <script src="theme.js"></script>
 </head>
-<body>
+<body class="page-wide" data-mtab="review">
 
 <header class="app-header">
   <button type="button" class="hamburger-btn" id="hamburger-btn" aria-label="Menu" aria-expanded="false">
     <span></span><span></span><span></span>
   </button>
   <div>
-    <h1>Manager</h1>
-    <div class="app-sub">Reports and Pay Apps needing review, and the projects you manage</div>
+    <h1 id="mgr-title">Manager</h1>
+    <div class="app-sub" id="mgr-sub">Reports and Pay Apps waiting on you</div>
   </div>
   <span></span>
 </header>
@@ -31,215 +31,676 @@
   <span id="bb-trail"></span>
 </div>
 
-<main>
-  <div class="empty-state" id="mgr-no-access" hidden style="padding:1.5rem;">
-    You don't have manager access on this device. Ask an admin to grant the
-    "Members can approve/comment on reports" and/or "Members can
-    approve/comment on Pay Apps" permission in Company Management.
-  </div>
+<main id="mgr-main"></main>
 
-  <div id="mgr-content" hidden>
-    <div class="step" id="mgr-review-step" hidden>
-      <div class="step-header">
-        <span class="step-num">REVIEW</span>
-        <h2>Needs Your Review &mdash; Reports</h2>
-      </div>
-      <div class="step-body">
-        <div id="mgr-review-list"></div>
-        <p class="hint" id="mgr-review-empty" hidden style="margin:0;">Nothing waiting on you -- every report in your managed projects has been approved.</p>
-      </div>
-    </div>
-
-    <div class="step" id="mgr-payapp-review-step" hidden style="margin-top:1.5rem;">
-      <div class="step-header">
-        <span class="step-num">REVIEW</span>
-        <h2>Needs Your Review &mdash; Pay Apps</h2>
-      </div>
-      <div class="step-body">
-        <div id="mgr-payapp-review-list"></div>
-        <p class="hint" id="mgr-payapp-review-empty" hidden style="margin:0;">Nothing waiting on you -- every Pay App in your managed projects has been approved.</p>
-      </div>
-    </div>
-
-    <div class="step" id="mgr-projects-step" style="margin-top:1.5rem;">
-      <div class="step-header">
-        <span class="step-num">MANAGER</span>
-        <h2>Managed Projects</h2>
-        <button type="button" class="info-tip" data-tip="Pick which projects you manage -- reports and Pay Apps on them show up above when they need review, and you'll get an alert elsewhere in the app when there's new activity." aria-label="What this does">i</button>
-      </div>
-      <div class="step-body">
-        <div id="mgr-project-checks"></div>
-        <div id="mgr-project-list" style="margin-top:1rem;"></div>
-        <p class="hint" id="mgr-projects-empty" hidden style="margin:0;">No projects to manage yet.</p>
-      </div>
-    </div>
-  </div>
-</main>
+<div id="pv-root"></div>
 
 <script src="common.js"></script>
 <script src="defaults.js"></script>
 <script src="storage.js"></script>
 <script src="audit-log.js"></script>
+<script src="quantity-calc.js"></script>
+<script src="dashboard-widgets.js"></script>
+<script src="page-ui.js"></script>
+<script src="dashboard-layout.js"></script>
 <script type="module" src="firebase-init.js"></script>
 <script src="firebase-sync.js"></script>
 <script>
-const APPROVAL_LABELS = {
-  approved: 'Approved',
-  changes_requested: 'Changes Requested',
+// The Manager page: one review inbox for reports and Pay Apps on the
+// projects you manage. Pick something in the queue and its summary opens
+// beside it (full screen on a phone) with Approve, Request Changes and
+// comments right there. Approving locks a report or Pay App; Unlock for
+// Edits reopens it with a reason. For people who don't approve anything,
+// this page is My Reviews: where their own reports stand.
+
+const mgr = {
+  canReports: false, canPayApps: false, canCommentReports: false, canCommentPayApps: false,
+  isAdmin: false, scope: 'managed', filter: 'all', project: 'all', sort: 'oldest',
+  selected: null, sheetOpen: false, composer: null, picking: false, picked: [],
+  projects: [], projectsById: new Map(), managed: new Set(), reports: [], userName: '', uid: null,
 };
+let mgrPhotoUrls = [];
 
-function mgrFormatBadge(status) {
-  const s = status || 'pending';
-  return `<span class="rv-approval-badge rv-${s}">${APPROVAL_LABELS[s] || 'Pending'}</span>`;
-}
+const DAY_MS = 86400000;
+const narrow = () => window.matchMedia('(max-width: 900px)').matches;
+const itemKey = (it) => `${it.kind}:${it.id}`;
 
-let mgrScopedProjects = [];
-let mgrManaged = new Set();
-let mgrCanReports = false;
-let mgrCanPayApps = false;
+// ---------- Loading ----------
 
-async function renderManagerPage() {
-  renderBreadcrumb('#bb-trail', [{ label: 'Home', href: 'index.html' }, { label: 'Manager' }]);
-  [mgrCanReports, mgrCanPayApps] = await Promise.all([companyCan('approveReports'), companyCan('approvePayApps')]);
-  if (!mgrCanReports && !mgrCanPayApps) {
-    $('#mgr-no-access').hidden = false;
-    $('#mgr-content').hidden = true;
-    return;
-  }
-  $('#mgr-no-access').hidden = true;
-  $('#mgr-content').hidden = false;
-  $('#mgr-review-step').hidden = !mgrCanReports;
-  $('#mgr-payapp-review-step').hidden = !mgrCanPayApps;
-
+async function loadManagerData() {
   const room = await getCompanyRoom();
-  const [allProjects, managedIds] = await Promise.all([getAllProjects(), getManagedProjectIds()]);
-  mgrScopedProjects = allProjects.filter((p) => projectInScope(p, room));
-  mgrManaged = new Set(managedIds);
-
-  renderMgrChecklist();
-  if (mgrCanReports) await renderMgrReviewList();
-  if (mgrCanPayApps) await renderMgrPayAppReviewList();
-  await renderMgrProjectList();
-
-  // A real page visit to the one place that shows this -- clears the
-  // new-activity banner everywhere else, same reasoning as index.html's
-  // own markManagedProjectsSeen call.
-  await markManagedProjectsSeen();
-  if (typeof refreshManagedProjectsAlertBanner === 'function') refreshManagedProjectsAlertBanner();
+  [mgr.canReports, mgr.canPayApps, mgr.canCommentReports, mgr.canCommentPayApps] = await Promise.all([
+    companyCan('approveReports'), companyCan('approvePayApps'), companyCan('commentReports'), companyCan('commentPayApps'),
+  ]);
+  mgr.isAdmin = !!(room && room.isAdmin);
+  const [allProjects, managedIds, allReports] = await Promise.all([getAllProjects(), getManagedProjectIds(), getAllReports()]);
+  mgr.projects = allProjects.filter((p) => projectInScope(p, room));
+  mgr.projectsById = new Map(mgr.projects.map((p) => [p.id, p]));
+  mgr.managed = new Set(managedIds);
+  mgr.reports = allReports.filter((r) => mgr.projectsById.has(r.projectId) && !r.deleted);
+  mgr.userName = (await getUserName()) || '';
+  mgr.uid = currentAccountUid();
 }
 
-function renderMgrChecklist() {
-  $('#mgr-project-checks').innerHTML = mgrScopedProjects.map((p) => `
-    <label class="md-check-row">
-      <input type="checkbox" data-mgr-project="${p.id}"${mgrManaged.has(p.id) ? ' checked' : ''}>
-      <span>${escapeHtml(p.name)}</span>
-    </label>`).join('');
+const inScope = (projectId) => (mgr.isAdmin && mgr.scope === 'all') || mgr.managed.has(projectId);
 
-  $$('[data-mgr-project]', $('#mgr-project-checks')).forEach((cb) => {
-    cb.addEventListener('change', async () => {
-      const id = cb.dataset.mgrProject;
-      const nextManaged = new Set(mgrManaged);
-      if (cb.checked) nextManaged.add(id); else nextManaged.delete(id);
-      cb.disabled = true;
-      try {
-        await saveManagedProjectIds([...nextManaged]);
-        await renderManagerPage();
-      } catch (err) {
-        console.error(err);
-        cb.checked = !cb.checked; // revert
-        alert(userError("Couldn't save that: " + err.message, 'MANAGED_PROJECTS'));
+// Everything this person reviews, as queue items:
+// { kind: 'report' | 'payapp', id, projectId, status, waited, ... }
+function reviewItems() {
+  const items = [];
+  const now = Date.now();
+  if (mgr.canReports) {
+    mgr.reports.filter((r) => inScope(r.projectId)).forEach((r) => {
+      const since = r.resubmittedAt || r.createdAt || r.updatedAt || now;
+      items.push({ kind: 'report', id: r.id, projectId: r.projectId, rec: r, status: r.approvalStatus || 'pending', waited: Math.max(0, Math.floor((now - since) / DAY_MS)), date: r.date || '', by: r.createdBy || r.representative || '' });
+    });
+  }
+  if (mgr.canPayApps) {
+    mgr.projects.filter((p) => inScope(p.id)).forEach((p) => (p.billingEstimates || []).forEach((e) => {
+      const since = e.resubmittedAt || e.updatedAt || now;
+      items.push({ kind: 'payapp', id: e.id, projectId: p.id, rec: e, status: e.approvalStatus || 'pending', waited: Math.max(0, Math.floor((now - since) / DAY_MS)), date: e.date || '', by: e.createdBy || '' });
+    }));
+  }
+  return items;
+}
+
+// ---------- Flags ----------
+
+// What's notable about a report: traffic control needing attention, or a
+// quantity that takes a pay item over plan. Reports with a flag have to be
+// opened to approve (no bulk approve).
+const overviewCache = new Map();
+function projectOverview(projectId) {
+  if (overviewCache.has(projectId)) return overviewCache.get(projectId);
+  const project = mgr.projectsById.get(projectId);
+  const reps = mgr.reports.filter((r) => r.projectId === projectId);
+  const items = fullPayItemCatalogOverview(effectivePayItemFlatEntries(reps, project.billingEstimates), project.payItemCatalog || []);
+  const byNo = new Map(items.map((it) => [String(it.itemNumber), it]));
+  overviewCache.set(projectId, byNo);
+  return byNo;
+}
+function reportFlags(r) {
+  const flags = [];
+  if (r.trafficControlSelect === 'ATTENTION_REQUIRED') flags.push('Traffic control needs attention');
+  const overview = projectOverview(r.projectId);
+  const seen = new Set();
+  (r.payItems || []).forEach((pi) => {
+    const it = overview.get(String(pi.itemNumber || '').trim());
+    if (!it || seen.has(it.itemNumber) || !(Number(pi.qty) > 0)) return;
+    if (completionBand(it.pct).cls === 'status-over') {
+      seen.add(it.itemNumber);
+      flags.push(`${it.itemNumber} ${it.description || ''} is now ${Math.round((it.pct - 1) * 100)}% over plan`.replace(/\s+/g, ' '));
+    }
+  });
+  return flags;
+}
+
+// A Pay App's figures: this period (vs the Pay App before it), billed to
+// date, and each billed line next to what inspectors logged in the period.
+function payAppFigures(projectId, e) {
+  const project = mgr.projectsById.get(projectId);
+  const all = sortedEstimates(project.billingEstimates);
+  const prev = all[all.findIndex((x) => x.id === e.id) - 1] || null;
+  const toFlat = (est) => Object.entries((est && est.itemTotals) || {}).map(([itemNumber, qty]) => ({ itemNumber, qty: Number(qty) }));
+  const catalog = project.payItemCatalog || [];
+  const now = contractValueSummary(fullPayItemCatalogOverview(toFlat(e), catalog));
+  const before = prev ? contractValueSummary(fullPayItemCatalogOverview(toFlat(prev), catalog)) : { totalEarned: 0, pctByValue: 0 };
+  const catByNo = new Map(catalog.map((c) => [String(c.itemNumber), c]));
+  const logged = new Map();
+  mgr.reports.filter((r) => r.projectId === projectId && r.date && (!prev || r.date > prev.date) && r.date <= e.date).forEach((r) => {
+    (r.payItems || []).forEach((pi) => { const k = String(pi.itemNumber || '').trim(); if (k) logged.set(k, (logged.get(k) || 0) + (Number(pi.qty) || 0)); });
+  });
+  const lines = [];
+  Object.entries(e.itemTotals || {}).forEach(([itemNumber, qty]) => {
+    const billed = Number(qty) - Number((prev && prev.itemTotals && prev.itemTotals[itemNumber]) || 0);
+    if (Math.abs(billed) < 1e-9) return;
+    const cat = catByNo.get(itemNumber) || {};
+    const lump = isLumpSumItem(cat);
+    const log = logged.get(itemNumber) || 0;
+    const planned = Number(cat.plannedQty) > 0 ? Number(cat.plannedQty) : null;
+    let state = 'match';
+    if (!lump && planned != null && Number(qty) > planned * 1.1) state = 'over';
+    else if (!lump && Math.abs(billed - log) > 1e-6) state = billed > log ? 'warn' : 'ok';
+    lines.push({ itemNumber, description: cat.description || '', unit: cat.unit || '', billed, logged: lump ? null : log, state, lump });
+  });
+  return { thisPeriod: (now.totalEarned || 0) - (before.totalEarned || 0), toDate: now.totalEarned, pct: now.pctByValue, prevPct: before.pctByValue, lines };
+}
+
+// ---------- Rendering ----------
+
+function statusOf(it) {
+  if (it.status === 'approved') return 'approved';
+  if (it.status === 'changes_requested' || it.status === 'unlocked') return 'sent';
+  return 'pending';
+}
+
+function queueList() {
+  const all = reviewItems().filter((it) => mgr.project === 'all' || it.projectId === mgr.project);
+  const counts = {
+    all: all.filter((it) => statusOf(it) === 'pending' || (statusOf(it) === 'approved' && it.rec.unlockRequest)).length,
+    report: all.filter((it) => it.kind === 'report' && statusOf(it) === 'pending').length,
+    payapp: all.filter((it) => it.kind === 'payapp' && statusOf(it) === 'pending').length,
+    sent: all.filter((it) => statusOf(it) === 'sent').length,
+    approved: all.filter((it) => statusOf(it) === 'approved').length,
+  };
+  let list;
+  if (mgr.filter === 'sent') list = all.filter((it) => statusOf(it) === 'sent');
+  else if (mgr.filter === 'approved') list = all.filter((it) => statusOf(it) === 'approved').sort((a, b) => (b.rec.updatedAt || 0) - (a.rec.updatedAt || 0)).slice(0, 60);
+  else list = all.filter((it) => (statusOf(it) === 'pending' && (mgr.filter === 'all' || it.kind === mgr.filter)) || (mgr.filter === 'all' && statusOf(it) === 'approved' && it.rec.unlockRequest));
+  if (mgr.filter !== 'approved') {
+    list.sort((a, b) => (!!b.rec.unlockRequest - !!a.rec.unlockRequest) || (mgr.sort === 'oldest' ? b.waited - a.waited : a.waited - b.waited) || (a.date || '').localeCompare(b.date || ''));
+  }
+  return { list, counts };
+}
+
+function typeLabel(it) {
+  return it.kind === 'report' ? `Report #${it.rec.reportNo}` : `Pay App #${it.rec.estimateNo || '?'}`;
+}
+
+function rowHtml(it) {
+  const p = mgr.projectsById.get(it.projectId);
+  const tags = [];
+  const s = statusOf(it);
+  if (it.rec.unlockRequest) tags.push(`<span class="q-tag late">&#128275; ${escapeHtml(it.rec.unlockRequest.by || 'Someone')} asked to unlock</span>`);
+  else if (s === 'approved') tags.push('<span class="q-tag">&#128274; Locked</span>');
+  else if (it.status === 'unlocked') tags.push(`<span class="q-tag flag">&#128275; Unlocked, waiting on ${escapeHtml(it.by || 'the author')}</span>`);
+  else if (s === 'sent') tags.push(`<span class="q-tag flag">Waiting on ${escapeHtml(it.by || 'the author')}</span>`);
+  else tags.push(`<span class="q-tag${it.waited >= 3 ? ' late' : ''}">${it.waited === 0 ? 'New today' : `Waiting ${it.waited} day${it.waited === 1 ? '' : 's'}`}</span>`);
+  if (s === 'pending' && it.rec.resubmittedAt) tags.push('<span class="q-tag re">Resubmitted</span>');
+  const flagged = it.kind === 'report' && s === 'pending' && reportFlags(it.rec).length > 0;
+  if (flagged) tags.push('<span class="q-tag flag">Flagged</span>');
+  const comments = (it.rec.comments || []).length;
+  if (comments) tags.push(`<span class="q-tag">&#128172; ${comments}</span>`);
+  const key = itemKey(it);
+  const picked = mgr.picked.includes(key);
+  const noPick = mgr.picking && (it.kind !== 'report' || flagged || s !== 'pending');
+  if (noPick) tags.push('<span class="q-tag">Open to approve</span>');
+  const when = it.kind === 'report' ? (it.date ? shortDateLabel(it.date) : '') : (it.date ? `period ending ${shortDateLabel(it.date)}` : '');
+  return `<button type="button" class="q-row${picked ? ' picked' : ''}${noPick ? ' nopick' : ''}" data-q="${escapeAttr(key)}" aria-current="${mgr.selected === key && !narrow()}">
+    ${mgr.picking ? `<span class="q-check" aria-hidden="true">${picked ? '&#10003;' : ''}</span>` : `<span class="q-ic" aria-hidden="true">${it.kind === 'report' ? '&#128196;' : '&#128178;'}</span>`}
+    <span style="min-width:0;"><span class="q-name">${p.icon || ''} ${escapeHtml(p.name)}</span><span class="q-meta">${typeLabel(it)}${when ? ` · ${escapeHtml(when)}` : ''}${it.by ? ` · ${escapeHtml(it.by)}` : ''}</span><span class="q-tags">${tags.join('')}</span></span>
+  </button>`;
+}
+
+function renderQueue() {
+  const { list, counts } = queueList();
+  const chips = [['all', 'All', counts.all]];
+  if (mgr.canReports) chips.push(['report', 'Reports', counts.report]);
+  if (mgr.canPayApps) chips.push(['payapp', 'Pay Apps', counts.payapp]);
+  chips.push(['sent', 'Sent Back', counts.sent], ['approved', 'Approved', counts.approved]);
+  const projOpts = [['all', 'All projects']].concat(mgr.projects.filter((p) => inScope(p.id)).map((p) => [p.id, p.name]));
+  const pickable = list.filter((it) => it.kind === 'report' && statusOf(it) === 'pending' && !reportFlags(it.rec).length);
+  const emptyMsg = mgr.filter === 'sent' ? ['Nothing sent back', 'Reports and Pay Apps you send back or unlock show here until they’re resubmitted.']
+    : mgr.filter === 'approved' ? ['Nothing approved yet', 'Approved reports and Pay Apps are locked and listed here.']
+    : mgr.managed.size === 0 && !(mgr.isAdmin && mgr.scope === 'all') ? ['No projects chosen yet', 'Use Choose Projects below to pick the projects you manage.']
+    : ['You’re all caught up', 'New reports and Pay Apps on your projects show up here.'];
+  $('#mgr-queue').innerHTML = `
+    <div class="q-chips">${chips.map(([v, l, n]) => `<button type="button" class="q-chip" data-filter="${v}" aria-pressed="${mgr.filter === v}">${l}<span class="n">${n}</span></button>`).join('')}</div>
+    <div class="q-sub">
+      <select class="small-select" id="q-project" aria-label="Project">${projOpts.map(([v, l]) => `<option value="${escapeAttr(v)}"${v === mgr.project ? ' selected' : ''}>${escapeHtml(l)}</option>`).join('')}</select>
+      ${mgr.filter === 'approved' ? '' : `<select class="small-select" id="q-sort" aria-label="Sort"><option value="oldest"${mgr.sort === 'oldest' ? ' selected' : ''}>Waiting longest</option><option value="newest"${mgr.sort === 'newest' ? ' selected' : ''}>Newest</option></select>`}
+      <span class="grow"></span>
+      ${(mgr.filter === 'all' || mgr.filter === 'report') && pickable.length > 1 ? `<button type="button" class="text-btn" id="q-pick">${mgr.picking ? 'Cancel' : 'Select'}</button>` : ''}
+    </div>
+    ${mgr.picking ? `<div class="bulk-bar" id="q-bulk"><span class="grow">${mgr.picked.length ? `${mgr.picked.length} report${mgr.picked.length === 1 ? '' : 's'} picked` : 'Reports with no flags can be approved together'}</span><button type="button" class="btn-sm" id="q-all">Pick all unflagged</button><button type="button" class="btn-sm btn-sm-ok" id="q-approve"${mgr.picked.length ? '' : ' disabled'}>Approve ${mgr.picked.length || ''}</button></div>` : ''}
+    <div class="q-list">${list.map(rowHtml).join('') || `<div class="q-empty">&#127881;<b>${emptyMsg[0]}</b>${emptyMsg[1]}</div>`}</div>`;
+  return list;
+}
+
+function findItem(key) {
+  return reviewItems().find((it) => itemKey(it) === key) || null;
+}
+
+function commentsHtml(it, canComment) {
+  const comments = it.rec.comments || [];
+  const list = comments.map((c) => `<div class="rv-comment"><div class="rv-comment-head"><span class="rv-comment-head-left"><span class="rv-comment-author">${escapeHtml(c.author || 'Unknown')}</span></span><span>${c.createdAt ? escapeHtml(new Date(c.createdAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })) : ''}</span></div><div class="rv-comment-text">${escapeHtml(c.text || '')}</div></div>`).join('');
+  const changes = mgr.composer === 'changes';
+  const composer = (canComment || changes) ? `
+    <div class="composer${changes ? ' needs' : ''}" id="composer">
+      <textarea id="c-text" placeholder="${changes ? `Tell ${escapeAttr(it.by || 'them')} what to fix (required)` : 'Add a comment, visible to everyone who can see this'}"></textarea>
+      <div class="row">${changes
+        ? `<span class="hint">${escapeHtml(it.by || 'The author')} gets an email with your note.</span><button type="button" class="btn-sm" data-act="cancel-changes">Cancel</button><button type="button" class="btn-sm btn-sm-danger" data-act="send-changes">Send Back for Changes</button>`
+        : '<button type="button" class="btn-sm" data-act="comment">Post Comment</button>'}</div>
+    </div>` : '';
+  return `<div class="pv-sec"><h4>Comments</h4>${list || '<p class="hint" style="margin:0 0 0.5rem;">No comments yet.</p>'}${composer}</div>`;
+}
+
+function previewHtml(it, mobile) {
+  if (!it) return '<div class="q-empty">&#128072;<b>Pick something from the queue</b>Its summary opens here, so you can approve it without leaving this page.</div>';
+  const p = mgr.projectsById.get(it.projectId);
+  const s = it.status;
+  const badge = s === 'approved' ? '<span class="rv-approval-badge rv-approved">&#128274; Approved</span>'
+    : s === 'changes_requested' ? '<span class="rv-approval-badge rv-changes_requested">Changes Requested</span>'
+    : s === 'unlocked' ? '<span class="rv-approval-badge rv-unlocked">&#128275; Unlocked</span>'
+    : '<span class="rv-approval-badge rv-pending">Pending</span>';
+  const fullHref = it.kind === 'report' ? `report-viewer.html?project=${p.id}&report=${it.id}` : `pay-apps.html?project=${p.id}&estimate=${encodeURIComponent(it.id)}`;
+  const pending = statusOf(it) === 'pending';
+  const noun = it.kind === 'report' ? 'report' : 'Pay App';
+  const sub = [it.date ? (it.kind === 'report' ? shortDateLabel(it.date) : `period ending ${shortDateLabel(it.date)}`) : '', it.by ? `${it.kind === 'report' ? 'filed' : 'entered'} by ${it.by}` : ''].filter(Boolean).join(' · ');
+  let html = `<div class="pv-title"><span class="pv-ic">${p.icon || '&#128193;'}</span><div class="t"><h3>${typeLabel(it)}, ${escapeHtml(p.name)}</h3><div class="s">${escapeHtml(sub)}</div></div>${badge}</div>`;
+  if (!mobile) {
+    html += `<div class="pv-actions">${pending ? '<button type="button" class="btn-primary" data-act="approve">&#10003; Approve</button><button type="button" class="btn-danger-outline" data-act="changes">Request Changes</button>' : ''}<span class="grow"></span><a class="btn-secondary" href="${fullHref}">Open Full ${it.kind === 'report' ? 'Report' : 'Pay App'}</a></div>`;
+  }
+  // Locked, unlock requested, unlocked.
+  if (it.rec.unlockRequest && s === 'approved') {
+    html += `<div class="lock-box req" style="margin:0;"><span class="li">&#128275;</span><span class="lt"><b>${escapeHtml(it.rec.unlockRequest.by || 'The author')} asked to unlock this ${noun}</b><small>${it.rec.unlockRequest.note ? `"${escapeHtml(it.rec.unlockRequest.note)}"` : ''}</small></span><button type="button" class="btn-sm" data-act="keep-locked">Keep Locked</button><button type="button" class="btn-sm" data-act="unlock">&#128275; Unlock for Edits</button></div>`;
+  } else if (s === 'approved') {
+    html += `<div class="lock-box" style="margin:0;"><span class="li">&#128274;</span><span class="lt"><b>Locked.</b> Approved${it.rec.approvalBy ? ` by ${escapeHtml(it.rec.approvalBy)}` : ''}.<small>Nobody can change this ${noun} until a manager or admin unlocks it. Comments still work.</small></span><button type="button" class="btn-sm" data-act="unlock">&#128275; Unlock for Edits</button></div>`;
+  } else if (s === 'unlocked') {
+    html += `<div class="lock-box req" style="margin:0;"><span class="li">&#128275;</span><span class="lt"><b>Unlocked${it.rec.unlockedBy ? ` by ${escapeHtml(it.rec.unlockedBy)}` : ''}.</b><small>${it.rec.unlockReason ? `"${escapeHtml(it.rec.unlockReason)}" ` : ''}It comes back here when it's resubmitted, and locks again when approved.</small></span></div>`;
+  }
+
+  if (it.kind === 'report') {
+    const r = it.rec;
+    const flags = reportFlags(r);
+    if (flags.length) html += `<div class="pv-note">&#9888;&#65039; ${flags.map(escapeHtml).join('. ')}</div>`;
+    const temps = (r.tempHigh || r.tempLow) ? `${r.tempHigh || '--'}°/${r.tempLow || '--'}°F` : '';
+    const day = isNoWorkDayReport(r) ? 'No Work Day' : isWeatherDayReport(r) ? 'Weather Day' : '';
+    const rows = [
+      ['Day', day],
+      ['Weather', [r.weatherDesc, temps].filter(Boolean).join(' · ')],
+      ['Activity', reportActivityText(r)],
+      ['Controlling Item', r.controllingItem],
+      ['Traffic Control', r.trafficControlSelect ? (r.trafficControlSelect === 'ATTENTION_REQUIRED' ? 'Attention Required' : 'In Place') : ''],
+      ['Hours', reportInspectorHours(r).map((x) => `${x.name} ${x.hours} h`).join(', ')],
+    ].filter(([, v]) => v);
+    if (rows.length) html += `<div class="pv-sec"><h4>The Day</h4><dl class="kv">${rows.map(([k, v]) => `<dt>${k}</dt><dd${k === 'Traffic Control' && v === 'Attention Required' ? ' style="color:var(--danger);font-weight:700;"' : ''}>${escapeHtml(v)}</dd>`).join('')}</dl></div>`;
+    const overview = projectOverview(r.projectId);
+    const qty = (r.payItems || []).filter((pi) => String(pi.itemNumber || '').trim() && Number(pi.qty));
+    if (qty.length) {
+      html += `<div class="pv-sec"><h4>Quantities Logged</h4><div class="tbl-wrap"><table class="qty-table"><thead><tr><th>Item</th><th class="num">Qty</th></tr></thead><tbody>${qty.map((pi) => {
+        const it2 = overview.get(String(pi.itemNumber).trim()) || {};
+        return `<tr><td><b>${escapeHtml(pi.itemNumber)}</b> <span class="d">${escapeHtml(it2.description || pi.description || '')}</span></td><td class="num">${escapeHtml(String(pi.qty))} ${escapeHtml(it2.unit || pi.unit || '')}</td></tr>`;
+      }).join('')}</tbody></table></div></div>`;
+    }
+    const total = reportPhotoCount(r);
+    const blobs = (r.photos || []).filter(Boolean).slice(0, 6);
+    if (total) {
+      const imgs = blobs.map((b, i) => { const url = URL.createObjectURL(b); mgrPhotoUrls.push(url); return `<img src="${url}" alt="Report photo ${i + 1}">`; }).join('');
+      html += `<div class="pv-sec"><h4>Photos (${total})</h4>${imgs ? `<div class="pv-photos">${imgs}</div>` : ''}${blobs.length < total ? `<p class="hint" style="margin:0.4rem 0 0;">${blobs.length ? 'More photos' : 'Photos'} open with the full report.</p>` : ''}</div>`;
+    }
+    html += commentsHtml(it, mgr.canCommentReports);
+  } else {
+    const f = payAppFigures(it.projectId, it.rec);
+    const off = f.lines.filter((l) => l.state === 'warn' || l.state === 'over').length;
+    if (off) html += `<div class="pv-note">&#9888;&#65039; ${off} line${off === 1 ? '' : 's'} billed more than inspectors logged, or over plan</div>`;
+    html += `<div class="pv-money">
+      <div class="dash-card"><span class="dc-value">${escapeHtml(fmtMoney(f.thisPeriod))}</span><span class="dc-label">This Period</span></div>
+      <div class="dash-card"><span class="dc-value">${f.toDate != null ? escapeHtml(fmtMoney(f.toDate)) : 'n/a'}</span><span class="dc-label">Billed to Date</span></div>
+      <div class="dash-card"><span class="dc-value">${f.pct != null ? `${(f.pct * 100).toFixed(1)}%` : 'n/a'}</span><span class="dc-label">Of Contract</span>${f.prevPct != null && f.pct != null ? `<span class="dc-sub">up from ${(f.prevPct * 100).toFixed(1)}%</span>` : ''}</div>
+    </div>`;
+    const pill = { match: ['payapp-diff-match', 'Matches logs'], ok: ['payapp-diff-ok', 'Billed less than logged'], warn: ['payapp-diff-warn', 'Billed more than logged'], over: ['payapp-diff-over', 'Over plan'] };
+    if (f.lines.length) {
+      html += `<div class="pv-sec"><h4>Billed This Period vs. Logged by Inspectors</h4><div class="tbl-wrap"><table class="qty-table"><thead><tr><th>Item</th><th class="num">Billed</th><th class="num">Logged</th></tr></thead><tbody>${f.lines.map((l) => `
+        <tr><td><b>${escapeHtml(l.itemNumber)}</b> <span class="d">${escapeHtml(l.description)}</span>${l.lump ? '' : `<div><span class="pill ${pill[l.state][0]}" style="margin-top:0.2rem;">${pill[l.state][1]}</span></div>`}</td>
+        <td class="num">${l.lump ? escapeHtml(fmtMoney(l.billed)) : `${(Math.round(l.billed * 100) / 100).toLocaleString()} ${escapeHtml(l.unit)}`}</td>
+        <td class="num">${l.logged == null ? '' : `${(Math.round(l.logged * 100) / 100).toLocaleString()} ${escapeHtml(l.unit)}`}</td></tr>`).join('')}</tbody></table></div></div>`;
+    }
+    html += commentsHtml(it, mgr.canCommentPayApps);
+  }
+  return `<div class="pv-body">${html}</div>`;
+}
+
+function renderPreview() {
+  mgrPhotoUrls.forEach((u) => URL.revokeObjectURL(u));
+  mgrPhotoUrls = [];
+  const it = mgr.selected ? findItem(mgr.selected) : null;
+  const pv = $('#mgr-preview');
+  if (pv) pv.innerHTML = previewHtml(it, false);
+  if ($('#pv-type')) {
+    $('#pv-type').textContent = it ? (it.kind === 'report' ? 'REPORT' : 'PAY APP') : 'PREVIEW';
+    $('#pv-title').textContent = it ? typeLabel(it) : 'Nothing picked';
+  }
+  // Phones: the summary opens full screen, with the decision at the bottom.
+  if (narrow() && it && mgr.sheetOpen) {
+    const pending = statusOf(it) === 'pending';
+    const fullHref = it.kind === 'report' ? `report-viewer.html?project=${it.projectId}&report=${it.id}` : `pay-apps.html?project=${it.projectId}&estimate=${encodeURIComponent(it.id)}`;
+    $('#pv-root').innerHTML = `<div class="pv-sheet" role="dialog" aria-modal="true" aria-label="${escapeAttr(typeLabel(it))}">
+      <div class="pv-top"><button type="button" data-act="close-sheet">&#8249; Queue</button><span class="ttl">${escapeHtml(typeLabel(it))}</span><a href="${fullHref}">Full</a></div>
+      <div class="pv-scroll" id="mgr-preview-m">${previewHtml(it, true)}</div>
+      ${pending && mgr.composer !== 'changes' ? '<div class="pv-dock"><button type="button" class="btn-danger-outline" data-act="changes">Request Changes</button><button type="button" class="btn-primary" data-act="approve">&#10003; Approve</button></div>' : ''}
+    </div>`;
+  } else {
+    $('#pv-root').innerHTML = '';
+  }
+  if (mgr.composer === 'changes') {
+    const t = $(narrow() && mgr.sheetOpen ? '#mgr-preview-m #c-text' : '#mgr-preview #c-text');
+    if (t) t.focus();
+  }
+}
+
+function recentDecisionsHtml() {
+  // Your last decisions, newest first, from the records themselves.
+  const mine = reviewItems().filter((it) => it.rec.approvalBy && (it.rec.approvalByUid ? it.rec.approvalByUid === mgr.uid : it.rec.approvalBy === mgr.userName) && it.status !== 'pending')
+    .sort((a, b) => (b.rec.updatedAt || 0) - (a.rec.updatedAt || 0)).slice(0, 8);
+  if (!mine.length) return '<p class="hint" style="margin:0;">Your approvals and the reports you send back show here.</p>';
+  const what = { approved: ['&#128274;', 'Approved'], changes_requested: ['&#8617;&#65039;', 'Sent back'], unlocked: ['&#128275;', 'Unlocked'] };
+  return mine.map((it) => {
+    const [icon, verb] = what[it.status] || ['&#9989;', 'Reviewed'];
+    const p = mgr.projectsById.get(it.projectId);
+    const when = it.rec.updatedAt ? new Date(it.rec.updatedAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+    const note = it.status === 'unlocked' ? it.rec.unlockReason : it.status === 'changes_requested' ? ((it.rec.comments || []).slice(-1)[0] || {}).text : '';
+    return `<div class="hist-row"><span>${icon}</span><span><b>${verb}</b> <button type="button" class="text-btn" data-open="${escapeAttr(itemKey(it))}">${typeLabel(it)}, ${escapeHtml(p.name)}</button><div class="w">${escapeHtml(when)}</div>${note ? `<div class="c">"${escapeHtml(note)}"</div>` : ''}</span></div>`;
+  }).join('');
+}
+
+function managedProjectsHtml() {
+  const ids = mgr.projects.filter((p) => inScope(p.id));
+  if (!ids.length) return '<p class="hint" style="margin:0;">You’re not managing any projects yet. Use Choose Projects to pick some.</p>';
+  const items = reviewItems();
+  return `<div class="mp-grid">${ids.map((p) => {
+    const mine = items.filter((it) => it.projectId === p.id);
+    const r = mine.filter((it) => it.kind === 'report' && statusOf(it) === 'pending').length;
+    const pa = mine.filter((it) => it.kind === 'payapp' && statusOf(it) === 'pending').length;
+    const sb = mine.filter((it) => statusOf(it) === 'sent').length;
+    const badges = [r ? `<span class="rv-approval-badge rv-pending">${r} report${r === 1 ? '' : 's'}</span>` : '', pa ? `<span class="rv-approval-badge rv-pending">${pa} Pay App${pa === 1 ? '' : 's'}</span>` : '', sb ? `<span class="rv-approval-badge rv-changes_requested">${sb} sent back</span>` : ''].filter(Boolean).join('') || '<span class="rv-approval-badge rv-approved">All caught up</span>';
+    return `<a class="hub-card" href="#" data-mp="${p.id}"><span class="hc-icon">${p.icon || '&#128193;'}</span><div class="hc-title">${escapeHtml(p.name)}</div><div class="mp-badges">${badges}</div></a>`;
+  }).join('')}</div>`;
+}
+
+function renderManagerPage() {
+  overviewCache.clear();
+  const pending = queueList().counts.all;
+  const late = reviewItems().filter((it) => statusOf(it) === 'pending' && it.waited >= 3).length;
+  const today = new Date().toDateString();
+  const doneToday = reviewItems().filter((it) => it.status !== 'pending' && it.rec.approvalBy && (it.rec.approvalByUid ? it.rec.approvalByUid === mgr.uid : it.rec.approvalBy === mgr.userName) && new Date(it.rec.updatedAt || 0).toDateString() === today).length;
+  $('#mgr-main').innerHTML = `
+    <div class="mgr-head">
+      <h2>${pending ? `${pending} waiting on you` : 'All caught up'}</h2>
+      <div class="sum-chips">${late ? `<span class="sum-chip s-warn">${late} waiting 3+ days</span>` : ''}<span class="sum-chip s-ok">${doneToday} reviewed today</span></div>
+      ${mgr.isAdmin ? `<select class="small-select scope" id="mgr-scope" aria-label="Which projects"><option value="managed"${mgr.scope === 'managed' ? ' selected' : ''}>Projects I manage</option><option value="all"${mgr.scope === 'all' ? ' selected' : ''}>All company projects</option></select>` : ''}
+    </div>
+    <div class="m-tabs"><div class="segmented" id="m-tabs">${[['review', 'To Review'], ['projects', 'Projects'], ['history', 'History']].map(([v, l]) => `<button type="button" data-v="${v}" aria-pressed="${document.body.dataset.mtab === v}">${l}</button>`).join('')}</div></div>
+    <div class="inbox">
+      <div class="step" id="mgr-queue-step"><div class="step-header"><span class="step-num">REVIEW</span><h2>Waiting on You</h2></div><div class="step-body" id="mgr-queue"></div></div>
+      <div class="pv-col"><div class="step"><div class="step-header"><span class="step-num" id="pv-type">PREVIEW</span><h2 id="pv-title"></h2></div><div class="step-body" id="mgr-preview"></div></div></div>
+    </div>
+    <div class="lower">
+      <div class="step mp-col" id="mgr-projects-step"><div class="step-header"><span class="step-num">MANAGER</span><h2>Managed Projects</h2>${mgr.isAdmin && mgr.scope === 'all' ? '' : '<button type="button" class="btn-sm" id="mgr-choose" style="margin:0 0 0 auto;background:rgba(255,255,255,0.15);color:var(--on-brand);border-color:transparent;">Choose Projects</button>'}</div><div class="step-body" id="mgr-projects">${managedProjectsHtml()}</div></div>
+      <div class="step hist-col"><div class="step-header"><span class="step-num">HISTORY</span><h2>Recently Reviewed</h2></div><div class="step-body" id="mgr-history">${recentDecisionsHtml()}</div></div>
+    </div>`;
+  const list = renderQueue();
+  if (!mgr.selected || !list.some((it) => itemKey(it) === mgr.selected)) {
+    if (!(mgr.selected && findItem(mgr.selected))) mgr.selected = list[0] ? itemKey(list[0]) : null;
+  }
+  renderQueue();
+  renderPreview();
+}
+
+// ---------- My Reviews (people who don't approve) ----------
+
+function renderMyReviews() {
+  $('#mgr-title').textContent = 'My Reviews';
+  $('#mgr-sub').textContent = 'Where your reports stand with your manager';
+  renderBreadcrumb('#bb-trail', [{ label: 'Home', href: 'index.html' }, { label: 'My Reviews' }]);
+  const mine = mgr.reports.filter((r) => (r.createdByUid ? !!mgr.uid && r.createdByUid === mgr.uid : !!mgr.userName && r.createdBy === mgr.userName));
+  const recent = Date.now() - 30 * DAY_MS;
+  const back = mine.filter((r) => r.approvalStatus === 'changes_requested' || r.approvalStatus === 'unlocked');
+  const wait = mine.filter((r) => !r.approvalStatus || r.approvalStatus === 'pending').sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 20);
+  const ok = mine.filter((r) => r.approvalStatus === 'approved' && (r.updatedAt || 0) >= recent).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 20);
+  const row = (r, sub, btn) => {
+    const p = mgr.projectsById.get(r.projectId);
+    return `<div class="attn-item"><span class="ai-icon">${p.icon || '&#128193;'}</span><span class="ai-text"><b>Report #${escapeHtml(String(r.reportNo))}</b>, ${escapeHtml(p.name)}<small>${escapeHtml([r.date ? shortDateLabel(r.date) : '', sub].filter(Boolean).join(' · '))}</small></span>${btn}</div>`;
+  };
+  const lastNote = (r) => { const c = (r.comments || []).slice().reverse().find((x) => x.author && x.author !== mgr.userName); return c ? `${c.author}: "${c.text}"` : ''; };
+  $('#mgr-main').innerHTML = `
+    <div class="mgr-head"><h2>${back.length ? `${back.length} report${back.length === 1 ? ' needs' : 's need'} a fix` : 'Nothing to fix'}</h2><div class="sum-chips"><span class="sum-chip">${wait.length} waiting</span><span class="sum-chip s-ok">${ok.length} approved in the last 30 days</span></div></div>
+    <div class="eyebrow">Sent Back to You</div>
+    <div class="attn-grid">${back.map((r) => row(r, r.approvalStatus === 'unlocked' ? `Unlocked: ${r.unlockReason || ''}` : lastNote(r), `<a class="btn-secondary" href="report-editor.html?project=${r.projectId}&report=${r.id}">Fix Report</a>`)).join('') || '<p class="attn-empty">Nothing sent back.</p>'}</div>
+    <div class="eyebrow">Waiting for Approval</div>
+    <div class="attn-grid">${wait.map((r) => row(r, '', `<a class="btn-secondary" href="report-viewer.html?project=${r.projectId}&report=${r.id}">View</a>`)).join('') || '<p class="attn-empty">Nothing waiting.</p>'}</div>
+    <div class="eyebrow">Approved Recently</div>
+    <div class="attn-grid">${ok.map((r) => row(r, `\u{1F512} Approved${r.approvalBy ? ` by ${r.approvalBy}` : ''}, locked`, r.unlockRequest ? '<span class="rv-approval-badge rv-pending">Unlock requested</span>' : `<button type="button" class="btn-secondary" data-ask="${escapeAttr(r.id)}">Ask to Unlock</button>`)).join('') || '<p class="attn-empty">Nothing approved in the last 30 days.</p>'}</div>`;
+}
+
+// ---------- Actions ----------
+
+async function decide(it, status, note) {
+  const key = itemKey(it);
+  const before = it.status;
+  const { list } = queueList();
+  const idx = list.findIndex((x) => itemKey(x) === key);
+  const next = list.filter((x) => itemKey(x) !== key)[Math.max(0, idx)] || list.filter((x) => itemKey(x) !== key)[idx - 1] || null;
+  try {
+    if (it.kind === 'report') await saveReportApproval(it.id, { status, comment: note });
+    else await saveBillingEstimateApproval(it.projectId, it.id, { status, comment: note });
+  } catch (err) {
+    console.error(err);
+    alert(userError("Couldn't save that: " + err.message, 'MANAGER_REVIEW'));
+    return;
+  }
+  mgr.composer = null;
+  mgr.selected = next ? itemKey(next) : null;
+  if (!next) mgr.sheetOpen = false;
+  await refresh();
+  if (status === 'approved') {
+    showToast(`Approved and locked ${typeLabel(it)}${next ? '. The next one is open.' : ''}`, async () => {
+      if (it.kind === 'report') await saveReportApproval(it.id, { status: before });
+      else await saveBillingEstimateApproval(it.projectId, it.id, { status: before });
+      mgr.selected = key;
+      await refresh();
+    });
+  } else {
+    showToast(`Sent ${typeLabel(it)} back to ${it.by || 'its author'}`);
+  }
+}
+
+function unlockSheet(it) {
+  const noun = it.kind === 'report' ? 'report' : 'Pay App';
+  openSheet(`
+    <h3 class="sheet-title">Unlock ${typeLabel(it)}?</h3>
+    <p class="sheet-sub">${escapeHtml(mgr.projectsById.get(it.projectId).name)}. It can be changed again and goes back to Pending, then locks again once it's approved.</p>
+    <div class="sheet-field"><label class="lbl" for="ul-why">Why? (saved with the ${noun}${it.kind === 'report' ? ' and emailed to its author' : ''})</label><textarea id="ul-why" rows="3">${it.rec.unlockRequest ? escapeHtml(it.rec.unlockRequest.note || '') : ''}</textarea></div>
+    <div class="sheet-actions"><button type="button" class="btn-secondary" id="ul-no">Cancel</button><button type="button" class="btn-primary" id="ul-yes">&#128275; Unlock for Edits</button></div>`, {
+    onMount: (card) => {
+      $('#ul-no', card).addEventListener('click', closeSheet);
+      $('#ul-yes', card).addEventListener('click', async () => {
+        const why = $('#ul-why', card).value.trim();
+        if (!why) { $('#ul-why', card).closest('.sheet-field').classList.add('needs'); return; }
+        $('#ul-yes', card).disabled = true;
+        try {
+          if (it.kind === 'report') await unlockReport(it.id, why);
+          else await unlockPayApp(it.projectId, it.id, why);
+        } catch (err) {
+          console.error(err);
+          alert(userError("Couldn't unlock it: " + err.message, 'MANAGER_UNLOCK'));
+          $('#ul-yes', card).disabled = false;
+          return;
+        }
+        closeSheet();
+        mgr.filter = 'sent';
+        await refresh();
+        showToast(`Unlocked ${typeLabel(it)}`);
+      });
+    },
+  });
+}
+
+function chooseProjectsSheet() {
+  openSheet(`
+    <h3 class="sheet-title">Choose Projects</h3>
+    <p class="sheet-sub">Reports and Pay Apps on these projects come to your queue, and you get an alert when there's new activity on them.</p>
+    <div class="checklist">${mgr.projects.map((p) => `<label><input type="checkbox" data-mpick="${p.id}"${mgr.managed.has(p.id) ? ' checked' : ''}><span>${p.icon || '&#128193;'}</span>${escapeHtml(p.name)}</label>`).join('')}</div>
+    <div class="sheet-actions"><button type="button" class="btn-primary" id="ch-done">Done</button></div>`, {
+    onMount: (card) => {
+      card.addEventListener('change', async (e) => {
+        const cb = e.target.closest('[data-mpick]');
+        if (!cb) return;
+        const next = new Set(mgr.managed);
+        if (cb.checked) next.add(cb.dataset.mpick); else next.delete(cb.dataset.mpick);
+        cb.disabled = true;
+        try {
+          await saveManagedProjectIds([...next]);
+          mgr.managed = next;
+          renderManagerPage();
+        } catch (err) {
+          console.error(err);
+          cb.checked = !cb.checked; // revert
+          alert(userError("Couldn't save that: " + err.message, 'MANAGED_PROJECTS'));
+        }
         cb.disabled = false;
+      });
+      $('#ch-done', card).addEventListener('click', closeSheet);
+    },
+  });
+}
+
+function wireManagerPage() {
+  document.addEventListener('click', async (e) => {
+    if (!e.target.closest('#mgr-main, #pv-root')) return;
+    const chip = e.target.closest('[data-filter]');
+    if (chip) { mgr.filter = chip.dataset.filter; mgr.picking = false; mgr.picked = []; mgr.composer = null; mgr.selected = null; renderManagerPage(); return; }
+    const tab = e.target.closest('#m-tabs [data-v]');
+    if (tab) { document.body.dataset.mtab = tab.dataset.v; renderManagerPage(); return; }
+    if (e.target.closest('#q-pick')) { mgr.picking = !mgr.picking; mgr.picked = []; renderQueue(); return; }
+    if (e.target.closest('#q-all')) { mgr.picked = queueList().list.filter((it) => it.kind === 'report' && statusOf(it) === 'pending' && !reportFlags(it.rec).length).map(itemKey); renderQueue(); return; }
+    if (e.target.closest('#q-approve')) {
+      const n = mgr.picked.length;
+      $('#q-bulk').innerHTML = `<span class="grow">Approve and lock ${n} report${n === 1 ? '' : 's'} without opening them?</span><button type="button" class="btn-sm" id="q-no">Not Yet</button><button type="button" class="btn-sm btn-sm-ok" id="q-yes">Approve ${n}</button>`;
+      return;
+    }
+    if (e.target.closest('#q-no')) { renderQueue(); return; }
+    if (e.target.closest('#q-yes')) {
+      const keys = mgr.picked.slice();
+      for (const key of keys) {
+        const it = findItem(key);
+        if (it && it.kind === 'report') await saveReportApproval(it.id, { status: 'approved' }).catch((err) => console.error(err));
       }
-    });
-  });
-}
-
-async function renderMgrReviewList() {
-  const managed = mgrScopedProjects.filter((p) => mgrManaged.has(p.id));
-  if (!managed.length) {
-    $('#mgr-review-list').innerHTML = '';
-    $('#mgr-review-empty').hidden = false;
-    $('#mgr-review-empty').textContent = "You're not managing any projects yet -- pick some below.";
-    return;
-  }
-
-  const managedIds = new Set(managed.map((p) => p.id));
-  const projectsById = new Map(managed.map((p) => [p.id, p]));
-  const allReports = await getAllReports();
-  const pending = allReports
-    .filter((r) => managedIds.has(r.projectId) && !r.deleted && (!r.approvalStatus || r.approvalStatus !== 'approved'))
-    .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-
-  $('#mgr-review-empty').hidden = pending.length > 0;
-  $('#mgr-review-empty').textContent = 'Nothing waiting on you -- every report in your managed projects has been approved.';
-  $('#mgr-review-list').innerHTML = pending.map((r) => {
-    const project = projectsById.get(r.projectId);
-    return `
-      <a class="mp-row" href="report-viewer.html?project=${r.projectId}&report=${r.id}">
-        <span class="mp-row-name">${escapeHtml(project ? project.name : 'Unknown project')} &mdash; Report #${r.reportNo}</span>
-        <span class="mp-row-meta">${escapeHtml(r.date || '')} &middot; ${mgrFormatBadge(r.approvalStatus)}</span>
-      </a>`;
-  }).join('');
-}
-
-async function renderMgrPayAppReviewList() {
-  const managed = mgrScopedProjects.filter((p) => mgrManaged.has(p.id));
-  if (!managed.length) {
-    $('#mgr-payapp-review-list').innerHTML = '';
-    $('#mgr-payapp-review-empty').hidden = false;
-    $('#mgr-payapp-review-empty').textContent = "You're not managing any projects yet -- pick some below.";
-    return;
-  }
-
-  const pending = [];
-  managed.forEach((p) => {
-    (p.billingEstimates || []).forEach((e) => {
-      if (!e.approvalStatus || e.approvalStatus !== 'approved') pending.push({ project: p, estimate: e });
-    });
-  });
-  pending.sort((a, b) => (b.estimate.date || '').localeCompare(a.estimate.date || ''));
-
-  $('#mgr-payapp-review-empty').hidden = pending.length > 0;
-  $('#mgr-payapp-review-empty').textContent = 'Nothing waiting on you -- every Pay App in your managed projects has been approved.';
-  $('#mgr-payapp-review-list').innerHTML = pending.map(({ project, estimate }) => `
-      <a class="mp-row" href="pay-apps.html?project=${project.id}&estimate=${estimate.id}">
-        <span class="mp-row-name">${escapeHtml(project.name)} &mdash; Pay App #${escapeHtml(estimate.estimateNo || '?')}</span>
-        <span class="mp-row-meta">${escapeHtml(estimate.date || '')} &middot; ${mgrFormatBadge(estimate.approvalStatus)}</span>
-      </a>`).join('');
-}
-
-async function renderMgrProjectList() {
-  const managed = mgrScopedProjects.filter((p) => mgrManaged.has(p.id));
-  $('#mgr-projects-empty').hidden = managed.length > 0;
-  if (!managed.length) { $('#mgr-project-list').innerHTML = ''; return; }
-
-  const allReports = (await getAllReports()).filter((r) => !r.deleted);
-  $('#mgr-project-list').innerHTML = managed.map((p) => {
-    const projReports = allReports.filter((r) => r.projectId === p.id);
-    const latest = projReports.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0];
-    const metaParts = [`${projReports.length} report${projReports.length === 1 ? '' : 's'}`];
-    if (latest) metaParts.push(`latest ${escapeHtml(latest.date || '')}`);
-    if (mgrCanReports) {
-      const pendingCount = projReports.filter((r) => !r.approvalStatus || r.approvalStatus !== 'approved').length;
-      if (pendingCount) metaParts.push(`<span class="mp-row-pending">${pendingCount} report${pendingCount === 1 ? '' : 's'} pending</span>`);
+      mgr.picking = false;
+      mgr.picked = [];
+      await refresh();
+      showToast(`Approved and locked ${keys.length} report${keys.length === 1 ? '' : 's'}`, async () => {
+        for (const key of keys) { const it = findItem(key); if (it) await saveReportApproval(it.id, { status: 'pending' }).catch(() => {}); }
+        await refresh();
+      });
+      return;
     }
-    if (mgrCanPayApps) {
-      const pendingPayApps = (p.billingEstimates || []).filter((e) => !e.approvalStatus || e.approvalStatus !== 'approved').length;
-      if (pendingPayApps) metaParts.push(`<span class="mp-row-pending">${pendingPayApps} Pay App${pendingPayApps === 1 ? '' : 's'} pending</span>`);
+    const row = e.target.closest('[data-q]');
+    if (row) {
+      const key = row.dataset.q;
+      if (mgr.picking) {
+        const it = findItem(key);
+        if (!it || it.kind !== 'report') { showToast('Pay Apps have to be opened to approve'); return; }
+        if (statusOf(it) !== 'pending' || reportFlags(it.rec).length) { showToast('This one has a flag, so open it to approve'); return; }
+        mgr.picked = mgr.picked.includes(key) ? mgr.picked.filter((x) => x !== key) : mgr.picked.concat(key);
+        renderQueue();
+        return;
+      }
+      mgr.selected = key; mgr.composer = null; mgr.sheetOpen = true;
+      renderQueue(); renderPreview();
+      return;
     }
-    return `
-      <a class="mp-row" href="reports.html?project=${p.id}">
-        <span class="mp-row-name">${escapeHtml(p.name)}</span>
-        <span class="mp-row-meta">${metaParts.join(' &middot; ')}</span>
-      </a>`;
-  }).join('');
+    const open = e.target.closest('[data-open]');
+    if (open) {
+      const it = findItem(open.dataset.open);
+      if (!it) return;
+      mgr.filter = statusOf(it) === 'approved' ? 'approved' : statusOf(it) === 'sent' ? 'sent' : 'all';
+      mgr.project = 'all'; mgr.selected = open.dataset.open; mgr.sheetOpen = true;
+      document.body.dataset.mtab = 'review';
+      renderManagerPage();
+      if (!narrow()) $('#mgr-queue-step').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    const mp = e.target.closest('[data-mp]');
+    if (mp) {
+      e.preventDefault();
+      mgr.project = mp.dataset.mp; mgr.filter = 'all'; mgr.selected = null;
+      document.body.dataset.mtab = 'review';
+      renderManagerPage();
+      $('#mgr-queue-step').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      return;
+    }
+    if (e.target.closest('#mgr-choose')) return chooseProjectsSheet();
+    const ask = e.target.closest('[data-ask]');
+    if (ask) {
+      const r = mgr.reports.find((x) => x.id === ask.dataset.ask);
+      openSheet(`
+        <h3 class="sheet-title">Ask to Unlock Report #${escapeHtml(String(r.reportNo))}</h3>
+        <p class="sheet-sub">Approved reports are locked. Say what needs changing and your manager can unlock it for you.</p>
+        <div class="sheet-field"><label class="lbl" for="ask-why">What needs changing?</label><textarea id="ask-why" rows="3" placeholder="e.g. Forgot to log 12 LF of pipe"></textarea></div>
+        <div class="sheet-actions"><button type="button" class="btn-secondary" id="ask-no">Cancel</button><button type="button" class="btn-primary" id="ask-yes">Send Request</button></div>`, {
+        onMount: (card) => {
+          $('#ask-no', card).addEventListener('click', closeSheet);
+          $('#ask-yes', card).addEventListener('click', async () => {
+            const why = $('#ask-why', card).value.trim();
+            if (!why) { $('#ask-why', card).closest('.sheet-field').classList.add('needs'); return; }
+            await requestReportUnlock(r.id, why);
+            closeSheet();
+            await refresh();
+            showToast('Request sent');
+          });
+        },
+      });
+      return;
+    }
+    const act = e.target.closest('[data-act]');
+    if (!act) return;
+    const a = act.dataset.act;
+    if (a === 'close-sheet') { mgr.sheetOpen = false; mgr.composer = null; renderPreview(); return; }
+    const it = mgr.selected ? findItem(mgr.selected) : null;
+    if (!it) return;
+    const text = () => { const t = $(narrow() && mgr.sheetOpen ? '#mgr-preview-m #c-text' : '#mgr-preview #c-text'); return t ? t.value.trim() : ''; };
+    if (a === 'approve') return decide(it, 'approved');
+    if (a === 'changes') {
+      mgr.composer = 'changes';
+      renderPreview();
+      const c = $(narrow() && mgr.sheetOpen ? '#mgr-preview-m #composer' : '#mgr-preview #composer');
+      if (c) c.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    if (a === 'cancel-changes') { mgr.composer = null; renderPreview(); return; }
+    if (a === 'send-changes') {
+      const note = text();
+      if (!note) { showToast('Add a note so they know what to fix'); return; }
+      return decide(it, 'changes_requested', note);
+    }
+    if (a === 'comment') {
+      const note = text();
+      if (!note) return;
+      if (it.kind === 'report') await saveReportApproval(it.id, { comment: note });
+      else await saveBillingEstimateApproval(it.projectId, it.id, { comment: note });
+      await refresh();
+      showToast('Comment posted');
+      return;
+    }
+    if (a === 'unlock') return unlockSheet(it);
+    if (a === 'keep-locked' && it.kind === 'report') {
+      await declineReportUnlock(it.id, 'Keeping this report locked. Add the change to your next report instead.');
+      await refresh();
+      showToast('Kept locked. Your note was sent.');
+    }
+  });
+  document.addEventListener('change', (e) => {
+    if (e.target.id === 'q-project') { mgr.project = e.target.value; mgr.selected = null; renderManagerPage(); }
+    if (e.target.id === 'q-sort') { mgr.sort = e.target.value; renderQueue(); }
+    if (e.target.id === 'mgr-scope') { mgr.scope = e.target.value; mgr.project = 'all'; mgr.selected = null; renderManagerPage(); }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && mgr.sheetOpen && narrow() && !sheetIsOpen()) { mgr.sheetOpen = false; renderPreview(); }
+  });
+  window.addEventListener('resize', () => { if (!sheetIsOpen()) renderPreview(); });
+}
+
+async function refresh() {
+  await loadManagerData();
+  if (!mgr.canReports && !mgr.canPayApps) renderMyReviews();
+  else renderManagerPage();
 }
 
 (async () => {
-  await renderManagerPage();
+  renderBreadcrumb('#bb-trail', [{ label: 'Home', href: 'index.html' }, { label: 'Manager' }]);
+  wireManagerPage();
+  await refresh();
+  if (mgr.canReports || mgr.canPayApps) {
+    // A real visit to the one place that shows this -- clears the
+    // new-activity banner everywhere else.
+    await markManagedProjectsSeen();
+    if (typeof refreshManagedProjectsAlertBanner === 'function') refreshManagedProjectsAlertBanner();
+  }
+  wireAutoPull();
 })();
 
-window.addEventListener('company-data-pulled', () => { renderManagerPage(); });
+window.addEventListener('company-data-pulled', () => { if (!sheetIsOpen()) refresh(); });
 </script>
 </body>
 </html>

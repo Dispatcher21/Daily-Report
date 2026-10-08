@@ -111,7 +111,13 @@
         <div class="rv-approval-actions" id="rv-approval-actions" hidden>
           <button type="button" class="btn-sm" id="rv-btn-approve">&#10003; Approve</button>
           <button type="button" class="btn-sm" id="rv-btn-request-changes">&#8635; Request Changes</button>
+          <button type="button" class="btn-sm" id="rv-btn-unlock" hidden>&#128275; Unlock for Edits</button>
         </div>
+      </div>
+      <div class="lock-box req" id="rv-unlock-request" hidden>
+        <span class="li" aria-hidden="true">&#128275;</span>
+        <span class="lt"><b id="rv-unlock-request-who"></b><small id="rv-unlock-request-note"></small></span>
+        <button type="button" class="btn-sm" id="rv-btn-keep-locked">Keep Locked</button>
       </div>
 
       <div class="rv-comments-scroll" id="rv-comments-scroll">
@@ -510,6 +516,7 @@ window.addEventListener('popstate', () => location.reload());
 const APPROVAL_LABELS = {
   approved: 'Approved',
   changes_requested: 'Changes Requested',
+  unlocked: 'Unlocked',
 };
 
 function formatCommentTime(iso) {
@@ -714,6 +721,18 @@ function renderReviewPanel(report) {
   headerBadge.textContent = badge.textContent;
   headerBadge.className = `rv-approval-badge rv-header-badge rv-${status}`;
   headerBadge.hidden = false;
+  // Approved means locked: approving again or asking for changes doesn't
+  // apply until it's unlocked.
+  const locked = status === 'approved';
+  $('#rv-btn-approve').hidden = locked;
+  $('#rv-btn-request-changes').hidden = locked;
+  $('#rv-btn-unlock').hidden = !locked;
+  const ask = locked && report.unlockRequest;
+  $('#rv-unlock-request').hidden = !(ask && rvCanApprove);
+  if (ask) {
+    $('#rv-unlock-request-who').textContent = `${report.unlockRequest.by || 'The author'} asked to unlock this report`;
+    $('#rv-unlock-request-note').textContent = report.unlockRequest.note ? `"${report.unlockRequest.note}"` : '';
+  }
 
   const comments = report.comments || [];
   const list = $('#rv-comments');
@@ -875,6 +894,14 @@ async function initReviewPanel(report) {
   // a new listener (closed over the now-superseded `report`) on top of
   // every previous one instead of replacing it.
   $('#rv-btn-approve').onclick = () => applyApproval({ status: 'approved' });
+  $('#rv-btn-unlock').onclick = () => {
+    const why = prompt('Unlock this report so it can be changed? Say why (saved as a comment and emailed to its author):', report.unlockRequest ? report.unlockRequest.note || '' : '');
+    if (!why || !why.trim()) return;
+    unlockReport(report.id, why.trim()).then((r) => { report = r; renderReviewPanel(report); });
+  };
+  $('#rv-btn-keep-locked').onclick = () => {
+    declineReportUnlock(report.id, 'Keeping this report locked. Add the change to your next report instead.').then((r) => { report = r; renderReviewPanel(report); });
+  };
   $('#rv-btn-request-changes').onclick = () => applyApproval({ status: 'changes_requested' });
   $('#rv-btn-pin-toggle').onclick = () => {
     pinModeActive = !pinModeActive;

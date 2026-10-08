@@ -59,16 +59,27 @@ service cloud.firestore {
     // Once accounts are required, permission `key` per the role table;
     // before that, anyone signed in (the old password-only behavior).
     function allowed(code, key) { return signedIn() && (openToAccounts(code) || can(code, key)); }
-    // A change that only touches a report's review: approval and comments,
-    // or just one of the two.
+    // A change that only touches a report's review: approval (including
+    // unlocking an approved report) and comments, or just one of the two.
+    // An unlock request rides with a comment.
     function reviewOnly() {
-      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approvalStatus', 'approvalBy', 'approvalByUid', 'comments', 'updatedAt']);
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approvalStatus', 'approvalBy', 'approvalByUid', 'comments', 'unlockRequest', 'unlockedBy', 'unlockedByUid', 'unlockedAt', 'unlockReason', 'updatedAt']);
     }
     function approvalOnly() {
-      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approvalStatus', 'approvalBy', 'approvalByUid', 'updatedAt']);
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approvalStatus', 'approvalBy', 'approvalByUid', 'unlockRequest', 'unlockedBy', 'unlockedByUid', 'unlockedAt', 'unlockReason', 'updatedAt']);
     }
     function commentsOnly() {
-      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['comments', 'updatedAt']);
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['comments', 'unlockRequest', 'updatedAt']);
+    }
+    // An approved report is locked: until a manager or admin unlocks it,
+    // only comments (and asking for an unlock) can change, plus its
+    // approval -- and that only by someone who approves reports. Applies
+    // before accounts are required too, so an old copy of the app can't
+    // overwrite an approved report.
+    function unlockedOrReview(code) {
+      return resource.data.get('approvalStatus', '') != 'approved'
+        || commentsOnly()
+        || (reviewOnly() && (openToAccounts(code) || can(code, 'membersCanApproveReports')));
     }
     // A report this person wrote: by account, or (older reports, from before
     // accounts) by the name on their member record.
@@ -168,6 +179,7 @@ service cloud.firestore {
         // Per the role table: anyone's reports, their own, or just the review
         // (approving and commenting are separate permissions).
         allow update: if canSeeProject(code, resource.data.projectId) && canSeeProject(code, request.resource.data.projectId)
+          && unlockedOrReview(code)
           && (openToAccounts(code)
               || can(code, 'membersCanEditAnyReport')
               || (can(code, 'membersCanEditOwnReports') && ownsReport(code, resource.data)

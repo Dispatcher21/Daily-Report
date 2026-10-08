@@ -80,6 +80,12 @@
             <button type="button" class="btn-sm btn-sm-danger" id="btn-delete-estimate">Delete</button>
           </div>
         </div>
+        <div class="lock-box" id="pa-locked" hidden>
+          <span class="li" aria-hidden="true">&#128274;</span>
+          <span class="lt"><b>This Pay App is approved and locked.</b> <span id="pa-locked-who"></span>
+            <small>It can't be edited or deleted until a manager or admin unlocks it.</small></span>
+          <button type="button" class="btn-sm" id="pa-unlock-btn" hidden>&#128275; Unlock for Edits</button>
+        </div>
         <div class="pa-view-meta-row">
           <p class="pa-view-meta" id="pa-view-meta"></p>
           <a class="text-btn" id="pa-period-link" href="#">What was logged in this period &rarr;</a>
@@ -105,7 +111,7 @@
 
       <!-- Filling in a Pay App (new, or Edit on a recorded one). -->
       <div id="pa-editor" hidden>
-        <p class="pa-note" id="pa-approved-note" hidden>This Pay App is approved. Saving changes to it sends it back to Pending for another review.</p>
+        <p class="pa-note" id="pa-approved-note" hidden>This Pay App was unlocked for changes. Saving it sends it back to Pending for another review, and it locks again once it's approved.</p>
         <div class="field-grid pa-fields" id="estimate-form">
           <label>Pay App No. <input type="text" id="f-est-no"></label>
           <label>Date <input type="date" id="f-est-date"></label>
@@ -211,6 +217,7 @@ async function init() {
 const PAYAPP_APPROVAL_LABELS = {
   approved: 'Approved',
   changes_requested: 'Changes Requested',
+  unlocked: 'Unlocked',
 };
 
 function statusBadgeHtml(estimate) {
@@ -343,6 +350,22 @@ function markDirty() {
 
 $('#pa-jump-review').addEventListener('click', () => {
   $('#pa-review').scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+
+$('#pa-unlock-btn').addEventListener('click', async () => {
+  const estimate = selectedEstimate();
+  if (!estimate || !confirmDiscard()) return;
+  const why = prompt(`Unlock Pay App ${estimate.estimateNo} so it can be changed? Say why (saved as a comment):`, '');
+  if (!why || !why.trim()) return;
+  try {
+    project = await unlockPayApp(project.id, estimate.id, why.trim());
+  } catch (err) {
+    console.error(err);
+    alert(userError("Couldn't unlock it: " + err.message, 'PAYAPP_UNLOCK'));
+    return;
+  }
+  renderList();
+  renderDetail();
 });
 
 $('#pa-edit-btn').addEventListener('click', () => {
@@ -492,7 +515,7 @@ function renderEditor(editing) {
   const ownTotals = totalsMap(editing);
   const items = payAppItems(prev, editing);
   editorItems = new Map(items.map((it) => [it.itemNumber, it]));
-  $('#pa-approved-note').hidden = !(editing && editing.approvalStatus === 'approved');
+  $('#pa-approved-note').hidden = !(editing && editing.approvalStatus === 'unlocked');
   $('#f-est-no').value = editing ? editing.estimateNo : nextEstimateNo(project.billingEstimates);
   $('#f-est-date').value = editing ? editing.date : todayIso();
   $('#f-est-note').value = editing ? (editing.note || '') : '';
@@ -640,6 +663,13 @@ function renderBreakdown(estimate) {
   const badge = $('#pa-detail-badge');
   badge.className = `rv-approval-badge rv-${status}`;
   badge.textContent = PAYAPP_APPROVAL_LABELS[status] || 'Pending';
+  // Approved means locked: no Edit or Delete until it's unlocked.
+  const locked = status === 'approved';
+  $('#pa-edit-btn').hidden = locked;
+  $('#btn-delete-estimate').hidden = locked;
+  $('#pa-locked').hidden = !locked;
+  $('#pa-locked-who').textContent = locked && estimate.approvalBy ? `Approved by ${estimate.approvalBy}.` : '';
+  $('#pa-unlock-btn').hidden = !(locked && canApprovePayApps);
   const comments = (estimate.comments || []).length;
   $('#pa-jump-review').textContent = comments ? `${comments} comment${comments === 1 ? '' : 's'} ↓` : (canApprovePayApps || canCommentPayApps ? 'Review ↓' : 'Comments ↓');
 
@@ -751,7 +781,7 @@ function renderReview() {
     : '<p class="hint" style="margin:0;">No comments yet.</p>';
   $('#pa-review-body').innerHTML = `
     <div class="rv-approval-row">${statusBadgeHtml(estimate)}
-    ${canApprovePayApps ? `
+    ${canApprovePayApps && estimate.approvalStatus !== 'approved' ? `
       <span class="rv-approval-actions">
         <button type="button" class="btn-sm" id="pa-approve">&#10003; Approve</button>
         <button type="button" class="btn-sm" id="pa-request-changes">&#8635; Request Changes</button>
@@ -808,6 +838,11 @@ $('#btn-record-estimate').addEventListener('click', async () => {
   const note = $('#f-est-note').value.trim();
   const editing = selectedEstimate();
   $('#estimate-error').hidden = true;
+  if (editing && isApprovedLocked(editing)) {
+    $('#estimate-error').textContent = 'This Pay App is approved and locked. Unlock it first.';
+    $('#estimate-error').hidden = false;
+    return;
+  }
   if (!estimateNo || !date) {
     $('#estimate-error').textContent = 'Pay App No. and Date are both required.';
     $('#estimate-error').hidden = false;
@@ -865,7 +900,7 @@ $('#btn-record-estimate').addEventListener('click', async () => {
 
 $('#btn-delete-estimate').addEventListener('click', async () => {
   const estimate = selectedEstimate();
-  if (!estimate) return;
+  if (!estimate || isApprovedLocked(estimate)) return;
   if (!confirm(`Delete Pay App ${estimate.estimateNo} (${estimate.date})? This can't be undone.`)) return;
   project.billingEstimates = (project.billingEstimates || []).filter((e) => e.id !== estimate.id);
   await saveProject(project);

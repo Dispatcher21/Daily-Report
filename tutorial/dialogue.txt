@@ -178,7 +178,7 @@ Points at: portfolio panel
 For: manager
 This is the Manager Dashboard. It rolls up every project you manage: total
 contract value, money earned so far, reports filed this week, and who is
-behind schedule.
+behind schedule. Edit Dashboard lets you move, add or remove its widgets.
 
 [4]
 Emotion: pointing
@@ -302,7 +302,8 @@ weather days, no work days, and days traffic control needed attention.
 Emotion: neutral
 Points at: trend chart
 For: manager
-Progress Over Time charts how the job is moving, report by report.
+Progress Over Time charts how the job is moving, report by report. Stay
+above the dashed line and you're on pace to finish on time.
 
 [10]
 Emotion: neutral
@@ -861,19 +862,20 @@ The Manager page is your to-do list for every project you manage.
 [2]
 Emotion: pointing
 Points at: reports to review
-Reports waiting on your approval show up here, along with any you've
-sent back for changes.
+Reports waiting on your approval show up here. Tap one and it opens
+right beside the list, so you can approve it or send it back
+without leaving the page.
 
 [3]
 Emotion: thinking
 Points at: managed projects
-Check the projects you manage. Their new reports show up here and light
-up the activity bar.
+Choose Projects picks the projects you manage. Their new reports show up
+here and light up the activity bar.
 
 [4]
 Emotion: pointing
 Points at: first report
-Tap a report to open it, and let's review it!
+Tap a report to see it, then Open Full Report to review it!
 
 
 === SETTINGS (settings.html) ===

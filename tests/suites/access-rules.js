@@ -131,6 +131,17 @@ const raw = (p, fn, arg) => p.evaluate(async ({ src, arg }) => {
   check('...but not edit it', await raw(Bp, `await fs.updateDoc(fs.doc(db, 'companies', code, 'reports', '${bobReport}'), { notes: 'edit' });`), 'permission-denied');
   await A.evaluate(() => updateRolePermission('inspector', 'membersCanEditOwnReports', true));
 
+  // Approved reports are locked until a manager or admin unlocks them.
+  const setOn = (id, fields) => `await fs.updateDoc(fs.doc(db, 'companies', code, 'reports', '${id}'), Object.assign(${JSON.stringify(fields)}, { updatedAt: Date.now() }));`;
+  check('admin approves Bob\'s report', await raw(A, setOn(bobReport, { approvalStatus: 'approved', approvalBy: 'Alice' })), 'ok');
+  check('locked: owner cannot edit an approved report', await raw(Bp, setOn(bobReport, { notes: 'after approval' })), 'permission-denied');
+  check('locked: owner can still comment', await raw(Bp, commentOn(bobReport)), 'ok');
+  check('locked: owner can ask to unlock', await raw(Bp, setOn(bobReport, { unlockRequest: { by: 'Bob', at: 1, note: 'typo' } })), 'ok');
+  check('locked: owner cannot unlock it themselves', await raw(Bp, setOn(bobReport, { approvalStatus: 'unlocked' })), 'permission-denied');
+  check('locked: even an editor of any report cannot change content', await raw(M, setOn(bobReport, { notes: 'manager edit' })), 'permission-denied');
+  check('admin unlocks it', await raw(A, setOn(bobReport, { approvalStatus: 'unlocked', unlockedBy: 'Alice', unlockedAt: Date.now(), unlockReason: 'typo', unlockRequest: null })), 'ok');
+  check('unlocked: owner can edit again', await raw(Bp, setOn(bobReport, { notes: 'fixed', approvalStatus: 'pending' })), 'ok');
+
   // Activity log is append-only.
   check('activity log entry cannot be edited', await raw(A, `const d = (await fs.getDocs(fs.collection(db, 'companies', code, 'auditLog'))).docs[0]; await fs.updateDoc(d.ref, { userName: 'Someone Else' });`), 'permission-denied');
   check('activity log entry cannot be deleted', await raw(A, `const d = (await fs.getDocs(fs.collection(db, 'companies', code, 'auditLog'))).docs[0]; await fs.deleteDoc(d.ref);`), 'permission-denied');
