@@ -88,6 +88,192 @@ function tutorialWeekdays(count) {
   return out;
 }
 
+// DEMO-101, the project the guided tour walks through. Its numbers are the
+// ones the tour's lines (and the quantities suite) talk about, so change
+// them with care.
+const TUTORIAL_DEMO = {
+  projectNo: 'DEMO-101',
+  name: 'DEMO-101 - Puddleton Storm Drain',
+  projectName: 'Riverside Drive Drainage Improvements, Puddleton',
+  icon: '\u{1F6A7}',
+  contractLength: '120',
+  engineer: TUTORIAL_ENGINEER,
+  helpers: TUTORIAL_INSPECTORS,
+  contractors: ['Delta Civil Constructors', 'Gulf Coast Paving', 'Bayou Traffic Control'],
+  catalog: [
+    { itemNumber: '201-01', description: 'Clearing and Grubbing', unit: 'LS', plannedQty: 1, unitPrice: 15000 },
+    { itemNumber: '202-01', description: 'Removal of Existing Pavement', unit: 'SY', plannedQty: 2400, unitPrice: 12.5 },
+    { itemNumber: '502-01', description: 'Asphalt Concrete', unit: 'TON', plannedQty: 650, unitPrice: 145 },
+    { itemNumber: '701-03', description: '24" Storm Drain Pipe', unit: 'LF', plannedQty: 1800, unitPrice: 95 },
+    { itemNumber: '702-01', description: 'Catch Basin', unit: 'EA', plannedQty: 14, unitPrice: 4200 },
+    { itemNumber: '713-01', description: 'Temporary Traffic Control', unit: 'LS', plannedQty: 1, unitPrice: 38000 },
+  ],
+  // Crew counts in the Contractors Force & Equipment table: one column per
+  // contractor, one row per role/equipment label. The paver crew shows up
+  // on asphalt days.
+  crew: (day) => {
+    const paving = day.pay.some(([n]) => n === '502-01');
+    return { Superintendent: ['1'], Foreman: ['1', paving ? '1' : ''], Operators: ['3', paving ? '4' : ''], Laborers: ['5', ''], 'Pickup truck': ['2', '', '1'], 'Attenuator truck': ['', '', '1'] };
+  },
+  days: TUTORIAL_DAYS,
+  payApps: (dates) => [{
+    id: crypto.randomUUID(), estimateNo: '1', date: dates[9], note: 'Example Pay App',
+    itemTotals: { '201-01': 15000, '202-01': 650, '701-03': 474, '702-01': 1, '713-01': 9500 },
+    approvalStatus: 'approved', updatedAt: Date.now(),
+  }, {
+    // Sent back by the engineer, with a comment -- so the tutorial's Pay
+    // Apps page and Manager page have a review in progress to show.
+    // Matches what was logged through its date, except asphalt: 300 TON
+    // billed against 244 logged -- what the engineer's comment questions.
+    id: crypto.randomUUID(), estimateNo: '2', date: dates[16], note: 'Pay Application 2',
+    itemTotals: { '201-01': 15000, '202-01': 1230, '502-01': 300, '701-03': 746, '702-01': 4, '713-01': 19500 },
+    approvalStatus: 'changes_requested', updatedAt: Date.now(),
+    comments: [{ id: crypto.randomUUID(), author: TUTORIAL_ENGINEER, text: 'Asphalt (502-01) is higher than the tickets I have. Can you double check it?', createdAt: Date.now() - 7200000 }],
+  }],
+};
+
+// The other example projects: one of each kind of job, all very obviously
+// made up. Same shape as TUTORIAL_DEMO; a day's `pay` logs [item, qty]
+// (a Lump Sum item logs dollars, as in the app). `ntpDaysAgo` sets how
+// far into the contract each one is, so the Manager Dashboard has a mix
+// of on-pace and behind-schedule jobs, and `everyNth` spreads the reports
+// out (one every Nth weekday, the last one today) across that time.
+const TUTORIAL_OTHER_PROJECTS = [
+  {
+    projectNo: 'SHIRE-007',
+    name: 'SHIRE-007 - Green Dragon Inn East Wing',
+    projectName: 'Green Dragon Inn Addition, Bywater, The Shire',
+    icon: '\u{1F3E1}',
+    contractLength: '180',
+    ntpDaysAgo: 40,
+    everyNth: 4,
+    engineer: 'Archie Tect, P.E.',
+    helpers: ['Sandy Loam', 'Mason Jarr'],
+    contractors: ['Proudfoot Masonry', 'Gamgee & Sons Landscaping', 'Brandybuck Ferry & Hauling'],
+    catalog: [
+      { itemNumber: '100-01', description: 'Round Door, Green, Brass Knob Dead Center', unit: 'EA', plannedQty: 4, unitPrice: 2500 },
+      { itemNumber: '210-01', description: 'Hillside Excavation (Smial)', unit: 'CY', plannedQty: 850, unitPrice: 38 },
+      { itemNumber: '320-01', description: 'Oak Timber Framing', unit: 'MBF', plannedQty: 42, unitPrice: 1900 },
+      { itemNumber: '410-01', description: 'Fieldstone Chimney', unit: 'EA', plannedQty: 3, unitPrice: 6800 },
+      { itemNumber: '520-01', description: 'Living Turf Roof', unit: 'SF', plannedQty: 6000, unitPrice: 14 },
+      { itemNumber: '610-01', description: 'Ale Cellar, Climate Controlled', unit: 'LS', plannedQty: 1, unitPrice: 45000 },
+      { itemNumber: '900-01', description: 'Second Breakfast Allowance', unit: 'LS', plannedQty: 1, unitPrice: 8000 },
+    ],
+    crew: () => ({ Superintendent: ['1'], Foreman: ['1', '1'], Laborers: ['4', '3'], 'Pickup truck': ['', '', '1'] }),
+    days: [
+      { activity: 'Layout', summary: 'Staked out the east wing. Mr. Proudfoot disputed the stakes along his hedge; the survey puts them 4 in. inside the Inn\'s property. He remains unconvinced.', pay: [], weather: 'Pleasant, light breeze', hi: 72, lo: 55, photos: ['East wing staked out'] },
+      { activity: 'Hillside excavation', summary: 'Dug 180 CY into the hill for the east wing. Work paused at 9:00 for second breakfast and 11:00 for elevenses, per local custom (see Second Breakfast Allowance).', pay: [['210-01', 180], ['900-01', 600]], weather: 'Sunny', hi: 74, lo: 56, photos: ['Excavating into the hill'] },
+      { activity: 'Hillside excavation', summary: 'Excavated another 240 CY. A laborer found a plain gold ring in the spoil pile and would not hand it over, calling it "precious." The laborer is no longer with the project.', pay: [['210-01', 240], ['900-01', 600]], weather: 'Partly cloudy', hi: 71, lo: 54, photos: ['Spoil pile (ring not pictured)'] },
+      { activity: '', notes: 'NO WORK DAY - birthday party at the Party Tree. Entire crew, the contractor and the inspector attended. The host vanished mid-speech.', weather: 'Sunny', hi: 75, lo: 57 },
+      { activity: 'Timber framing', summary: 'Set oak beams for the new common room. Ceiling height 6\'-2" per the Shire building code. A "Mind your head" sign for tall wizards is on order.', pay: [['320-01', 12], ['900-01', 600]], weather: 'Pleasant', hi: 73, lo: 55, photos: ['Oak beams set'], approval: 'approved' },
+      { activity: 'Round doors', summary: 'Hung two round green doors. Brass knobs verified dead center per spec Section 08 11 00. A visiting wizard scratched a rune into one; contractor to repaint at no cost.', pay: [['100-01', 2]], weather: 'Light rain', hi: 66, lo: 54, photos: ['Round door, east entrance', 'Rune to be painted over'], approval: 'approved' },
+      { activity: 'Turf roof', summary: 'Laid 1,800 SF of living turf roof on the east wing. Rabbit damage noted at the NE corner.', pay: [['520-01', 1800], ['900-01', 600]], weather: 'Sunny', hi: 76, lo: 58, photos: ['Turf roof going on'], approval: 'changes_requested', comment: { author: 'Archie Tect, P.E.', text: 'Please confirm the rabbits were relocated, and not, as one of the gardeners suggested, stewed.' } },
+    ],
+  },
+  {
+    projectNo: 'TAT-0042',
+    name: 'TAT-0042 - Moisture Farm Geotech',
+    projectName: 'Lars Moisture Farm Foundation Investigation, Tatooine',
+    icon: '\u{1F3DC}\u{FE0F}',
+    contractLength: '60',
+    ntpDaysAgo: 20,
+    everyNth: 2,
+    engineer: 'Dee Watering, P.E.',
+    helpers: ['Augie Drill', 'Cory Sample'],
+    contractors: ['Jawa Drilling Co.', 'Anchorhead Lab Services', 'Tosche Station Supply'],
+    catalog: [
+      { itemNumber: '101-01', description: 'Mobilization (Bantha-Drawn)', unit: 'LS', plannedQty: 1, unitPrice: 12000 },
+      { itemNumber: '201-01', description: 'Soil Boring, Sand', unit: 'LF', plannedQty: 400, unitPrice: 65 },
+      { itemNumber: '201-02', description: 'Standard Penetration Test', unit: 'EA', plannedQty: 80, unitPrice: 45 },
+      { itemNumber: '202-01', description: 'Cone Penetration Test Sounding', unit: 'LF', plannedQty: 300, unitPrice: 30 },
+      { itemNumber: '301-01', description: 'Lab Test, Grain Size (It Is Sand)', unit: 'EA', plannedQty: 40, unitPrice: 120 },
+      { itemNumber: '301-02', description: 'Lab Test, Moisture Content', unit: 'EA', plannedQty: 40, unitPrice: 60 },
+      { itemNumber: '401-01', description: 'Sand Removal From Equipment', unit: 'HR', plannedQty: 200, unitPrice: 95 },
+    ],
+    crew: () => ({ Foreman: ['1'], Operators: ['2'], Laborers: ['2', '1'], 'Pickup truck': ['1', '1'] }),
+    days: [
+      { activity: 'Mobilization', summary: 'Drill rig arrived from Anchorhead. The Jawa crew described it as "mostly working." It sparked during the first inspection, so it got a second one.', pay: [['101-01', 12000]], weather: 'Clear, two suns', hi: 128, lo: 71, photos: ['Drill rig (mostly working)'] },
+      { activity: 'Borings B-1, B-2', summary: 'Drilled B-1 and B-2 to 50 ft. Soil: SAND, fine; SAND, coarse; and SAND. Groundwater not encountered, to nobody\'s surprise.', pay: [['201-01', 100], ['201-02', 20]], weather: 'Clear, two suns', hi: 131, lo: 73, photos: ['Boring B-1', 'Split spoon sample (sand)'] },
+      { activity: 'Boring B-3', summary: 'B-3 terminated at 12 ft when the driller reported the hole "growled." Boring offset 200 ft east per the Sarlacc avoidance plan.', pay: [['201-01', 12], ['201-02', 2]], weather: 'Clear, two suns', hi: 129, lo: 72, photos: ['B-3, abandoned'], approval: 'approved' },
+      { activity: '', notes: 'WEATHER DAY - sandstorm, visibility zero', weather: 'Sandstorm', hi: 118, lo: 80 },
+      { activity: 'CPT soundings', summary: 'Pushed CPT-1 and CPT-2 to refusal at 40 ft. Sand People observed on the ridge all afternoon; no contact. Crew kept the rig horn handy.', pay: [['202-01', 80]], weather: 'Clear, two suns', hi: 127, lo: 70, photos: ['CPT rig set up'] },
+      { activity: 'Lab testing', summary: 'Delivered 18 samples to the lab in Mos Eisley. Moisture contents: 0.0%, 0.0%, and 0.1% (that sample was sneezed on).', pay: [['301-01', 18], ['301-02', 18]], weather: 'Clear, two suns', hi: 130, lo: 72, photos: ['Samples to the lab'], approval: 'changes_requested', comment: { author: 'Dee Watering, P.E.', text: 'Moisture farm, 0.0% moisture. Please confirm the owner knows.' } },
+      { activity: 'Equipment cleaning', summary: 'Cleaned sand out of the rig, the truck, the inspector\'s boots, and somehow the sealed sample jars. It\'s coarse and rough and irritating, and it gets everywhere.', pay: [['401-01', 24]], weather: 'Clear, two suns', hi: 128, lo: 71, photos: ['Sand, everywhere'] },
+    ],
+  },
+  {
+    projectNo: 'MOR-0001',
+    name: 'MOR-0001 - Bridge of Khazad-dum',
+    projectName: 'Bridge of Khazad-dum Replacement, Moria',
+    icon: '\u{1F309}',
+    contractLength: '365',
+    ntpDaysAgo: 330,
+    everyNth: 30,
+    engineer: 'Gail Vanized, P.E.',
+    helpers: ['Abby Utment', 'Pierce Cap'],
+    contractors: ["Durin's Folk Ironworks", 'Khazad Concrete Co.', 'Watcher Pumping Services'],
+    catalog: [
+      { itemNumber: '105-01', description: 'Removal of Previous Bridge (Balrog Incident)', unit: 'LS', plannedQty: 1, unitPrice: 85000 },
+      { itemNumber: '401-01', description: 'Mithril Reinforcing Steel', unit: 'LB', plannedQty: 12000, unitPrice: 950 },
+      { itemNumber: '402-01', description: 'Structural Steel, Dwarf-Forged', unit: 'LB', plannedQty: 180000, unitPrice: 4.5 },
+      { itemNumber: '501-01', description: 'Bridge Deck Concrete', unit: 'CY', plannedQty: 320, unitPrice: 900 },
+      { itemNumber: '601-01', description: 'Handrails (First Ever on This Crossing)', unit: 'LF', plannedQty: 300, unitPrice: 210 },
+      { itemNumber: '701-01', description: 'Fire-Resistant Coating', unit: 'SF', plannedQty: 9000, unitPrice: 18 },
+    ],
+    crew: () => ({ Superintendent: ['1'], Foreman: ['1', '1'], Operators: ['2', '1'], Laborers: ['6', '4', '1'] }),
+    days: [
+      { activity: 'Debris removal', summary: 'Removed what was left of the old bridge: 2 ft wide, no handrails, over a bottomless chasm. We have questions about the original design. No sign of the previous occupant; inspector recommends keeping it that way.', pay: [['105-01', 34000]], weather: 'Dark (underground)', hi: 68, lo: 68, photos: ['What was left of the old bridge'] },
+      { activity: 'East abutment', summary: 'Formed and poured the east abutment, 45 CY. Crew reported drums in the deep again. Foreman confirmed it was the concrete vibrator.', pay: [['501-01', 45]], weather: 'Dark (underground)', hi: 68, lo: 68, photos: ['East abutment pour'] },
+      { activity: 'Structural steel', summary: 'Erected girders G1 to G4. The ironworkers sing the whole time; the Watcher in the Water filed a noise complaint.', pay: [['402-01', 64000]], weather: 'Dark, echoing', hi: 69, lo: 68, photos: ['Girders G1 to G4'] },
+      { activity: 'Mithril reinforcing', summary: 'Placed mithril reinforcing in the deck: light as a feather, hard as dragon scales. Bar count verified twice. Nobody is taking any home.', pay: [['401-01', 3200]], weather: 'Dark (underground)', hi: 68, lo: 68, photos: ['Mithril rebar in the deck'], approval: 'approved' },
+      { activity: '', notes: 'NO WORK DAY - crew refused to cross after a voice boomed "You shall not pass." It was the flagger. Flagger has been retrained.', weather: 'Dark (underground)', hi: 68, lo: 68 },
+      { activity: 'Handrails', summary: 'Installed 120 LF of handrail on the north side, the first handrails this crossing has ever had. Wizards in particular should appreciate them.', pay: [['601-01', 120]], weather: 'Dark (underground)', hi: 68, lo: 68, photos: ['North handrail'], approval: 'changes_requested', comment: { author: 'Gail Vanized, P.E.', text: 'Handrail height has to work for dwarves AND wizards. Please verify 42 in. on the north side.' } },
+      { activity: 'Fire-resistant coating', summary: 'Applied intumescent coating to girders G1 to G4. Rated for 2 hours or 1 Balrog, whichever comes first.', pay: [['701-01', 3600]], weather: 'Dark, slightly warm', hi: 71, lo: 68, photos: ['Coating the girders'] },
+    ],
+    payApps: (dates) => [{
+      id: crypto.randomUUID(), estimateNo: '1', date: dates[3], note: 'Pay Application 1',
+      itemTotals: { '105-01': 34000, '501-01': 45, '402-01': 64000, '401-01': 3200 },
+      approvalStatus: 'approved', updatedAt: Date.now(),
+    }],
+  },
+  {
+    projectNo: 'OZ-1900',
+    name: 'OZ-1900 - Yellow Brick Road Rehab',
+    projectName: 'Yellow Brick Road Rehabilitation, Munchkinland to Emerald City',
+    icon: '\u{1F9F1}',
+    contractLength: '150',
+    ntpDaysAgo: 60,
+    everyNth: 6,
+    engineer: 'Rhoda Grader, P.E.',
+    helpers: ['Patty Pavement', 'Mill N. Overlay'],
+    contractors: ['Munchkin Paving Co.', 'Tin Man Welding & Fab', 'Emerald City Traffic Control'],
+    catalog: [
+      { itemNumber: '201-01', description: 'Removal of Damaged Yellow Brick', unit: 'SY', plannedQty: 3000, unitPrice: 18 },
+      { itemNumber: '301-01', description: 'Crushed Stone Base', unit: 'TON', plannedQty: 1800, unitPrice: 42 },
+      { itemNumber: '401-01', description: 'Yellow Brick Pavers, Munchkin Gold', unit: 'SY', plannedQty: 3000, unitPrice: 135 },
+      { itemNumber: '402-01', description: 'Spiral Section Realignment', unit: 'LS', plannedQty: 1, unitPrice: 60000 },
+      { itemNumber: '501-01', description: 'Poppy Field Mowing', unit: 'ACRE', plannedQty: 40, unitPrice: 650 },
+      { itemNumber: '601-01', description: 'Flying Monkey Netting', unit: 'LF', plannedQty: 2000, unitPrice: 28 },
+      { itemNumber: '701-01', description: 'Traffic Control (Lions, Tigers and Bears)', unit: 'LS', plannedQty: 1, unitPrice: 22000 },
+    ],
+    crew: () => ({ Superintendent: ['1'], Foreman: ['1', '1'], Operators: ['2'], Laborers: ['6', '1'], 'Pickup truck': ['1', '1', '1'], 'Attenuator truck': ['', '', '1'] }),
+    days: [
+      { activity: 'Brick removal', summary: 'Removed cracked yellow brick, Sta. 0+00 to 3+10, starting from the center of the spiral in Munchkinland. Munchkins lined the road and sang the whole time.', pay: [['201-01', 420], ['701-01', 4000]], weather: 'Sunny, rainbow', hi: 79, lo: 60, photos: ['Brick removal at the spiral'] },
+      { activity: 'Brick removal, base', summary: 'Removed brick to Sta. 6+00 and placed crushed stone base. The crew kept following the yellow brick road; inspector reminded them it is the thing being replaced.', pay: [['201-01', 380], ['301-01', 210]], weather: 'Sunny', hi: 81, lo: 61, photos: ['Stone base going down'] },
+      { activity: 'Poppy mowing', summary: 'Mowed 12 acres of poppies along the shoulder. Two laborers fell asleep in the field and were revived with snow. Respirators are now required.', pay: [['501-01', 12]], weather: 'Partly cloudy', hi: 78, lo: 60, photos: ['Poppy field, mowed'] },
+      { activity: 'Brick paving', summary: 'Laid 520 SY of new yellow brick. Color checked against the approved Munchkin Gold sample; one pallet rejected for being "more of a mustard."', pay: [['401-01', 520]], weather: 'Sunny', hi: 82, lo: 62, photos: ['New yellow brick', 'Rejected pallet (mustard)'], approval: 'approved' },
+      { activity: '', notes: 'WEATHER DAY - tornado. A farmhouse from Kansas landed at Sta. 2+00. Contractor to haul it off as extra work.', weather: 'Tornado', hi: 74, lo: 58 },
+      { activity: 'Monkey netting', summary: 'Installed 600 LF of flying monkey netting through the Haunted Forest. Three monkeys tested it at once. Netting held.', pay: [['601-01', 600]], weather: 'Overcast, ominous', hi: 70, lo: 57, photos: ['Netting, Haunted Forest'] },
+      { activity: 'Brick paving', summary: 'Laid 610 SY of yellow brick to Sta. 9+40. The Tin Man welded the drainage grates and asked for an oil can on the next change order.', pay: [['401-01', 610], ['701-01', 3000]], weather: 'Sunny', hi: 80, lo: 61, photos: ['Paving toward the Emerald City'], approval: 'changes_requested', comment: { author: 'Rhoda Grader, P.E.', text: 'Please send the brick color test results. The Wizard is very particular. (Has anyone actually met the Wizard?)' } },
+    ],
+    payApps: (dates) => [{
+      id: crypto.randomUUID(), estimateNo: '1', date: dates[3], note: 'Pay Application 1',
+      itemTotals: { '201-01': 800, '301-01': 210, '501-01': 12, '401-01': 520, '701-01': 4000 },
+      approvalStatus: 'approved', updatedAt: Date.now(),
+    }],
+  },
+];
+
 async function seedTutorialData(onProgress) {
   const progress = onProgress || (() => {});
   await saveUserName(TUTORIAL_USER);
@@ -98,49 +284,55 @@ async function seedTutorialData(onProgress) {
   // company's cloud record on first visit (sync is off in tutorial mode).
   await saveSetting(managerDashboardExcludedSettingKey(TUTORIAL_USER), []);
 
-  const dates = tutorialWeekdays(TUTORIAL_DAYS.length);
-  const catalog = [
-    { itemNumber: '201-01', description: 'Clearing and Grubbing', unit: 'LS', plannedQty: 1, unitPrice: 15000 },
-    { itemNumber: '202-01', description: 'Removal of Existing Pavement', unit: 'SY', plannedQty: 2400, unitPrice: 12.5 },
-    { itemNumber: '502-01', description: 'Asphalt Concrete', unit: 'TON', plannedQty: 650, unitPrice: 145 },
-    { itemNumber: '701-03', description: '24" Storm Drain Pipe', unit: 'LF', plannedQty: 1800, unitPrice: 95 },
-    { itemNumber: '702-01', description: 'Catch Basin', unit: 'EA', plannedQty: 14, unitPrice: 4200 },
-    { itemNumber: '713-01', description: 'Temporary Traffic Control', unit: 'LS', plannedQty: 1, unitPrice: 38000 },
-  ];
+  // DEMO-101 goes last so it's the most recently updated project: first on
+  // the home page, where the tour points at the first project card.
+  const ids = [];
+  for (const def of TUTORIAL_OTHER_PROJECTS) ids.push(await seedTutorialProject(def, progress));
+  const demoId = await seedTutorialProject(TUTORIAL_DEMO, progress);
+  ids.push(demoId);
+  await saveSetting(managedProjectsSettingKey(TUTORIAL_USER), ids);
+  return demoId;
+}
+
+let tutorialPhotoSeed = 0;
+
+// One example project: the project, a report for each of its days (on
+// weekdays ending today), and its Pay Apps.
+async function seedTutorialProject(def, progress) {
+  const nth = def.everyNth || 1;
+  const dates = tutorialWeekdays((def.days.length - 1) * nth + 1).filter((d, i, all) => (all.length - 1 - i) % nth === 0);
   const project = {
     id: crypto.randomUUID(),
     companyCode: TUTORIAL_COMPANY.code,
-    name: 'DEMO-101 - Riverside Drive Drainage',
-    icon: '\u{1F6A7}',
+    name: def.name,
+    icon: def.icon,
     meta: {
-      projectNo: 'DEMO-101',
-      projectName: 'Riverside Drive Drainage Improvements',
-      ntpDate: dates[0],
-      contractLength: '120',
+      projectNo: def.projectNo,
+      projectName: def.projectName,
+      ntpDate: def.ntpDaysAgo ? tutorialIsoDaysAgo(def.ntpDaysAgo) : dates[0],
+      contractLength: def.contractLength,
       representative: TUTORIAL_USER,
-      peName: TUTORIAL_ENGINEER,
+      peName: def.engineer,
       activity: '', notes: '', workSummaryHeader: '', trafficControlNote: '', workSummary: '',
       controllingItem: '', commentsOnTime: '', controllingItemTimeFrom: '', controllingItemTimeTo: '',
       workingConditions: '', trafficControlSelect: 'IN_PLACE', workBegin: '7:00 AM', workEnd: '3:30 PM',
       weatherDesc: '', tempHigh: '', tempLow: '',
     },
-    defaultContractors: ['Delta Civil Constructors', 'Gulf Coast Paving', 'Bayou Traffic Control'],
+    defaultContractors: def.contractors,
     defaultEquipmentLabels: [],
-    payItemCatalog: catalog,
+    payItemCatalog: def.catalog,
     billingEstimates: [],
     requiredFields: [], hiddenFields: [], fieldOrder: [],
     backgroundImage: null, backgroundImageFetched: true,
     createdAt: Date.now(), updatedAt: Date.now(),
   };
   await saveProject(project);
-  await saveSetting(managedProjectsSettingKey(TUTORIAL_USER), [project.id]);
 
-  const byItem = new Map(catalog.map((it) => [it.itemNumber, it]));
+  const byItem = new Map(def.catalog.map((it) => [it.itemNumber, it]));
   let previous = null;
-  let photoSeed = 0;
-  for (let i = 0; i < TUTORIAL_DAYS.length; i++) {
-    const day = TUTORIAL_DAYS[i];
-    progress(`Writing example report ${i + 1} of ${TUTORIAL_DAYS.length}…`);
+  for (let i = 0; i < def.days.length; i++) {
+    const day = def.days[i];
+    progress(`Writing ${def.projectNo} report ${i + 1} of ${def.days.length}…`);
     const report = await makeBlankReport(i + 1, project, previous);
     report.date = dates[i];
     report.activity = day.activity || '';
@@ -153,15 +345,14 @@ async function seedTutorialData(onProgress) {
     const working = !day.notes;
     report.hours = working ? '16' : ''; // both inspectors' hours
     report.inspectors = [{ name: TUTORIAL_USER, hours: working ? '8' : '', timeEntries: [{ start: working ? '07:00' : '', end: working ? '15:30' : '' }] }];
-    if (working) report.inspectors.push({ name: TUTORIAL_INSPECTORS[i % TUTORIAL_INSPECTORS.length], hours: '8', timeEntries: [{ start: '07:00', end: '15:30' }] });
+    if (working) report.inspectors.push({ name: def.helpers[i % def.helpers.length], hours: '8', timeEntries: [{ start: '07:00', end: '15:30' }] });
+    report.representative = report.inspectors.map((insp) => insp.name).join(', '); // kept in step with the list, as the editor does
     report.trafficControlSelect = working ? (day.traffic || 'IN_PLACE') : null;
     report.commentsOnTime = day.trafficNote || '';
     report.workSummaryHeader = day.activity || '';
     report.workSummary = day.summary || '';
     if (working) {
-      // Crew counts in the Contractors Force & Equipment table: one column
-      // per contractor, one row per role/equipment label.
-      const crew = { Superintendent: ['1'], Foreman: ['1', day.pay.some(([n]) => n === '502-01') ? '1' : ''], Operators: ['3', day.pay.some(([n]) => n === '502-01') ? '4' : ''], Laborers: ['5', ''], 'Pickup truck': ['2', '', '1'], 'Attenuator truck': ['', '', '1'] };
+      const crew = def.crew(day);
       report.equipmentRows.forEach((row) => {
         const counts = crew[row.label];
         if (counts) counts.forEach((v, col) => { row.qty[col] = v; });
@@ -172,7 +363,7 @@ async function seedTutorialData(onProgress) {
       });
     }
     for (let p = 0; p < (day.photos || []).length; p++) {
-      report.photos[p] = await tutorialPhoto(day.photos[p], photoSeed++);
+      report.photos[p] = await tutorialPhoto(day.photos[p], tutorialPhotoSeed++);
     }
     if (day.approval) report.approvalStatus = day.approval;
     const comments = [];
@@ -186,22 +377,11 @@ async function seedTutorialData(onProgress) {
     previous = report;
   }
 
-  progress('Adding a Pay App…');
-  const fresh = await getProject(project.id);
-  fresh.billingEstimates = [{
-    id: crypto.randomUUID(), estimateNo: '1', date: dates[9], note: 'Example Pay App',
-    itemTotals: { '201-01': 15000, '202-01': 650, '701-03': 474, '702-01': 1, '713-01': 9500 },
-    approvalStatus: 'approved', updatedAt: Date.now(),
-  }, {
-    // Sent back by the engineer, with a comment -- so the tutorial's Pay
-    // Apps page and Manager page have a review in progress to show.
-    // Matches what was logged through its date, except asphalt: 300 TON
-    // billed against 244 logged -- what the engineer's comment questions.
-    id: crypto.randomUUID(), estimateNo: '2', date: dates[16], note: 'Pay Application 2',
-    itemTotals: { '201-01': 15000, '202-01': 1230, '502-01': 300, '701-03': 746, '702-01': 4, '713-01': 19500 },
-    approvalStatus: 'changes_requested', updatedAt: Date.now(),
-    comments: [{ id: crypto.randomUUID(), author: TUTORIAL_ENGINEER, text: 'Asphalt (502-01) is higher than the tickets I have. Can you double check it?', createdAt: Date.now() - 7200000 }],
-  }];
-  await saveProject(fresh);
+  if (def.payApps) {
+    progress(`Adding ${def.projectNo}'s Pay Apps…`);
+    const fresh = await getProject(project.id);
+    fresh.billingEstimates = def.payApps(dates);
+    await saveProject(fresh);
+  }
   return project.id;
 }

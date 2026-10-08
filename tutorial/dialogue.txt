@@ -184,7 +184,8 @@ the arrows to move between months, and tap a day to see what was done.
 [4]
 Emotion: pointing
 Points at: project card
-These are your projects. Each card opens that project's dashboard, reports,
+These are your projects. DEMO-101 is a normal drainage job. The others
+are... less normal. Each card opens that project's dashboard, reports,
 and quantities.
 
 [5]
@@ -231,8 +232,8 @@ Let's look inside the example project. Tap DEMO-101 to continue the tour!
 [1]
 Emotion: happy
 Points at: nothing
-Welcome to DEMO-101, a drainage job about three weeks in. Every project
-gets a page like this one.
+Welcome to the project page. Every project gets one like this, whether
+it's a storm drain or a bridge over a bottomless chasm.
 
 [2]
 Emotion: pointing
@@ -600,8 +601,8 @@ status.
 [3]
 Emotion: surprised
 Points at: status
-The newest one opens on its own. Pay App 2 was sent back, and its status
-and comments show right at the top.
+The newest one opens on its own. On DEMO-101, Pay App 2 was sent back,
+and its status and comments show right at the top.
 
 [4]
 Emotion: thinking
@@ -612,8 +613,8 @@ piece means something was billed ahead of what inspectors logged.
 [5]
 Emotion: pointing
 Points at: breakdown
-Here's which item: the asphalt was billed 56 tons ahead of the logs.
-That's what the engineer asked about.
+Here's which item: on DEMO-101, the asphalt was billed 56 tons ahead of
+the logs. That's what the engineer asked about.
 
 [6]
 Emotion: neutral

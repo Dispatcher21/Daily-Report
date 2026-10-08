@@ -17,7 +17,8 @@ const text = (p, sel) => p.textContent(sel).then((t) => t.replace(/\s+/g, ' ').t
   await p.goto(`${B}/tutorial.html`);
   await p.waitForURL(/index\.html/, { timeout: 90000 });
   await p.waitForTimeout(1000);
-  const pid = await p.evaluate(async () => (await getAllProjects())[0].id);
+  const pid = await p.evaluate(async () => (await getAllProjects()).find((pr) => pr.meta.projectNo === 'DEMO-101').id);
+  check('example projects, DEMO-101 first', await p.evaluate(async () => (await getAllProjects()).map((pr) => pr.meta.projectNo)), ['DEMO-101', 'OZ-1900', 'MOR-0001', 'TAT-0042', 'SHIRE-007']);
   const settle = () => p.waitForTimeout(1500);
 
   // The welcome asks inspector or manager. Picking one switches the
