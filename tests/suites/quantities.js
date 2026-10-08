@@ -125,6 +125,11 @@ const text = (p, sel) => p.textContent(sel).then((t) => t.replace(/\s+/g, ' ').t
   check('pay item table under the summary', box.caption.startsWith('Pay Items'), true);
   check('prints details on the line under the item', box.rows.slice(0, 3), [['502-01', 'Asphalt Concrete', '104', 'TON'], ['202-01', 'Removal of Existing Pavement', '93.333', 'SY'], ['', 'Sta. 12+30 to 13+00, Lt, 70 × 12 ft. Saw cut first']]);
   check('every item in the table, nothing moved to the summary', [box.rows[3][0], box.rows[4][1], box.det], ['713-01', '5% complete', 2]);
+  check('same item twice: one row with the total, each entry on the line under it', await p.evaluate(() => summaryBoxPayItems([
+    { itemNumber: '502-01', description: 'Asphalt Concrete', qty: '250', unit: 'TON', startStation: '10+00', endStation: '12+00', side: 'Lt' },
+    { itemNumber: '202-01', description: 'Removal', qty: '5', unit: 'SY' },
+    { itemNumber: '502-01', description: 'Asphalt Concrete', qty: '100.5', unit: 'TON', startStation: '15+00', endStation: '16+00' },
+  ]).map((r) => [r.itemNumber, r.qty, r.detail])), [['502-01', '350.5', '250 TON: Sta. 10+00 to 12+00, Lt; 100.5 TON: Sta. 15+00 to 16+00'], ['202-01', '5', '']]);
   await p.screenshot({ path: `${OUT}/report-payitems-desktop.png`, fullPage: true });
   await Promise.all([p.waitForURL(/reports\.html/, { timeout: 30000 }), p.click('#btn-save-report')]);
   check('saved with remarks and calculator', await p.evaluate(async (id) => { const r = await getReport(id); const it = r.payItems.find((x) => x.itemNumber === '202-01'); return [it.remarks, it.calc.type, it.calc.w, it.qty]; }, rid), ['Saw cut first', 'area', '12', '93.333']);

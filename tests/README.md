@@ -59,6 +59,7 @@ When to run what:
 | weekly-roundup | Roundup contents, alerts, week and time zone math, preview button |
 | account-emails | Join request, approved, invite and password-changed emails |
 | admin-alerts | Admin security and problem emails, and the company-wide roundup |
+| offline | No signal: the offline bar and its count, pages (with ?project=... addresses) and the Firebase SDK load from the saved copy, the sign-in page doesn't hang, a report saved offline uploads by itself when the signal returns |
 | quantities | Quantities, Log Quantities and Pay Apps pages: logged vs billed, item history, Excel, phone layout; the report editor's Pay Items (calculators, remarks, printed detail lines); pay item units in Project Settings and the project Excel file; the printed Work Summary box; Tests Performed and Checks Completed (tutorial project) |
 
 ## Known quirk

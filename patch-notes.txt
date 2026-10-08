@@ -3,6 +3,31 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.0591 -- 2026-10-08
+  - Works with no signal: once the app has been opened with internet, it
+    opens offline from the Home Screen, including the Reports page and
+    the report form. Reports, photos and signatures save on the device.
+  - Reports saved offline upload by themselves once the device is back
+    online (when the app is opened or brought back on screen). Sync Now
+    still works too.
+  - A grey "You're offline" bar under the header shows when there's no
+    connection, with how many reports are waiting to upload.
+  - The sign-in screen no longer gets stuck when opened with no signal.
+  - The app asks the device to keep its saved reports and photos even
+    when storage runs low.
+  - Manager Dashboard: no longer fails to show when opened offline.
+
+0.059 -- 2026-10-08
+  - Downloaded files are named by the dates they cover, so two downloads
+    no longer get the same name: a batch of reports as
+    "PR123_DailyReports_2026-09-01_to_09-15_5reports.pdf", one report with
+    its number and date, the Pay Apps spreadsheet with its Pay Apps'
+    dates, and the project data file with the day it was saved.
+  - Printed report: a pay item entered more than once on the same report
+    prints as one row with the total, and the line under it lists each
+    entry (for example "250 TON: Sta. 10+00 to 12+00, Lt; 100 TON: Sta.
+    15+00 to 16+00").
+
 0.058 -- 2026-10-07
   - Phones: Project Settings' Pay Items list no longer runs off the side
     of the screen when an item has a long description.

@@ -11,7 +11,7 @@ function escapeHtml(str) {
 
 // The app's version, shown at the bottom of every page as a link to the
 // patch notes. Bump it together with each new patch-notes.txt entry.
-const APP_VERSION = '0.058';
+const APP_VERSION = '0.0591';
 document.addEventListener('DOMContentLoaded', () => {
   const main = document.querySelector('main');
   if (!main) return;
@@ -624,6 +624,18 @@ function loginThrottleReset(key) {
   saveLoginThrottleState(key, { fails: 0, until: 0 });
 }
 
+// A short date range for export file names, so two downloads of different
+// periods don't end up with the same name: "2026-09-15" for one day,
+// "2026-09-01_to_09-15" within a year, "2025-12-29_to_2026-01-05" across
+// years. Takes ISO dates in any order; blanks are ignored.
+function fileDateRange(dates) {
+  const real = (dates || []).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d || '')).sort();
+  if (!real.length) return 'undated';
+  const first = real[0], last = real[real.length - 1];
+  if (first === last) return first;
+  return `${first}_to_${first.slice(0, 4) === last.slice(0, 4) ? last.slice(5) : last}`;
+}
+
 function triggerDownload(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -746,6 +758,13 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
   // newer service worker just activated (a real update, worth a prompt).
   const hadControllerAtLoad = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.register('service-worker.js').catch(console.error);
+
+  // Asks the browser not to clear this device's reports and photos when
+  // it runs low on space (iPads and Android otherwise may). Granted or
+  // not, nothing else changes; asked only until it's granted.
+  if (navigator.storage && navigator.storage.persist) {
+    navigator.storage.persisted().then((granted) => granted || navigator.storage.persist()).catch(console.error);
+  }
 
   // A new service worker just took over -- the page already open is still
   // running whatever JS it loaded with, which is now stale relative to

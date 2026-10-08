@@ -784,6 +784,24 @@ button.global-sync-banner:disabled { opacity: 0.7; cursor: default; }
   text-decoration: none;
 }
 
+/* No connection (firebase-sync.js's refreshOfflineBanner): same placement
+   as the banners above, in plain grey, since being offline isn't an error
+   (saving still works, uploads just wait). */
+.offline-banner {
+  background: var(--surface-3);
+  border-bottom: 2px solid var(--border-strong);
+  color: var(--text);
+  padding: 0.6rem 1rem;
+  font-size: 0.88rem;
+  font-weight: 700;
+  text-align: center;
+}
+.offline-banner::before {
+  content: ''; display: inline-block; width: 0.6em; height: 0.6em; margin-right: 0.45em;
+  border-radius: 50%; background: var(--text-dim); vertical-align: 0.05em;
+}
+.offline-banner[hidden] { display: none; }
+
 /* Tutorial mode (common.js): same placement as the banners above, in the
    brand color so it reads as "you're in a special mode", not a warning. */
 .tutorial-banner {

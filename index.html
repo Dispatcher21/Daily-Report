@@ -1039,8 +1039,11 @@ async function renderManagerDashboard() {
   // an admin had already curated before this became per-person) is their
   // starting point, same idea as getProjectLayout's own null fallback.
   let excludedProjectIds = await getManagerDashboardExcludedProjectIds();
+  // Offline (or the read fails), nothing is left out for now rather than
+  // the whole dashboard failing to show; the company list is tried again
+  // next time, since nothing here saves.
   if (excludedProjectIds === null) {
-    excludedProjectIds = (await getManagerDashboardConfig()).excludedProjectIds || [];
+    excludedProjectIds = (await getManagerDashboardConfig().catch(() => ({}))).excludedProjectIds || [];
   }
 
   const [allProjects, allReports] = await Promise.all([getAllProjects(), getAllReports()]);

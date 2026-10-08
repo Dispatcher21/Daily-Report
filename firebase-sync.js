@@ -220,8 +220,21 @@ function waitForFirebaseCore() {
     return Promise.reject(new Error('Sync is turned off in tutorial mode.'));
   }
   if (window.FirebaseCore) return Promise.resolve(window.FirebaseCore);
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     window.addEventListener('firebase-core-ready', () => resolve(window.FirebaseCore), { once: true });
+    // With no signal and no saved copy of the Firebase SDK (see
+    // service-worker.js), firebase-init.js never loads and the event above
+    // never fires -- give up instead of hanging the page. Only when
+    // offline: online, a slow load is still worth waiting for. The grace
+    // period lets a saved copy finish loading first.
+    const giveUpIfOffline = () => {
+      if (navigator.onLine) return;
+      setTimeout(() => {
+        if (!window.FirebaseCore) reject(new Error("You're offline. Syncing with the company needs a connection."));
+      }, 3000);
+    };
+    giveUpIfOffline();
+    window.addEventListener('offline', giveUpIfOffline, { once: true });
   });
 }
 
@@ -2341,6 +2354,93 @@ function wireAutoPull() {
   });
 }
 
+// Uploads whatever this device saved but couldn't send yet (pendingPush),
+// such as reports written with no signal, so nobody has to remember Sync
+// Now. Tried on every page (not just home, unlike wireAutoPull): on load,
+// whenever the app comes back on screen, and the moment the connection
+// returns. Only pushes; pulling stays with autoPullCompanyData. At most
+// once a minute, except right when the connection comes back, so a change
+// the server keeps refusing isn't re-sent on every page.
+const PENDING_PUSH_THROTTLE_MS = 60 * 1000;
+const PENDING_PUSH_SETTING = 'companyPendingPushAt';
+let pushingPending = false;
+
+// This company's projects and reports on this device still waiting to
+// upload (trashed reports included: the delete itself is what's waiting).
+async function getPendingPushRecords(code) {
+  return {
+    reports: (await getAllReports({ includeDeleted: true })).filter((r) => r.pendingPush && reportInScope(r, { code })),
+    projects: (await getAllProjects()).filter((p) => p.pendingPush && projectInScope(p, { code })),
+  };
+}
+
+async function pushPendingChanges(force) {
+  if (pushingPending || !navigator.onLine || isTutorialMode()) return;
+  pushingPending = true;
+  try {
+    const room = await getCompanyRoom();
+    if (!room) return;
+    if (!force && Date.now() - ((await getSetting(PENDING_PUSH_SETTING)) || 0) < PENDING_PUSH_THROTTLE_MS) return;
+    const pending = await getPendingPushRecords(room.code);
+    if (!pending.reports.length && !pending.projects.length) return;
+    await saveSetting(PENDING_PUSH_SETTING, Date.now());
+    await pushAllLocalData(room.code, null, { dirtyOnly: true });
+  } catch (err) {
+    console.error('upload pending changes:', err);
+  } finally {
+    pushingPending = false;
+  }
+}
+window.addEventListener('load', () => pushPendingChanges());
+window.addEventListener('online', () => pushPendingChanges(true));
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') pushPendingChanges();
+});
+
+// ---------- Offline indicator ----------
+//
+// A bar under the header on every page while the device has no
+// connection, so an inspector can see their saves are staying on the
+// device for now, and how many reports are waiting to upload. Same
+// placement as common.js's global-sync-banner. login.html has no header,
+// so it never shows there.
+async function refreshOfflineBanner() {
+  const header = document.querySelector('.app-header');
+  if (!header) return;
+  let banner = document.getElementById('offline-banner');
+  if (navigator.onLine) {
+    if (banner) banner.hidden = true;
+    return;
+  }
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'offline-banner';
+    banner.className = 'offline-banner';
+    banner.setAttribute('role', 'status');
+    header.insertAdjacentElement('afterend', banner);
+  }
+  let text = "You're offline. Everything still saves on this device.";
+  try {
+    const room = isTutorialMode() ? null : await getCompanyRoom();
+    if (room) {
+      const n = (await getPendingPushRecords(room.code)).reports.length;
+      text = n
+        ? `You're offline. ${n} report${n === 1 ? '' : 's'} waiting to upload when you're back online.`
+        : "You're offline. Reports save on this device and upload when you're back online.";
+    }
+  } catch (err) {
+    console.error('offline banner:', err);
+  }
+  if (navigator.onLine) return; // came back while counting; the 'online' refresh hides it
+  banner.textContent = text;
+  banner.hidden = false;
+}
+document.addEventListener('DOMContentLoaded', refreshOfflineBanner);
+window.addEventListener('online', refreshOfflineBanner);
+window.addEventListener('offline', refreshOfflineBanner);
+window.addEventListener('pending-push-changed', refreshOfflineBanner);
+window.addEventListener('pageshow', (e) => { if (e.persisted) refreshOfflineBanner(); });
+
 // ---------- Project sync ----------
 //
 // Projects carry no blob fields (see storage.js -- the old templateBlob was
@@ -3035,7 +3135,7 @@ async function pushAllLocalData(code, onProgress, { dirtyOnly = false } = {}) {
     projects.map(async (project) => {
       try {
         await pushProjectToCompany(code, project);
-        if (project.pendingPush) await putProjectRaw({ ...project, pendingPush: false });
+        if (project.pendingPush) await setPendingPush(PROJECTS_STORE, project, false);
       } catch (err) { refusedOk(err); }
     })
   );
@@ -3050,7 +3150,7 @@ async function pushAllLocalData(code, onProgress, { dirtyOnly = false } = {}) {
   for (let i = 0; i < reports.length; i++) {
     try {
       await pushReportToCompany(code, reports[i]);
-      if (reports[i].pendingPush) await putReportRaw({ ...reports[i], pendingPush: false });
+      if (reports[i].pendingPush) await setPendingPush(REPORTS_STORE, reports[i], false);
     } catch (err) { refusedOk(err); }
     if (onProgress) onProgress({ phase: 'reports', index: i + 1, total: reports.length });
   }
@@ -3132,14 +3232,30 @@ async function withSyncRetry(fn, attempts = 3, baseDelayMs = 400) {
   throw lastErr;
 }
 
-// pendingPush marks a record "Sync Now" must re-push -- set the moment a
-// live push fails even after retrying (so a later manual Refresh actually
-// finds it instead of Sync Now silently skipping it, now that Sync Now no
-// longer re-pushes the whole company -- see pushAllLocalData's dirtyOnly
-// mode), cleared the moment a push actually lands. A local-only raw write,
-// same as the other device-local fields (thumbnail, photosFetched) --
-// never something to await the caller for, and never sent to Firestore
+// pendingPush marks a record still waiting to upload -- set when a live
+// push starts, cleared the moment one actually lands, so whatever didn't
+// make it is found again by Sync Now (pushAllLocalData's dirtyOnly mode)
+// and by pushPendingChanges. A local-only field, same as the other
+// device-local ones (thumbnail, photosFetched), never sent to Firestore
 // (see pushProjectToCompany/pushReportToCompany's exclusion of it).
+//
+// setPendingPush sets or clears just the pendingPush flag on this device's copy of a
+// project or report. Read and written in one transaction, and only if the
+// record hasn't been saved again since `record` (same updatedAt): writing
+// the whole `record` back instead could put an older copy over a save made
+// while its push was still uploading. A newer save flags itself.
+function setPendingPush(storeName, record, pending) {
+  return withStore(storeName, 'readwrite', (store) => {
+    const req = store.get(record.id);
+    req.onsuccess = () => {
+      const current = req.result;
+      if (current && current.updatedAt === record.updatedAt && !!current.pendingPush !== pending) {
+        store.put({ ...current, pendingPush: pending });
+      }
+    };
+  }).then(() => { window.dispatchEvent(new CustomEvent('pending-push-changed')); }); // the offline bar's count
+}
+
 async function onCompanySyncProjectChanged(project, deleted) {
   if (isTutorialMode()) return; // nothing syncs in tutorial mode (see waitForFirebaseCore)
   const room = await getCompanyRoom();
@@ -3148,11 +3264,14 @@ async function onCompanySyncProjectChanged(project, deleted) {
     await withSyncRetry(() => deleteProjectFromCompany(room.code, project));
     return;
   }
+  // Flagged before trying, not only once a try fails: offline, a failed
+  // push can take a while to give up, and if the app is closed first the
+  // change would never be retried.
+  await setPendingPush(PROJECTS_STORE, project, true);
   try {
     await withSyncRetry(() => pushProjectToCompany(room.code, project));
-    if (project.pendingPush) await putProjectRaw({ ...project, pendingPush: false });
+    await setPendingPush(PROJECTS_STORE, project, false);
   } catch (err) {
-    await putProjectRaw({ ...project, pendingPush: true });
     reportSyncProblem(`Project "${project.name || (project.meta && project.meta.projectNo) || project.id}"`, err);
     throw err;
   }
@@ -3167,11 +3286,11 @@ async function onCompanySyncReportChanged(report) {
   if (isTutorialMode()) return; // nothing syncs in tutorial mode (see waitForFirebaseCore)
   const room = await getCompanyRoom();
   if (!room) return;
+  await setPendingPush(REPORTS_STORE, report, true); // see onCompanySyncProjectChanged
   try {
     await withSyncRetry(() => pushReportToCompany(room.code, report));
-    if (report.pendingPush) await putReportRaw({ ...report, pendingPush: false });
+    await setPendingPush(REPORTS_STORE, report, false);
   } catch (err) {
-    await putReportRaw({ ...report, pendingPush: true });
     reportSyncProblem(reportLabel(report), err);
     throw err;
   }

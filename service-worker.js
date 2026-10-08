@@ -1,7 +1,7 @@
 // Caches the app shell so it keeps working with no signal in the field.
 // Bump CACHE_NAME whenever any of these files change so the new version
 // actually gets picked up.
-const CACHE_NAME = 'daily-report-app-v344';
+const CACHE_NAME = 'daily-report-app-v348';
 const ASSETS = [
   './',
   './login.html',
@@ -65,6 +65,16 @@ const ASSETS = [
   './settings-icon.png',
 ];
 
+// The Firebase SDK (sign-in and company sync) comes from Google's CDN, not
+// this site. Without a copy here, a device that opens the app with no
+// signal can't load it at all, and every page that waits on it hangs. Keep
+// the version in step with firebase-init.js and firebase-sync.js. Saved on
+// a best-effort basis: if the CDN can't be reached during an update, the
+// update still installs (sync then just needs a connection, as before).
+const FIREBASE_SDK = 'https://www.gstatic.com/firebasejs/10.14.1/';
+const FIREBASE_ASSETS = ['firebase-app.js', 'firebase-auth.js', 'firebase-firestore.js', 'firebase-storage.js', 'firebase-functions.js']
+  .map((file) => FIREBASE_SDK + file);
+
 // cache.addAll(ASSETS) would fetch with the browser's default HTTP caching,
 // which can silently pull a stale copy out of the ordinary HTTP cache even
 // right after bumping CACHE_NAME -- {cache: 'reload'} forces every asset to
@@ -73,7 +83,14 @@ const ASSETS = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) =>
-      Promise.all(ASSETS.map((url) => fetch(url, { cache: 'reload' }).then((res) => cache.put(url, res))))
+      Promise.all([
+        ...ASSETS.map((url) => fetch(url, { cache: 'reload' }).then((res) => cache.put(url, res))),
+        ...FIREBASE_ASSETS.map((url) =>
+          fetch(url, { mode: 'cors', cache: 'reload' })
+            .then((res) => { if (res.ok) return cache.put(url, res); })
+            .catch((err) => console.error('Firebase SDK not saved for offline use:', url, err))
+        ),
+      ])
     )
   );
   self.skipWaiting();
@@ -109,7 +126,12 @@ self.addEventListener('fetch', (event) => {
     );
     return;
   }
+  // ignoreSearch: pages are opened with their details in the address
+  // (project.html?id=..., report-editor.html?project=...), but each page is
+  // saved once under its plain name. Without it, every one of those misses
+  // the saved copy and fails with no signal. No saved file differs by its
+  // query string, so nothing else is affected.
   event.respondWith(
-    caches.match(event.request).then((cached) => cached || fetch(event.request))
+    caches.match(event.request, { ignoreSearch: true }).then((cached) => cached || fetch(event.request))
   );
 });

@@ -13,10 +13,12 @@ const TARGET_DPI = 300;
 
 function pdfFilename(reports) {
   const projectNo = (reports[0] && reports[0].projectNo) || 'PR';
+  // The report number keeps two reports from the same day apart, and a
+  // batch is named by the dates it covers.
   if (reports.length === 1) {
-    return `PR${projectNo}_DailyReport_${reports[0].date || 'undated'}.pdf`;
+    return `PR${projectNo}_DailyReport_No${reports[0].reportNo}_${reports[0].date || 'undated'}.pdf`;
   }
-  return `PR${projectNo}_DailyReports_${reports.length}reports.pdf`;
+  return `PR${projectNo}_DailyReports_${fileDateRange(reports.map((r) => r.date))}_${reports.length}reports.pdf`;
 }
 
 // Renders each report's sheets into `sandbox` one at a time, rasterizes each
