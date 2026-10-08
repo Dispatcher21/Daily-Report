@@ -3,6 +3,23 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.0612 -- 2026-10-08
+  - Reports hold up to 10 photos (was 6).
+  - New Summary and Photos page, printed only when it's needed. When the
+    Work Summary is too long for page 1, it continues on page 2, with the
+    top half for the rest of the summary and the bottom half for 4
+    photos. With 4 photos or fewer, this page takes the Photo Log's
+    place, so the report stays 2 pages; with more, the Photo Log follows
+    as page 3. Page 1 says "(Continued on page 2)", and long Pay Items,
+    Tests and Checks tables split by row under the same headings.
+  - With more than 6 photos, the extra ones print on the Summary and
+    Photos page after the Photo Log. Photos keep their numbers from the
+    editor wherever they print.
+  - Printed Work Summary starts right under "Short Work Summary": the
+    empty row and the lines between them are gone, giving the summary
+    more room.
+  - Saving a report makes fewer requests to the photo storage.
+
 0.0611 -- 2026-10-08
   - Progress Over Time chart: Pay App stars are smaller and take the
     color of their own project's line instead of gold, with a thin outline
