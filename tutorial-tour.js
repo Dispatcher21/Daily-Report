@@ -39,6 +39,13 @@ const TOUR_ART = {
 // stand-in). `before` runs first, e.g. to open a collapsed section. The
 // '*' list works on every page. Keep the name lists at the top of
 // dialogue.txt in step with these.
+// On a phone the home and project pages show one of two tabs (see their
+// .phone-tabs); switch to the one holding the thing being pointed at.
+function tourShowTab(tab) {
+  const btn = document.querySelector(`#phone-tabs [data-tab="${tab}"], #phone-tabs [data-tab="${tab === 'projects' ? 'workspace' : tab}"]`);
+  if (btn && getComputedStyle(btn.closest('.phone-tabs')).display !== 'none') btn.click();
+}
+
 function tourExpand(sel) {
   const el = document.querySelector(sel);
   if (el && el.classList.contains('collapsed')) {
@@ -87,14 +94,11 @@ const TOUR_TARGETS = {
   },
   'index.html': {
     'portfolio panel': {
-      selector: '#md-overview-step',
-      before: () => {
-        const toggle = document.querySelector('#md-mobile-toggle');
-        if (toggle && getComputedStyle(toggle).display !== 'none' && toggle.getAttribute('aria-expanded') !== 'true') toggle.click();
-      },
+      selector: ['#md-widgets [data-type="overview"]', '#md-widgets .widget', '#manager-dashboard-col'],
+      before: () => tourShowTab('dashboard'),
     },
-    'activity calendar': { selector: '#md-calendar-step' },
-    'project card': { selector: '#hub-grid .hub-card[data-drag-type="project"]' },
+    'activity calendar': { selector: ['#md-widgets [data-type="calendar"]', '#md-widgets .widget'], before: () => tourShowTab('dashboard') },
+    'project card': { selector: '#hub-grid .hub-card[data-drag-type="project"]', before: () => tourShowTab('projects') },
     'add project card': { selector: '#btn-add-project' },
   },
   'project-setup.html': {
@@ -110,10 +114,10 @@ const TOUR_TARGETS = {
     'view reports tile': { selector: '#card-view-reports' },
     'quantities tile': { selector: '#card-quantities' },
     'pay apps tile': { selector: '#card-payapps' },
-    'dashboard overview': { selector: '#dash-content > .step:first-child' },
-    'pay items panel': { selector: '#dash-content .step-pair > .step:first-child', before: () => tourExpand('#dash-content .step-pair > .step:first-child') },
-    'weather panel': { selector: '#dash-weather-step', before: () => tourExpand('#dash-weather-step') },
-    'trend chart': { selector: '#dash-trend-step', before: () => tourExpand('#dash-trend-step') },
+    'dashboard overview': { selector: ['#pd-widgets [data-type="progress"]', '#pd-widgets .widget'], before: () => tourShowTab('dashboard') },
+    'pay items panel': { selector: ['#pd-widgets [data-type="payitems"]', '#pd-widgets .widget'], before: () => tourShowTab('dashboard') },
+    'weather panel': { selector: ['#pd-widgets [data-type="dailylog"]', '#pd-widgets .widget'], before: () => tourShowTab('dashboard') },
+    'trend chart': { selector: ['#pd-widgets [data-type="trend"]', '#pd-widgets .widget'], before: () => tourShowTab('dashboard') },
     'project settings button': { selector: '#btn-project-settings' },
   },
   'reports.html': {
@@ -206,11 +210,11 @@ const TOUR_TARGETS = {
     'view report button': { selector: '#bb-report-link' },
   },
   'manager.html': {
-    'reports to review': { selector: '#mgr-review-step' },
-    'first report': { selector: '#mgr-review-list .mp-row' },
-    'pay apps to review': { selector: '#mgr-payapp-review-step' },
-    'managed projects': { selector: '#mgr-projects-step' },
-    'project checkboxes': { selector: '#mgr-project-checks' },
+    'reports to review': { selector: '#mgr-queue-step' },
+    'first report': { selector: ['#mgr-queue .q-row', '#mgr-queue-step'] },
+    'pay apps to review': { selector: ['#mgr-queue [data-filter="payapp"]', '#mgr-queue-step'] },
+    'managed projects': { selector: '#mgr-projects-step', before: () => { const b = document.querySelector('#m-tabs [data-v="projects"]'); if (b && getComputedStyle(b.closest('.m-tabs')).display !== 'none') b.click(); } },
+    'project checkboxes': { selector: ['#mgr-choose', '#mgr-projects-step'] },
   },
   'settings.html': {
     'you tab': { selector: '#tab-you' },

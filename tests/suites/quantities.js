@@ -35,14 +35,15 @@ const text = (p, sel) => p.textContent(sel).then((t) => t.replace(/\s+/g, ' ').t
   await settle();
   const homeLines = () => p.evaluate(() => tourStepsForPage('index.html').map((s) => s.say));
   await p.click('#hamburger-btn');
-  check('inspector: no Manager Dashboard, Manager page or approving', [await p.isVisible('#md-overview-step'), await p.isVisible('#hb-manager-row'), await p.evaluate(() => companyCan('approveReports')), (await homeLines()).some((t) => t.includes('Manager Dashboard'))], [false, false, false, false]);
+  const menuRow = async () => ((await p.isVisible('#hb-manager-row')) ? (await text(p, '#hb-manager-row .hb-row-label')) : null);
+  check('inspector: no Manager Dashboard or approving; the menu has My Reviews', [await p.isVisible('#md-widgets [data-type="overview"]'), await menuRow(), await p.evaluate(() => companyCan('approveReports')), (await homeLines()).some((t) => t.includes('Manager Dashboard'))], [false, 'My Reviews', false, false]);
   check('inspector walkthrough: project page leads to New Report, editor ends at Generate', await p.evaluate(() => [tourStepsForPage('project.html').slice(-1)[0].say.includes('Tap New Report'), tourStepsForPage('report-editor.html').slice(-1)[0].say.includes('Generate Report')]), [true, true]);
   await p.click('.tour-choose-explore');
   // Same for a manager (straight to the role switch the button makes).
   await p.evaluate(async () => { sessionStorage.setItem('dr-tour-role', 'manager'); await applyTutorialRole('manager'); });
   await p.reload(); await settle();
   await p.click('#hamburger-btn');
-  check('manager: Manager Dashboard, Manager page and approving', [await p.isVisible('#md-overview-step'), await p.isVisible('#hb-manager-row'), await p.evaluate(() => companyCan('approveReports')), (await homeLines()).some((t) => t.includes('Manager Dashboard'))], [true, true, true, true]);
+  check('manager: Manager Dashboard, Manager page and approving', [await p.isVisible('#md-widgets [data-type="overview"]'), await menuRow(), await p.evaluate(() => companyCan('approveReports')), (await homeLines()).some((t) => t.includes('Manager Dashboard'))], [true, 'Manager', true, true]);
   check('manager walkthrough: new project, then reviews with the emails, no Pay Apps', await p.evaluate(() => {
     const lines = ['index.html', 'project-setup.html', 'manager.html', 'report-viewer.html'].flatMap((pg) => tourStepsForPage(pg).map((st) => st.say));
     return [lines.some((t) => t.includes('Add Project')), lines.some((t) => t.includes('emails the inspector')), lines.some((t) => t.includes('weekly roundup')), lines.some((t) => /Pay App/.test(t))];

@@ -1417,6 +1417,9 @@ async function getReportPermissionContext() {
 }
 
 function canEditReportWithContext(report, ctx) {
+  // Approved means locked, for everyone, admins included: it has to be
+  // unlocked first (report-viewer.html, manager.html).
+  if (isApprovedLocked(report)) return false;
   if (ctx.isAdmin || ctx.canEditAny) return true;
   // "Own" is decided by account where the report has one (a typed name
   // isn't unique), by name otherwise.
@@ -2108,17 +2111,21 @@ async function pushUserLayout(code, userName) {
   const { doc, setDoc, serverTimestamp } = await import(FIRESTORE_SDK);
   await ensureSignedIn();
 
-  const [projectLayout, favoriteProjectIds, managerDashboardExcludedProjectIds, managedProjectIds] = await Promise.all([
+  const [projectLayout, favoriteProjectIds, managerDashboardExcludedProjectIds, managedProjectIds, homeWidgets, projectWidgets] = await Promise.all([
     getProjectLayout(),
     getFavoriteProjectIds(),
     getManagerDashboardExcludedProjectIds(),
     getManagedProjectIds(),
+    getDashboardWidgets('home'),
+    getDashboardWidgets('project'),
   ]);
   await setDoc(doc(db, 'companies', code, 'userLayouts', userLayoutDocId(userName)), {
     projectLayout: JSON.parse(JSON.stringify(stripLayoutForSync(projectLayout))),
     favoriteProjectIds,
     managerDashboardExcludedProjectIds,
     managedProjectIds,
+    homeWidgets: homeWidgets ? JSON.parse(JSON.stringify(homeWidgets)) : null,
+    projectWidgets: projectWidgets ? JSON.parse(JSON.stringify(projectWidgets)) : null,
     updatedAt: serverTimestamp(),
   });
 }
@@ -2171,6 +2178,10 @@ async function pullUserLayout(code, userName) {
   if (data.managedProjectIds !== undefined) {
     await saveSetting(managedProjectsSettingKey(userName), data.managedProjectIds);
   }
+  // Dashboard widgets: missing on copies pushed by an older version of
+  // the app, which means "leave this device's own alone", not "reset".
+  if (Array.isArray(data.homeWidgets)) await saveSetting(dashboardWidgetsSettingKey('home', userName), data.homeWidgets);
+  if (Array.isArray(data.projectWidgets)) await saveSetting(dashboardWidgetsSettingKey('project', userName), data.projectWidgets);
   await saveSetting(userLayoutUpdatedAtSettingKey(userName), remoteUpdatedAt);
   return true;
 }
@@ -2462,6 +2473,33 @@ function projectBackgroundPath(code, projectId) {
   return `companies/${code}/projects/${projectId}/background`;
 }
 
+// For pushProjectToCompany: `local` Pay Apps, with any that are approved
+// in `remote` put back the way the company has them, unless this is a
+// manager's unlock (status 'unlocked', unlocked after the company copy
+// last changed). Returns { list, replaced } -- replaced holds this
+// device's versions that were overruled.
+function protectApprovedPayApps(local, remote) {
+  const list = local.map((e) => e);
+  const replaced = [];
+  const content = (e) => {
+    const out = {};
+    Object.keys(e || {}).sort().forEach((k) => { if (!REVIEW_FIELDS.includes(k)) out[k] = e[k]; });
+    return JSON.stringify(out);
+  };
+  remote.filter(isApprovedLocked).forEach((r) => {
+    const i = list.findIndex((e) => e.id === r.id);
+    if (i === -1) { list.push(r); return; } // removed on a device that hadn't seen the approval
+    const l = list[i];
+    const unlocking = l.approvalStatus === 'unlocked' && (l.unlockedAt || 0) > (r.updatedAt || 0);
+    if (unlocking) return;
+    if (l.approvalStatus !== 'approved' || content(l) !== content(r)) {
+      replaced.push(l);
+      list[i] = r;
+    }
+  });
+  return { list, replaced };
+}
+
 async function pushProjectToCompany(code, project) {
   const { db, storage, ensureSignedIn } = await waitForFirebaseCore();
   const { doc, getDoc, setDoc } = await import(FIRESTORE_SDK);
@@ -2502,6 +2540,23 @@ async function pushProjectToCompany(code, project) {
   // device, which would misread it as ITS OWN sync state for this record.
   const { backgroundImage: _bg, backgroundImageFetched: _bgf, pendingPush: _pp, ...rest } = project;
   const data = JSON.parse(JSON.stringify(rest));
+  // Approved Pay Apps are locked (they live inside the project record, so
+  // the rules can't single them out the way they do approved reports --
+  // this is the check). A device with an older copy of the project saving
+  // anything else must not undo an approval or bring back earlier figures:
+  // the company's approved version wins, and this device's version is kept
+  // aside in its settings (payAppConflict:<project>:<pay app>).
+  if (remote && Array.isArray(remote.billingEstimates)) {
+    const guarded = protectApprovedPayApps(data.billingEstimates || [], remote.billingEstimates);
+    if (guarded.replaced.length) {
+      data.billingEstimates = guarded.list;
+      for (const lost of guarded.replaced) {
+        await saveSetting(`payAppConflict:${project.id}:${lost.id}`, lost).catch(() => {});
+      }
+      const local = await getProject(project.id);
+      if (local && local.updatedAt === project.updatedAt) await putProjectRaw({ ...local, billingEstimates: guarded.list });
+    }
+  }
   data.hasBackgroundImage = hasBackgroundImage;
   if (backgroundImageVersion) data.backgroundImageVersion = backgroundImageVersion;
   else delete data.backgroundImageVersion;
@@ -2597,6 +2652,49 @@ function reportSignaturePath(code, reportId) {
   return `companies/${code}/reports/${reportId}/signature`;
 }
 
+// True when pushing `report` over the approved company copy `remote` would
+// change more than its review (approval, comments, unlocking) -- or would
+// undo the approval without being an unlock.
+function reportLockConflict(report, remote) {
+  const status = report.approvalStatus || 'pending';
+  // An unlock made after the company copy last changed (an older unlock
+  // from before a re-approval doesn't count).
+  const unlocking = status === 'unlocked' && (report.unlockedAt || 0) > (remote.updatedAt || 0);
+  if (status !== 'approved' && !unlocking) return true;
+  const skip = new Set([...REVIEW_FIELDS, 'photos', 'photosFetched', 'repSignatureImage', 'signatureFetched', 'peSignatureImage',
+    'thumbnail', 'thumbnailBack', 'thumbnailAt', 'pendingPush', 'photoSlots', 'extraPhotoSlots', 'hasSignature', 'companyCode']);
+  const pick = (obj) => {
+    const out = {};
+    Object.keys(obj || {}).sort().forEach((k) => { if (!skip.has(k) && obj[k] !== undefined) out[k] = obj[k]; });
+    return JSON.stringify(out);
+  };
+  if (pick(JSON.parse(JSON.stringify(report))) !== pick(remote)) return true;
+  // Photos: which slots are filled must match too.
+  const local = (report.photos || []).map((p, i) => ((report.photosFetched || [])[i] === false ? null : !!p));
+  const remoteSlots = remotePhotoSlots(remote);
+  return local.some((has, i) => has !== null && has !== !!remoteSlots[i]);
+}
+
+// Replaces this device's copy of a report with the company's, the way a
+// pull would: photos and signature marked "not downloaded yet" so they're
+// fetched when the report is next opened. A local-only write.
+async function adoptRemoteReport(code, id, data) {
+  const local = { ...data, id, companyCode: code };
+  delete local.photoSlots;
+  delete local.extraPhotoSlots;
+  delete local.hasSignature;
+  const slots = remotePhotoSlots(data);
+  local.photos = [];
+  local.photosFetched = [];
+  for (let i = 0; i < REPORT_PHOTO_COUNT; i++) {
+    local.photos.push(null);
+    local.photosFetched.push(!slots[i]);
+  }
+  local.repSignatureImage = null;
+  local.signatureFetched = !data.hasSignature;
+  await putReportRaw(local);
+}
+
 async function pushReportToCompany(code, report) {
   const { db, storage, ensureSignedIn } = await waitForFirebaseCore();
   const { doc, getDoc, setDoc } = await import(FIRESTORE_SDK);
@@ -2613,6 +2711,19 @@ async function pushReportToCompany(code, report) {
   const existingDoc = await getDoc(doc(db, 'companies', code, 'reports', report.id));
   const existingData = existingDoc.exists() ? existingDoc.data() : {};
   const existingPhotoSlots = remotePhotoSlots(existingData);
+
+  // Approved in the company copy means locked. A device that changed this
+  // report before it saw the approval (offline, or an old copy) must not
+  // overwrite the approved version -- that's checked here, before any photo
+  // uploads. Its own version isn't thrown away: it's kept on that device as
+  // an unsaved draft (see index.html's Unsaved Reports), and the approved
+  // copy replaces it locally.
+  if (isApprovedLocked(existingData) && reportLockConflict(report, existingData)) {
+    await saveReportDraft(report).catch((err) => console.error('locked report draft:', err));
+    await adoptRemoteReport(code, report.id, existingData);
+    window.dispatchEvent(new CustomEvent('report-locked-conflict', { detail: { reportId: report.id } }));
+    return;
+  }
 
   const photos = report.photos || [];
   const photosFetched = report.photosFetched || photos.map(() => true);

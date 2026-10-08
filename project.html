@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://www.gstatic.com https://*.googleapis.com https://api.open-meteo.com https://geocoding-api.open-meteo.com; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self';">
-<title>Project &mdash; Daily Work Reports</title>
+<title>Project · Daily Work Reports</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1c3d5a">
@@ -17,7 +17,7 @@
 <script src="theme.js"></script>
 <script src="lib/heic2any.min.js"></script>
 </head>
-<body>
+<body class="page-wide has-dash">
 
 <img class="page-bg-img" id="page-bg-img" alt="" hidden>
 <div class="page-bg-fade" id="page-bg-fade" hidden></div>
@@ -30,109 +30,76 @@
     <h1 id="project-title">Loading&hellip;</h1>
     <div class="app-sub">Project Workspace</div>
   </a>
-  <span></span>
+  <a class="hdr-new" id="hdr-new" href="#" style="display:inline-flex;align-items:center;text-decoration:none;"><span aria-hidden="true">+</span><span class="lbl">&nbsp;New Report</span></a>
 </header>
 <div class="back-bar">
   <span id="bb-trail"></span>
 </div>
 
 <main>
-  <div class="hub-grid action-tiles">
-    <a class="hub-card" id="card-new-report" href="#">
-      <span class="hc-icon">&#128221;</span>
-      <div class="hc-title">+ New Report</div>
-      <div class="hc-desc">Start today's daily work report</div>
-    </a>
-    <a class="hub-card" id="card-view-reports" href="#">
-      <span class="hc-icon">&#128203;</span>
-      <div class="hc-title">View Reports</div>
-      <div class="hc-desc"><span id="report-count">0</span> saved report(s)</div>
-    </a>
-    <a class="hub-card" id="card-quantities" href="#">
-      <span class="hc-icon">&#128202;</span>
-      <div class="hc-title">Quantities</div>
-      <div class="hc-desc" id="card-quantities-desc">What inspectors have logged</div>
-    </a>
-    <a class="hub-card" id="card-payapps" href="#">
-      <span class="hc-icon">&#128181;</span>
-      <div class="hc-title">Pay Apps</div>
-      <div class="hc-desc" id="card-payapps-desc">What's been billed and approved</div>
-    </a>
-  </div>
+  <div class="hero" id="hero"></div>
 
-  <div class="eyebrow">Project Dashboard</div>
-
-  <div class="dash-empty" id="dash-empty" hidden>No reports filed yet &mdash; the dashboard fills in once you've saved a few.</div>
-
-  <div id="dash-content" class="dash-box" hidden>
-    <div class="step">
-      <div class="step-header">
-        <span class="step-num">OVERVIEW</span>
-        <h2>Dashboard</h2>
-      </div>
-      <div class="step-body" id="dash-stats"></div>
-    </div>
-
-    <div class="step-pair">
-    <div class="step step-collapsible">
-      <div class="step-header">
-        <span class="step-num">PAY ITEMS</span>
-        <h2>Pay Item Completion</h2>
-      </div>
-      <div class="step-body">
-        <p class="dash-basis" id="dash-pi-basis" hidden></p>
-        <div id="dash-status-summary"></div>
-        <div class="pi-controls" id="pi-controls" hidden>
-          <input type="text" id="pi-search" placeholder="Search item # or description...">
-          <select id="pi-sort">
-            <option value="most-complete">Sort: Most Complete First</option>
-            <option value="default">Sort: Least Complete First</option>
-            <option value="item-number">Sort: Item Number</option>
-            <option value="earned-desc">Sort: Highest $ Earned</option>
-            <option value="remaining-desc">Sort: Highest $ Remaining</option>
-          </select>
-        </div>
-        <div class="bar-list" id="dash-bars"></div>
-        <p class="hint" id="dash-bars-empty" hidden style="margin:0;">This project's pay item catalog is empty &mdash; add items to the project's data file to see them here.</p>
-        <p class="hint" id="dash-bars-no-match" hidden style="margin:0;">No pay items match the current search/filter.</p>
-      </div>
-    </div>
-
-    <div class="step step-collapsible" id="dash-weather-step" hidden>
-      <div class="step-header">
-        <span class="step-num">CONDITIONS</span>
-        <h2>Weather &amp; Schedule</h2>
-      </div>
-      <div class="step-body">
-        <div class="dash-grid" id="dash-weather-stats" style="margin-top:0;"></div>
-        <div class="weather-view-controls">
-          <div class="view-toggle" id="weather-view-toggle" role="group" aria-label="View as">
-            <button type="button" class="view-toggle-btn active" data-view="list" title="List view" aria-label="List view">&#9776;</button>
-            <button type="button" class="view-toggle-btn" data-view="calendar" title="Calendar view" aria-label="Calendar view">&#128197;</button>
-          </div>
-        </div>
-        <div class="weather-log" id="dash-weather-log"></div>
-        <div class="weather-calendar" id="dash-weather-calendar" hidden></div>
-      </div>
-    </div>
-    </div>
-
-    <div class="step step-collapsible" id="dash-trend-step" hidden>
-      <div class="step-header">
-        <span class="step-num">TREND</span>
-        <h2>Progress Over Time</h2>
-      </div>
-      <div class="step-body">
-        <div id="dash-trend-chart"></div>
-        <p class="hint" id="dash-trend-hint" hidden style="margin-top:0.5rem;">Only one dated report on file so far &mdash; a trend line will appear once there's more than one date to compare.</p>
-      </div>
+  <div class="phone-tabs">
+    <div class="segmented" id="phone-tabs">
+      <button type="button" data-tab="workspace" aria-pressed="true">Workspace</button>
+      <button type="button" data-tab="dashboard" aria-pressed="false">Dashboard</button>
     </div>
   </div>
 
-  <a class="settings-toggle" id="btn-project-settings" href="#">
-    <span>&#9881;&#65039; Project Settings</span>
-    <span class="st-chevron">&#8250;</span>
-  </a>
+  <div class="home-split has-dash">
+    <section class="dash-col" id="dash-col" aria-label="Project Dashboard">
+      <div class="eyebrow eyebrow-row">
+        <span>Project Dashboard</span>
+        <span class="er-tools"><button type="button" class="text-btn" id="pd-edit-btn" aria-pressed="false">Edit Dashboard</button></span>
+      </div>
+      <div class="edit-banner" id="pd-edit-banner" hidden>
+        <span class="grow"><b>Editing your project dashboard.</b> It's the same on every project you open, and only your view changes.</span>
+        <button type="button" class="btn-secondary" id="pd-reset-btn">Reset to Default</button>
+        <button type="button" class="btn-secondary" id="pd-add-btn">+ Add a Widget</button>
+        <button type="button" class="btn-primary" id="pd-done-btn">Done</button>
+      </div>
+      <div class="dash-empty" id="dash-empty" hidden>No reports filed yet. The dashboard fills in once you've saved a few.</div>
+      <div class="widgets" id="pd-widgets"></div>
+    </section>
+
+    <section class="ws-col" aria-label="Workspace">
+      <div class="eyebrow eyebrow-row"><span>Workspace</span></div>
+      <div class="hub-grid action-tiles">
+        <a class="hub-card primary-tile" id="card-new-report" href="#">
+          <span class="hc-icon">&#128221;</span>
+          <div class="hc-title">+ New Report</div>
+          <div class="hc-desc" id="card-new-report-desc">Start today's daily work report</div>
+        </a>
+        <a class="hub-card" id="card-view-reports" href="#">
+          <span class="hc-icon">&#128203;</span>
+          <div class="hc-title">View Reports</div>
+          <div class="hc-desc"><span id="report-count">0</span> saved report(s)</div>
+        </a>
+        <a class="hub-card" id="card-quantities" href="#">
+          <span class="hc-icon">&#128202;</span>
+          <div class="hc-title">Quantities</div>
+          <div class="hc-desc" id="card-quantities-desc">What inspectors have logged</div>
+        </a>
+        <a class="hub-card" id="card-payapps" href="#">
+          <span class="hc-icon">&#128181;</span>
+          <div class="hc-title">Pay Apps</div>
+          <div class="hc-desc" id="card-payapps-desc">What's been billed and approved</div>
+        </a>
+      </div>
+      <div class="step">
+        <div class="step-header"><span class="step-num">REPORTS</span><h2 id="recent-title">Recent Reports</h2></div>
+        <div class="step-body" id="recent-reports"></div>
+      </div>
+      <div class="step">
+        <div class="step-header"><span class="step-num">PROJECT</span><h2>Project Info</h2></div>
+        <div class="step-body"><dl class="info-list" id="project-info"></dl></div>
+      </div>
+      <a class="settings-toggle" id="btn-project-settings" href="#">
+        <span>&#9881;&#65039; Project Settings</span>
+        <span class="st-chevron">&#8250;</span>
+      </a>
+    </section>
+  </div>
 </main>
 
 <div class="modal-overlay" id="day-detail-overlay" hidden>
@@ -167,14 +134,20 @@
 <script src="quantity-calc.js"></script>
 <script src="quantities-ui.js"></script>
 <script src="dashboard-widgets.js"></script>
+<script src="page-ui.js"></script>
+<script src="dashboard-layout.js"></script>
 <script type="module" src="firebase-init.js"></script>
 <script src="firebase-sync.js"></script>
 <script>
 let project = null;
 let pageBgUrl = null;
-let dashFunFactTimer = null; // rotation interval for the fun-fact card, see renderDashboard
+let pd = null; // everything the widgets draw from, worked out once per load
+let pdBoard = null;
+let pdFunFactIdx = 0;
+let pdPhotoUrls = [];
 
 function showPageBackground(p) {
+  document.body.classList.toggle('has-page-bg', !!p.backgroundImage);
   if (!p.backgroundImage) return;
   if (pageBgUrl) URL.revokeObjectURL(pageBgUrl);
   pageBgUrl = URL.createObjectURL(p.backgroundImage);
@@ -192,13 +165,15 @@ async function init() {
     return;
   }
 
-  document.title = project.name + ' — Daily Work Reports';
+  document.title = project.name + ' · Daily Work Reports';
   $('#project-title').textContent = project.name;
   renderBreadcrumb('#bb-trail', [{ label: 'Home', href: 'index.html' }, { label: project.name }]);
 
   showPageBackground(project);
 
-  $('#card-new-report').href = `report-editor.html?project=${project.id}&report=new`;
+  const newReportHref = `report-editor.html?project=${project.id}&report=new`;
+  $('#card-new-report').href = newReportHref;
+  $('#hdr-new').href = newReportHref;
   $('#card-view-reports').href = `reports.html?project=${project.id}`;
   $('#card-quantities').href = `quantity-sheet.html?project=${project.id}`;
   $('#card-payapps').href = `pay-apps.html?project=${project.id}`;
@@ -208,16 +183,36 @@ async function init() {
   // shows each person only the sections they're allowed to use.
   $('#btn-project-settings').href = `project-setup.html?id=${project.id}`;
 
-  const reports = await getReportsForProject(project.id);
+  const reports = (await getReportsForProject(project.id)).filter((r) => !r.deleted);
   $('#report-count').textContent = reports.length;
   renderQuantityCards(reports, project);
-  renderDashboard(reports, project);
-}
+  await buildProjectData(reports);
+  renderHero();
+  renderWorkspace();
+  $('#dash-empty').hidden = reports.length > 0;
 
-// ---------- Dashboard ----------
-// daysBetween/ringSvg/statCard/DASH_COUNT_FORMATS/animateDashboardFills/
-// fitDashboardValues/fmtMoney now live in dashboard-widgets.js, shared with
-// index.html's Manager Dashboard.
+  if (!pdBoard) {
+    pdBoard = createWidgetBoard({
+      board: 'project',
+      container: $('#pd-widgets'),
+      editBtn: $('#pd-edit-btn'),
+      banner: $('#pd-edit-banner'),
+      addBtn: $('#pd-add-btn'),
+      resetBtn: $('#pd-reset-btn'),
+      doneBtn: $('#pd-done-btn'),
+      types: PD_WIDGETS,
+      // Approvers start with the figures and Pay Apps; everyone else with
+      // the day-to-day pieces. Either can add the rest.
+      defaults: () => (pd.canApproveAny
+        ? [{ type: 'attention', size: 'full' }, { type: 'progress', size: 'full' }, { type: 'dailylog', size: 'full' }, { type: 'payitems', size: 'half' }, { type: 'trend', size: 'half' }, { type: 'payapps', size: 'half' }]
+        : [{ type: 'attention', size: 'full' }, { type: 'dailylog', size: 'full' }, { type: 'payitems', size: 'half' }, { type: 'photos', size: 'half' }]),
+      customBuilder: openPdWidgetBuilder,
+      onRendered: () => { fitDashboardValues(); animateDashboardFills(); },
+    });
+    await pdBoard.load();
+  }
+  pdBoard.render();
+}
 
 // The Quantities and Pay Apps cards' live line: how much is logged and
 // billed, and where the latest Pay App stands.
@@ -232,276 +227,342 @@ function renderQuantityCards(reports, project) {
   }
 }
 
-function renderDashboard(reports, project) {
-  if (dashFunFactTimer) { clearInterval(dashFunFactTimer); dashFunFactTimer = null; }
-  const hasReports = reports.length > 0;
-  $('#dash-empty').hidden = hasReports;
-  $('#dash-content').hidden = !hasReports;
-  if (!hasReports) return;
-
+// ---------- Working out the figures ----------
+// daysBetween/ringSvg/statCard/fmtMoney etc. live in dashboard-widgets.js,
+// shared with the home page's Manager Dashboard.
+async function buildProjectData(reports) {
   const dated = reports.filter((r) => r.date).sort((a, b) => a.date.localeCompare(b.date));
   const totalHours = reports.reduce((sum, r) => sum + (Number(r.hours) || 0), 0);
-
   let avgHoursPerWeek = null;
   if (dated.length > 0) {
     const spanDays = Math.max(1, daysBetween(dated[0].date, dated[dated.length - 1].date) + 1);
     avgHoursPerWeek = totalHours / Math.max(spanDays / 7, 1 / 7);
   }
-
-  let daysSinceNtp = null;
+  const timeline = projectContractTimeline(project);
   const ntpDate = (project.meta || {}).ntpDate;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(ntpDate || '')) {
-    const d = daysBetween(ntpDate, todayIso());
-    if (Number.isFinite(d)) daysSinceNtp = d;
-  }
-  const contractLength = parseInt((project.meta || {}).contractLength, 10);
-  const hasContractLength = Number.isFinite(contractLength) && contractLength > 0;
-  const daysRemaining = hasContractLength && daysSinceNtp != null ? contractLength - daysSinceNtp : null;
+  const daysSinceNtp = /^\d{4}-\d{2}-\d{2}$/.test(ntpDate || '') ? daysBetween(ntpDate, todayIso()) : null;
 
   // Every pay item in the catalog, not just ones that have shown up on a
-  // report yet -- an item nobody's touched still counts toward the
-  // project's total scope (and toward the weighted % complete below).
-  // effectivePayItemFlatEntries folds in the latest Pay App (if any),
-  // superseding reports through its date rather than just summing every
-  // report ever filed -- see that function's own comment.
+  // report yet. effectivePayItemFlatEntries folds in the latest agreed Pay
+  // App, superseding reports through its date (see that function).
   const flatItems = effectivePayItemFlatEntries(reports, project.billingEstimates);
-  // Where these figures come from, in one quiet line, once a Pay App is
-  // part of them.
-  const basis = latestAgreedEstimate(project.billingEstimates);
-  $('#dash-pi-basis').hidden = !basis;
-  if (basis) {
-    const when = basis.date ? new Date(basis.date + 'T12:00:00Z').toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' }) : '';
-    $('#dash-pi-basis').textContent = `Pay App ${basis.estimateNo}${when ? ` (${when})` : ''} plus daily reports since`;
-  }
   const items = fullPayItemCatalogOverview(flatItems, project.payItemCatalog);
   const overall = overallPercentComplete(items);
   const { totalContract } = contractValueSummary(items);
-  const funFacts = unitFunFacts(items);
-
-  const overallTip = overall == null
-    ? 'No pay item on this project has both a Per Plans Total and any usage yet, so there\'s nothing to weight.'
-    : `Total quantity used across every pay item that has a Per Plans Total on file, divided by their combined planned quantity -- a physical measure, not a dollar one. Items with no Per Plans Total aren't counted either way, and neither are Lump Sum items, which aren't measured on a comparable scale.`;
-
-  // A dollar-based ring, deliberately built only from the latest recorded
-  // Pay App -- not effectivePayItemFlatEntries' blended live figure (that's
-  // still what Earned to Date below shows) -- since this one's meant to
-  // read as "what's officially been billed," a number that should hold
-  // still between Pay Apps rather than creep up with every inspector report
-  // filed on top of it.
+  // "Officially billed": only the latest recorded Pay App, so it holds
+  // still between Pay Apps rather than creeping up with every report.
   const payAppFlat = latestPayAppFlatEntries(project.billingEstimates);
   const payAppPctByValue = payAppFlat != null
     ? contractValueSummary(fullPayItemCatalogOverview(payAppFlat, project.payItemCatalog)).pctByValue
     : null;
-  const payAppValueTip = payAppFlat == null
-    ? 'No Pay App has been recorded for this project yet -- record one on the Pay Apps page to track billed contract value here.'
-    : payAppPctByValue == null
-      ? 'The most recently recorded Pay App has no dollar value yet to weigh against contract value.'
-      : `Dollars billed in the most recently recorded Pay App, divided by total contract value. Based only on that Pay App -- doesn't include report activity filed since, since it's meant to reflect what's been formally billed rather than day-to-day progress.`;
 
-  // A second ring, next to Overall % Complete, for the natural comparison a
-  // PM actually wants: is the % of the contract's days used running ahead
-  // of or behind the % of work actually done? Only shown once there's a
-  // total contract length to measure against -- see the Days Remaining
-  // card's own note about that same missing-data case.
-  let scheduleCardHtml = '';
-  if (hasContractLength && daysSinceNtp != null) {
-    const timeFrac = daysSinceNtp / contractLength;
-    let scheduleColor = null; // null = ringSvg's own neutral default
-    if (overall != null) {
-      if (overall + 0.05 >= timeFrac) scheduleColor = 'var(--ok)';
-      else if (overall + 0.2 >= timeFrac) scheduleColor = 'var(--warn)';
-      else scheduleColor = 'var(--danger)';
-    }
-    const scheduleTip = overall != null
-      ? `${Math.round(timeFrac * 100)}% of the contract's ${contractLength} days have elapsed, versus ${Math.round(overall * 100)}% of planned work complete. ` +
-        (overall + 0.05 >= timeFrac ? 'On pace or ahead of schedule.' : 'Behind schedule -- more time used than work done.')
-      : `${Math.round(timeFrac * 100)}% of the contract's ${contractLength} days have elapsed. Add a Per Plans Total to pay items to compare this against % complete.`;
-    scheduleCardHtml = ringCardHtml(
-      timeFrac, 'Schedule Used',
-      daysRemaining >= 0 ? `${daysRemaining} day(s) left` : `${Math.abs(daysRemaining)} day(s) over`,
-      scheduleTip, scheduleColor
-    );
+  const [canReports, canPayApps] = await Promise.all([companyCan('approveReports'), companyCan('approvePayApps')]);
+  const uid = currentAccountUid();
+  const userName = await getUserName();
+  pd = {
+    reports, dated, totalHours, avgHoursPerWeek, timeline, daysSinceNtp, items, overall, totalContract,
+    payAppFlat, payAppPctByValue, funFacts: unitFunFacts(items),
+    status: scheduleStatusFor(overall, timeline),
+    basis: latestAgreedEstimate(project.billingEstimates),
+    progress: progressOverTime(dated, project.payItemCatalog, project.billingEstimates),
+    canReports, canPayApps, canApproveAny: canReports || canPayApps,
+    mine: (r) => (r.createdByUid ? !!uid && r.createdByUid === uid : !!userName && r.createdBy === userName),
+    userName,
+  };
+}
+
+function renderHero() {
+  const meta = project.meta || {};
+  const chips = [];
+  if (pd.status) chips.push(`<span class="hero-chip st-${pd.status}">${SCHEDULE_STATUS_LABELS[pd.status]}</span>`);
+  if (pd.timeline) {
+    const left = pd.timeline.length - pd.timeline.day;
+    chips.push(`<span class="hero-chip">Day ${Math.max(0, pd.timeline.day)} of ${pd.timeline.length}</span>`);
+    chips.push(`<span class="hero-chip">${left >= 0 ? `${left} days left` : `${-left} days over`}</span>`);
   }
+  if (pd.overall != null) chips.push(`<span class="hero-chip">${Math.round(pd.overall * 100)}% complete</span>`);
+  const sub = [meta.projectNo, meta.projectName].filter(Boolean).map(escapeHtml).join(' · ');
+  $('#hero').innerHTML = `
+    <div class="hero-icon">${project.icon || '&#128193;'}</div>
+    <div class="hero-text">
+      <h2>${escapeHtml(project.name)}</h2>
+      ${sub ? `<div class="hero-sub">${sub}</div>` : ''}
+      ${chips.length ? `<div class="hero-facts">${chips.join('')}</div>` : ''}
+    </div>`;
+}
 
-  const ringsRow = dashGridRow([
-    overall != null ? ringCardHtml(overall, 'Estimated Pay Item Usage', 'By quantity, excludes Lump Sum', overallTip) : '',
-    payAppFlat != null ? ringCardHtml(payAppPctByValue, 'Contract Value Used', 'By dollars billed, latest Pay App only', payAppValueTip) : '',
-    scheduleCardHtml,
-  ]);
+function approvalChip(r) {
+  const s = r.approvalStatus || 'pending';
+  if (s === 'approved') return '<span class="status-chip ok">&#128274; Approved</span>';
+  if (s === 'changes_requested') return '<span class="status-chip chg">Changes Requested</span>';
+  if (s === 'unlocked') return '<span class="status-chip chg">&#128275; Unlocked</span>';
+  return '<span class="status-chip wait">Pending</span>';
+}
 
-  // Kept visually separate (its own always-full-width row, see
-  // .dash-contract-row) rather than just another tile in the grid below --
-  // both because it's the one figure people scan for first, and because
-  // that's what keeps it from ever landing as the odd tile stuck alone in
-  // that grid.
-  const contractRow = totalContract != null
-    ? `<div class="dash-contract-row" data-tip="Sum of Per Plans Total × Unit Price across every pay item that has both on file." tabindex="0">
-        <span class="dc-label">Total Contract Value</span>
-        <span class="dc-value">${escapeHtml(fmtMoney(totalContract))}</span>
-      </div>`
+function renderWorkspace() {
+  // People who approve see everything; everyone else sees their own first.
+  const mine = pd.reports.filter(pd.mine);
+  const showMine = !pd.canApproveAny && mine.length > 0;
+  const list = (showMine ? mine : pd.reports).slice().sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.reportNo || 0) - (a.reportNo || 0)).slice(0, 6);
+  $('#recent-title').textContent = showMine ? 'My Recent Reports' : 'Recent Reports';
+  $('#recent-reports').innerHTML = list.length
+    ? list.map((r) => {
+        const what = isNoWorkDayReport(r) ? 'No Work Day' : isWeatherDayReport(r) ? 'Weather Day' : (reportActivityText(r) || `Report #${r.reportNo}`);
+        return `<a class="rr-row" href="report-viewer.html?project=${project.id}&report=${r.id}"><span class="d">${escapeHtml(shortDateLabel(r.date) || `#${r.reportNo}`)}</span><span class="b">${escapeHtml(what)}</span>${approvalChip(r)}</a>`;
+      }).join('') + `<a class="text-btn" href="reports.html?project=${project.id}" style="display:inline-block;margin-top:0.5rem;padding:0;">All reports &#8250;</a>`
+    : '<p class="hint" style="margin:0;">No reports yet.</p>';
+
+  const meta = project.meta || {};
+  const tl = pd.timeline;
+  const fmtDate = (iso) => new Date(iso + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  const rows = [
+    ['Project No.', meta.projectNo],
+    ['Project Name', meta.projectName],
+    ['Project Engineer', meta.peName],
+    ['NTP Date', /^\d{4}-\d{2}-\d{2}$/.test(meta.ntpDate || '') ? fmtDate(meta.ntpDate) : ''],
+    ['Contract Time', meta.contractLength ? `${meta.contractLength} calendar days` : ''],
+    ['Completion Date', tl ? fmtDate(tl.end) : ''],
+    ['Contract Value', pd.totalContract != null ? fmtMoney(pd.totalContract) : ''],
+  ].filter(([, v]) => v);
+  $('#project-info').innerHTML = rows.length
+    ? rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${escapeHtml(v)}</dd></div>`).join('')
+    : '<p class="hint" style="margin:0;">Add the project number, NTP Date and contract length in Project Settings.</p>';
+}
+
+// ---------- Widgets ----------
+
+const PD_WIDGETS = {
+  attention: {
+    tag: 'TO DO', title: 'Needs Attention', icon: '\u{1F514}', size: 'full',
+    desc: 'What’s waiting on you for this project.',
+    render: () => pdAttentionHtml(),
+  },
+  progress: {
+    tag: 'OVERVIEW', title: 'Progress', icon: '\u{1F3AF}', size: 'full',
+    desc: 'Pay item usage, contract value billed and schedule used, plus total contract value.',
+    render: () => pdProgressHtml(),
+  },
+  numbers: {
+    tag: 'NUMBERS', title: 'Project Numbers', icon: '\u{1F522}', size: 'half',
+    desc: 'Reports filed, days since NTP, days left, hours, pay items.',
+    render: () => pdNumbersHtml(),
+  },
+  funfacts: {
+    tag: 'FUN', title: 'Fun Facts', icon: '\u{1F69A}', size: 'half',
+    desc: 'Quantities so far in everyday terms, rotating.',
+    available: () => pd.funFacts.length > 0,
+    render: () => pdFunFactHtml(),
+  },
+  payitems: {
+    tag: 'PAY ITEMS', title: 'Pay Item Completion', icon: '\u{1F4CB}', size: 'half',
+    desc: 'Every pay item with a status bar, filters, search and sort.',
+    render: (body) => pdRenderPayItems(body),
+  },
+  dailylog: {
+    tag: 'DAILY LOG', title: 'Weather & Schedule', icon: '\u{1F4C5}', size: 'full',
+    desc: 'A calendar or list of every report: weather, activity, photos, traffic control.',
+    render: (body) => pdRenderDailyLog(body),
+  },
+  conditions: {
+    tag: 'CONDITIONS', title: 'Site Conditions', icon: '⛅', size: 'half',
+    desc: 'Weather-flagged days, traffic control attention, no work days, weather days.',
+    render: () => pdConditionsHtml(),
+  },
+  trend: {
+    tag: 'TREND', title: 'Progress Over Time', icon: '\u{1F4C8}', size: 'half',
+    desc: 'Percent complete by date, with an on-pace line and Pay App stars.',
+    render: (body) => pdRenderTrend(body),
+  },
+  payapps: {
+    tag: 'PAY APPS', title: 'Pay Apps', icon: '\u{1F4B5}', size: 'half',
+    desc: 'Every Pay App with the amount billed and its approval status.',
+    render: () => pdPayAppsHtml(),
+  },
+  hours: {
+    tag: 'TEAM', title: 'Hours by Inspector', icon: '⏱️', size: 'half',
+    desc: 'Hours logged on this project by each inspector.',
+    render: () => pdHoursHtml(),
+  },
+  photos: {
+    tag: 'PHOTOS', title: 'Recent Photos', icon: '\u{1F4F7}', size: 'half',
+    desc: 'The latest report photos on this device. Tap one to open its report.',
+    render: () => pdPhotosHtml(),
+  },
+  custom: {
+    tag: 'CUSTOM', title: 'Your Widget', icon: '\u{1F6E0}️', size: 'half',
+    desc: 'Pick what to count, the time range and how to show it.',
+    render: (body, w) => pdCustomHtml(w.config || {}),
+  },
+};
+
+function pdAttentionHtml() {
+  const items = [];
+  const item = (icon, text, sub, href, btn, attrs = '') => `<div class="attn-item"><span class="ai-icon">${icon}</span><span class="ai-text">${text}${sub ? `<small>${sub}</small>` : ''}</span>${href ? `<a class="btn-secondary" href="${href}">${btn}</a>` : `<button type="button" class="btn-secondary" ${attrs}>${btn}</button>`}</div>`;
+  const editHref = (r) => `report-editor.html?project=${project.id}&report=${r.id}`;
+  pd.reports.filter((r) => pd.mine(r) && (r.approvalStatus === 'changes_requested' || r.approvalStatus === 'unlocked')).forEach((r) => {
+    const note = (r.comments || []).slice().reverse().find((c) => c.author && c.author !== pd.userName);
+    items.push(item(r.approvalStatus === 'unlocked' ? '&#128275;' : '&#8617;&#65039;',
+      `${r.approvalStatus === 'unlocked' ? 'Unlocked for changes' : 'Changes requested'}: Report #${escapeHtml(String(r.reportNo))}${r.date ? `, ${escapeHtml(shortDateLabel(r.date))}` : ''}`,
+      note ? `${escapeHtml(note.author)}: "${escapeHtml(note.text)}"` : '', editHref(r), 'Fix Report'));
+  });
+  // A project still in progress with nothing filed today.
+  const today = todayIso();
+  const recent = pd.dated.length && pd.dated[pd.dated.length - 1].date >= widgetRangeStart('30');
+  if (recent && !pd.reports.some((r) => r.date === today) && new Date().getDay() % 6 !== 0) {
+    items.push(item('&#128221;', 'No report saved for today yet', '', `report-editor.html?project=${project.id}&report=new`, 'New Report'));
+  }
+  if (pd.canReports) {
+    const waiting = pd.reports.filter((r) => !r.approvalStatus || r.approvalStatus === 'pending');
+    if (waiting.length) items.push(item('&#9989;', `${waiting.length} report${waiting.length === 1 ? '' : 's'} waiting for approval`, escapeHtml(waiting.slice(0, 4).map((r) => shortDateLabel(r.date) || `#${r.reportNo}`).join(', ')), 'manager.html', 'Review'));
+    const asks = pd.reports.filter((r) => r.approvalStatus === 'approved' && r.unlockRequest);
+    asks.forEach((r) => items.push(item('&#128275;', `${escapeHtml(r.unlockRequest.by || 'An inspector')} asked to unlock Report #${escapeHtml(String(r.reportNo))}`, r.unlockRequest.note ? `"${escapeHtml(r.unlockRequest.note)}"` : '', 'manager.html', 'Review')));
+  }
+  if (pd.canPayApps) {
+    (project.billingEstimates || []).filter((e) => !e.approvalStatus || e.approvalStatus === 'pending').forEach((e) => {
+      items.push(item('&#128178;', `Pay App #${escapeHtml(e.estimateNo || '?')} waiting for approval`, escapeHtml(shortDateLabel(e.date)), `pay-apps.html?project=${project.id}&estimate=${encodeURIComponent(e.id)}`, 'Review'));
+    });
+  }
+  if (pd.canApproveAny) {
+    pd.items.filter((it) => completionBand(it.pct).cls === 'status-over').slice(0, 3).forEach((it) => {
+      items.push(item('&#9888;&#65039;', `${escapeHtml(it.itemNumber)} ${escapeHtml(it.description || '')} is ${Math.round((it.pct - 1) * 100)}% over plan`, `${it.total.toLocaleString()} of ${(it.planned || 0).toLocaleString()} ${escapeHtml(it.unit || '')}`, '', 'See Pay Items', 'data-pd-goto="payitems"'));
+    });
+    if (pd.status === 'warn' || pd.status === 'danger') {
+      items.push(item('&#128201;', `${SCHEDULE_STATUS_LABELS[pd.status]}: ${Math.round(pd.overall * 100)}% complete with ${Math.round(pd.timeline.frac * 100)}% of contract time used`, `Completion date ${escapeHtml(shortDateLabel(pd.timeline.end))}`, '', 'See Chart', 'data-pd-goto="trend"'));
+    }
+  }
+  return items.length ? `<div class="attn-grid">${items.join('')}</div>` : '<p class="attn-empty">Nothing needs your attention on this project.</p>';
+}
+
+function pdProgressHtml() {
+  const tl = pd.timeline;
+  const overallTip = pd.overall == null
+    ? 'No pay item on this project has both a Per Plans Total and any usage yet, so there\'s nothing to weight.'
+    : 'Total quantity used across every pay item that has a Per Plans Total on file, divided by their combined planned quantity -- a physical measure, not a dollar one. Items with no Per Plans Total aren\'t counted either way, and neither are Lump Sum items, which aren\'t measured on a comparable scale.';
+  const payAppValueTip = pd.payAppFlat == null
+    ? 'No Pay App has been recorded for this project yet -- record one on the Pay Apps page to track billed contract value here.'
+    : pd.payAppPctByValue == null
+      ? 'The most recently recorded Pay App has no dollar value yet to weigh against contract value.'
+      : 'Dollars billed in the most recently recorded Pay App, divided by total contract value. Based only on that Pay App, since it\'s meant to reflect what\'s been formally billed rather than day-to-day progress.';
+  let scheduleCard = '';
+  if (tl) {
+    const color = pd.status === 'ok' ? 'var(--ok)' : pd.status === 'warn' ? 'var(--warn)' : pd.status === 'danger' ? 'var(--danger)' : null;
+    const left = tl.length - tl.day;
+    const tip = pd.overall != null
+      ? `${Math.round(tl.frac * 100)}% of the contract's ${tl.length} days have elapsed, versus ${Math.round(pd.overall * 100)}% of planned work complete. ${pd.status === 'ok' ? 'On pace or ahead of schedule.' : 'Behind schedule -- more time used than work done.'}`
+      : `${Math.round(tl.frac * 100)}% of the contract's ${tl.length} days have elapsed. Add a Per Plans Total to pay items to compare this against % complete.`;
+    scheduleCard = ringCardHtml(tl.frac, 'Schedule Used', left >= 0 ? `${left} day(s) left` : `${-left} day(s) over`, tip, color);
+  }
+  const rings = [
+    pd.overall != null ? ringCardHtml(pd.overall, 'Estimated Pay Item Usage', 'By quantity, excludes Lump Sum', overallTip) : '',
+    pd.payAppFlat != null ? ringCardHtml(pd.payAppPctByValue, 'Contract Value Used', 'By dollars billed, latest Pay App only', payAppValueTip) : '',
+    scheduleCard,
+  ].filter(Boolean);
+  const contractRow = pd.totalContract != null
+    ? `<div class="dash-contract-row" data-tip="Sum of Per Plans Total × Unit Price across every pay item that has both on file." tabindex="0"><span class="dc-label">Total Contract Value</span><span class="dc-value">${escapeHtml(fmtMoney(pd.totalContract))}</span></div>`
     : '';
-
-  const tilesRow = dashGridRow([
-    statCard(reports.length, 'Reports Filed', '', 'Number of daily reports saved for this project.', null, 'int'),
-    daysSinceNtp != null ? statCard(
-      daysSinceNtp,
-      'Days Since NTP',
-      '',
-      `Calendar days from the NTP Date (${ntpDate}) to today.` +
-        (hasContractLength ? '' : ' Not a days-remaining-in-contract figure -- there\'s no total contract length on file.'),
-      null, 'int'
-    ) : '',
-    daysRemaining != null ? statCard(
-      daysRemaining,
-      'Days Remaining (Contract)',
-      daysRemaining < 0 ? 'Past contract length' : '',
-      `Total Contract Length (${contractLength} days) minus Days Since NTP. Negative means the contract's allotted days have been exceeded.`,
-      null, 'int'
-    ) : '',
-    statCard(
-      totalHours, 'Total Hours Worked', '',
-      'Sum of the Hours field across every report on file for this project.',
-      null, 'decimal1'
-    ),
-    avgHoursPerWeek ? statCard(
-      avgHoursPerWeek, 'Avg Hours / Week', '',
-      'Total hours worked, divided by the number of weeks between the earliest and latest dated report.',
-      null, 'decimal1'
-    ) : '',
-    statCard(
-      items.length, 'Pay Items in Catalog', '',
-      'Number of distinct pay item numbers on this project, whether or not they\'ve shown up on a report yet.',
-      null, 'int'
-    ),
-  ]);
-
-  $('#dash-stats').innerHTML = ringsRow + contractRow + tilesRow + funFactCardHtml(funFacts);
-
-  renderPayItems(items);
-  renderTrendChart(progressOverTime(dated, project.payItemCatalog, project.billingEstimates));
-  renderWeatherSchedule(dated);
-  setupCollapsibleSteps($('#dash-content'));
-  fitDashboardValues();
-  animateDashboardFills();
-  startDashFunFactRotation(funFacts);
+  if (!rings.length && !contractRow) return '<p class="hint" style="margin:0;">Add pay items with a Per Plans Total, and an NTP Date and contract length, to see progress here.</p>';
+  return (rings.length ? `<div class="rings-row">${rings.join('')}</div>` : '') + contractRow;
 }
 
-// A full-width card, its own row at the bottom of the stat grid -- markup
-// only, no side effects, so it can be built and dropped into #dash-stats'
-// innerHTML the same way every other card here is. startDashFunFactRotation
-// (below) is what actually brings it to life afterward.
-function funFactCardHtml(funFacts) {
-  if (!funFacts.length) return '';
-  return `<div class="dash-card fun-fact-card" id="dash-fun-fact">
-    <span class="ff-icon" id="ff-icon" aria-hidden="true">${funFacts[0].icon}</span>
-    <div class="ff-body">
-      <span class="ff-headline" id="ff-headline">${escapeHtml(funFacts[0].headline)}</span>
-      <span class="ff-sub" id="ff-sub">${escapeHtml(funFacts[0].sub)}</span>
-    </div>
-  </div>`;
+function pdNumbersHtml() {
+  const tl = pd.timeline;
+  const left = tl ? tl.length - tl.day : null;
+  const cards = [
+    statCard(pd.reports.length, 'Reports Filed', '', 'Number of daily reports saved for this project.', null, 'int'),
+    pd.daysSinceNtp != null ? statCard(pd.daysSinceNtp, 'Days Since NTP', '', `Calendar days from the NTP Date (${project.meta.ntpDate}) to today.`, null, 'int') : '',
+    left != null ? statCard(left, 'Days Remaining (Contract)', left < 0 ? 'Past contract length' : '', `Total Contract Length (${tl.length} days) minus Days Since NTP. Negative means the contract's allotted days have been exceeded.`, null, 'int') : '',
+    statCard(pd.totalHours, 'Total Hours Worked', '', 'Sum of the Hours field across every report on file for this project.', null, 'decimal1'),
+    pd.avgHoursPerWeek ? statCard(pd.avgHoursPerWeek, 'Avg Hours / Week', '', 'Total hours worked, divided by the number of weeks between the earliest and latest dated report.', null, 'decimal1') : '',
+    statCard(pd.items.length, 'Pay Items in Catalog', '', 'Number of distinct pay item numbers on this project, whether or not they\'ve shown up on a report yet.', null, 'int'),
+  ].filter(Boolean);
+  return `<div class="tiles-row">${cards.join('')}</div>`;
 }
 
-// Crossfades to the next fact every few seconds -- a no-op for zero or one
-// fact (nothing to rotate to). The timer is stashed on dashFunFactTimer so
-// the next renderDashboard call (a new report saved, a date range changed)
-// clears it rather than piling up a second interval underneath the first.
-function startDashFunFactRotation(funFacts) {
-  if (funFacts.length < 2) return;
-  let idx = 0;
-  dashFunFactTimer = setInterval(() => {
-    const card = $('#dash-fun-fact');
-    if (!card) { clearInterval(dashFunFactTimer); dashFunFactTimer = null; return; }
-    card.classList.add('ff-fade');
-    setTimeout(() => {
-      idx = (idx + 1) % funFacts.length;
-      $('#ff-icon').textContent = funFacts[idx].icon;
-      $('#ff-headline').textContent = funFacts[idx].headline;
-      $('#ff-sub').textContent = funFacts[idx].sub;
-      card.classList.remove('ff-fade');
-    }, 250);
-  }, 5000);
+function pdFunFactHtml() {
+  const f = pd.funFacts[pdFunFactIdx % pd.funFacts.length];
+  return `<div class="dash-card fun-fact-card" style="margin:0;"><span class="ff-icon" aria-hidden="true">${f.icon}</span><div class="ff-body"><span class="ff-headline">${escapeHtml(f.headline)}</span><span class="ff-sub">${escapeHtml(f.sub)}</span></div></div>`;
 }
+// Crossfades to the next fact every few seconds, like before.
+setInterval(() => {
+  if (!pd || pd.funFacts.length < 2) return;
+  const card = $('#pd-widgets [data-type="funfacts"] .fun-fact-card');
+  if (!card) return;
+  card.classList.add('ff-fade');
+  setTimeout(() => {
+    pdFunFactIdx++;
+    const body = card.closest('.step-body');
+    if (body) body.innerHTML = pdFunFactHtml();
+  }, 250);
+}, 5000);
 
-// ---------- Pay item completion (color-coded list + summary strip) ----------
-// PI_BAND_ORDER/PI_BAND_LABELS/completionBand live in quantity-calc.js,
-// shared with quantity-sheet.html's own totals view.
-
-let allPayItems = [];
-// Search/sort/band-filter are presentation-only, kept in memory rather than
-// re-fetched -- switching sort order shouldn't need to recompute totals.
+// ----- Pay item completion (color-coded list + summary strip) -----
+// Search/sort/band-filter are presentation-only, kept in memory.
 const payItemFilterState = { search: '', sort: 'most-complete', hiddenBands: new Set() };
 
-function renderPayItems(items) {
-  allPayItems = items;
-  $('#pi-controls').hidden = items.length === 0;
+function pdRenderPayItems(body) {
+  const items = pd.items;
+  if (!items.length) { body.innerHTML = '<p class="hint" style="margin:0;">This project\'s pay item catalog is empty. Add items in Project Settings to see them here.</p>'; return; }
+  let basisHtml = '';
+  if (pd.basis) {
+    const when = pd.basis.date ? new Date(pd.basis.date + 'T12:00:00Z').toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' }) : '';
+    basisHtml = `<p class="dash-basis" id="dash-pi-basis">Pay App ${escapeHtml(pd.basis.estimateNo)}${when ? ` (${when})` : ''} plus daily reports since</p>`;
+  }
+  body.innerHTML = `${basisHtml}
+    <div id="dash-status-summary"></div>
+    <div class="pi-controls" id="pi-controls">
+      <input type="text" id="pi-search" placeholder="Search item # or description..." value="${escapeAttr(payItemFilterState.search)}">
+      <select id="pi-sort">
+        <option value="most-complete">Most complete first</option>
+        <option value="least-complete">Least complete first</option>
+        <option value="item-number">Item number</option>
+        <option value="value">Contract value</option>
+      </select>
+    </div>
+    <div class="bar-list" id="dash-bars"></div>
+    <p class="hint" id="dash-bars-no-match" hidden style="margin:0;">No pay items match the current search/filter.</p>`;
+  const sortSel = $('#pi-sort', body);
+  if ([...sortSel.options].some((o) => o.value === payItemFilterState.sort)) sortSel.value = payItemFilterState.sort;
+  $('#pi-search', body).addEventListener('input', (e) => { payItemFilterState.search = e.target.value; renderFilteredPayItems(); });
+  sortSel.addEventListener('change', (e) => { payItemFilterState.sort = e.target.value; renderFilteredPayItems(); });
   renderFilteredPayItems();
 }
 
 function renderFilteredPayItems() {
-  const items = allPayItems;
-  $('#dash-bars-empty').hidden = items.length > 0;
-  if (items.length === 0) {
-    $('#dash-bars-no-match').hidden = true;
-    $('#dash-status-summary').innerHTML = '';
-    $('#dash-bars').innerHTML = '';
-    return;
-  }
-
-  // The status bar/legend always reflects the FULL catalog, not the current
-  // filter -- it's the stable "big picture" a legend chip filters down from,
-  // not something that would make sense shrinking to match its own filter.
+  const items = pd.items;
+  if (!$('#dash-bars')) return;
+  // The status bar always reflects the FULL catalog, not the current filter.
   const counts = Object.fromEntries(PI_BAND_ORDER.map((b) => [b, 0]));
   items.forEach((it) => counts[completionBand(it.pct).cls]++);
   const total = items.length;
-
-  const segments = PI_BAND_ORDER.filter((b) => counts[b] > 0)
-    .map((b) => `<span class="${b}" style="width:${(counts[b] / total) * 100}%"></span>`).join('');
-  const legend = PI_BAND_ORDER.filter((b) => counts[b] > 0)
-    .map((b) => {
-      const off = payItemFilterState.hiddenBands.has(b);
-      return `<span class="sl-item${off ? ' sl-off' : ''}" data-band="${b}" title="Click to ${off ? 'show' : 'hide'} ${PI_BAND_LABELS[b]}"><span class="sl-dot ${b}"></span>${PI_BAND_LABELS[b]} (${counts[b]})</span>`;
-    }).join('');
+  const segments = PI_BAND_ORDER.filter((b) => counts[b] > 0).map((b) => `<span class="${b}" style="width:${(counts[b] / total) * 100}%"></span>`).join('');
+  const legend = PI_BAND_ORDER.filter((b) => counts[b] > 0).map((b) => {
+    const off = payItemFilterState.hiddenBands.has(b);
+    return `<span class="sl-item${off ? ' sl-off' : ''}" data-band="${b}" role="button" tabindex="0" title="Click to ${off ? 'show' : 'hide'} ${PI_BAND_LABELS[b]}"><span class="sl-dot ${b}"></span>${PI_BAND_LABELS[b]} (${counts[b]})</span>`;
+  }).join('');
   $('#dash-status-summary').innerHTML = `<div class="status-bar">${segments}</div><div class="status-legend">${legend}</div>`;
-  $$('.sl-item', $('#dash-status-summary')).forEach((el) => {
-    el.addEventListener('click', () => {
-      const band = el.dataset.band;
-      if (payItemFilterState.hiddenBands.has(band)) payItemFilterState.hiddenBands.delete(band);
-      else payItemFilterState.hiddenBands.add(band);
-      renderFilteredPayItems();
-    });
-  });
 
   const q = payItemFilterState.search.trim().toLowerCase();
-  let filtered = q
-    ? items.filter((it) => it.itemNumber.toLowerCase().includes(q) || (it.description || '').toLowerCase().includes(q))
-    : items.slice();
-  if (payItemFilterState.hiddenBands.size) {
-    filtered = filtered.filter((it) => !payItemFilterState.hiddenBands.has(completionBand(it.pct).cls));
-  }
+  let filtered = q ? items.filter((it) => it.itemNumber.toLowerCase().includes(q) || (it.description || '').toLowerCase().includes(q)) : items.slice();
+  if (payItemFilterState.hiddenBands.size) filtered = filtered.filter((it) => !payItemFilterState.hiddenBands.has(completionBand(it.pct).cls));
   const sorted = sortPayItems(filtered, payItemFilterState.sort);
 
   $('#dash-bars-no-match').hidden = sorted.length > 0;
   $('#dash-bars').innerHTML = sorted.map((it) => {
     const band = completionBand(it.pct);
     const widthPct = it.pct == null ? 0 : Math.min(Math.max(it.pct, 0) * 100, 100);
-    const pctLabel = it.pct == null ? '—' : `${(it.pct * 100).toFixed(1)}%`;
+    const pctLabel = it.pct == null ? 'n/a' : `${(it.pct * 100).toFixed(1)}%`;
     // A Lump Sum item's pct is dollars earned vs. its contract value (see
-    // quantity-calc.js), not a quantity-vs-planned ratio -- shown as
-    // "$X of $Y billed" instead of the generic qty/planned phrasing, and
-    // moneyLine is skipped for it since that would just repeat the same two
-    // figures a second time.
+    // quantity-calc.js), shown as "$X of $Y billed".
     const isLump = isLumpSumItem(it);
     const qtyLine = isLump
-      ? (it.contractTotal != null ? `${fmtMoney(it.earnedTotal)} of ${fmtMoney(it.contractTotal)} billed` : `${it.total.toLocaleString()} ${it.unit || ''} used — no Unit Price on file to measure against`)
+      ? (it.contractTotal != null ? `${fmtMoney(it.earnedTotal)} of ${fmtMoney(it.contractTotal)} billed` : `${it.total.toLocaleString()} ${it.unit || ''} used, no Unit Price on file to measure against`)
       : it.pct != null
         ? `${it.total.toLocaleString()} of ${it.planned.toLocaleString()} ${it.unit || ''} planned`
-        : `${it.total.toLocaleString()} ${it.unit || ''} used — no Per Plans Total on file`;
-    const moneyLine = (!isLump && it.unitPrice != null)
-      ? ` &middot; ${fmtMoney(it.earnedTotal)} earned${it.contractTotal != null ? ' of ' + fmtMoney(it.contractTotal) : ''}`
-      : '';
+        : `${it.total.toLocaleString()} ${it.unit || ''} used, no Per Plans Total on file`;
+    const moneyLine = (!isLump && it.unitPrice != null) ? ` &middot; ${fmtMoney(it.earnedTotal)} earned${it.contractTotal != null ? ' of ' + fmtMoney(it.contractTotal) : ''}` : '';
     const tip = `${qtyLine}.${it.unitPrice != null ? ' Unit price ' + fmtMoney(it.unitPrice) + '/' + (it.unit || 'unit') + '.' : ' No Unit Price on file.'}`;
     return `
-      <div class="bar-row" data-tip="${escapeHtml(tip)}" tabindex="0">
+      <div class="bar-row" data-tip="${escapeAttr(tip)}" tabindex="0">
         <div class="br-top">
           <span class="br-label">${escapeHtml(it.itemNumber)} <span class="br-desc">${escapeHtml(it.description)}</span></span>
           <span class="pill ${band.cls}">${band.label}</span>
@@ -510,12 +571,8 @@ function renderFilteredPayItems() {
         <div class="br-sub"><span>${qtyLine}${moneyLine}</span><span class="br-pct">${pctLabel}</span></div>
       </div>`;
   }).join('');
-
-  // Row tooltips open upward by default; a row in the visual first row sits
-  // flush with the scrollable list's own top edge, so its tooltip pops out
-  // above the clipping boundary and never shows. Flag those rows so the CSS
-  // can flip their tooltip downward instead -- offsetTop rather than index,
-  // since the desktop grid can put 2-3 items in that first row.
+  // Row tooltips open upward by default; the first visual row's would pop
+  // out above the list's own clipping edge, so flip those downward.
   const barEls = $$('.bar-row', $('#dash-bars'));
   if (barEls.length) {
     const topY = Math.min(...barEls.map((el) => el.offsetTop));
@@ -523,117 +580,54 @@ function renderFilteredPayItems() {
   }
 }
 
-$('#pi-search').addEventListener('input', (e) => {
-  payItemFilterState.search = e.target.value;
-  renderFilteredPayItems();
-});
-$('#pi-sort').addEventListener('change', (e) => {
-  payItemFilterState.sort = e.target.value;
-  renderFilteredPayItems();
-});
-
-// ---------- Progress over time ----------
-// trendDateLabel/renderTrendSvg live in dashboard-widgets.js, shared with
-// index.html's Manager Dashboard trend.
-
-function renderTrendChart(points) {
-  const step = $('#dash-trend-step');
-  step.hidden = points.length === 0;
-  $('#dash-trend-hint').hidden = points.length !== 1;
-  // No color/label -- draws as the original single filled-area line.
-  // h: half the default 220 -- this card is a quick-glance summary here,
-  // not the point of the page.
-  renderTrendSvg($('#dash-trend-chart'), [{ points }], { h: 110 });
-}
-
-// ---------- Weather & schedule log ----------
-// ADVERSE_WEATHER_RE lives in dashboard-widgets.js, shared with index.html's
-// Manager Dashboard feed.
-
-let weatherViewMode = 'list';
-let weatherLoggableCache = [];
+// ----- Daily log: the weather & schedule list or calendar -----
+let weatherViewMode = 'calendar';
+let weatherCalMonth = null;
 
 // True if any photo slot has a real Blob locally, OR is confirmed to exist
-// remotely but just hasn't been downloaded to this device yet
-// (photosFetched[i] === false still means "there's a photo there" -- see
-// firebase-sync.js's pull path). Only photosFetched[i] === true with a null
-// Blob means "confirmed empty".
+// remotely but just hasn't been downloaded yet (photosFetched[i] === false).
 function reportHasPhotos(r) {
   return (r.photos || []).some((p, i) => p || (r.photosFetched && r.photosFetched[i] === false));
 }
 
-function renderWeatherSchedule(dated) {
-  const step = $('#dash-weather-step');
-  // Every dated report shows up here, full stop -- this used to filter down
-  // to only reports with a weather/activity/traffic-control/etc field
-  // filled in, which silently hid a perfectly normal report that, say, only
-  // had pay item quantities logged and nothing in this section's own
-  // fields. From the dashboard that looked like "some reports just aren't
-  // here", which is exactly what got reported -- the fix is to not filter
-  // at all, same as the Manager Dashboard's own report-activity calendar.
-  const loggable = dated;
-  const noWorkDays = dated.filter(isNoWorkDayReport).length;
-  const weatherDays = dated.filter(isWeatherDayReport).length;
-  step.hidden = loggable.length === 0;
-  if (step.hidden) return;
-
-  const weatherFlagged = dated.filter((r) => ADVERSE_WEATHER_RE.test(r.weatherDesc || '')).length;
-  const attentionDays = dated.filter((r) => r.trafficControlSelect === 'ATTENTION_REQUIRED').length;
-
-  $('#dash-weather-stats').innerHTML =
-    statCard(weatherFlagged, 'Weather-Flagged Days', '', 'Dated reports whose Weather Description mentions rain, snow, wind, or similar adverse conditions.', null, 'int') +
-    statCard(attentionDays, 'Traffic Control Attention Days', '', 'Dated reports where Traffic Control Status was set to "Attention Required".', null, 'int') +
-    statCard(noWorkDays, 'No Work Days', '', 'Dated reports whose Notes contains "no work" -- either from the button at the top of the report editor, or typed in by hand.', null, 'int') +
-    statCard(weatherDays, 'Weather Days', '', 'Dated reports marked "WEATHER DAY" via the button at the top of the report editor.', null, 'int');
-
-  weatherLoggableCache = loggable;
-  renderWeatherView();
-}
-
-function renderWeatherView() {
-  $('#dash-weather-log').hidden = weatherViewMode !== 'list';
-  $('#dash-weather-calendar').hidden = weatherViewMode !== 'calendar';
-  if (weatherViewMode === 'list') renderWeatherLogList(weatherLoggableCache);
-  else renderWeatherCalendar(weatherLoggableCache);
+function pdRenderDailyLog(body) {
+  const dated = pd.dated;
+  if (!dated.length) { body.innerHTML = '<p class="hint" style="margin:0;">No dated reports yet.</p>'; return; }
+  body.innerHTML = `
+    <div class="wv-top"><span class="hint" style="margin:0;">${dated.length} dated report${dated.length === 1 ? '' : 's'}</span>
+      <div class="view-toggle" role="group" aria-label="View as">
+        <button type="button" class="view-toggle-btn${weatherViewMode === 'list' ? ' active' : ''}" data-view="list" title="List view" aria-label="List view">&#9776;</button>
+        <button type="button" class="view-toggle-btn${weatherViewMode === 'calendar' ? ' active' : ''}" data-view="calendar" title="Calendar view" aria-label="Calendar view">&#128197;</button>
+      </div>
+    </div>
+    <div class="weather-log" id="dash-weather-log"${weatherViewMode === 'list' ? '' : ' hidden'}></div>
+    <div class="weather-calendar" id="dash-weather-calendar"${weatherViewMode === 'calendar' ? '' : ' hidden'}></div>`;
+  if (weatherViewMode === 'list') renderWeatherLogList(dated);
+  else renderWeatherCalendar(dated);
 }
 
 function renderWeatherLogList(loggable) {
-  $('#dash-weather-log').innerHTML = loggable
-    .slice()
-    .reverse()
-    .map((r) => {
-      if (isNoWorkDayReport(r)) {
-        return `
-          <div class="wlog-row wlog-nwd">
-            <div class="wlog-date">${escapeHtml(r.date)}</div>
-            <div class="wlog-body"><div class="wlog-nwd-badge">&#128683; No Work Day</div></div>
-          </div>`;
-      }
-      if (isWeatherDayReport(r)) {
-        return `
-          <div class="wlog-row wlog-nwd">
-            <div class="wlog-date">${escapeHtml(r.date)}</div>
-            <div class="wlog-body"><div class="wlog-nwd-badge">&#9925; Weather Day</div></div>
-          </div>`;
-      }
-      const isAttention = r.trafficControlSelect === 'ATTENTION_REQUIRED';
-      const temps = (r.tempHigh || r.tempLow) ? `${r.tempHigh || '—'}°/${r.tempLow || '—'}°F` : '';
-      const weatherText = [r.weatherDesc, temps].filter(Boolean).join(' · ');
-      const isAdverse = ADVERSE_WEATHER_RE.test(r.weatherDesc || '');
-      const activityText = reportActivityText(r); // falls back to Work Summary's first line when Activity is blank
-      return `
-        <div class="wlog-row">
-          <div class="wlog-date">${escapeHtml(r.date)}</div>
-          <div class="wlog-body">
-            ${activityText ? `<div class="wlog-activity">${escapeHtml(activityText)}</div>` : ''}
-            ${weatherText ? `<div class="wlog-weather">${isAdverse ? '<span title="Adverse weather">⛈️</span> ' : ''}${escapeHtml(weatherText)}</div>` : ''}
-            ${r.trafficControlSelect ? `<div class="wlog-tc"><span class="status-dot ${isAttention ? 'status-over' : 'status-near'}"></span>Traffic Control: ${isAttention ? 'Attention Required' : 'In Place'}</div>` : ''}
-            ${r.controllingItem ? `<div><strong>Controlling Item:</strong> ${escapeHtml(r.controllingItem)}</div>` : ''}
-            ${r.commentsOnTime ? `<div class="wlog-comment">${escapeHtml(r.commentsOnTime)}</div>` : ''}
-          </div>
-        </div>`;
-    })
-    .join('');
+  $('#dash-weather-log').innerHTML = loggable.slice().reverse().map((r) => {
+    if (isNoWorkDayReport(r) || isWeatherDayReport(r)) {
+      return `<div class="wlog-row wlog-nwd wcal-clickable" data-report-id="${r.id}" tabindex="0"><div class="wlog-date">${escapeHtml(r.date)}</div><div class="wlog-body"><div class="wlog-nwd-badge">${isNoWorkDayReport(r) ? '&#128683; No Work Day' : '&#9925; Weather Day'}</div></div></div>`;
+    }
+    const isAttention = r.trafficControlSelect === 'ATTENTION_REQUIRED';
+    const temps = (r.tempHigh || r.tempLow) ? `${r.tempHigh || '--'}°/${r.tempLow || '--'}°F` : '';
+    const weatherText = [r.weatherDesc, temps].filter(Boolean).join(' · ');
+    const isAdverse = ADVERSE_WEATHER_RE.test(r.weatherDesc || '');
+    const activityText = reportActivityText(r); // falls back to Work Summary's first line when Activity is blank
+    return `
+      <div class="wlog-row wcal-clickable" data-report-id="${r.id}" tabindex="0" style="cursor:pointer;">
+        <div class="wlog-date">${escapeHtml(r.date)}</div>
+        <div class="wlog-body">
+          ${activityText ? `<div class="wlog-activity">${escapeHtml(activityText)}</div>` : ''}
+          ${weatherText ? `<div class="wlog-weather">${isAdverse ? '<span title="Adverse weather">⛈️</span> ' : ''}${escapeHtml(weatherText)}</div>` : ''}
+          ${r.trafficControlSelect ? `<div class="wlog-tc"><span class="status-dot ${isAttention ? 'status-over' : 'status-near'}"></span>Traffic Control: ${isAttention ? 'Attention Required' : 'In Place'}</div>` : ''}
+          ${r.controllingItem ? `<div><strong>Controlling Item:</strong> ${escapeHtml(r.controllingItem)}</div>` : ''}
+          ${r.commentsOnTime ? `<div class="wlog-comment">${escapeHtml(r.commentsOnTime)}</div>` : ''}
+        </div>
+      </div>`;
+  }).join('');
 }
 
 const WCAL_WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -642,38 +636,22 @@ function weatherCalDayHtml(dayNum, r, iso) {
   if (!r) return `<div class="wcal-day" data-date="${iso}"><span class="wcal-day-num">${dayNum}</span></div>`;
   const hasPhotos = reportHasPhotos(r);
   const photoPill = hasPhotos ? '<span class="wcal-pill wcal-pill-photos">📷 Photos</span>' : '';
-  // Every branch below gets data-report-id + .wcal-clickable so the single
-  // delegated listener in renderWeatherCalendar can open the day-detail
-  // modal for any day that has a real report, regardless of its type; and
-  // data-date so the month pager can find (and outline) today's cell
-  // whether or not it has a report.
-  if (isNoWorkDayReport(r)) {
+  if (isNoWorkDayReport(r) || isWeatherDayReport(r)) {
+    const label = isNoWorkDayReport(r) ? 'No Work Day' : 'Weather Day';
     return `
-      <div class="wcal-day wcal-nwd wcal-clickable" data-tip="No Work Day" tabindex="0" data-report-id="${r.id}" data-date="${iso}">
+      <div class="wcal-day wcal-nwd wcal-clickable" data-tip="${label}" tabindex="0" data-report-id="${r.id}" data-date="${iso}">
         <span class="wcal-day-num">${dayNum}</span>
-        <span class="wcal-badge">NWD</span>
-        ${photoPill ? `<div class="wcal-pills">${photoPill}</div>` : ''}
-      </div>`;
-  }
-  if (isWeatherDayReport(r)) {
-    return `
-      <div class="wcal-day wcal-nwd wcal-clickable" data-tip="Weather Day" tabindex="0" data-report-id="${r.id}" data-date="${iso}">
-        <span class="wcal-day-num">${dayNum}</span>
-        <span class="wcal-badge">WD</span>
+        <span class="wcal-badge">${isNoWorkDayReport(r) ? 'NWD' : 'WD'}</span>
         ${photoPill ? `<div class="wcal-pills">${photoPill}</div>` : ''}
       </div>`;
   }
   const isAttention = r.trafficControlSelect === 'ATTENTION_REQUIRED';
   const isAdverse = ADVERSE_WEATHER_RE.test(r.weatherDesc || '');
   const activity = (r.activity || '').trim();
-  const activityText = reportActivityText(r); // falls back to Work Summary's first line when Activity is blank
-  const hasActivity = !!activityText;
-  const temps = (r.tempHigh || r.tempLow) ? `${r.tempHigh || '—'}°/${r.tempLow || '—'}°F` : '';
+  const activityText = reportActivityText(r);
+  const temps = (r.tempHigh || r.tempLow) ? `${r.tempHigh || '--'}°/${r.tempLow || '--'}°F` : '';
   const weatherText = [r.weatherDesc, temps].filter(Boolean).join(' · ');
   const tipParts = [
-    // Labeled by which field it actually came from -- showing Work Summary
-    // text under an "Activity:" label would misrepresent what's actually on
-    // the report.
     activity ? `Activity: ${activity}` : (activityText ? `Work Summary: ${activityText}` : ''),
     weatherText,
     r.trafficControlSelect ? `Traffic Control: ${isAttention ? 'Attention Required' : 'In Place'}` : '',
@@ -683,29 +661,17 @@ function weatherCalDayHtml(dayNum, r, iso) {
   const cls = ['wcal-day', 'wcal-clickable'];
   if (isAdverse) cls.push('wcal-adverse');
   if (isAttention) cls.push('wcal-attention');
-  // Labeled pills instead of bare icons/a plain dot -- same visual language
-  // as the Manager Dashboard's own calendar (see mdcal-pill), just colored
-  // by category instead of by project since there's only one project here.
-  // Only shown for something actually worth flagging: adverse weather, not
-  // every clear day; Attention Required, not routine In Place (still in the
-  // tooltip either way) -- a normal day stays uncluttered.
+  // Labeled pills, only for something worth flagging; a plain "Report
+  // Filed" pill when nothing else applies, so a real report always shows.
   const categoryPills = [
     isAdverse ? '<span class="wcal-pill wcal-pill-weather">⛈️ Weather</span>' : '',
-    hasActivity ? '<span class="wcal-pill wcal-pill-activity">📝 Activity</span>' : '',
+    activityText ? '<span class="wcal-pill wcal-pill-activity">📝 Activity</span>' : '',
     photoPill,
     isAttention ? '<span class="wcal-pill wcal-pill-traffic">⚠️ Traffic</span>' : '',
   ].filter(Boolean);
-  // A report with nothing notable in any category above (no activity typed
-  // in, no adverse weather, no photos, traffic control routine or unset --
-  // e.g. one that only has pay item quantities logged) would otherwise
-  // render as a bare day number, indistinguishable from a day with no
-  // report at all. This neutral fallback pill only shows up when every
-  // other one is absent, so a real report is always visibly marked as
-  // "there's something here", without adding a second pill next to ones
-  // that already have one.
   const pills = (categoryPills.length ? categoryPills : ['<span class="wcal-pill wcal-pill-filed">Report Filed</span>']).join('');
   return `
-    <div class="${cls.join(' ')}"${tipParts.length ? ` data-tip="${escapeHtml(tipParts.join(' — '))}"` : ''} tabindex="0" data-report-id="${r.id}" data-date="${iso}">
+    <div class="${cls.join(' ')}"${tipParts.length ? ` data-tip="${escapeAttr(tipParts.join(' · '))}"` : ''} tabindex="0" data-report-id="${r.id}" data-date="${iso}">
       <span class="wcal-day-num">${dayNum}</span>
       <div class="wcal-pills">${pills}</div>
     </div>`;
@@ -714,12 +680,13 @@ function weatherCalDayHtml(dayNum, r, iso) {
 function renderWeatherCalendar(loggable) {
   const byDate = new Map(loggable.map((r) => [r.date, r]));
   const months = [...new Set(loggable.map((r) => r.date.slice(0, 7)))].sort();
-  // One month at a time with prev/next/Today (renderMonthPager in
-  // dashboard-widgets.js), starting on the current month.
-  renderMonthPager($('#dash-weather-calendar'), {
+  const cal = $('#dash-weather-calendar');
+  if (weatherCalMonth) cal.dataset.month = weatherCalMonth; // keep the month someone paged to across redraws
+  renderMonthPager(cal, {
     firstMonth: months[0],
     lastMonth: [months[months.length - 1], todayIso().slice(0, 7)].sort().pop(),
     renderMonth: (mk) => {
+      weatherCalMonth = mk;
       const [y, m] = mk.split('-').map(Number);
       const first = new Date(y, m - 1, 1);
       const daysInMonth = new Date(y, m, 0).getDate();
@@ -729,42 +696,186 @@ function renderWeatherCalendar(loggable) {
         const iso = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
         cells.push(weatherCalDayHtml(d, byDate.get(iso), iso));
       }
-      return `
-        <div class="wcal-weekdays">${WCAL_WEEKDAY_LABELS.map((l) => `<div>${l}</div>`).join('')}</div>
-        <div class="wcal-grid">${cells.join('')}</div>`;
+      return `<div class="wcal-weekdays">${WCAL_WEEKDAY_LABELS.map((l) => `<div>${l}</div>`).join('')}</div><div class="wcal-grid">${cells.join('')}</div>`;
     },
   });
 }
 
-$$('#weather-view-toggle .view-toggle-btn').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    weatherViewMode = btn.dataset.view;
-    $$('#weather-view-toggle .view-toggle-btn').forEach((b) => b.classList.toggle('active', b === btn));
-    renderWeatherView();
+function pdConditionsHtml() {
+  const dated = pd.dated;
+  return `<div class="tiles-row two">
+    ${statCard(dated.filter((r) => ADVERSE_WEATHER_RE.test(r.weatherDesc || '')).length, 'Weather-Flagged Days', '', 'Dated reports whose Weather Description mentions rain, snow, wind, or similar adverse conditions.', null, 'int')}
+    ${statCard(dated.filter((r) => r.trafficControlSelect === 'ATTENTION_REQUIRED').length, 'Traffic Control Attention Days', '', 'Dated reports where Traffic Control Status was set to "Attention Required".', null, 'int')}
+    ${statCard(dated.filter(isNoWorkDayReport).length, 'No Work Days', '', 'Dated reports marked No Work Day.', null, 'int')}
+    ${statCard(dated.filter(isWeatherDayReport).length, 'Weather Days', '', 'Dated reports marked Weather Day.', null, 'int')}
+  </div>`;
+}
+
+// ----- Progress over time -----
+// With an NTP Date and contract length: dated from NTP to the completion
+// date, with a dashed line for finishing exactly on time and a Today
+// marker. Without them, the original chart (first to latest report).
+function pdRenderTrend(body) {
+  const points = pd.progress.filter((p) => p.pct != null);
+  if (!points.length) { body.innerHTML = '<p class="hint" style="margin:0;">No progress to chart yet. It needs pay items with a Per Plans Total and reports that use them.</p>'; return; }
+  const tl = pd.timeline;
+  if (!tl) {
+    body.innerHTML = '<div id="dash-trend-chart"></div>';
+    renderTrendSvg($('#dash-trend-chart', body), [{ points }], { h: 160 });
+    if (points.length === 1) body.insertAdjacentHTML('beforeend', '<p class="hint" style="margin-top:0.5rem;">Only one dated report on file so far. A trend line appears once there\'s more than one date to compare.</p>');
+    return;
+  }
+  const W = 560, H = 260, pl = 38, pr = 14, pt = 12, pb = 32;
+  const span = Math.max(1, daysBetween(tl.ntp, tl.end));
+  const xAt = (iso) => pl + (Math.max(0, Math.min(span, daysBetween(tl.ntp, iso))) / span) * (W - pl - pr);
+  const y = (v) => pt + (1 - Math.max(0, Math.min(1, v || 0))) * (H - pt - pb);
+  const series = points[0].date > tl.ntp ? [{ date: tl.ntp, pct: 0 }, ...points] : points;
+  const today = todayIso();
+  let g = '';
+  [0, 0.25, 0.5, 0.75, 1].forEach((v) => { g += `<line class="trend-grid" x1="${pl}" x2="${W - pr}" y1="${y(v)}" y2="${y(v)}"></line><text class="trend-axis-label" x="${pl - 5}" y="${y(v) + 3}" text-anchor="end">${v * 100}%</text>`; });
+  g += `<text class="trend-axis-label" x="${pl}" y="${H - pb + 14}" text-anchor="start">NTP ${escapeHtml(shortDateLabel(tl.ntp))}</text><text class="trend-axis-label" x="${W - pr}" y="${H - pb + 14}" text-anchor="end">Completion ${escapeHtml(shortDateLabel(tl.end))}</text>`;
+  g += `<line class="pace-line" x1="${xAt(tl.ntp)}" y1="${y(0)}" x2="${xAt(tl.end)}" y2="${y(1)}"></line>`;
+  if (today <= tl.end) g += `<line class="today-line" x1="${xAt(today)}" x2="${xAt(today)}" y1="${pt}" y2="${y(0)}"></line><text class="today-label" x="${xAt(today) + 4}" y="${pt + 10}">Today</text>`;
+  const coords = series.map((p) => `${xAt(p.date).toFixed(1)},${y(p.pct).toFixed(1)}`);
+  g += `<polygon class="trend-area" points="${xAt(series[0].date)},${y(0)} ${coords.join(' ')} ${xAt(series[series.length - 1].date)},${y(0)}"></polygon>`;
+  g += `<polyline class="trend-line" points="${coords.join(' ')}"></polyline>`;
+  series.forEach((p) => {
+    const tip = `${p.date}${p.payApp ? ', Pay App' : ''}: ${((p.pct || 0) * 100).toFixed(1)}% complete${p.earned != null ? ', ' + fmtMoney(p.earned) + ' earned' : ''}`;
+    if (p.payApp) g += `<polygon class="trend-star" points="${starPoints(xAt(p.date), y(p.pct), 6)}"><title>${escapeHtml(tip)}</title></polygon>`;
+    else g += `<circle cx="${xAt(p.date)}" cy="${y(p.pct)}" r="4" class="trend-dot"><title>${escapeHtml(tip)}</title></circle>`;
   });
-});
+  body.innerHTML = `<div class="pace-chart"><svg class="trend-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Percent complete over time with an on-pace line and Pay App stars">${g}</svg></div>
+    <div class="trend-legend" style="margin-top:0.4rem;">${PACE_STAR_KEY}<span class="trend-legend-item"><svg width="22" height="6" aria-hidden="true"><line x1="0" y1="3" x2="22" y2="3" stroke="var(--text-dim)" stroke-dasharray="5 4" stroke-width="1.5"></line></svg>On pace to finish on time</span></div>`;
+}
+
+// ----- Pay Apps, hours, photos -----
+function payAppBilled(e) {
+  const flat = Object.entries(e.itemTotals || {}).map(([itemNumber, qty]) => ({ itemNumber, qty: Number(qty) }));
+  return contractValueSummary(fullPayItemCatalogOverview(flat, project.payItemCatalog || []));
+}
+function pdPayAppsHtml() {
+  const list = sortedEstimates(project.billingEstimates).reverse();
+  if (!list.length) return `<p class="hint" style="margin:0;">No Pay Apps recorded yet. <a href="pay-apps.html?project=${project.id}">Record one</a>.</p>`;
+  return list.map((e) => {
+    const sum = payAppBilled(e);
+    const pct = sum.pctByValue;
+    const chip = e.approvalStatus === 'approved' ? '<span class="status-chip ok">&#128274; Approved</span>' : e.approvalStatus === 'changes_requested' ? '<span class="status-chip chg">Changes Requested</span>' : e.approvalStatus === 'unlocked' ? '<span class="status-chip chg">&#128275; Unlocked</span>' : '<span class="status-chip wait">Pending</span>';
+    return `<a class="payapp-row" href="pay-apps.html?project=${project.id}&estimate=${encodeURIComponent(e.id)}">
+      <span class="n">#${escapeHtml(e.estimateNo || '?')}</span>
+      <span>${sum.totalEarned != null ? `<b>${escapeHtml(fmtMoney(sum.totalEarned))}</b> billed to date` : 'Billed to date'} <span class="m">· ${escapeHtml(shortDateLabel(e.date))}</span>${pct != null ? `<div class="pa-bar"><span style="width:${Math.min(100, pct * 100).toFixed(1)}%"></span></div>` : ''}</span>
+      ${chip}
+    </a>`;
+  }).join('');
+}
+
+function pdHoursHtml() {
+  const totals = new Map();
+  pd.reports.forEach((r) => reportInspectorHours(r).forEach(({ name, hours }) => totals.set(name, (totals.get(name) || 0) + hours)));
+  const rows = [...totals.entries()].sort((a, b) => b[1] - a[1]).map(([n, h]) => [escapeHtml(n), h]);
+  return rows.length ? widgetBarRows(rows, (h) => `${h.toFixed(1)}h`) + '<p class="w-note">Since the first report</p>' : '<p class="hint" style="margin:0;">No hours logged yet.</p>';
+}
+
+// Only photos already on this device (opening a report downloads its own).
+function pdPhotosHtml() {
+  pdPhotoUrls.forEach((u) => URL.revokeObjectURL(u));
+  pdPhotoUrls = [];
+  const tiles = [];
+  pd.reports.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '')).some((r) => {
+    (r.photos || []).forEach((blob) => {
+      if (!blob || tiles.length >= 8) return;
+      const url = URL.createObjectURL(blob);
+      pdPhotoUrls.push(url);
+      tiles.push(`<a href="report-photos.html?project=${project.id}&report=${r.id}"><img src="${url}" alt="Photo from ${escapeAttr(r.date || '')}"><span>${escapeHtml(shortDateLabel(r.date) || `#${r.reportNo}`)}</span></a>`);
+    });
+    return tiles.length >= 8;
+  });
+  return tiles.length
+    ? `<div class="w-photo-grid">${tiles.join('')}</div>`
+    : '<p class="hint" style="margin:0;">No photos on this device yet. Photos show here once a report with photos has been opened on this device.</p>';
+}
+
+// ----- Make your own -----
+const PD_MEASURES = { reports: 'Reports filed', hours: 'Hours logged', photos: 'Photos taken', weather: 'Weather-flagged days', qty: 'Quantity of a pay item' };
+const PD_SHOWS = { total: 'One big number', person: 'A bar per inspector', week: 'A bar per week (last 8)' };
+
+function pdCustomHtml(c) {
+  const measure = PD_MEASURES[c.measure] ? c.measure : 'reports';
+  const show = PD_SHOWS[c.show] ? c.show : 'total';
+  const from = show === 'week' ? '' : widgetRangeStart(c.range);
+  const rs = pd.reports.filter((r) => r.date && (!from || r.date >= from));
+  const item = measure === 'qty' ? (project.payItemCatalog || []).find((it) => String(it.itemNumber) === String(c.item)) : null;
+  const qtyOn = (r) => (r.payItems || []).filter((pi) => String(pi.itemNumber) === String(c.item)).reduce((s, pi) => s + (Number(pi.qty) || 0), 0);
+  const valueOf = (r) => measure === 'reports' ? 1 : measure === 'photos' ? reportPhotoCount(r) : measure === 'weather' ? (ADVERSE_WEATHER_RE.test(r.weatherDesc || '') ? 1 : 0) : measure === 'qty' ? qtyOn(r) : reportInspectorHours(r).reduce((s, x) => s + x.hours, 0);
+  const unit = item && item.unit ? ` ${item.unit}` : '';
+  const fmt = measure === 'hours' ? (v) => `${v.toFixed(1)}h` : measure === 'qty' ? (v) => `${(Math.round(v * 100) / 100).toLocaleString()}${unit}` : (v) => String(Math.round(v));
+  const what = measure === 'qty' ? (item ? `${item.itemNumber} ${item.description || ''}`.trim() : 'Pay item not found') : PD_MEASURES[measure];
+  if (show === 'week') {
+    // The last 8 weeks, Sunday to Saturday.
+    const weeks = [];
+    const sunday = new Date();
+    sunday.setDate(sunday.getDate() - sunday.getDay());
+    for (let i = 7; i >= 0; i--) {
+      const s = new Date(sunday); s.setDate(s.getDate() - i * 7);
+      const e = new Date(s); e.setDate(e.getDate() + 6);
+      const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      weeks.push([iso(s), iso(e)]);
+    }
+    const rows = weeks.map(([s, e]) => [`Week of ${escapeHtml(shortDateLabel(s))}`, pd.reports.filter((r) => r.date && r.date >= s && r.date <= e).reduce((sum, r) => sum + valueOf(r), 0)]);
+    return widgetBarRows(rows, fmt) + `<p class="w-note">${escapeHtml(what)}, by week</p>`;
+  }
+  const note = `<p class="w-note">${escapeHtml(what)}, ${escapeHtml(WIDGET_RANGE_LABELS[c.range] || 'all time')}</p>`;
+  if (show === 'total') return `<div class="dash-card" style="margin:0;"><span class="dc-value">${escapeHtml(fmt(rs.reduce((s, r) => s + valueOf(r), 0)))}</span><span class="dc-label">${escapeHtml(what)}</span></div>${note}`;
+  const totals = new Map();
+  rs.forEach((r) => {
+    if (measure === 'hours') { reportInspectorHours(r).forEach((x) => totals.set(x.name, (totals.get(x.name) || 0) + x.hours)); return; }
+    const who = (r.createdBy || 'Unknown').trim() || 'Unknown';
+    totals.set(who, (totals.get(who) || 0) + valueOf(r));
+  });
+  return widgetBarRows([...totals.entries()].filter((e) => e[1] > 0).map(([k, v]) => [escapeHtml(k), v]).sort((a, b) => b[1] - a[1]), fmt) + note;
+}
+
+function openPdWidgetBuilder(existing, onSave) {
+  const catalog = (project.payItemCatalog || []).filter((it) => it && it.itemNumber && !isLumpSumUnit(it.unit));
+  const c = Object.assign({ title: '', measure: 'reports', item: catalog[0] ? String(catalog[0].itemNumber) : '', range: '30', show: 'total' }, existing ? existing.config : {});
+  const sel = (id, options, value) => `<select id="${id}">${options.map(([k, l]) => `<option value="${escapeAttr(k)}"${String(k) === String(value) ? ' selected' : ''}>${escapeHtml(l)}</option>`).join('')}</select>`;
+  openSheet(`
+    <h3 class="sheet-title">${existing ? 'Edit Widget' : 'Make a Widget'}</h3>
+    <p class="sheet-sub">Pick what to count, when, and how to show it. It works on whichever project you open.</p>
+    <div class="sheet-field"><label class="lbl" for="wb-title">Title</label><input type="text" id="wb-title" maxlength="40" value="${escapeAttr(c.title)}" placeholder="e.g. Rebar Tied per Week"></div>
+    <div class="wb-grid">
+      <div class="sheet-field"><label class="lbl" for="wb-measure">Count</label>${sel('wb-measure', Object.entries(PD_MEASURES), c.measure)}</div>
+      <div class="sheet-field" id="wb-item-field"><label class="lbl" for="wb-item">Pay item</label>${sel('wb-item', catalog.map((it) => [String(it.itemNumber), `${it.itemNumber} ${it.description || ''}`]), c.item)}</div>
+      <div class="sheet-field"><label class="lbl" for="wb-range">Time range</label>${sel('wb-range', [['7', 'Last 7 days'], ['30', 'Last 30 days'], ['month', 'This month'], ['all', 'Since the first report']], c.range)}</div>
+      <div class="sheet-field"><label class="lbl" for="wb-show">Show as</label>${sel('wb-show', Object.entries(PD_SHOWS), c.show)}</div>
+    </div>
+    <div class="sheet-field"><span class="lbl">Preview</span><div class="step wb-preview"><div class="step-header"><span class="step-num">CUSTOM</span><h2 id="wb-ptitle"></h2></div><div class="step-body" id="wb-prev"></div></div></div>
+    <div class="sheet-actions"><button type="button" class="btn-secondary" id="wb-cancel">Cancel</button><button type="button" class="btn-primary" id="wb-save">${existing ? 'Save' : 'Add to Dashboard'}</button></div>`, {
+    wide: true,
+    onMount: (card) => {
+      const defaultTitle = () => (c.measure === 'qty' ? `${c.item} Quantity` : PD_MEASURES[c.measure]);
+      const read = () => {
+        c.title = $('#wb-title', card).value.trim();
+        ['measure', 'range', 'show'].forEach((k) => { c[k] = $('#wb-' + k, card).value; });
+        if ($('#wb-item', card).value) c.item = $('#wb-item', card).value;
+        $('#wb-item-field', card).hidden = c.measure !== 'qty';
+        $('#wb-range', card).disabled = c.show === 'week';
+        $('#wb-ptitle', card).textContent = c.title || defaultTitle();
+        $('#wb-prev', card).innerHTML = pdCustomHtml(c);
+      };
+      read();
+      card.addEventListener('input', read);
+      card.addEventListener('change', read);
+      $('#wb-cancel', card).addEventListener('click', closeSheet);
+      $('#wb-save', card).addEventListener('click', () => {
+        read();
+        closeSheet();
+        onSave({ ...c, title: c.title || defaultTitle() });
+      });
+    },
+  });
+}
 
 // ---------- Day detail modal ----------
-//
-// One delegated listener rather than one per cell, since the calendar
-// re-renders its innerHTML wholesale on every view switch/date change --
-// per-cell listeners would need re-wiring every time, a delegated one on
-// the never-replaced container just keeps working.
-$('#dash-weather-calendar').addEventListener('click', (e) => {
-  const cell = e.target.closest('.wcal-clickable[data-report-id]');
-  if (!cell) return;
-  const r = weatherLoggableCache.find((x) => x.id === cell.dataset.reportId);
-  if (r) openDayDetailModal(r);
-});
-$('#dash-weather-calendar').addEventListener('keydown', (e) => {
-  if (e.key !== 'Enter' && e.key !== ' ') return;
-  const cell = e.target.closest('.wcal-clickable[data-report-id]');
-  if (!cell) return;
-  e.preventDefault();
-  const r = weatherLoggableCache.find((x) => x.id === cell.dataset.reportId);
-  if (r) openDayDetailModal(r);
-});
-
 function dayDetailRow(label, value) {
   if (!value) return '';
   return `<div class="ddm-row"><span class="ddm-label">${escapeHtml(label)}</span><span class="ddm-value">${escapeHtml(value)}</span></div>`;
@@ -772,15 +883,14 @@ function dayDetailRow(label, value) {
 
 function openDayDetailModal(r) {
   $('#ddm-title').textContent = r.date || `Report #${r.reportNo}`;
-
   let bodyHtml;
   if (isNoWorkDayReport(r) || isWeatherDayReport(r)) {
     bodyHtml = `<div class="ddm-badge">${isNoWorkDayReport(r) ? '&#128683; No Work Day' : '&#9925; Weather Day'}</div>`;
   } else {
     const isAttention = r.trafficControlSelect === 'ATTENTION_REQUIRED';
-    const temps = (r.tempHigh || r.tempLow) ? `${r.tempHigh || '—'}°/${r.tempLow || '—'}°F` : '';
+    const temps = (r.tempHigh || r.tempLow) ? `${r.tempHigh || '--'}°/${r.tempLow || '--'}°F` : '';
     const activity = (r.activity || '').trim();
-    const activityText = reportActivityText(r); // falls back to Work Summary's first line when Activity is blank
+    const activityText = reportActivityText(r);
     bodyHtml = [
       activity ? dayDetailRow('Activity', activity) : (activityText ? dayDetailRow('Work Summary', activityText) : ''),
       dayDetailRow('Weather', [r.weatherDesc, temps].filter(Boolean).join(' · ')),
@@ -791,13 +901,11 @@ function openDayDetailModal(r) {
     ].filter(Boolean).join('') || '<p class="hint" style="margin:0;">Nothing logged beyond the report itself.</p>';
   }
   $('#ddm-body').innerHTML = bodyHtml;
-
   $('#ddm-link-report').href = `report-viewer.html?project=${project.id}&report=${r.id}`;
   $('#ddm-link-edit').href = `report-editor.html?project=${project.id}&report=${r.id}`;
   $('#ddm-link-quantity').href = `quick-quantity.html?project=${project.id}&date=${r.date}`;
   $('#ddm-link-photos').hidden = !reportHasPhotos(r);
   $('#ddm-link-photos').href = `report-photos.html?project=${project.id}&report=${r.id}`;
-
   $('#day-detail-overlay').hidden = false;
 }
 $('#ddm-close').addEventListener('click', () => { $('#day-detail-overlay').hidden = true; });
@@ -805,10 +913,63 @@ $('#day-detail-overlay').addEventListener('click', (e) => {
   if (e.target === $('#day-detail-overlay')) $('#day-detail-overlay').hidden = true;
 });
 
+// Everything inside the widgets is redrawn often, so it's handled here.
+$('#pd-widgets').addEventListener('click', (e) => {
+  const view = e.target.closest('.view-toggle-btn[data-view]');
+  if (view) {
+    weatherViewMode = view.dataset.view;
+    const wel = view.closest('[data-wid]');
+    if (wel) pdBoard.rerender(wel.dataset.wid);
+    return;
+  }
+  const band = e.target.closest('.sl-item[data-band]');
+  if (band) {
+    const b = band.dataset.band;
+    if (payItemFilterState.hiddenBands.has(b)) payItemFilterState.hiddenBands.delete(b); else payItemFilterState.hiddenBands.add(b);
+    renderFilteredPayItems();
+    return;
+  }
+  const day = e.target.closest('.wcal-clickable[data-report-id]');
+  if (day) {
+    const r = pd.reports.find((x) => x.id === day.dataset.reportId);
+    if (r) openDayDetailModal(r);
+    return;
+  }
+  const go = e.target.closest('[data-pd-goto]');
+  if (go) {
+    const el = $(`#pd-widgets [data-type="${go.dataset.pdGoto}"]`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    else showToast('That widget isn’t on your dashboard. Add it with Edit Dashboard.');
+  }
+});
+$('#pd-widgets').addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const el = e.target.closest('.wcal-clickable[data-report-id], .sl-item[data-band]');
+  if (!el) return;
+  e.preventDefault();
+  el.click();
+});
+
+// Phones: Workspace / Dashboard switch, remembered per device.
+const PROJECT_TAB_KEY = 'project-phone-tab';
+function setProjectTab(tab) {
+  document.body.dataset.tab = tab;
+  $$('#phone-tabs button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tab === tab)));
+  try { localStorage.setItem(PROJECT_TAB_KEY, tab); } catch (err) { /* private mode */ }
+}
+(() => {
+  let tab = 'workspace';
+  try { tab = localStorage.getItem(PROJECT_TAB_KEY) || 'workspace'; } catch (err) { /* private mode */ }
+  setProjectTab(tab === 'dashboard' ? 'dashboard' : 'workspace');
+  $('#phone-tabs').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-tab]');
+    if (b) setProjectTab(b.dataset.tab);
+  });
+})();
+
 // The background photo (and logo, via applyHeaderLogo) syncs in the
-// background after Join/Sync Now return -- this is what shows it here
-// without needing a manual reload once it lands, if this project's the one
-// that got one.
+// background after Join/Sync Now return -- this shows it here without a
+// manual reload once it lands.
 window.addEventListener('company-media-updated', async () => {
   applyHeaderLogo();
   const fresh = await getProject(project.id);
@@ -818,8 +979,7 @@ window.addEventListener('company-media-updated', async () => {
 init().then(wireAutoPull);
 
 // A background auto-pull landed new project/report data -- re-run init so
-// the dashboard and pay item stats reflect a teammate's change without a
-// manual reload. init() itself is idempotent (see its own redirect guard).
+// the dashboard reflects a teammate's change without a manual reload.
 window.addEventListener('company-data-pulled', init);
 
 </script>

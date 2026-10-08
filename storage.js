@@ -218,6 +218,28 @@ async function toggleManagedProject(projectId) {
   return ids;
 }
 
+// Which dashboard widgets a person has, in what order and size -- one list
+// for the home page's Manager Dashboard ('home') and one shared by every
+// project page ('project'). Per person and synced, same as the folder
+// layout above. `null` means never customized: dashboard-layout.js then
+// uses that board's default set (which depends on the person's role).
+// Shape: [{ id, type, size: 'half' | 'full', config }].
+function dashboardWidgetsSettingKey(board, userName) {
+  return `dashboardWidgets:${board}:${userName || '_anon'}`;
+}
+
+async function getDashboardWidgets(board) {
+  const userName = await getUserName();
+  const v = await getSetting(dashboardWidgetsSettingKey(board, userName));
+  return Array.isArray(v) ? v : null;
+}
+
+async function saveDashboardWidgets(board, widgets) {
+  const userName = await getUserName();
+  await saveSetting(dashboardWidgetsSettingKey(board, userName), widgets);
+  syncUserLayout(userName);
+}
+
 // Local marker of when this person's favorites/layout last changed on
 // THIS device -- compared against the company's copy on pull (see
 // pullUserLayout in firebase-sync.js) so an older copy synced from
@@ -348,10 +370,36 @@ function currentAccountUid() {
   return user && !user.isAnonymous ? user.uid : null;
 }
 
+// An approved report or Pay App is locked: nothing about its content can
+// change until a manager or admin unlocks it (unlockReport/unlockPayApp
+// below). Only its review fields -- these -- can still change while locked.
+// firestore.rules enforces the same list for reports.
+const REVIEW_FIELDS = ['approvalStatus', 'approvalBy', 'approvalByUid', 'comments', 'unlockRequest', 'unlockedBy', 'unlockedByUid', 'unlockedAt', 'unlockReason', 'resubmittedAt', 'updatedAt'];
+
+function isApprovedLocked(record) {
+  return !!record && record.approvalStatus === 'approved';
+}
+
+class LockedRecordError extends Error {
+  constructor(message) { super(message); this.name = 'LockedRecordError'; }
+}
+
 async function saveReport(report) {
+  // The stored copy decides: a report approved on another device since this
+  // one opened it is just as locked.
+  const stored = await getReport(report.id, { includeDeleted: true });
+  if (isApprovedLocked(stored)) {
+    throw new LockedRecordError(`Report #${stored.reportNo} is approved and locked. Ask a manager to unlock it before changing it.`);
+  }
+  // Fixing a report that was sent back (or unlocked) puts it back in line
+  // for approval.
+  if (stored && (stored.approvalStatus === 'changes_requested' || stored.approvalStatus === 'unlocked')) {
+    report.approvalStatus = 'pending';
+    report.resubmittedAt = Date.now();
+  }
   // Needed before the write for the audit hook to diff against -- a no-op
   // extra read when nothing's listening (logAuditableChange undefined).
-  const before = typeof logAuditableChange === 'function' ? await getReport(report.id, { includeDeleted: true }) : null;
+  const before = typeof logAuditableChange === 'function' ? stored : null;
   const userName = await getUserName();
   if (userName) {
     if (!report.createdBy) report.createdBy = userName; // set once, never overwritten by a later editor
@@ -393,7 +441,10 @@ async function saveReport(report) {
 // width/height rather than absolute pixels, so the pin lands in the same
 // spot on the page no matter what width it's later rendered at (a phone
 // vs. a wide desktop window, or the page simply getting resized).
-async function saveReportApproval(reportId, { status, comment, pin, parentId } = {}) {
+// `fields` (optional) sets more review fields at the same time (only names
+// in REVIEW_FIELDS are taken; undefined removes one) -- how unlocking and
+// unlock requests are saved, below.
+async function saveReportApproval(reportId, { status, comment, pin, parentId, fields } = {}) {
   const report = await getReport(reportId, { includeDeleted: true });
   if (!report) throw new Error('Report not found.');
 
@@ -405,6 +456,13 @@ async function saveReportApproval(reportId, { status, comment, pin, parentId } =
     report.approvalStatus = status;
     report.approvalBy = userName || '';
     report.approvalByUid = currentAccountUid();
+  }
+  if (fields) {
+    Object.entries(fields).forEach(([k, v]) => {
+      if (!REVIEW_FIELDS.includes(k)) return;
+      if (v === undefined) delete report[k];
+      else report[k] = v;
+    });
   }
 
   let addedComment = null;
@@ -429,6 +487,7 @@ async function saveReportApproval(reportId, { status, comment, pin, parentId } =
     const label = await reportEntityLabel(report);
     if (status && status !== fromStatus) {
       const verb = status === 'approved' ? 'approved' : status === 'changes_requested' ? 'changes-requested' : 'edited';
+      // (Unlocking reads as "edited: Approval Status approved -> unlocked".)
       writeAuditEntry('report', report.id, label, verb, [{ label: 'Approval Status', from: fromStatus, to: status }])
         .catch((err) => console.error('audit log:', err));
     }
@@ -439,6 +498,34 @@ async function saveReportApproval(reportId, { status, comment, pin, parentId } =
   }
 
   return report;
+}
+
+// Unlocking an approved report so its author can change it again. For
+// managers and admins (the caller checks companyCan('approveReports')). The
+// reason is saved as a comment, so it's emailed and stays on the record.
+// It goes back to Pending when the author saves it (see saveReport), and
+// locks again when approved.
+async function unlockReport(reportId, reason) {
+  const userName = await getUserName();
+  return saveReportApproval(reportId, {
+    status: 'unlocked',
+    comment: `Unlocked for edits: ${reason}`,
+    fields: { unlockedBy: userName || '', unlockedByUid: currentAccountUid(), unlockedAt: Date.now(), unlockReason: reason, unlockRequest: undefined },
+  });
+}
+
+// The author asking a manager to unlock their approved report.
+async function requestReportUnlock(reportId, note) {
+  const userName = await getUserName();
+  return saveReportApproval(reportId, {
+    comment: `Asked to unlock this report: ${note}`,
+    fields: { unlockRequest: { by: userName || '', byUid: currentAccountUid(), at: Date.now(), note } },
+  });
+}
+
+// A manager turning an unlock request down; the report stays locked.
+async function declineReportUnlock(reportId, note) {
+  return saveReportApproval(reportId, { comment: note, fields: { unlockRequest: undefined } });
 }
 
 // Removes one comment from a report -- a real (hard) delete, unlike
@@ -662,7 +749,7 @@ async function saveProject(project) {
 // entry by id, and writes it back with its own audit verb rather than going
 // through saveProject's generic per-field diff (which would just log it as
 // an unremarkable "edited" project change, same as any other pay item edit).
-async function saveBillingEstimateApproval(projectId, estimateId, { status, comment, parentId } = {}) {
+async function saveBillingEstimateApproval(projectId, estimateId, { status, comment, parentId, fields } = {}) {
   const project = await getProject(projectId);
   if (!project) throw new Error('Project not found.');
   const estimate = (project.billingEstimates || []).find((e) => e.id === estimateId);
@@ -674,6 +761,13 @@ async function saveBillingEstimateApproval(projectId, estimateId, { status, comm
     estimate.approvalStatus = status;
     estimate.approvalBy = userName || '';
     estimate.approvalByUid = currentAccountUid();
+  }
+  if (fields) {
+    Object.entries(fields).forEach(([k, v]) => {
+      if (!REVIEW_FIELDS.includes(k)) return;
+      if (v === undefined) delete estimate[k];
+      else estimate[k] = v;
+    });
   }
 
   let addedComment = null;
@@ -695,6 +789,7 @@ async function saveBillingEstimateApproval(projectId, estimateId, { status, comm
     const estLabel = `${projectEntityLabel(project)} — Pay App #${estimate.estimateNo || '?'} (${estimate.date || 'no date'})`;
     if (status && status !== fromStatus) {
       const verb = status === 'approved' ? 'approved' : status === 'changes_requested' ? 'changes-requested' : 'edited';
+      // (Unlocking reads as "edited: Approval Status approved -> unlocked".)
       writeAuditEntry('payApp', estimate.id, estLabel, verb, [{ label: 'Approval Status', from: fromStatus, to: status }])
         .catch((err) => console.error('audit log:', err));
     }
@@ -705,6 +800,18 @@ async function saveBillingEstimateApproval(projectId, estimateId, { status, comm
   }
 
   return project;
+}
+
+// Unlocking an approved Pay App so it can be changed again (managers and
+// admins). Same as unlockReport: the reason is kept as a comment, and it
+// locks again when approved.
+async function unlockPayApp(projectId, estimateId, reason) {
+  const userName = await getUserName();
+  return saveBillingEstimateApproval(projectId, estimateId, {
+    status: 'unlocked',
+    comment: `Unlocked for edits: ${reason}`,
+    fields: { unlockedBy: userName || '', unlockedByUid: currentAccountUid(), unlockedAt: Date.now(), unlockReason: reason },
+  });
 }
 
 function getAllProjects() {
