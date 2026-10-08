@@ -45,7 +45,10 @@
 #
 #  Any page:    menu button, sync button, tutorial bar, tips button,
 #               breadcrumb, activity banner
-#  Home:        portfolio panel, activity calendar, project card
+#  Home:        portfolio panel, activity calendar, project card,
+#               add project card
+#  Project Settings: section list, project info, pay items,
+#               contractors, preview, save button
 #  Project:     new report tile, view reports tile, quantities tile,
 #               pay apps tile, dashboard overview, pay items panel,
 #               weather panel, trend chart, project settings button
@@ -76,7 +79,7 @@
 #  Manager:     reports to review, first report, pay apps to review,
 #               managed projects, project checkboxes
 #  Settings:    you tab, company tab, profile, appearance, theme buttons,
-#               accent colors, app section, tutorial section,
+#               accent colors, app section, tutorial section, account section,
 #               sync to folder
 #
 #  Need to point at something that isn't listed? Ask and it can be added.
@@ -136,9 +139,9 @@ Emotion: happy
 Points at: nothing
 Walkthrough button: Show me around
 Explore button: I'll explore
-Great! I'll show you how to keep tabs on your jobs: the dashboards,
-approving reports, and checking Pay Apps against what was logged. Want
-me to walk you through it, or would you rather poke around on your own?
+Great! I'll keep it short: setting up a new project, then reviewing
+reports and the emails that keep everyone in the loop. Want me to walk
+you through it, or would you rather poke around on your own?
 
 
 === EXPLORE ON YOUR OWN (explore) ===
@@ -177,13 +180,6 @@ This is the Manager Dashboard. It rolls up every project you manage: total
 contract value, money earned so far, reports filed this week, and who is
 behind schedule.
 
-[3]
-Emotion: neutral
-Points at: activity calendar
-For: manager
-The Report Activity calendar shows every report, one month at a time. Use
-the arrows to move between months, and tap a day to see what was done.
-
 [4]
 Emotion: pointing
 Points at: project card
@@ -196,14 +192,7 @@ Emotion: surprised
 Points at: activity banner
 For: manager
 When something changes in a project you manage, like a new report or a
-Pay App, this bar lights up. Tap it to see what's new.
-
-[6]
-Emotion: neutral
-Points at: menu button (top left)
-For: manager
-The menu gets you anywhere fast: home, any project, the Manager page,
-Settings, and this tutorial.
+comment, this bar lights up. Tap it to see what's new.
 
 [6]
 Emotion: neutral
@@ -215,6 +204,7 @@ tutorial.
 [7]
 Emotion: thinking
 Points at: sync button (top right, circular arrows)
+For: inspector
 This button syncs with your company and checks for app updates. It's
 switched off in the tutorial, so nothing ever leaves this device.
 
@@ -227,7 +217,14 @@ from me again on any page.
 [9]
 Emotion: pointing
 Points at: project card
+For: inspector
 Let's look inside the example project. Tap DEMO-101 to continue the tour!
+
+[9]
+Emotion: pointing
+Points at: add project card
+For: manager
+Let's set up a new job. Tap + Add Project, then Set Up Manually.
 
 
 === PROJECT PAGE (project.html) ===
@@ -276,6 +273,7 @@ Quantities adds up what inspectors have logged on every pay item.
 [5]
 Emotion: thinking
 Points at: pay apps tile
+For: inspector
 Pay Apps is the billing side: what the contractor has been paid, checked
 against what was logged.
 
@@ -320,9 +318,43 @@ through it!
 
 [11]
 Emotion: pointing
-Points at: pay apps tile
+Points at: menu button
 For: manager
-Let's check the contractor's billing. Tap Pay Apps to keep going!
+To review this project's reports, open the menu and tap Manager.
+
+
+=== PROJECT SETTINGS (project-setup.html) ===
+# Managers land here from + Add Project, Set Up Manually.
+
+[1]
+Emotion: happy
+Points at: section list
+This is where a project gets built. Work down the list on the left; each
+section is short.
+
+[2]
+Emotion: neutral
+Points at: project info
+Project Info prints at the top of every report: the project number and
+name, the engineer, the start date, and contract days.
+
+[3]
+Emotion: pointing
+Points at: pay items
+Pay Items is the contract's item list, and Contractors and Equipment
+sets up the crew table. Inspectors pick from both on their reports.
+
+[4]
+Emotion: neutral
+Points at: save button
+Tap Save when you're done. You can come back and change any of it later.
+
+[5]
+Emotion: happy
+Points at: menu button
+For: manager
+That's a project! Next, reviewing reports. Open the menu and tap
+Manager.
 
 
 === REPORTS LIST (reports.html) ===
@@ -386,12 +418,14 @@ This is the finished report, laid out exactly like the printed form.
 [2]
 Emotion: pointing
 Points at: side reports
+For: inspector
 The reports from the days before and after peek in from the sides. Tap
 one, or use the arrows, to flip through the job day by day.
 
 [3]
 Emotion: neutral
 Points at: details bar
+For: inspector
 Report Details shows who wrote the report and every change made to it
 since.
 
@@ -407,9 +441,9 @@ you're on it.
 Emotion: thinking
 Points at: review bar
 For: manager
-Approvals and Comments is where you approve a report or send it back
-for changes. Comments can even pin a spot on the page, so your inspector
-knows exactly what you mean.
+Approvals and Comments is where you review. Approve it, or tap Request
+Changes to send it back with a note. A comment can even pin a spot on
+the page.
 
 [5]
 Emotion: pointing
@@ -427,18 +461,26 @@ reports, break things, and try every button. Tap Tips on any page if you
 get stuck.
 
 [5]
-Emotion: neutral
-Points at: edit button
+Emotion: surprised
+Points at: review bar
 For: manager
-You can fix small things yourself with Edit. Every change is kept in
-Report Details, so nothing is lost.
+Every approval, change request and comment emails the inspector who
+wrote the report, and their replies email you. Nobody has to keep
+checking the app.
 
 [6]
-Emotion: happy
-Points at: tips button
+Emotion: thinking
+Points at: nothing
 For: manager
-That's the tour! Look around as much as you like. On any page, tap Tips
-and I'll pop back up.
+You can also get a weekly roundup email of your projects every Tuesday
+morning. Turn it on in Settings, under Account.
+
+[7]
+Emotion: happy
+Points at: review bar
+For: manager
+That's it! Try approving this one or sending it back. Tap Tips on any
+page if you need me.
 
 
 === REPORT EDITOR (report-editor.html) ===
@@ -818,31 +860,19 @@ The Manager page is your to-do list for every project you manage.
 [2]
 Emotion: pointing
 Points at: reports to review
-Reports waiting on your approval show up here, along with any that
-were sent back for changes.
+Reports waiting on your approval show up here, along with any you've
+sent back for changes.
 
 [3]
-Emotion: neutral
-Points at: first report
-Tap one to open it. From there you can approve it, request changes,
-or leave a comment.
-
-[4]
-Emotion: neutral
-Points at: pay apps to review
-Pay Apps waiting on approval get their own list.
-
-[5]
 Emotion: thinking
 Points at: managed projects
-Check the projects you manage. Their new reports and Pay Apps show up
-here and light up the activity bar.
+Check the projects you manage. Their new reports show up here and light
+up the activity bar.
 
-[6]
+[4]
 Emotion: pointing
 Points at: first report
-For: manager
-Tap a report to open it, and try approving it or sending it back!
+Tap a report to open it, and let's review it!
 
 
 === SETTINGS (settings.html) ===
@@ -851,6 +881,12 @@ Tap a report to open it, and try approving it or sending it back!
 Emotion: happy
 Points at: you tab
 Settings has two sides. You is just for you and this device.
+
+[2]
+Emotion: neutral
+Points at: account section
+Account is where you sign in, and choose your emails: comments and
+approvals, and the weekly roundup of your projects.
 
 [2]
 Emotion: neutral

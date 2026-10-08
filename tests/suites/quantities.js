@@ -43,6 +43,10 @@ const text = (p, sel) => p.textContent(sel).then((t) => t.replace(/\s+/g, ' ').t
   await p.reload(); await settle();
   await p.click('#hamburger-btn');
   check('manager: Manager Dashboard, Manager page and approving', [await p.isVisible('#md-overview-step'), await p.isVisible('#hb-manager-row'), await p.evaluate(() => companyCan('approveReports')), (await homeLines()).some((t) => t.includes('Manager Dashboard'))], [true, true, true, true]);
+  check('manager walkthrough: new project, then reviews with the emails, no Pay Apps', await p.evaluate(() => {
+    const lines = ['index.html', 'project-setup.html', 'manager.html', 'report-viewer.html'].flatMap((pg) => tourStepsForPage(pg).map((st) => st.say));
+    return [lines.some((t) => t.includes('Add Project')), lines.some((t) => t.includes('emails the inspector')), lines.some((t) => t.includes('weekly roundup')), lines.some((t) => /Pay App/.test(t))];
+  }), [true, true, true, false]);
   // The rest of this suite is about quantities: back to the admin view.
   await p.evaluate(() => saveSetting(COMPANY_ADMIN_SETTING, true));
 

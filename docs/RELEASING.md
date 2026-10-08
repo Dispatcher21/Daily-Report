@@ -9,7 +9,10 @@ Everything waiting to be applied to the live Firebase project
 (`daily-reports-53c82`). Add to this list as you go; clear it once the
 owner has applied it.
 
-(Nothing pending.)
+- **Rules** (`firestore.rules`): Managers can create projects by default
+  (`defaultPerm`). Companies that set this in Settings > Roles keep their
+  setting. Publish the rules together with the app change, so a
+  manager's new Add Project button isn't refused by the server.
 
 (Last applied: 0.057, 2026-10-07: rules for devices without an account
 (approval, assigned projects only); onMemberWritten. 0.054, 2026-10-07: weeklyRoundup and sendRoundupPreview

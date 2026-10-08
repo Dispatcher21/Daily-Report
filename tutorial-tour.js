@@ -95,6 +95,15 @@ const TOUR_TARGETS = {
     },
     'activity calendar': { selector: '#md-calendar-step' },
     'project card': { selector: '#hub-grid .hub-card[data-drag-type="project"]' },
+    'add project card': { selector: '#btn-add-project' },
+  },
+  'project-setup.html': {
+    'section list': { selector: '#ps-nav' },
+    'project info': { selector: '#ps-nav [data-sec="info"]' },
+    'pay items': { selector: '#ps-nav [data-sec="pay"]' },
+    'contractors': { selector: '#ps-nav [data-sec="crew"]' },
+    'preview': { selector: '#ps-right' },
+    'save button': { selector: '#fsb-save' },
   },
   'project.html': {
     'new report tile': { selector: '#card-new-report' },
@@ -212,6 +221,7 @@ const TOUR_TARGETS = {
     'accent colors': { selector: '#accent-swatches', before: () => tourOpenDetails('.settings-section:has(#theme-picker)') },
     'app section': { selector: '.settings-section:has(#btn-install)' },
     'tutorial section': { selector: '#tutorial-section' },
+    'account section': { selector: '#account-section', before: () => tourOpenDetails('#account-section') },
     'sync to folder': { selector: '#sync-section' },
   },
 };

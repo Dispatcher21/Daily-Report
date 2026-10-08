@@ -36,12 +36,12 @@ service cloud.firestore {
     function canAdmin(code) { return signedIn() && (openToAccounts(code) || (memberActive(code) && me(code).role == 'admin' && (hasAccount() || !enforced(code)))); }
     // What each role may do, from Settings > Roles (company rolePermissions),
     // falling back to the built-in defaults. Admins may do everything.
-    // Built-in defaults: managers can do everything except create
-    // projects; inspectors can only edit their own reports. (Kept as plain
+    // Built-in defaults: managers can do everything (creating projects
+    // included); inspectors can only edit their own reports. (Kept as plain
     // comparisons: a map literal here costs dozens of steps on every check,
     // and a rule may only take 1,000.)
     function defaultPerm(role, key) {
-      return role == 'manager' ? key != 'membersCanCreateProjects' : key == 'membersCanEditOwnReports';
+      return role == 'manager' || key == 'membersCanEditOwnReports';
     }
     function can(code, key) {
       return memberActive(code) && (hasAccount() || !enforced(code)) && (me(code).role == 'admin'
