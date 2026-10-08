@@ -47,8 +47,9 @@ function deleteTutorialDb() {
   });
 }
 
-// Forget which page tours have played and whether the person chose the
-// walkthrough, so every new tutorial starts with the inspector's welcome.
+// Forget which page tours have played, which role (inspector or manager)
+// the person picked, and whether they chose the walkthrough, so every new
+// tutorial starts with the inspector's welcome.
 function resetTourState() {
   Object.keys(sessionStorage)
     .filter((k) => k.startsWith('dr-tour-'))

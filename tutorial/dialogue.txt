@@ -19,10 +19,18 @@
 #  - The text can run over several lines; they're joined into one
 #    paragraph. Leave a blank line inside the text to start a new
 #    paragraph. Don't start a text line with #.
-#  - Besides the pages, three special sections (WELCOME, EXPLORE ON
-#    YOUR OWN, and NO TIPS YET) are explained where they appear below.
+#  - Besides the pages, five special sections (WELCOME, the two role
+#    welcomes, EXPLORE ON YOUR OWN, and NO TIPS YET) are explained where
+#    they appear below.
 #  - Keep each line to 2-3 sentences. On a phone the box fits about 4
 #    short lines before it crowds the screen.
+#
+# FOR (who hears the line)
+#  The welcome asks whether they're an inspector or a manager. A line
+#  with "For: inspector" only plays for inspectors, and "For: manager"
+#  only for managers. Leave the For line out (or write "For: everyone")
+#  and everyone hears it. To give the two roles different wording for
+#  the same spot, write the line twice, once for each.
 #
 # EMOTIONS (which character image shows)
 #    neutral, happy, thinking, surprised, pointing
@@ -77,21 +85,57 @@ CHARACTER NAME: Inspector
 
 === WELCOME (welcome) ===
 # Pops up as soon as the tutorial opens. The LAST line in this section
-# gets two buttons instead of Next. Change the button wording on the
-# "Walkthrough button" and "Explore button" lines. Picking the
-# walkthrough starts the tour of whatever page they're on, and each
-# page's tour then plays the first time they open it. Picking explore
-# plays the EXPLORE ON YOUR OWN section, and after that tours only play
-# when they tap Tips.
+# gets two buttons instead of Next, asking whether they're an inspector
+# or a manager. Change the button wording on the "Inspector button" and
+# "Manager button" lines. Their answer picks which role welcome plays
+# next, and which lines they hear on every page after that (see FOR at
+# the top).
+
+[1]
+Emotion: happy
+Points at: nothing
+Hi there! I'm your site inspector. This is a sandbox with an example
+project, so nothing you do here touches your real work.
+
+[2]
+Emotion: thinking
+Points at: nothing
+Inspector button: I'm an inspector
+Manager button: I'm a manager
+First, what kind of work do you do? I'll focus the tour on the parts of
+the app you'll actually use.
+
+
+=== WELCOME, INSPECTORS (welcome inspector) ===
+# Plays after they pick the inspector button. Like the welcome, the LAST
+# line gets two buttons: "Walkthrough button" and "Explore button".
+# Picking the walkthrough starts the tour of whatever page they're on,
+# and each page's tour then plays the first time they open it. Picking
+# explore plays the EXPLORE ON YOUR OWN section, and after that tours
+# only play when they tap Tips.
 
 [1]
 Emotion: happy
 Points at: nothing
 Walkthrough button: Show me around
 Explore button: I'll explore
-Hi there! I'm your site inspector. This is a sandbox with an example
-project, so nothing you do here touches your real work. Want me to walk
-you through it, or would you rather poke around on your own?
+Great! I'll show you the everyday field work: writing daily reports,
+logging quantities, and fixing a report your manager sent back. Want me
+to walk you through it, or would you rather poke around on your own?
+
+
+=== WELCOME, MANAGERS (welcome manager) ===
+# Plays after they pick the manager button. Works the same as the
+# inspectors' welcome above.
+
+[1]
+Emotion: happy
+Points at: nothing
+Walkthrough button: Show me around
+Explore button: I'll explore
+Great! I'll show you how to keep tabs on your jobs: the dashboards,
+approving reports, and checking Pay Apps against what was logged. Want
+me to walk you through it, or would you rather poke around on your own?
 
 
 === EXPLORE ON YOUR OWN (explore) ===
@@ -111,7 +155,7 @@ page you're on.
 Emotion: thinking
 Points at: nothing
 I don't have notes for this page yet. Tap Tips on the home page, the
-project page, the reports list, or a report and I'll walk you through it.
+project page, or a report and I'll walk you through it.
 
 
 === HOME PAGE (index.html) ===
@@ -125,6 +169,7 @@ come together. Tap Next to keep going, or Skip whenever you like.
 [2]
 Emotion: pointing
 Points at: portfolio panel
+For: manager
 This is the Manager Dashboard. It rolls up every project you manage: total
 contract value, money earned so far, reports filed this week, and who is
 behind schedule.
@@ -132,8 +177,16 @@ behind schedule.
 [3]
 Emotion: neutral
 Points at: activity calendar
+For: manager
 The Report Activity calendar shows every report, one month at a time. Use
 the arrows to move between months, and tap a day to see what was done.
+
+[3]
+Emotion: neutral
+Points at: activity calendar
+For: inspector
+The Report Activity calendar shows which days have a report, so a missed
+day stands out. Tap a day to see what was done.
 
 [4]
 Emotion: pointing
@@ -144,14 +197,23 @@ and quantities.
 [5]
 Emotion: surprised
 Points at: activity banner
+For: manager
 When something changes in a project you manage, like a new report or a
 Pay App, this bar lights up. Tap it to see what's new.
 
 [6]
 Emotion: neutral
 Points at: menu button (top left)
+For: manager
 The menu gets you anywhere fast: home, any project, the Manager page,
 Settings, and this tutorial.
+
+[6]
+Emotion: neutral
+Points at: menu button (top left)
+For: inspector
+The menu gets you anywhere fast: home, any project, Settings, and this
+tutorial.
 
 [7]
 Emotion: thinking
@@ -182,20 +244,37 @@ gets a page like this one.
 [2]
 Emotion: pointing
 Points at: new report tile
+For: inspector
 New Report starts today's daily work report. You'll be filling these in
 most days, so it lives right up top.
 
 [3]
 Emotion: neutral
 Points at: view reports tile
+For: inspector
 View Reports lists every report filed on this project, so you can open,
 print, or edit any of them.
+
+[3]
+Emotion: neutral
+Points at: view reports tile
+For: manager
+View Reports lists every report your inspectors have filed on this
+project, along with any comments waiting on them.
 
 [4]
 Emotion: neutral
 Points at: quantities tile
-Quantities adds up what inspectors have logged on every pay item. You
-can log quantities for a day from there too.
+For: inspector
+Quantities adds up everything you've logged on every pay item. When a
+day is just quantities, you can log them from there without a full
+report.
+
+[4]
+Emotion: neutral
+Points at: quantities tile
+For: manager
+Quantities adds up what inspectors have logged on every pay item.
 
 [5]
 Emotion: thinking
@@ -206,6 +285,7 @@ against what was logged.
 [6]
 Emotion: pointing
 Points at: dashboard overview
+For: manager
 The dashboard keeps score for you: how much of the contract and schedule
 is used up, hours worked, and a fun fact or two.
 
@@ -218,12 +298,14 @@ dollars billed. Search or sort it to find one fast.
 [8]
 Emotion: thinking
 Points at: weather panel
+For: manager
 Weather and Schedule pulls the conditions from every report, and flags
 weather days, no work days, and days traffic control needed attention.
 
 [9]
 Emotion: neutral
 Points at: trend chart
+For: manager
 Progress Over Time charts how the job is moving, report by report.
 
 [10]
@@ -235,7 +317,14 @@ info, pay items, crew, which report fields are required, and files.
 [11]
 Emotion: pointing
 Points at: view reports tile
+For: inspector
 Let's look at the reports. Tap View Reports to keep going!
+
+[11]
+Emotion: pointing
+Points at: pay apps tile
+For: manager
+Let's check the contractor's billing. Tap Pay Apps to keep going!
 
 
 === REPORTS LIST (reports.html) ===
@@ -303,14 +392,39 @@ since.
 [4]
 Emotion: thinking
 Points at: review bar
-Approvals and Comments is where a report gets approved or sent back for
-changes. Comments can even pin a spot on the page.
+For: inspector
+Approvals and Comments shows whether your manager approved the report
+or sent it back for changes. Read their comments here, reply, then fix
+the report.
+
+[4]
+Emotion: thinking
+Points at: review bar
+For: manager
+Approvals and Comments is where you approve a report or send it back
+for changes. Comments can even pin a spot on the page, so your inspector
+knows exactly what you mean.
 
 [5]
 Emotion: pointing
 Points at: edit button
+For: inspector
 Need to change something? Tap Edit to open this report in the editor.
 Give it a try!
+
+[5]
+Emotion: neutral
+Points at: edit button
+For: manager
+You can fix small things yourself with Edit. Every change is kept in
+Report Details, so nothing is lost.
+
+[6]
+Emotion: happy
+Points at: tips button
+For: manager
+That's the tour! Look around as much as you like. On any page, tap Tips
+and I'll pop back up.
 
 
 === REPORT EDITOR (report-editor.html) ===
@@ -427,7 +541,15 @@ Need a spreadsheet? Excel downloads everything in this range.
 [9]
 Emotion: pointing
 Points at: pay apps tab
+For: manager
 Now tap Pay Apps up top to see the billing side!
+
+[9]
+Emotion: pointing
+Points at: log quantities button
+For: inspector
+Just need to record quantities for a day? Log Quantities is the quick
+way, no full report needed.
 
 
 === LOG QUANTITIES (quick-quantity.html) ===
@@ -519,14 +641,23 @@ here.
 [9]
 Emotion: thinking
 Points at: excel file
+For: manager
 Doing Pay Apps in a spreadsheet? Download this file, fill it in, and
 upload it back to record them.
 
 [10]
 Emotion: happy
 Points at: new pay app button
+For: manager
 When the next Pay App comes in, start it here. It fills in from the last
 one, so you only change what's different.
+
+[11]
+Emotion: pointing
+Points at: menu button
+For: manager
+Last stop: open the menu and tap Manager to see everything waiting on
+your approval.
 
 
 === DOWNLOAD REPORT (download.html) ===
@@ -592,6 +723,12 @@ Emotion: thinking
 Points at: managed projects
 Check the projects you manage. Their new reports and Pay Apps show up
 here and light up the activity bar.
+
+[6]
+Emotion: pointing
+Points at: first report
+For: manager
+Tap a report to open it, and try approving it or sending it back!
 
 
 === SETTINGS (settings.html) ===

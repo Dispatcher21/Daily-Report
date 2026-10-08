@@ -20,6 +20,22 @@ const text = (p, sel) => p.textContent(sel).then((t) => t.replace(/\s+/g, ' ').t
   const pid = await p.evaluate(async () => (await getAllProjects())[0].id);
   const settle = () => p.waitForTimeout(1500);
 
+  // The welcome asks inspector or manager, and the tours after that only
+  // play that role's lines.
+  await p.waitForSelector('.tour-root', { timeout: 15000 });
+  await p.evaluate(() => tour.finishTyping()); // a tap while typing only finishes the line
+  await p.click('.tour-next');
+  check('welcome asks for a role', [await p.isVisible('.tour-choose-inspector'), await p.isVisible('.tour-choose-manager'), await p.isVisible('.tour-choose-guided')], [true, true, false]);
+  await p.click('.tour-choose-manager');
+  await p.evaluate(() => tour.finishTyping());
+  check('then the manager welcome, walkthrough or explore', [await p.isVisible('.tour-choose-guided'), (await text(p, '.tour-text')).includes('approving reports')], [true, true]);
+  const homeLines = () => p.evaluate(() => tourStepsForPage('index.html').map((s) => s.say));
+  const managerLines = await homeLines();
+  await p.evaluate(() => sessionStorage.setItem('dr-tour-role', 'inspector'));
+  const inspectorLines = await homeLines();
+  check('manager hears about the Manager Dashboard, inspector does not', [managerLines.some((t) => t.includes('Manager Dashboard')), inspectorLines.some((t) => t.includes('Manager Dashboard'))], [true, false]);
+  await p.click('.tour-choose-explore');
+
   // Project page cards.
   await p.goto(`${B}/project.html?id=${pid}`); await settle();
   check('Quantities card', await text(p, '#card-quantities-desc'), '49.5% logged · $201,345');

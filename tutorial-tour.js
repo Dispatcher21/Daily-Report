@@ -1,8 +1,11 @@
 // Guided tour for tutorial mode: an inspector character in the bottom-right
 // corner talks the person through each page RPG-style, and a floating hand
 // points at whatever is being explained. Only loaded in tutorial mode (see
-// common.js). Each page's tour plays once per tutorial session, the first
-// time that page is opened; the banner's Tips button replays it.
+// common.js). The welcome asks whether the person is an inspector or a
+// manager, and every tour after that only plays the lines meant for that
+// role (a line's "For:" in dialogue.txt). Each page's tour plays once per
+// tutorial session, the first time that page is opened; the banner's Tips
+// button replays it.
 
 // ---------- Art ----------
 // Swap these paths for the real art. Every emotion image should share the
@@ -230,7 +233,12 @@ function parseTourDialogue(text) {
     if (/^\[\s*\d*\s*\]$/.test(line)) { finish(); step = { emotion: 'neutral', target: null, lines: [] }; page.push(step); return; }
     if (!step) return;
     if (!step.lines.length && (m = line.match(/^emotion:\s*(.*)$/i))) { step.emotion = m[1].trim().toLowerCase(); return; }
-    if (!step.lines.length && (m = line.match(/^(walkthrough|explore) button:\s*(.*)$/i))) { step[`${m[1].toLowerCase()}Button`] = m[2].trim(); return; }
+    if (!step.lines.length && (m = line.match(/^(walkthrough|explore|inspector|manager) button:\s*(.*)$/i))) { step[`${m[1].toLowerCase()}Button`] = m[2].trim(); return; }
+    if (!step.lines.length && (m = line.match(/^for:\s*(.*)$/i))) {
+      const roles = m[1].toLowerCase().split(/[^a-z]+/).filter((r) => TOUR_ROLES.includes(r));
+      step.roles = roles.length ? roles : null; // anything else (everyone, blank): every role
+      return;
+    }
     if (!step.lines.length && (m = line.match(/^points at:\s*(.*)$/i))) {
       const t = m[1].trim();
       step.target = /^(nothing|none|-)?$/i.test(t) ? null : t;
@@ -259,14 +267,17 @@ const tourDialogueReady = fetch(TOUR_DIALOGUE_URL, { cache: 'no-store' })
   .then((text) => { tourDialogue = parseTourDialogue(text); })
   .catch((e) => { console.error('Tutorial: could not load the dialogue file:', e); });
 
+// A page's lines for the role picked in the welcome. Lines without a
+// "For:" play for everyone, and so does every line before a role is picked.
 function tourStepsForPage(page) {
   if (!tourDialogue) return null;
-  const steps = tourDialogue.pages[page];
-  if (!steps || !steps.length) return null;
+  const role = tourRole();
+  const steps = (tourDialogue.pages[page] || []).filter((s) => !s.roles || !role || s.roles.includes(role));
+  if (!steps.length) return null;
   return steps.map((s) => {
     if (!TOUR_ART.emotions[s.emotion]) console.warn(`Tutorial: no "${s.emotion}" emotion image, showing neutral`);
     const t = tourResolveTarget(page, s.target);
-    return { emotion: s.emotion, say: s.say, target: t && t.selector, before: t && t.before, walkthroughButton: s.walkthroughButton, exploreButton: s.exploreButton };
+    return { emotion: s.emotion, say: s.say, target: t && t.selector, before: t && t.before, walkthroughButton: s.walkthroughButton, exploreButton: s.exploreButton, inspectorButton: s.inspectorButton, managerButton: s.managerButton };
   });
 }
 
@@ -284,9 +295,24 @@ function setTourMode(mode) {
   try { sessionStorage.setItem(TOUR_MODE_KEY, mode); } catch (e) {}
 }
 
+// 'inspector' or 'manager', picked at the start of the welcome. Cleared
+// with the mode, so each new tutorial asks again.
+const TOUR_ROLES = ['inspector', 'manager'];
+const TOUR_ROLE_KEY = 'dr-tour-role';
+function tourRole() {
+  let role = null;
+  try { role = sessionStorage.getItem(TOUR_ROLE_KEY); } catch (e) {}
+  return TOUR_ROLES.includes(role) ? role : null;
+}
+function setTourRole(role) {
+  try { sessionStorage.setItem(TOUR_ROLE_KEY, role); } catch (e) {}
+}
+
 // Used only if dialogue.txt can't be loaded at all.
 const TOUR_FALLBACK = {
-  welcome: [{ emotion: 'happy', say: "Hi there! This is a sandbox with an example project, so nothing you do here touches your real work. Want a walkthrough, or would you rather explore on your own?" }],
+  welcome: [{ emotion: 'happy', say: "Hi there! This is a sandbox with an example project, so nothing you do here touches your real work. Are you an inspector or a manager?" }],
+  'welcome inspector': [{ emotion: 'happy', say: 'Want a walkthrough, or would you rather explore on your own?' }],
+  'welcome manager': [{ emotion: 'happy', say: 'Want a walkthrough, or would you rather explore on your own?' }],
   'no tips': [{ emotion: 'thinking', say: "I couldn't load my notes. Check your connection and refresh the page." }],
 };
 function tourSection(key) {
@@ -363,12 +389,21 @@ const tour = {
     return true;
   },
 
-  // The first thing shown in a new tutorial: its last line asks whether to
-  // take the walkthrough or explore alone.
+  // The first thing shown in a new tutorial: its last line asks whether
+  // they're an inspector or a manager, then that role's welcome asks
+  // whether to take the walkthrough or explore alone.
   welcome() {
     const steps = tourSection('welcome');
     if (!steps) { setTourMode('guided'); this.start(false); return; }
-    this.play(steps, { choice: true });
+    this.play(steps, { choice: 'role' });
+  },
+
+  chooseRole(role) {
+    setTourRole(role);
+    this.end(false);
+    const steps = tourSection(`welcome ${role}`);
+    if (!steps) { setTourMode('guided'); this.start(false); return; }
+    this.play(steps, { choice: 'mode' });
   },
 
   choose(mode) {
@@ -422,6 +457,10 @@ const tour = {
           <button type="button" class="tour-btn tour-choose-explore"></button>
           <button type="button" class="tour-btn tour-choose-guided"></button>
         </div>
+        <div class="tour-choice tour-choice-role" hidden>
+          <button type="button" class="tour-btn tour-choose-inspector"></button>
+          <button type="button" class="tour-btn tour-choose-manager"></button>
+        </div>
       </div>
       <img class="tour-char" alt="">`;
     this.root.querySelector('.tour-name').textContent = TOUR_SHOW_ART ? ((tourDialogue && tourDialogue.name) || TOUR_ART.name) : 'Tutorial · W.I.P.';
@@ -433,6 +472,8 @@ const tour = {
     this.root.querySelector('.tour-skip').addEventListener('click', () => this.skip());
     this.root.querySelector('.tour-choose-guided').addEventListener('click', () => this.choose('guided'));
     this.root.querySelector('.tour-choose-explore').addEventListener('click', () => this.choose('explore'));
+    this.root.querySelector('.tour-choose-inspector').addEventListener('click', () => this.chooseRole('inspector'));
+    this.root.querySelector('.tour-choose-manager').addEventListener('click', () => this.chooseRole('manager'));
     // Tapping the text while it's still typing finishes the line.
     this.root.querySelector('.tour-text').addEventListener('click', () => this.finishTyping());
     this.onKey = (e) => {
@@ -445,7 +486,8 @@ const tour = {
     this.raf = requestAnimationFrame(loop);
   },
 
-  // Skipping the welcome counts as choosing to explore.
+  // Skipping the welcome counts as choosing to explore (with no role picked,
+  // Tips then plays every line).
   skip() {
     if (this.opts && this.opts.choice) { setTourMode('explore'); this.end(false); }
     else this.end(true);
@@ -476,11 +518,16 @@ const tour = {
     this.root.querySelector('.tour-back').disabled = this.index === 0;
     this.root.querySelector('.tour-next').textContent = this.index === this.steps.length - 1 ? 'Got it' : 'Next';
     const choice = this.onChoice();
+    const roleChoice = choice && this.opts.choice === 'role';
     this.root.querySelector('.tour-controls').hidden = choice && this.steps.length === 1;
     this.root.querySelector('.tour-next').hidden = choice;
     this.root.querySelector('.tour-skip').hidden = choice;
-    this.root.querySelector('.tour-choice').hidden = !choice;
-    if (choice) {
+    this.root.querySelector('.tour-choice:not(.tour-choice-role)').hidden = !choice || roleChoice;
+    this.root.querySelector('.tour-choice-role').hidden = !roleChoice;
+    if (roleChoice) {
+      this.root.querySelector('.tour-choose-inspector').textContent = step.inspectorButton || "I'm an inspector";
+      this.root.querySelector('.tour-choose-manager').textContent = step.managerButton || "I'm a manager";
+    } else if (choice) {
       this.root.querySelector('.tour-choose-guided').textContent = step.walkthroughButton || 'Show me around';
       this.root.querySelector('.tour-choose-explore').textContent = step.exploreButton || "I'll explore";
     }
