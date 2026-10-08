@@ -272,6 +272,37 @@ const TUTORIAL_OTHER_PROJECTS = [
       approvalStatus: 'approved', updatedAt: Date.now(),
     }],
   },
+  {
+    projectNo: 'PAW-0048',
+    name: 'PAW-0048 - Lot 48 Children\'s Park',
+    projectName: 'Lot 48 Children\'s Park (Formerly "The Pit"), Pawnee, Indiana',
+    icon: '\u{1F333}',
+    contractLength: '120',
+    ntpDaysAgo: 50,
+    everyNth: 5,
+    engineer: 'Penny Trometer, P.E.',
+    helpers: ['Sandy Box', 'Woody Chips'],
+    contractors: ['Very Good Building & Development Co.', 'Mouse Rat Hauling', 'Sweetums Landscaping'],
+    catalog: [
+      { itemNumber: '100-01', description: 'Fill the Pit', unit: 'CY', plannedQty: 4800, unitPrice: 22 },
+      { itemNumber: '200-01', description: 'Remove Couch From Pit', unit: 'EA', plannedQty: 1, unitPrice: 350 },
+      { itemNumber: '300-01', description: 'Playground Structure, Installed', unit: 'EA', plannedQty: 6, unitPrice: 18000 },
+      { itemNumber: '310-01', description: 'Engineered Wood Fiber Surfacing', unit: 'CY', plannedQty: 220, unitPrice: 65 },
+      { itemNumber: '400-01', description: 'Waffle Stand', unit: 'LS', plannedQty: 1, unitPrice: 15000 },
+      { itemNumber: '500-01', description: 'Li\'l Sebastian Memorial (Life Size, So Small)', unit: 'EA', plannedQty: 1, unitPrice: 9500 },
+      { itemNumber: '600-01', description: 'Safety Fence Around Pit', unit: 'LF', plannedQty: 900, unitPrice: 14 },
+    ],
+    crew: () => ({ Superintendent: ['1'], Foreman: ['1', '', '1'], Operators: ['2', '1'], Laborers: ['4', '', '3'], 'Pickup truck': ['1', '1', '1'] }),
+    days: [
+      { activity: 'Pit fencing', summary: 'Installed 900 LF of safety fence around the pit. A local musician who used to live in the pit confirmed nobody is down there now.', pay: [['600-01', 900]], weather: 'Partly cloudy', hi: 64, lo: 45, photos: ['Fence around the pit'] },
+      { activity: 'Pit fill', summary: 'Placed and compacted 1,200 CY of fill in 12 in. lifts. The Deputy Parks Director stopped by with a color-coded binder of 41 park designs and stayed until dark.', pay: [['100-01', 1200]], weather: 'Sunny', hi: 66, lo: 44, photos: ['Filling the pit', 'The binder'] },
+      { activity: 'Couch removal, fill', summary: 'Pulled an old couch, a guitar, and a Mouse Rat setlist out of the pit before backfilling. Placed 900 CY of fill.', pay: [['200-01', 1], ['100-01', 900]], weather: 'Overcast', hi: 61, lo: 46, photos: ['Couch, retrieved'] },
+      { activity: '', notes: 'NO WORK DAY - public forum ran 9 hours. One resident demanded the park be named after his dog; another wanted it to be a mini golf course.', weather: 'Rain', hi: 55, lo: 43 },
+      { activity: 'Pit fill complete', summary: 'Placed the last 1,500 CY. The pit is officially no longer a pit. The Parks Director said he liked it better as a pit, then left to go build a canoe.', pay: [['100-01', 1500]], weather: 'Sunny', hi: 63, lo: 42, photos: ['No longer a pit'], approval: 'approved' },
+      { activity: 'Playground', summary: 'Set two play structures and placed 80 CY of wood fiber surfacing. Fall height checked to ASTM F1292. Kids already lined up at the fence.', pay: [['300-01', 2], ['310-01', 80]], weather: 'Sunny', hi: 65, lo: 44, photos: ['Play structures set', 'Wood fiber surfacing'], approval: 'approved' },
+      { activity: 'Memorial, waffle stand', summary: 'Set the Li\'l Sebastian memorial. Started the waffle stand rough-in. Several staff members were seen crying at the memorial; work continued.', pay: [['500-01', 1], ['400-01', 5000]], weather: 'Clear', hi: 60, lo: 41, photos: ['Li\'l Sebastian memorial'], approval: 'changes_requested', comment: { author: 'Penny Trometer, P.E.', text: 'The plaque says "Li\'l Sebastion." Please fix it before the candlelight vigil.' } },
+    ],
+  },
 ];
 
 async function seedTutorialData(onProgress) {
