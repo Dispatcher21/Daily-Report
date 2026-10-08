@@ -1404,8 +1404,13 @@ async function companyCan(action) {
 async function getReportPermissionContext() {
   const room = await getCompanyRoom();
   const userName = await getUserName();
-  const uid = currentAccountUid();
+  let uid = currentAccountUid();
   if (!room || room.isAdmin) return { isAdmin: true, canEditAny: true, canEditOwn: true, userName, uid };
+  // Right after a page loads, the sign-in may not be restored yet
+  // (currentAccountUid reads null until it is), which would make every
+  // report this account wrote look like someone else's. Wait for it.
+  const account = await getAccount();
+  if (account) uid = account.uid;
   const perms = await getCompanyPermissions();
   return {
     isAdmin: false,
