@@ -3,7 +3,7 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
-Next release -- on the test site, version number to be picked
+0.0712 -- 2026-10-08
   - Home page redesign. Uses the whole window: for managers, the
     Manager Dashboard on the left and your projects on the right. On
     phones, tabs switch between Projects and Dashboard.
@@ -37,6 +37,9 @@ Next release -- on the test site, version number to be picked
     unlock send it back for approval, marked Resubmitted.
   - Inspectors get a My Reviews page (in the menu): what was sent back,
     what's waiting, and what was approved recently.
+  - Fixed: reports an inspector wrote opened read-only for them, even
+    with "Edit/delete their own reports" on.
+  - Project cards with a photo keep their name readable in light mode.
 
 0.0612 -- 2026-10-08
   - Reports hold up to 10 photos (was 6).
