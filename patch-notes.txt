@@ -3,6 +3,11 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.0611 -- 2026-10-08
+  - Progress Over Time chart: Pay App stars are smaller and take the
+    color of their own project's line instead of gold, with a thin outline
+    so they still stand out.
+
 0.0601 -- 2026-10-08
   - No Work Day and Weather Day: after tapping the button, pick the
     reason (waiting on materials, holiday, rain, wet site, high wind, and
