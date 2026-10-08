@@ -20,21 +20,29 @@ const text = (p, sel) => p.textContent(sel).then((t) => t.replace(/\s+/g, ' ').t
   const pid = await p.evaluate(async () => (await getAllProjects())[0].id);
   const settle = () => p.waitForTimeout(1500);
 
-  // The welcome asks inspector or manager, and the tours after that only
-  // play that role's lines.
+  // The welcome asks inspector or manager. Picking one switches the
+  // example company to that role's default permissions (the page reloads to
+  // show it), and the tours after that only play that role's lines.
   await p.waitForSelector('.tour-root', { timeout: 15000 });
   await p.evaluate(() => tour.finishTyping()); // a tap while typing only finishes the line
   await p.click('.tour-next');
   check('welcome asks for a role', [await p.isVisible('.tour-choose-inspector'), await p.isVisible('.tour-choose-manager'), await p.isVisible('.tour-choose-guided')], [true, true, false]);
-  await p.click('.tour-choose-manager');
+  await p.click('.tour-choose-inspector');
+  await p.waitForSelector('.tour-choose-guided', { timeout: 15000 });
   await p.evaluate(() => tour.finishTyping());
-  check('then the manager welcome, walkthrough or explore', [await p.isVisible('.tour-choose-guided'), (await text(p, '.tour-text')).includes('approving reports')], [true, true]);
+  check('then the inspector welcome, walkthrough or explore', (await text(p, '.tour-text')).includes('everyday field work'), true);
+  await settle();
   const homeLines = () => p.evaluate(() => tourStepsForPage('index.html').map((s) => s.say));
-  const managerLines = await homeLines();
-  await p.evaluate(() => sessionStorage.setItem('dr-tour-role', 'inspector'));
-  const inspectorLines = await homeLines();
-  check('manager hears about the Manager Dashboard, inspector does not', [managerLines.some((t) => t.includes('Manager Dashboard')), inspectorLines.some((t) => t.includes('Manager Dashboard'))], [true, false]);
+  await p.click('#hamburger-btn');
+  check('inspector: no Manager Dashboard, Manager page or approving', [await p.isVisible('#md-overview-step'), await p.isVisible('#hb-manager-row'), await p.evaluate(() => companyCan('approveReports')), (await homeLines()).some((t) => t.includes('Manager Dashboard'))], [false, false, false, false]);
   await p.click('.tour-choose-explore');
+  // Same for a manager (straight to the role switch the button makes).
+  await p.evaluate(async () => { sessionStorage.setItem('dr-tour-role', 'manager'); await applyTutorialRole('manager'); });
+  await p.reload(); await settle();
+  await p.click('#hamburger-btn');
+  check('manager: Manager Dashboard, Manager page and approving', [await p.isVisible('#md-overview-step'), await p.isVisible('#hb-manager-row'), await p.evaluate(() => companyCan('approveReports')), (await homeLines()).some((t) => t.includes('Manager Dashboard'))], [true, true, true, true]);
+  // The rest of this suite is about quantities: back to the admin view.
+  await p.evaluate(() => saveSetting(COMPANY_ADMIN_SETTING, true));
 
   // Project page cards.
   await p.goto(`${B}/project.html?id=${pid}`); await settle();

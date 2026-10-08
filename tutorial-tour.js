@@ -308,6 +308,18 @@ function setTourRole(role) {
   try { sessionStorage.setItem(TOUR_ROLE_KEY, role); } catch (e) {}
 }
 
+// Makes the example company show what this role really sees: the tutorial
+// user stops being an admin and gets the role's default permissions, the
+// same as someone who joined a company with that role. Only ever the
+// tutorial's own database (isTutorialMode), never the real one. False if
+// this page can't do it (no firebase-sync.js), and nothing is changed.
+async function applyTutorialRole(role) {
+  if (!isTutorialMode() || typeof rolePermissionsFor !== 'function') return false;
+  await saveSetting(COMPANY_ADMIN_SETTING, false);
+  await saveSetting(COMPANY_PERMISSIONS_SETTING, rolePermissionsFor(null, role));
+  return true;
+}
+
 // Used only if dialogue.txt can't be loaded at all.
 const TOUR_FALLBACK = {
   welcome: [{ emotion: 'happy', say: "Hi there! This is a sandbox with an example project, so nothing you do here touches your real work. Are you an inspector or a manager?" }],
@@ -393,14 +405,24 @@ const tour = {
   // they're an inspector or a manager, then that role's welcome asks
   // whether to take the walkthrough or explore alone.
   welcome() {
+    if (tourRole()) { this.welcomeRole(); return; }
     const steps = tourSection('welcome');
     if (!steps) { setTourMode('guided'); this.start(false); return; }
     this.play(steps, { choice: 'role' });
   },
 
+  // Switches the example company to that role, then reloads so the page
+  // shows what the role sees; the role's welcome plays once it's back.
   chooseRole(role) {
     setTourRole(role);
     this.end(false);
+    applyTutorialRole(role)
+      .then((applied) => { if (applied) location.reload(); else this.welcomeRole(); })
+      .catch((e) => { console.error('Tutorial: could not switch roles:', e); this.welcomeRole(); });
+  },
+
+  welcomeRole() {
+    const role = tourRole();
     const steps = tourSection(`welcome ${role}`);
     if (!steps) { setTourMode('guided'); this.start(false); return; }
     this.play(steps, { choice: 'mode' });

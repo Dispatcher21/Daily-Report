@@ -309,6 +309,9 @@ body {
   padding: 0.65rem 0.7rem;
 }
 .hb-row:hover { background: var(--surface-2); }
+/* display:flex above would otherwise beat the hidden attribute (the Manager row
+   is hidden for anyone without approval rights). */
+.hb-row[hidden] { display: none; }
 .hb-row-icon {
   flex: 0 0 auto;
   display: inline-flex; align-items: center; justify-content: center;

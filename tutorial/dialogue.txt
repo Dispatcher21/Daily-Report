@@ -181,13 +181,6 @@ For: manager
 The Report Activity calendar shows every report, one month at a time. Use
 the arrows to move between months, and tap a day to see what was done.
 
-[3]
-Emotion: neutral
-Points at: activity calendar
-For: inspector
-The Report Activity calendar shows which days have a report, so a missed
-day stands out. Tap a day to see what was done.
-
 [4]
 Emotion: pointing
 Points at: project card
