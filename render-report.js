@@ -184,7 +184,7 @@ function renderSheetGrid(sheetData, coordValues, coordImages) {
           cellEl.style.fontSize = RR_NOWRAP_CELLS[coord] + 'pt';
         }
         if (RR_INDENT_CELLS[coord]) cellEl.style.paddingLeft = RR_INDENT_CELLS[coord] + 'pt';
-        if (coord === RR_WORK_SUMMARY_CELL && coordValues.summaryBox) {
+        if (coordValues.summaryBox && coord === coordValues.summaryBox.coord) {
           buildSummaryBox(cellEl, text, coordValues.summaryBox);
           grid.appendChild(cellEl);
           continue;
@@ -371,7 +371,7 @@ function buildSheet1Values(report) {
   const payItems = summaryBoxPayItems(report.payItems);
   const tests = (report.tests || []).filter((t) => t && t.name).map((t) => ({ name: t.name, note: t.note || '' }));
   const checks = (report.checks || []).filter((c) => c && c.name && c.status).map((c) => ({ name: c.name, status: CHECK_STATUS_LABELS[c.status] || c.status, note: c.note || '' }));
-  Object.defineProperty(v, 'summaryBox', { value: { payItems, tests, checks }, enumerable: false });
+  Object.defineProperty(v, 'summaryBox', { value: { coord: RR_WORK_SUMMARY_CELL, payItems, tests, checks }, enumerable: false });
 
   // Rows 34-41 alternate label row / value row: the 8pt label sits on one row
   // and its 12pt value on the row below. Controlling Item and Comments on Time
@@ -509,6 +509,106 @@ function buildSheet2Images(report) {
     if (blob && PHOTO_COORDS[i]) imgs[PHOTO_COORDS[i]] = blob;
   });
   return imgs;
+}
+
+// ---------- Summary and Photos page (page 3, only when needed) ----------
+//
+// Not part of the Excel template: the template only has the work report
+// and the 6-photo log. This page prints when the Work Summary box can't
+// hold everything (the rest of it continues here) or when photos 7-10 are
+// filled in. Its layout is built from the photo log's own (same header,
+// same columns), with rows 9 on replaced: the top half is one Summary box,
+// the bottom half is photos 7-10 in a 2x2 grid.
+const RR_CONT_PAGE_NO = 3;
+const RR_CONT_SUMMARY_CELL = 'A10';
+const RR_CONT_PHOTO_COORDS = ['A13', 'H13', 'A16', 'H16'];
+const RR_CONT_FIRST_PHOTO = PHOTO_COORDS.length; // photos[6] is Photo No. 7
+
+// Rows 9-16 (label, summary, gap, label, photos, gap, label, photos) share
+// the 728.4pt the photo log gives rows 9-61, so the page keeps the same
+// size and margins. The two halves come out the same height: label +
+// summary on top, and gap + 2 x (label + photos) + gap below.
+const RR_CONT_LABEL_PT = 13.8;
+const RR_CONT_GAP_PT = 6.75;
+const RR_CONT_BODY_PT = 728.4;
+const RR_CONT_PHOTO_PT = (RR_CONT_BODY_PT - 4 * RR_CONT_LABEL_PT - 4 * RR_CONT_GAP_PT) / 4;
+const RR_CONT_SUMMARY_PT = RR_CONT_BODY_PT - 3 * RR_CONT_LABEL_PT - 2 * RR_CONT_GAP_PT - 2 * RR_CONT_PHOTO_PT;
+
+const RR_CONT_LAYOUT_CACHE = new WeakMap();
+function summaryPhotoSheet(layout) {
+  let sheet = RR_CONT_LAYOUT_CACHE.get(layout);
+  if (sheet) return sheet;
+  const log = layout.dailyPhotoLog;
+  const HEADER_LAST_ROW = 8;
+  const lastCol = log.lastCol || log.maxCol;
+  const cells = {};
+  Object.keys(log.cells).forEach((coord) => {
+    const { col, row } = parseCoord(coord);
+    if (row <= HEADER_LAST_ROW && col <= lastCol) cells[coord] = log.cells[coord];
+  });
+  const merges = log.merges.filter((m) => parseCoord(m.split(':')[0]).row <= HEADER_LAST_ROW);
+
+  // Labels and photo boxes are styled like the photo log's own.
+  const labelStyle = log.cells.A9;
+  const photoStyle = log.cells.A10;
+  const medium = { style: 'medium', color: '#000000' };
+  cells.A9 = labelStyle;
+  cells[RR_CONT_SUMMARY_CELL] = {
+    border: { top: medium, right: medium, bottom: medium, left: medium },
+    font: { size: RR_SBOX_MAX_PT },
+    align: { h: 'left', v: 'top', wrap: true },
+  };
+  merges.push('A9:M9', 'A10:M10');
+  [[12, 13], [15, 16]].forEach(([labelRow, photoRow]) => {
+    cells['A' + labelRow] = labelStyle;
+    cells['H' + labelRow] = labelStyle;
+    cells['A' + photoRow] = photoStyle;
+    cells['H' + photoRow] = photoStyle;
+    merges.push(`A${labelRow}:F${labelRow}`, `H${labelRow}:M${labelRow}`, `A${photoRow}:F${photoRow}`, `H${photoRow}:M${photoRow}`);
+  });
+
+  const heights = [RR_CONT_LABEL_PT, RR_CONT_SUMMARY_PT, RR_CONT_GAP_PT, RR_CONT_LABEL_PT, RR_CONT_PHOTO_PT, RR_CONT_GAP_PT, RR_CONT_LABEL_PT, RR_CONT_PHOTO_PT];
+  sheet = {
+    ...log,
+    maxRow: HEADER_LAST_ROW + heights.length,
+    lastRow: HEADER_LAST_ROW + heights.length,
+    rows: [
+      ...log.rows.filter((r) => r.row <= HEADER_LAST_ROW),
+      ...heights.map((heightPt, i) => ({ row: HEADER_LAST_ROW + 1 + i, heightPt })),
+    ],
+    merges,
+    cells,
+  };
+  RR_CONT_LAYOUT_CACHE.set(layout, sheet);
+  return sheet;
+}
+
+function buildSummaryPhotoValues(report, cont) {
+  const v = Object.assign(buildSheet2Values(report), {
+    A1: "RESIDENT INSPECTOR'S DAILY REPORT (CONTINUED)",
+    A9: 'SUMMARY OF WORK PERFORMED (CONTINUED)',
+  });
+  RR_CONT_PHOTO_COORDS.forEach((coord, i) => {
+    const { col, row } = parseCoord(coord);
+    v[colIndexToLetter(col - 1) + (row - 1)] = `PHOTO NO. ${RR_CONT_FIRST_PHOTO + i + 1}`;
+  });
+  v[RR_CONT_SUMMARY_CELL] = cont ? cont.text : '';
+  const box = cont || { payItems: [], tests: [], checks: [] };
+  Object.defineProperty(v, 'summaryBox', { value: { ...box, coord: RR_CONT_SUMMARY_CELL }, enumerable: false });
+  return v;
+}
+
+function buildSummaryPhotoImages(report) {
+  const imgs = {};
+  RR_CONT_PHOTO_COORDS.forEach((coord, i) => {
+    const blob = (report.photos || [])[RR_CONT_FIRST_PHOTO + i];
+    if (blob) imgs[coord] = blob;
+  });
+  return imgs;
+}
+
+function reportHasExtraPhotos(report) {
+  return (report.photos || []).slice(RR_CONT_FIRST_PHOTO).some(Boolean);
 }
 
 // ---------- Embedded photos -> Report.photos (inverse of buildSheet2Images) ----------
@@ -669,7 +769,7 @@ function reportFromImportedFields(fields, photos, forProject) {
     weatherDesc: fields.weatherDesc,
     tempHigh: fields.tempHigh,
     tempLow: fields.tempLow,
-    photos: Array.from({ length: 6 }, (_, i) => (photos && photos[i]) || null),
+    photos: Array.from({ length: REPORT_PHOTO_COUNT }, (_, i) => (photos && photos[i]) || null),
     photosFetched: [true, true, true, true, true, true],
     signatureFetched: true,
     thumbnail: null,
@@ -730,15 +830,12 @@ function pageGeometry(sheetData) {
   };
 }
 
-// Appends one report's two sheet-pages (each a .sheet-page div) into
-// `container`. Returns the page elements paired with their page geometry.
+// Appends one report's sheet-pages (each a .sheet-page div) into
+// `container`: the work report and the photo log always, then the Summary
+// and Photos page when the work summary runs over or photos 7-10 are
+// filled in. Returns the page elements paired with their page geometry.
 function renderReportPages(container, layout, report, logoBlob) {
-  const sheets = [
-    [layout.dailyWorkReport, buildSheet1Values(report), buildSheet1Images(report), true],
-    [layout.dailyPhotoLog, buildSheet2Values(report), buildSheet2Images(report), false],
-  ];
-
-  return sheets.map(([sheetData, values, images, withLogo]) => {
+  const renderPage = (sheetData, values, images, withLogo) => {
     const page = document.createElement('div');
     page.className = 'sheet-page';
     const grid = renderSheetGrid(sheetData, values, images);
@@ -750,7 +847,75 @@ function renderReportPages(container, layout, report, logoBlob) {
     fitRotatedText(page); // needs layout, so only after it's in the document
     fitSummaryBox(page);
     return { el: page, geom: pageGeometry(sheetData) };
-  });
+  };
+
+  const values1 = buildSheet1Values(report);
+  const pages = [
+    renderPage(layout.dailyWorkReport, values1, buildSheet1Images(report), true),
+    renderPage(layout.dailyPhotoLog, buildSheet2Values(report), buildSheet2Images(report), false),
+  ];
+  const cont = continueSummaryBox(pages[0].el, values1[RR_WORK_SUMMARY_CELL], values1.summaryBox);
+  if (cont || reportHasExtraPhotos(report)) {
+    pages.push(renderPage(summaryPhotoSheet(layout), buildSummaryPhotoValues(report, cont), buildSummaryPhotoImages(report), false));
+  }
+  return pages;
+}
+
+// When the work report's Summary box can't hold everything even at its
+// smallest text size, moves what doesn't fit onto the Summary and Photos
+// page, rebuilding the box on `page` in place. The box's content is read
+// as one sequence (the summary text word by word, then each Pay Item,
+// Test and Check row) and page 1 keeps the longest start of it that fits
+// at RR_SBOX_SPLIT_PT; the rest continues on page 3, under the same
+// table headings. The smallest sizes are for squeezing a little extra
+// onto one page, not for a page that's continued anyway. Returns what goes
+// on the continuation ({ text, payItems, tests, checks }), or null when
+// nothing needs to move.
+const RR_SBOX_SPLIT_PT = 9;
+const RR_SBOX_CONT_NOTE = `(Continued on page ${RR_CONT_PAGE_NO})`;
+const RR_SBOX_TABLES = ['payItems', 'tests', 'checks'];
+
+function continueSummaryBox(page, text, box) {
+  const cell = page.querySelector('.rr-sbox');
+  if (!cell || !cell.dataset.overflow) return null;
+
+  const tokens = String(text || '').split(/(\s+)/);
+  const rows = RR_SBOX_TABLES.flatMap((key) => box[key].map((row) => [key, row]));
+  // The first `k` units of the sequence, as page 1's text and tables, and
+  // everything after them for the continuation.
+  const split = (k) => {
+    const textEnd = Math.min(k, tokens.length);
+    const kept = rows.slice(0, Math.max(0, k - tokens.length));
+    const moved = rows.slice(kept.length);
+    const tables = (list) => Object.fromEntries(RR_SBOX_TABLES.map((key) => [key, list.filter(([k2]) => k2 === key).map(([, row]) => row)]));
+    return {
+      pageText: tokens.slice(0, textEnd).join('').trimEnd(),
+      pageBox: tables(kept),
+      cont: { text: tokens.slice(textEnd).join('').trim(), ...tables(moved) },
+    };
+  };
+  const build = (k) => {
+    const { pageText, pageBox } = split(k);
+    cell.innerHTML = '';
+    buildSummaryBox(cell, pageText, { ...pageBox, note: RR_SBOX_CONT_NOTE });
+  };
+  const fitsAt = (k) => {
+    build(k);
+    cell.style.fontSize = RR_SBOX_SPLIT_PT + 'pt';
+    const t = cell.querySelector('.rr-sbox-text');
+    return t.scrollHeight <= t.clientHeight + 0.5 && cell.scrollHeight <= cell.clientHeight + 0.5;
+  };
+
+  let lo = 0;
+  let hi = tokens.length + rows.length - 1; // at least one unit always continues
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (fitsAt(mid)) lo = mid;
+    else hi = mid - 1;
+  }
+  build(lo);
+  fitSummaryBox(page);
+  return split(lo).cont;
 }
 
 // Contractor names are typed by the user and can be longer than the vertical
@@ -806,6 +971,12 @@ function buildSummaryBox(cellEl, text, box) {
   summary.className = 'rr-sbox-text';
   summary.textContent = text;
   cellEl.appendChild(summary);
+  if (box.note) {
+    const note = document.createElement('div');
+    note.className = 'rr-sbox-note';
+    note.textContent = box.note;
+    cellEl.appendChild(note);
+  }
   const table = (caption, cols, rows) => {
     const t = document.createElement('table');
     t.className = 'rr-sbox-table';
@@ -831,16 +1002,18 @@ function buildSummaryBox(cellEl, text, box) {
 }
 
 // Largest text size (12pt down to 7pt) at which the summary text still fits
-// above the tables with at least RR_SBOX_MIN_SUMMARY_LINES lines of room.
-// Needs layout, so only after the page is in the document.
+// above the tables with at least RR_SBOX_MIN_SUMMARY_LINES lines of room
+// (none needed when there's no text, as on a continuation that's only
+// tables). Needs layout, so only after the page is in the document.
 function fitSummaryBox(scope) {
   $$('.rr-sbox', scope).forEach((box) => {
     const text = box.querySelector('.rr-sbox-text');
+    const minLines = text.textContent.trim() ? RR_SBOX_MIN_SUMMARY_LINES : 0;
     let fits = false;
     for (let pt = RR_SBOX_MAX_PT; pt >= RR_SBOX_MIN_PT - 0.001; pt -= 0.5) {
       box.style.fontSize = pt + 'pt';
       const lineH = parseFloat(getComputedStyle(text).lineHeight) || pt * 1.25;
-      if (text.clientHeight + 0.5 >= lineH * RR_SBOX_MIN_SUMMARY_LINES && text.scrollHeight <= text.clientHeight + 0.5) {
+      if (text.clientHeight + 0.5 >= lineH * minLines && text.scrollHeight <= text.clientHeight + 0.5 && box.scrollHeight <= box.clientHeight + 0.5) {
         fits = true;
         break;
       }

@@ -31,6 +31,16 @@ const CONTRACTOR_COUNT = 6; // fixed by the template
 // report starts with. Not a cap: the printed table is now built to fit
 // however many there are (buildSummaryBox in render-report.js).
 const PAY_ITEM_ROW_COUNT = 6;
+// Photo slots per report: 6 on the Daily Photo Log page, then 4 more on
+// the Summary and Photos page that prints only when it's needed (see
+// renderReportPages in render-report.js).
+const REPORT_PHOTO_COUNT = 10;
+function blankPhotoSlots() {
+  return Array.from({ length: REPORT_PHOTO_COUNT }, () => null);
+}
+function fetchedPhotoSlots() {
+  return Array.from({ length: REPORT_PHOTO_COUNT }, () => true);
+}
 
 function todayIso() {
   const d = new Date();
@@ -564,16 +574,16 @@ async function makeBlankReport(nextReportNo, project, previous) {
     weatherDesc: meta.weatherDesc || '',
     tempHigh: meta.tempHigh || '',
     tempLow: meta.tempLow || '',
-    photos: [null, null, null, null, null, null],
+    photos: blankPhotoSlots(),
     // A brand-new report has nothing to lazily fetch -- every slot is
     // locally authoritative already. A report pulled from a company
     // without downloading its photo bytes (see firebase-sync.js) sets
     // these to false for whichever slots it deferred; report-editor.html
     // fetches them on open, download.html before generating a PDF.
-    photosFetched: [true, true, true, true, true, true],
+    photosFetched: fetchedPhotoSlots(),
     signatureFetched: true,
-    // Small rendered previews of the report's two printed pages (front:
-    // the work report, back: the photo log), shown on reports.html.
+    // Small rendered previews of the report's first two printed pages
+    // (front: the work report, back: the photo log), shown on reports.html.
     // Local-only -- never pushed to the company (see pushReportToCompany)
     // -- and regenerated whenever thumbnailAt stops matching updatedAt
     // (see ensureThumbnails in reports.html).
@@ -647,8 +657,8 @@ async function duplicateReport(source, nextReportNo, project) {
     checks: [],
     repSignatureImage: null,
     peSignatureImage: null,
-    photos: [null, null, null, null, null, null],
-    photosFetched: [true, true, true, true, true, true],
+    photos: blankPhotoSlots(),
+    photosFetched: fetchedPhotoSlots(),
     signatureFetched: true,
     thumbnail: null,
     thumbnailBack: null,
@@ -716,7 +726,12 @@ function normalizeReport(report) {
   // Only fills in when entirely absent (a report saved before this field
   // existed) -- an actual `false` from a lazy pull must survive this, not
   // get reset back to "fetched" just because normalizeReport ran again.
-  if (!Array.isArray(report.photosFetched)) report.photosFetched = [true, true, true, true, true, true];
+  if (!Array.isArray(report.photosFetched)) report.photosFetched = fetchedPhotoSlots();
+  // Reports from before the 4 extra slots existed hold 6; the new slots
+  // are empty, and known to be.
+  if (!Array.isArray(report.photos)) report.photos = [];
+  while (report.photos.length < REPORT_PHOTO_COUNT) report.photos.push(null);
+  while (report.photosFetched.length < REPORT_PHOTO_COUNT) report.photosFetched.push(true);
   if (report.signatureFetched == null) report.signatureFetched = true;
   if (!Array.isArray(report.equipmentRows)) report.equipmentRows = [];
   while (report.equipmentRows.length < EQUIPMENT_ROW_COUNT) {

@@ -30,10 +30,12 @@ function pdfFilename(reports) {
 async function buildPdfBlob(sandbox, layout, reports, logoBlob, onProgress) {
   const captures = [];
   let done = 0;
-  const total = reports.length * 2;
+  // Two pages a report, plus any Summary and Photos pages as they turn up.
+  let total = reports.length * 2;
 
   for (const report of reports) {
     const pages = renderReportPages(sandbox, layout, report, logoBlob);
+    total += pages.length - 2;
     await waitForImages(sandbox);
     // A rAF-based settle wait can hang indefinitely if the tab is backgrounded
     // (rAF is throttled/suspended when not visible) -- setTimeout still fires.

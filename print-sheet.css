@@ -127,3 +127,12 @@
 .rr-sbox-table td.rr-q { text-align: right; white-space: nowrap; }
 .rr-sbox-table td.rr-st { text-align: center; font-weight: 700; }
 .rr-sbox-table tr.rr-det td { font-size: 0.8em; color: #333; border-left: 0; padding-left: 12pt; }
+/* "(Continued on page 3)" under the text when the rest of the box moves to
+   the Summary and Photos page. */
+.rr-sbox-note {
+  flex: none;
+  padding: 0 3pt 2pt;
+  font-style: italic;
+  font-weight: 700;
+  white-space: nowrap;
+}

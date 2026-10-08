@@ -204,7 +204,9 @@ Six object stores:
     workingConditions, trafficControlSelect, workBegin/workEnd,
     repSignatureName/repSignatureImage (a Blob), peSignatureName (no
     image -- the engineer signs on paper), weatherDesc/tempHigh/tempLow,
-    photos[6] (Blobs or null), photosFetched[6]/signatureFetched (lazy-
+    photos[10] (Blobs or null; REPORT_PHOTO_COUNT in defaults.js, and
+    normalizeReport pads an older 6-slot report), photosFetched[10]/
+    signatureFetched (lazy-
     pull flags, see Company sync below), thumbnail/thumbnailBack/
     thumbnailAt (local-only preview images for reports.html, never
     synced), createdAt/updatedAt, createdBy/lastEditedBy (the logged-in
@@ -697,8 +699,14 @@ render-report.js
   buildSummaryBox draws the summary text on top and the Pay Items, Tests
   Performed and Checks Completed tables (each only as long as it needs,
   left out when empty) at the bottom; fitSummaryBox shrinks it all from
-  12pt to 7pt as needed, keeping 3 summary lines, and marks
-  data-overflow when even 7pt is too much (report-editor.html warns).
+  12pt to 7pt as needed, keeping 3 summary lines.
+  A third page, Summary and Photos, prints only when needed: when even
+  7pt is too much (continueSummaryBox keeps the longest start of the text
+  and table rows that fits at 9pt on page 1, adds "(Continued on page
+  3)", and moves the rest into the top half of page 3), or when photos
+  7-10 are filled in (the bottom half, 2x2). Its layout is built from the
+  Photo Log's (summaryPhotoSheet). A box that still can't hold everything
+  marks data-overflow (report-editor.html warns).
   The inverse direction -- parseReportExcelFile/
   parseDailyWorkReportSheet/extractEmbeddedPhotos -- reads a hand-filled
   Daily Work Report Excel file back into a report record + its embedded
@@ -755,6 +763,9 @@ heic2any.min.js -- converts iPhone HEIC/HEIF photos to JPEG so they can be
 print-layout.json -- machine-generated description of the original Excel
   report template's grid (column widths, row heights, cell styles,
   merges, print area) for both sheets (Daily Work Report, Photo Log).
+  The third printed page (Summary and Photos) isn't in the template;
+  render-report.js's summaryPhotoSheet builds its layout from the Photo
+  Log's.
   render-report.js is the only reader (loadPrintLayout).
 error-codes.txt -- the human-readable table behind common.js's
   ERROR_CODES/userError -- a short made-up (Transformers) name for every
@@ -827,7 +838,11 @@ Syncing a project to a company
      companies/{hash} in Firestore, saves the room's code/name/admin flag/
      permissions locally (storage.js's saveSetting), then calls
      pullAllCompanyData() (every project/report/audit entry, photos
-     deferred), pullCompanyThemes(), pullUserLayout(), and kicks off
+     deferred; a report doc says which photo slots are filled in
+     photoSlots (slots 1-6, always 6 long) and extraPhotoSlots (slots
+     7-10, written only once a report uses one, so older app versions
+     carry it through untouched and approval/comment-only writes still
+     match firestore.rules), pullCompanyThemes(), pullUserLayout(), and kicks off
      pullCompanyMediaInBackground() (logo + project background photos,
      not awaited).
   2. Ongoing: every local saveReport()/saveProject()/deleteReport()/

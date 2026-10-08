@@ -83,7 +83,7 @@
            (defaults.js) and rendered as collapsible cards here. -->
       <div id="rb-groups"></div>
 
-      <div class="rb-fit-warn" id="rb-fit-warn" hidden>&#9888;&#65039; Too much to fit in the Work Summary box on the printed report, even at the smallest text size. Shorten the work summary or move some pay items, tests or checks to another report. You can still generate it, but the bottom will be cut off.</div>
+      <div class="rb-fit-warn" id="rb-fit-warn" hidden>&#9888;&#65039; Too much to fit in the Work Summary on the printed report, even with the extra Summary and Photos page. Shorten the work summary or move some pay items, tests or checks to another report. You can still generate it, but the bottom will be cut off.</div>
 
       <div class="export-bar">
         <div class="save-row">
@@ -320,6 +320,7 @@ async function init() {
     const draft = editable ? await getReportDraft(report.id) : null;
     if (draft) {
       report = draft.data;
+      normalizeReport(report); // a draft saved by an older version holds 6 photo slots
       hasRestoredDraft = true;
     } else if ((report.photosFetched || []).some((f) => !f) || report.signatureFetched === false) {
       // Photos sync lazily -- a report pulled from a company doesn't carry
@@ -466,7 +467,8 @@ function blockFieldBodyHtml(key, def) {
   } else if (key === 'checks') {
     inner = `<div class="rtc" id="rchecks"></div>`;
   } else if (key === 'photos') {
-    inner = `<div id="photo-grid" class="photo-grid"></div>`;
+    inner = `<div id="photo-grid" class="photo-grid"></div>
+      <p class="hint" style="margin:0.5rem 0 0;">Photos 7 to 10 print on an extra page after the Photo Log.</p>`;
   }
   // contractorsEquipment, payItems, and photos are each the lone field in a
   // REPORT_BUILDER_GROUPS group whose own label is this field's label,
@@ -819,10 +821,12 @@ async function refreshLivePreview() {
   wraps.forEach((wrap) => previewEl.appendChild(wrap));
   previewGrids = { 1: pages[0].el.querySelector('.print-grid'), 2: pages[1].el.querySelector('.print-grid') };
   Object.keys(FIELD_HIGHLIGHT_REGIONS).forEach((key) => addPreviewClickTarget(key, FIELD_HIGHLIGHT_REGIONS[key]));
-  // The Work Summary box marks itself when even its smallest text size
-  // can't hold everything (fitSummaryBox, render-report.js).
+  // A Summary box marks itself when even its smallest text size can't hold
+  // everything (fitSummaryBox, render-report.js). The work report's box
+  // continues onto the Summary and Photos page, so this only shows once
+  // that page's box is full too.
   const fitWarn = $('#rb-fit-warn');
-  if (fitWarn) fitWarn.hidden = !pages[0].el.querySelector('.rr-sbox[data-overflow]');
+  if (fitWarn) fitWarn.hidden = !pages.some(({ el }) => el.querySelector('.rr-sbox[data-overflow]'));
   previewEl.scrollTop = scrollTop;
 }
 
