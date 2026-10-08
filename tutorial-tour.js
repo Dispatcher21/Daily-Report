@@ -64,6 +64,18 @@ function tourOpenEditorGroup(id) {
     if (hd) hd.click();
   }
 }
+// Reports list: marks the newest report sent back with Changes Requested,
+// so a step can point at it (the list doesn't show approval status).
+function tourMarkSentBack() {
+  if (document.querySelector('.tour-sent-back') || typeof getReportsForProject !== 'function') return;
+  const pid = new URLSearchParams(location.search).get('project');
+  if (!pid) return;
+  getReportsForProject(pid).then((reports) => {
+    const sent = reports.filter((r) => r.approvalStatus === 'changes_requested').sort((a, b) => (a.date < b.date ? 1 : -1))[0];
+    const row = sent && document.querySelector(`#report-list [data-id="${sent.id}"]`);
+    if (row) row.classList.add('tour-sent-back');
+  }).catch(() => {});
+}
 const TOUR_TARGETS = {
   '*': {
     'menu button': { selector: '#hamburger-btn' },
@@ -105,6 +117,7 @@ const TOUR_TARGETS = {
     'select all': { selector: '#btn-select-all' },
     'comment badge': { selector: '#report-list .report-corner-badge' },
     'new report button': { selector: '#fab-new-report' },
+    'sent back report': { selector: '#report-list .tour-sent-back', before: tourMarkSentBack },
     'deleted reports': { selector: '#trash-step' },
   },
   'report-viewer.html': {
@@ -121,7 +134,15 @@ const TOUR_TARGETS = {
     'report info': { selector: '#step-reportInfo' },
     'date field': { selector: '#f-date' },
     'inspectors': { selector: '#inspectors-toggle' },
+    'add inspector button': { selector: '#btn-add-inspector' },
     'sections': { selector: '#rb-groups' },
+    'add pay item button': { selector: '#rpi-add', before: () => tourOpenEditorGroup('payItems') },
+    'overview section': { selector: '#rb-group-overview', before: () => tourOpenEditorGroup('overview') },
+    'work summary section': { selector: '#rb-group-workSummary', before: () => tourOpenEditorGroup('workSummary') },
+    'tests section': { selector: '#rb-group-tests', before: () => tourOpenEditorGroup('tests') },
+    'controlling item section': { selector: '#rb-group-controllingItem', before: () => tourOpenEditorGroup('controllingItem') },
+    'site conditions section': { selector: '#rb-group-siteConditions', before: () => tourOpenEditorGroup('siteConditions') },
+    'sign off section': { selector: '#rb-group-signOff', before: () => tourOpenEditorGroup('signOff') },
     'contractors section': { selector: '#rb-group-contractorsEquipment', before: () => tourOpenEditorGroup('contractorsEquipment') },
     'pay items section': { selector: '#rb-group-payItems', before: () => tourOpenEditorGroup('payItems') },
     'weather section': { selector: '#rb-group-weather', before: () => tourOpenEditorGroup('weather') },

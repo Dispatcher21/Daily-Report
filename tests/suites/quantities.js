@@ -36,6 +36,7 @@ const text = (p, sel) => p.textContent(sel).then((t) => t.replace(/\s+/g, ' ').t
   const homeLines = () => p.evaluate(() => tourStepsForPage('index.html').map((s) => s.say));
   await p.click('#hamburger-btn');
   check('inspector: no Manager Dashboard, Manager page or approving', [await p.isVisible('#md-overview-step'), await p.isVisible('#hb-manager-row'), await p.evaluate(() => companyCan('approveReports')), (await homeLines()).some((t) => t.includes('Manager Dashboard'))], [false, false, false, false]);
+  check('inspector walkthrough: project page leads to New Report, editor ends at Generate', await p.evaluate(() => [tourStepsForPage('project.html').slice(-1)[0].say.includes('Tap New Report'), tourStepsForPage('report-editor.html').slice(-1)[0].say.includes('Generate Report')]), [true, true]);
   await p.click('.tour-choose-explore');
   // Same for a manager (straight to the role switch the button makes).
   await p.evaluate(async () => { sessionStorage.setItem('dr-tour-role', 'manager'); await applyTutorialRole('manager'); });
@@ -103,7 +104,13 @@ const text = (p, sel) => p.textContent(sel).then((t) => t.replace(/\s+/g, ' ').t
   // Log Quantities: running totals, day arrows.
   await p.goto(`${B}/quick-quantity.html?project=${pid}`); await settle();
   const today = await p.inputValue('#f-date');
-  check('editing today\'s report', await text(p, '#date-context'), "Editing Report #19's quantities.");
+  // The example reports end yesterday, leaving today open for the tour's
+  // new report.
+  check('today has no report yet', (await text(p, '#date-context')).startsWith('No report for this day yet.'), true);
+  const lastDate = await p.evaluate(async (projectId) => (await getReportsForProject(projectId)).find((r) => String(r.reportNo) === '19').date, pid);
+  await p.fill('#f-date', lastDate); await p.dispatchEvent('#f-date', 'change');
+  await p.waitForFunction(() => document.querySelector('#date-context').textContent.startsWith('Editing'), null, { timeout: 5000 }).catch(() => {});
+  check('editing the last report', await text(p, '#date-context'), "Editing Report #19's quantities.");
   const row = '.qq-row[data-item-number="502-01"]';
   check('asphalt to date', (await text(p, `${row} .qq-progress`)).startsWith('To date 440 of 650 TON · 210 left'), true);
   await p.fill(`${row} .qq-qty`, '400');

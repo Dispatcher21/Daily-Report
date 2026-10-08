@@ -2,7 +2,8 @@
 // tutorial.html, after it has switched this tab into tutorial mode, so
 // every save below lands in the separate tutorial database -- never the
 // real one. Dates are relative to today so the example always looks
-// current: about four weeks of weekday reports ending today.
+// current: about four weeks of weekday reports ending yesterday, which
+// leaves today open for the report the person writes in the tour.
 
 // The example people, all named with civil puns. TUTORIAL_USER is "you"
 // (the reports' author and Representative); a second inspector from
@@ -77,10 +78,11 @@ function tutorialIsoDaysAgo(days) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-// The last `count` weekdays ending today, oldest first.
+// The last `count` weekdays before today, oldest first. Never today: a
+// new report the person starts would warn that the date is already taken.
 function tutorialWeekdays(count) {
   const out = [];
-  for (let back = 0; out.length < count; back++) {
+  for (let back = 1; out.length < count; back++) {
     const d = new Date();
     d.setDate(d.getDate() - back);
     if (d.getDay() !== 0 && d.getDay() !== 6) out.unshift(tutorialIsoDaysAgo(back));
@@ -137,7 +139,7 @@ const TUTORIAL_DEMO = {
 // (a Lump Sum item logs dollars, as in the app). `ntpDaysAgo` sets how
 // far into the contract each one is, so the Manager Dashboard has a mix
 // of on-pace and behind-schedule jobs, and `everyNth` spreads the reports
-// out (one every Nth weekday, the last one today) across that time.
+// out (one every Nth weekday, the last one yesterday) across that time.
 const TUTORIAL_OTHER_PROJECTS = [
   {
     projectNo: 'SHIRE-007',
@@ -390,7 +392,7 @@ async function seedTutorialData(onProgress) {
 let tutorialPhotoSeed = 0;
 
 // One example project: the project, a report for each of its days (on
-// weekdays ending today), and its Pay Apps.
+// weekdays ending yesterday), and its Pay Apps.
 async function seedTutorialProject(def, progress) {
   const nth = def.everyNth || 1;
   const dates = tutorialWeekdays((def.days.length - 1) * nth + 1).filter((d, i, all) => (all.length - 1 - i) % nth === 0);

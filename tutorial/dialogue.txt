@@ -51,14 +51,17 @@
 #               weather panel, trend chart, project settings button
 #  Reports:     filters, search box, view toggle, report list,
 #               first report, checkbox, select all, comment badge,
-#               new report button, deleted reports
+#               new report button, deleted reports, sent back report
 #  Viewer:      report page, side reports, details bar, review bar,
 #               pinned comment, edit button
 #  Editor:      no work day button, weather day button, report info,
 #               date field, inspectors, sections, contractors section,
 #               pay items section, weather section, fetch weather button,
 #               photos section, live preview, preview tabs, save button,
-#               generate button, duplicate button
+#               generate button, duplicate button, add inspector button,
+#               add pay item button, overview section, work summary
+#               section, tests section, controlling item section, site
+#               conditions section, sign-off section
 #  Quantities:  section tabs, pay apps tab, contract bar, range options,
 #               item list, first item, check chip, view toggle,
 #               excel button, log quantities button
@@ -310,9 +313,10 @@ info, pay items, crew, which report fields are required, and files.
 
 [11]
 Emotion: pointing
-Points at: view reports tile
+Points at: new report tile
 For: inspector
-Let's look at the reports. Tap View Reports to keep going!
+Best way to learn is to write one. Tap New Report and I'll walk you
+through it!
 
 [11]
 Emotion: pointing
@@ -361,7 +365,15 @@ it back.
 [7]
 Emotion: pointing
 Points at: first report
+For: manager
 Tap any report to open it. Let's try the newest one!
+
+[7]
+Emotion: surprised
+Points at: sent back report
+For: inspector
+Uh oh, the engineer sent this one back with changes requested. Tap it
+to see what they want.
 
 
 === REPORT VIEWER (report-viewer.html) ===
@@ -387,9 +399,9 @@ since.
 Emotion: thinking
 Points at: review bar
 For: inspector
-Approvals and Comments shows whether your manager approved the report
-or sent it back for changes. Read their comments here, reply, then fix
-the report.
+Approvals and Comments is where the engineer approves a report or sends
+it back. Open it to read what they asked for, and reply so they know
+you're on it.
 
 [4]
 Emotion: thinking
@@ -403,8 +415,16 @@ knows exactly what you mean.
 Emotion: pointing
 Points at: edit button
 For: inspector
-Need to change something? Tap Edit to open this report in the editor.
-Give it a try!
+Then tap Edit to make the fix and Save. A quick reply like "fixed, ready
+for another look" lets them know it's done.
+
+[6]
+Emotion: happy
+Points at: tips button
+For: inspector
+That's everything for a normal day! Nothing here is real, so write
+reports, break things, and try every button. Tap Tips on any page if you
+get stuck.
 
 [5]
 Emotion: neutral
@@ -422,64 +442,157 @@ and I'll pop back up.
 
 
 === REPORT EDITOR (report-editor.html) ===
+# The inspectors' walkthrough lands here from New Report, so this is the
+# one that teaches filling in a report, section by section.
 
 [1]
 Emotion: happy
 Points at: nothing
 This is the report editor, where the daily report gets written. Every
-change shows up on the preview as you type.
+change shows up on the preview as you type, and it saves a draft as you
+go, so nothing gets lost.
 
 [2]
 Emotion: neutral
-Points at: no work day button
-No work on site today? No Work Day or Weather Day fills in the day for
-you in one tap.
+Points at: report info
+For: inspector
+A new report starts with the next report number and today's date, and
+brings over the inspectors from the last one. Most days you only change
+what's different.
 
-[3]
+[2]
 Emotion: neutral
 Points at: report info
+For: manager
 Report Info has the report number, the date, and the inspectors who
 worked the day, with their hours.
 
+[3]
+Emotion: neutral
+Points at: inspectors
+For: inspector
+Check each inspector's hours here. Tap + Add Inspector if someone else
+was out there with you.
+
 [4]
-Emotion: pointing
-Points at: sections
-Everything else is grouped into sections. Tap one to open it.
+Emotion: neutral
+Points at: no work day button
+No work on site today? No Work Day or Weather Day fills in the whole day
+for you in one tap.
 
 [5]
+Emotion: pointing
+Points at: sections
+Everything else is grouped into sections. Tap one to open it, and tap
+it again to close it. Let's go through them.
+
+[6]
+Emotion: thinking
+Points at: add pay item button
+For: inspector
+Pay Items is what got done today and how much. Tap + Add a pay item,
+search by number or name, then type the quantity.
+
+[7]
 Emotion: neutral
-Points at: contractors section
-Contractors and Equipment counts the crew and machines for each
-contractor on site.
+Points at: pay items section
+For: inspector
+Don't want to do the math? Calculate works out tons, yards or feet from
+stations and sizes. Remarks print on the line under the item.
 
 [6]
 Emotion: thinking
 Points at: pay items section
-Pay Items comes first: add what was worked on and how much. Calculate
-works out tons, yards or feet for you, and stations, sizes and remarks
-print on the line under each item.
+For: manager
+Pay Items is what got done and how much. Calculate works out tons, yards
+or feet for the inspector, and stations, sizes and remarks print on the
+line under each item.
 
-[7]
+[8]
+Emotion: neutral
+Points at: overview section
+For: inspector
+Overview holds the Activity line, the day in a few words, plus Notes
+for anything that doesn't fit anywhere else.
+
+[9]
+Emotion: neutral
+Points at: contractors section
+Contractors and Equipment counts the crew and machines for each
+contractor on site. Only rows in use show; the + buttons add more.
+
+[10]
+Emotion: pointing
+Points at: work summary section
+For: inspector
+Work Summary is the story of the day: what was done, where, and anything
+unusual. Write it like you're telling the engineer.
+
+[11]
+Emotion: neutral
+Points at: tests section
+For: inspector
+Tests Performed: pick the test from the list so it reads the same on
+every report, then note where and the results.
+
+[12]
+Emotion: neutral
+Points at: controlling item section
+For: inspector
+Controlling Item and Time Charged is for the work that drives the
+schedule, and why a day should or shouldn't count.
+
+[13]
+Emotion: thinking
+Points at: site conditions section
+For: inspector
+Site Conditions covers working conditions, work hours, and whether
+traffic control is in place or needs the engineer's attention.
+
+[14]
 Emotion: surprised
 Points at: fetch weather button
 Don't feel like typing the weather? Fetch Weather fills it in for the
 report's date.
 
-[8]
+[15]
+Emotion: neutral
+Points at: sign off section
+For: inspector
+Sign-Off is your signature. Draw it with a finger or the mouse, and it
+prints on the report.
+
+[16]
+Emotion: happy
+Points at: photos section
+For: inspector
+Photos: tap an empty box to take a picture or pick one. The pencil marks
+one up, and they print on photo pages after the report.
+
+[17]
 Emotion: pointing
 Points at: live preview
 The live preview shows the report as it'll print. Tap any part of it to
 jump straight to that field.
 
-[9]
+[18]
 Emotion: neutral
 Points at: save button
-Save keeps your changes. Generate Report checks the required fields,
-then gets the finished report ready to download.
+Save keeps your changes, and you can come back to finish later. If your
+company requires certain fields, they turn red until they're filled in.
 
-[10]
+[19]
+Emotion: happy
+Points at: generate button
+For: inspector
+When the day is done, Generate Report gets the finished PDF ready. Your
+turn: fill in a few sections (anything goes here), then tap Generate
+Report!
+
+[19]
 Emotion: happy
 Points at: tips button
+For: manager
 That's the tour! Look around as much as you like. On any page, tap Tips
 and I'll pop back up.
 
@@ -672,6 +785,13 @@ can add one in Settings.
 Emotion: pointing
 Points at: download button
 Tap Download PDF to save it, then print it, email it, or file it away.
+
+[4]
+Emotion: happy
+Points at: breadcrumb
+For: inspector
+Nice work, that's a whole report! One more thing: sometimes a report
+comes back with changes requested. Tap Reports up here to find one.
 
 
 === REPORT PHOTOS (report-photos.html) ===
