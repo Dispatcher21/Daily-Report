@@ -695,7 +695,10 @@ render-report.js
   download.html/local-sync.js (feeding html2canvas -> PDF), report-viewer.html
   and report-editor.html (live/static preview), and required-fields.html
   (click-target preview). print-layout.json merges the Work Summary and
-  the template's old pay item rows (I14:Q33) into one box:
+  the template's old pay item rows (I14:Q33) into one box, and
+  loadPrintLayout's tidyPrintLayout stretches it up to I13 when printed
+  (the template's empty row 13 and the lines under "Short Work Summary"
+  go; an imported Excel report is still read from I14):
   buildSummaryBox draws the summary text on top and the Pay Items, Tests
   Performed and Checks Completed tables (each only as long as it needs,
   left out when empty) at the bottom; fitSummaryBox shrinks it all from

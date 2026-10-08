@@ -315,11 +315,14 @@ const RR_NOWRAP_CELLS = { I12: 10 };
 // two words collide. A little indent restores the gap the printed form has.
 const RR_INDENT_CELLS = { K11: 10 };
 
-// The big "Summary of Work Performed" box.
+// The big "Summary of Work Performed" box: where the template (and so an
+// imported Excel report) has it, and where it prints. The printed box
+// starts a row higher, taking in the empty row 13 the template leaves
+// under "Short Work Summary" (see tidyPrintLayout).
 const RR_WORK_SUMMARY_CELL = 'I14';
+const RR_WORK_SUMMARY_PRINT_CELL = 'I13';
 
-// Rows 14-33 of the template, columns I-Q, are one box (print-layout.json
-// merges them): the work summary text on top, then the day's Pay Items,
+// Rows 13-33, columns I-Q, are one box on the printed page: the work summary text on top, then the day's Pay Items,
 // Tests Performed and Checks Completed tables stacked at the bottom, each
 // only as long as it needs to be and left out entirely when empty. The
 // whole box shrinks its text together (fitSummaryBox) from the template's
@@ -365,13 +368,13 @@ function buildSheet1Values(report) {
   v['K11'] = report.workSummaryHeader || '';
   v['K12'] = report.trafficControlNote || '';
 
-  v[RR_WORK_SUMMARY_CELL] = report.workSummary || '';
+  v[RR_WORK_SUMMARY_PRINT_CELL] = report.workSummary || '';
   // The tables under the summary (see RR_SBOX_* above); kept off the
   // enumerable keys so nothing that walks the values sees it as a cell.
   const payItems = summaryBoxPayItems(report.payItems);
   const tests = (report.tests || []).filter((t) => t && t.name).map((t) => ({ name: t.name, note: t.note || '' }));
   const checks = (report.checks || []).filter((c) => c && c.name && c.status).map((c) => ({ name: c.name, status: CHECK_STATUS_LABELS[c.status] || c.status, note: c.note || '' }));
-  Object.defineProperty(v, 'summaryBox', { value: { coord: RR_WORK_SUMMARY_CELL, payItems, tests, checks }, enumerable: false });
+  Object.defineProperty(v, 'summaryBox', { value: { coord: RR_WORK_SUMMARY_PRINT_CELL, payItems, tests, checks }, enumerable: false });
 
   // Rows 34-41 alternate label row / value row: the 8pt label sits on one row
   // and its 12pt value on the row below. Controlling Item and Comments on Time
@@ -779,8 +782,30 @@ function reportFromImportedFields(fields, photos, forProject) {
 
 let printLayoutPromise = null;
 function loadPrintLayout() {
-  if (!printLayoutPromise) printLayoutPromise = fetch('print-layout.json').then((r) => r.json());
+  if (!printLayoutPromise) printLayoutPromise = fetch('print-layout.json').then((r) => r.json()).then(tidyPrintLayout);
   return printLayoutPromise;
+}
+
+// Changes to the template's own layout, made here rather than in
+// print-layout.json because that file is regenerated from the Excel
+// template (scripts/extract-print-layout.py). The work report leaves an
+// empty row (13) and two lines between "Short Work Summary" and the
+// summary text; the box takes in that row and the lines go, so the label
+// reads as the heading of the summary right under it.
+function tidyPrintLayout(layout) {
+  const sheet = layout.dailyWorkReport;
+  const box = sheet.merges.indexOf(RR_WORK_SUMMARY_CELL + ':Q33');
+  if (box < 0) return layout; // not the layout this was written for
+  sheet.merges[box] = RR_WORK_SUMMARY_PRINT_CELL + ':Q33';
+  const noLine = (coord, side) => {
+    const cell = sheet.cells[coord];
+    if (cell && cell.border) sheet.cells[coord] = { ...cell, border: { ...cell.border, [side]: undefined } };
+  };
+  sheet.cells[RR_WORK_SUMMARY_PRINT_CELL] = sheet.cells[RR_WORK_SUMMARY_CELL];
+  noLine(RR_WORK_SUMMARY_PRINT_CELL, 'top');
+  noLine('I12', 'bottom');
+  noLine('K12', 'bottom');
+  return layout;
 }
 
 // US Letter, in points -- what the template's page setup targets.
@@ -865,7 +890,7 @@ function renderReportPages(container, layout, report, logoBlob) {
 
   const values1 = buildSheet1Values(report);
   const pages = [renderPage(RR_SHEET_WORK_REPORT, layout.dailyWorkReport, values1, buildSheet1Images(report), true)];
-  const cont = continueSummaryBox(pages[0].el, values1[RR_WORK_SUMMARY_CELL], values1.summaryBox);
+  const cont = continueSummaryBox(pages[0].el, values1[RR_WORK_SUMMARY_PRINT_CELL], values1.summaryBox);
   const photos = (report.photos || []).map((blob, slot) => ({ blob, slot })).filter((p) => p.blob);
   const perSummaryPage = RR_CONT_PHOTO_COORDS.length;
   const perLog = PHOTO_COORDS.length;
@@ -965,7 +990,7 @@ function fitRotatedText(scope) {
   });
 }
 
-// The Work Summary box (RR_WORK_SUMMARY_CELL): the summary text, then each
+// The Work Summary box (RR_WORK_SUMMARY_PRINT_CELL): the summary text, then each
 // table that has anything in it. Sizes are in em so fitSummaryBox can scale
 // the whole box by changing one font size.
 // The pay item rows for the summary box. The same item logged more than
@@ -1098,7 +1123,7 @@ const FIELD_HIGHLIGHT_REGIONS = {
   },
   workSummaryHeader: { sheet: 1, coord: 'K11' },
   trafficControlNote: { sheet: 1, coord: 'K12' },
-  workSummary: { sheet: 1, coord: RR_WORK_SUMMARY_CELL },
+  workSummary: { sheet: 1, coord: RR_WORK_SUMMARY_PRINT_CELL },
   // The tables are built to fit inside the Work Summary box now; this is
   // just its lower part, where they usually land.
   payItems: { sheet: 1, ranges: [{ fromCol: 'I', toCol: 'Q', fromRow: 26, toRow: 33 }] },
