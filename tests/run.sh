@@ -15,7 +15,7 @@ if [ "$1" = "--list" ]; then ls suites | sed 's/\.js$//'; exit 0; fi
 SUITES=("$@")
 if [ ${#SUITES[@]} -eq 0 ]; then
   # The order they've always run in: rules first, then features.
-  SUITES=(access-rules baseline accounts team company-password-change full-app ui team-ui auth-action-page comment-emails reset-codes weekly-roundup account-emails admin-alerts quantities report-pages offline)
+  SUITES=(access-rules baseline accounts team company-password-change full-app ui team-ui auth-action-page comment-emails reset-codes weekly-roundup account-emails admin-alerts quantities report-pages home-overhaul offline)
 fi
 
 # ---------- one-time setup ----------
