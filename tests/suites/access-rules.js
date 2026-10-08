@@ -130,6 +130,13 @@ const raw = (p, fn, arg) => p.evaluate(async ({ src, arg }) => {
   check('owner can still reply on own report', await raw(Bp, commentOn(bobReport)), 'ok');
   check('...but not edit it', await raw(Bp, `await fs.updateDoc(fs.doc(db, 'companies', code, 'reports', '${bobReport}'), { notes: 'edit' });`), 'permission-denied');
   await A.evaluate(() => updateRolePermission('inspector', 'membersCanEditOwnReports', true));
+  // Opened fresh, before the sign-in is restored: still recognized as Bob's.
+  await Bp.evaluate(() => autoPullCompanyData(true));
+  await Bp.goto(`${B}/report-editor.html?project=p1&report=${bobReport}`);
+  await Bp.waitForTimeout(2500);
+  check('inspector can open his own report for editing', await Bp.evaluate(() => document.querySelector('#readonly-banner').hidden), true);
+  await Bp.goto(`${B}/settings.html`);
+  await Bp.waitForTimeout(800);
 
   // Approved reports are locked until a manager or admin unlocks them.
   const setOn = (id, fields) => `await fs.updateDoc(fs.doc(db, 'companies', code, 'reports', '${id}'), Object.assign(${JSON.stringify(fields)}, { updatedAt: Date.now() }));`;
