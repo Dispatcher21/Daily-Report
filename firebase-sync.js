@@ -2625,9 +2625,11 @@ async function pushReportToCompany(code, report) {
   const photoUploads = photos.map((photo, i) => {
     if (!photosFetched[i]) return Promise.resolve(); // unknown locally -- don't touch it
     const photoRef = ref(storage, reportPhotoPath(code, report.id, i));
-    return photo
-      ? uploadBytes(photoRef, photo, { contentType: photo.type || 'image/jpeg' })
-      : deleteObject(photoRef).catch(() => {}); // wasn't there -- nothing to remove
+    if (photo) return uploadBytes(photoRef, photo, { contentType: photo.type || 'image/jpeg' });
+    // Only a slot the doc says was filled has anything to remove; asking
+    // Storage to delete every empty slot on every save was 10 paid
+    // operations a save for nothing.
+    return existingPhotoSlots[i] ? deleteObject(photoRef).catch(() => {}) : Promise.resolve();
   });
 
   const sigRef = ref(storage, reportSignaturePath(code, report.id));
