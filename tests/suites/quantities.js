@@ -208,6 +208,27 @@ const text = (p, sel) => p.textContent(sel).then((t) => t.replace(/\s+/g, ' ').t
     return [pick('202-05').unitKind, pick('202-05').unit, pick('203-01').calcs, pick('730-02').unitKind, pick('502-01').dailyLimit, pick('502-01').remarksRequired, old.dailyLimit, old.remarksRequired];
   });
   check('settings survive the Excel file', roundTrip, ['LS', 'LUMP', ['loads', 'thickness'], 'OTHER', '100', true, '100', true]);
+
+  // Lump Sum logged in percent: switching from dollars keeps the amount,
+  // stored as 100% at the amount / 100 per 1%, and left out of the
+  // project-wide quantity average.
+  const mob = await p.evaluate(() => {
+    project.payItemCatalog.push({ itemNumber: '108-01', description: 'Mobilization', unit: 'LS', unitKind: 'LS', plannedQty: '', unitPrice: '50000' });
+    renderPayItemsTab();
+    return project.payItemCatalog.length - 1;
+  });
+  await p.click(`[data-psi-open="${mob}"]`);
+  await p.selectOption(`[data-psi-unit][data-idx="${mob}"]`, 'LSP');
+  check('LSP keeps the dollar amount', await p.inputValue('[data-psi-lsp-amount]'), '50000');
+  await p.fill('[data-psi-lsp-amount]', '60000');
+  check('LSP stored as 100% at a price per 1%', await p.evaluate((i) => [project.payItemCatalog[i].unitKind, project.payItemCatalog[i].plannedQty, project.payItemCatalog[i].unitPrice], mob), ['LSP', '100', '600']);
+  await p.addScriptTag({ url: `${B}/quantity-calc.js` }); // the dashboards' math, not loaded on this page
+  const lsp = await p.evaluate(() => {
+    const cat = [{ itemNumber: '108-01', unit: 'LS', unitKind: 'LSP', plannedQty: '100', unitPrice: '600' }, { itemNumber: '203-01', unit: 'CY', unitKind: 'CY', plannedQty: '100', unitPrice: '10' }];
+    const rows = aggregatePayItemTotals([{ itemNumber: '108-01', qty: '25' }, { itemNumber: '203-01', qty: '50' }], cat);
+    return [rows[0].pct, rows[0].earnedTotal, rows[0].contractTotal, overallPercentComplete(rows), matchPayUnit('%')];
+  });
+  check('LSP percent, dollars, and kept out of the overall', lsp, [0.25, 15000, 60000, 0.5, 'LSP']);
   await p.click('#fsb-save');
   await p.waitForFunction(() => document.querySelector('#fsb-status').textContent === 'Saved.', null, { timeout: 15000 });
   check('saved', await p.evaluate(async (projectId) => (await getProject(projectId)).payItemCatalog.find((c) => c.itemNumber === '203-01').unitKind, pid), 'CY');

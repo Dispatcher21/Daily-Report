@@ -583,7 +583,10 @@ defaults.js
   directly), payItemNeedsMultiple, computeOverrun/overrunLabel,
   parseStation, computeAreaQty, and pay item units and calculators:
   PAY_UNITS (the standard unit list: LF, MI, SY, SF, ACRE, CY, TON, GAL,
-  HR, DAY, EA, LS, each with its spellings and calculators) plus
+  HR, DAY, EA, LS, LSP, each with its spellings and calculators; LSP is a
+  Lump Sum logged in percent, stored as Per Plans Total 100 at a Unit
+  Price per 1% so it needs no special math, but overallPercentComplete
+  leaves it out via the isLumpPct row flag) plus
   PAY_UNIT_OTHER for an admin's own unit; a catalog item's `unit` is the
   printed text and `unitKind` what it means (unset on items from before,
   which Project Settings lists to confirm: payItemUnitNeedsConfirm,

@@ -228,6 +228,8 @@ function parsePayItemsSheet(ws) {
       const t = row[cUnitType] != null ? String(row[cUnitType]).trim().toUpperCase() : '';
       const kind = t === PAY_UNIT_OTHER ? PAY_UNIT_OTHER : payUnitDef(t) ? t : matchPayUnit(t);
       if (kind) item.unitKind = kind;
+      // A Lump Sum logged in percent is always out of 100%.
+      if (kind === 'LSP' && !plannedQty) item.plannedQty = '100';
     }
     if (cCalcs !== -1) {
       const names = row[cCalcs] != null ? String(row[cCalcs]).split(/\r?\n|,/).map((n) => n.trim().toUpperCase()).filter(Boolean) : [];

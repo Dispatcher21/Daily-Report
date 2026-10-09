@@ -9,7 +9,8 @@ Everything waiting to be applied to the live Firebase project
 (`daily-reports-53c82`). Add to this list as you go; clear it once the
 owner has applied it.
 
-(Nothing pending.)
+- Functions: `weeklyRoundup` and `sendRoundupPreview` (Lump Sum logged in
+  percent is left out of the overall % complete, same as the dashboards).
 
 Future idea, not scheduled: move Pay Apps out of the project document
 into their own records (`companies/{code}/payApps`). Then the rules could
