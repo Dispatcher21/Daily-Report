@@ -713,10 +713,10 @@ weather-day-export.js
   signature block. buildWeatherDayWorkbook(project, reports, 'YYYY-MM') is
   the entry point, called by project.html's "Weather & Workday" button.
   Rules (weatherDayStatus): days before NTP (or the first report when
-  there's no NTP) and future days aren't counted; every other day counts
-  by contract-time.js's contractDayInfo for the project's setting (working
-  days: Weather Days and No Work Days lost; calendar days: only Weather
-  Days lost; every day: nothing lost). A No Work Day's cause is its
+  there's no NTP) and future days aren't counted; Weather Days and No
+  Work Days are always lost (no charge), whatever the project's contract
+  time setting, and every other day is a contract day (contractDayInfo
+  with the 'working' rule). A No Work Day's cause is its
   Comments on Time Charged or "No Work Day"; a Weather Day's cause
   is its Comments on Time Charged (weatherDayCause trims the Weather Day
   button's own sentence back to the reason). Est. No. is the Pay App dated

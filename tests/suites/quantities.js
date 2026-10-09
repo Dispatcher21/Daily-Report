@@ -63,8 +63,8 @@ const text = (p, sel) => p.textContent(sel).then((t) => t.replace(/\s+/g, ' ').t
   // Weather and Working Day Report from the daily log calendar.
   const [wdFile] = await Promise.all([p.waitForEvent('download', { timeout: 30000 }), p.click('[data-weather-day-xlsx]')]);
   check('Weather & Workday download', /^PRDEMO-101_WeatherWorkday_\d{4}-\d{2}\.xlsx$/.test(wdFile.suggestedFilename()), true);
-  check('NTP month (working days): nothing counted before NTP, Weather and No Work Days lost, weekends counted, nothing previous', await p.evaluate(async (id) => {
-    const pr = { ...(await getProject(id)), contractTimeMode: 'working' };
+  check('NTP month: nothing counted before NTP, Weather and No Work Days lost on any setting, weekends counted, nothing previous', await p.evaluate(async (id) => {
+    const pr = await getProject(id); // the default, Every day: the sheet still doesn't charge Weather or No Work Days
     const reps = await getReportsForProject(id);
     const ntp = pr.meta.ntpDate;
     const { wb } = await buildWeatherDayWorkbook(pr, reps, ntp.slice(0, 7));

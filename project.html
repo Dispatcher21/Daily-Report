@@ -598,7 +598,7 @@ function pdRenderDailyLog(body) {
   body.innerHTML = `
     <div class="wv-top"><span class="hint" style="margin:0;">${dated.length} dated report${dated.length === 1 ? '' : 's'}</span>
       <div class="wv-actions">
-        <button type="button" class="btn-sm" data-weather-day-xlsx data-tip="The Weather and Working Day Report for the month on the calendar, as an Excel file: each day's weather, contract days and lost days (by the project's contract time setting), with totals to date.">&#11015; Weather &amp; Workday</button>
+        <button type="button" class="btn-sm" data-weather-day-xlsx data-tip="The Weather and Working Day Report for the month on the calendar, as an Excel file: each day's weather, contract days and no-charge days (Weather Days and No Work Days), with totals to date.">&#11015; Weather &amp; Workday</button>
         <div class="view-toggle" role="group" aria-label="View as">
           <button type="button" class="view-toggle-btn${weatherViewMode === 'list' ? ' active' : ''}" data-view="list" title="List view" aria-label="List view">&#9776;</button>
           <button type="button" class="view-toggle-btn${weatherViewMode === 'calendar' ? ' active' : ''}" data-view="calendar" title="Calendar view" aria-label="Calendar view">&#128197;</button>
