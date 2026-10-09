@@ -15,6 +15,9 @@ owner has applied it.
   unlock requests still go through. Publish before the app that has the
   Unlock button goes live, so old phones can't overwrite approved
   reports.
+- Functions: `weeklyRoundup` and `sendRoundupPreview` (contract days
+  used and left follow each project's Working days / Calendar days
+  setting, via the new `functions/lib/contract-time.js`).
 
 Future idea, not scheduled: move Pay Apps out of the project document
 into their own records (`companies/{code}/payApps`). Then the rules could

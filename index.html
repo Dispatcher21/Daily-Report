@@ -183,6 +183,7 @@
 <script src="lib/xlsx.min.js"></script>
 <script src="common.js"></script>
 <script src="defaults.js"></script>
+<script src="contract-time.js"></script>
 <script src="storage.js"></script>
 <script src="audit-log.js"></script>
 <script src="project-file.js"></script>
@@ -1101,8 +1102,8 @@ let mdBoard = null;
 let mdFocusProjectId = null; // a project picked out on the progress chart
 let mdCalendarMonth = null; // the month the calendar was last showing
 
-function mdScheduleStatus(project, overall) {
-  return scheduleStatusFor(overall, projectContractTimeline(project));
+function mdScheduleStatus(project, overall, projReports) {
+  return scheduleStatusFor(overall, projectContractTimeline(project, projReports));
 }
 
 // One color per project, shared by the progress chart and the calendar, so
@@ -1148,7 +1149,7 @@ async function renderManagerDashboard() {
     const items = fullPayItemCatalogOverview(flatItems, project.payItemCatalog || []);
     const overall = overallPercentComplete(items);
     const { totalContract, totalEarned } = contractValueSummary(items);
-    return { project, overall, totalContract, totalEarned, status: mdScheduleStatus(project, overall) };
+    return { project, overall, totalContract, totalEarned, status: mdScheduleStatus(project, overall, projReports) };
   });
 
   const [canReports, canPayApps, managedIds] = await Promise.all([companyCan('approveReports'), companyCan('approvePayApps'), getManagedProjectIds()]);
@@ -1455,12 +1456,12 @@ function openMdDayDetailModal(date) {
 function mdPaceSeries() {
   const { included, reports } = mdData;
   return included.map((project) => {
-    const tl = projectContractTimeline(project);
-    if (!tl) return null;
     const dated = reports.filter((r) => r.projectId === project.id && r.date);
+    const tl = projectContractTimeline(project, dated);
+    if (!tl) return null;
     const points = progressOverTime(dated, project.payItemCatalog || [], project.billingEstimates)
       .filter((p) => p.pct != null)
-      .map((p) => ({ date: p.date, pct: p.pct, payApp: p.payApp, frac: Math.max(0, daysBetween(tl.ntp, p.date)) / tl.length }));
+      .map((p) => ({ date: p.date, pct: p.pct, payApp: p.payApp, frac: tl.usedThrough(p.date) / tl.length }));
     if (!points.length) return null;
     // The line starts at NTP (0%) even when the first report came later.
     if (points[0].frac > 0) points.unshift({ date: tl.ntp, pct: 0, frac: 0 });
@@ -1528,7 +1529,7 @@ function mdFeedHtml() {
 }
 
 function mdDeadlinesHtml() {
-  const rows = mdData.included.map((p) => ({ p, tl: projectContractTimeline(p) })).filter((x) => x.tl)
+  const rows = mdData.included.map((p) => ({ p, tl: projectContractTimeline(p, mdData.reports.filter((r) => r.projectId === p.id)) })).filter((x) => x.tl)
     .map(({ p, tl }) => ({ p, tl, left: tl.length - tl.day })).sort((a, b) => a.left - b.left);
   if (!rows.length) return '<p class="hint" style="margin:0;">No included project has an NTP Date and Total Contract Length on file.</p>';
   return `<div class="md-projlist">${rows.map(({ p, tl, left }) => `

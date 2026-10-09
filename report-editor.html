@@ -155,6 +155,7 @@
 
 <script src="common.js"></script>
 <script src="defaults.js"></script>
+<script src="contract-time.js"></script>
 <script src="storage.js"></script>
 <script src="audit-log.js"></script>
 <script src="local-sync.js"></script>
@@ -929,7 +930,17 @@ function bindDynamicFields() {
 function renderEditor() {
   bindText('#f-reportNo', 'reportNo');
   bindText('#f-date', 'date');
+  // Numbered by contract day or date order (Project Settings): a new date
+  // gets that date's number, unless someone already typed their own.
+  let numberedDate = report.date;
   $('#f-date')?.addEventListener('input', () => {
+    if (['contractDay', 'dateOrder'].includes(reportNumberingMode(project)) && report.date
+      && String(report.reportNo ?? '') === String(reportNumberFor(project, otherProjectReports, numberedDate))) {
+      report.reportNo = reportNumberFor(project, otherProjectReports, report.date);
+      $('#f-reportNo').value = report.reportNo;
+      checkDupeWarnings();
+    }
+    if (report.date) numberedDate = report.date;
     $('#editor-title').textContent = `Report #${report.reportNo} - ${report.date || ''}`;
   });
 

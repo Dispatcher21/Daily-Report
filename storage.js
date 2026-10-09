@@ -712,8 +712,14 @@ async function getDeletedReportsForProject(projectId) {
   return (await getReportsForProject(projectId, { includeDeleted: true })).filter((r) => r.deleted);
 }
 
-async function getNextReportNo(projectId) {
+// The Report No. for a new report dated `date` (today if not given), by the
+// project's Report No. setting (contract-time.js's reportNumberFor); '' when
+// the project has numbering turned off. Highest plus one on a page without
+// contract-time.js.
+async function getNextReportNo(projectId, date) {
   const reports = await getReportsForProject(projectId);
+  const project = typeof reportNumberFor === 'function' ? await getProject(projectId) : null;
+  if (project) return reportNumberFor(project, reports, date || todayIso());
   const max = reports.reduce((m, r) => Math.max(m, Number(r.reportNo) || 0), 0);
   return max + 1;
 }

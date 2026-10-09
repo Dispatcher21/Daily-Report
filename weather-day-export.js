@@ -4,7 +4,8 @@
 // Day), the weather logged that day, and totals for the month, the
 // previous report and to date. Laid out like the paper form inspectors
 // already turn in, with formulas for the totals so the sheet still adds up
-// after someone edits a day by hand. Used by project.html's daily log
+// after someone edits a day by hand. Days count by the project's contract
+// time setting (contract-time.js). Used by project.html's daily log
 // calendar. Needs the global ExcelJS from lib/exceljs.min.js -- callers
 // load it first (ensureWeatherDayLibs).
 
@@ -22,33 +23,6 @@ function wdIso(y, m, d) {
   return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
 
-// The nth (1-based) given weekday of a month, or the last one with n = -1.
-function wdNthWeekday(y, m, weekday, n) {
-  if (n > 0) {
-    const first = new Date(y, m - 1, 1).getDay();
-    return 1 + ((weekday - first + 7) % 7) + (n - 1) * 7;
-  }
-  const days = new Date(y, m, 0).getDate();
-  const last = new Date(y, m - 1, days).getDay();
-  return days - ((last - weekday + 7) % 7);
-}
-
-// Holidays no contract time is charged on, by ISO date. A holiday that
-// lands on a weekend is already a weekend day, so no observed day is added.
-// Anything else (a local holiday, a day the contract treats differently)
-// can be changed by hand in the downloaded sheet.
-function weatherDayHolidays(y) {
-  return new Map([
-    [wdIso(y, 1, 1), 'New Year\'s Day'],
-    [wdIso(y, 1, wdNthWeekday(y, 1, 1, 3)), 'Martin Luther King Jr. Day'],
-    [wdIso(y, 5, wdNthWeekday(y, 5, 1, -1)), 'Memorial Day'],
-    [wdIso(y, 7, 4), 'Independence Day'],
-    [wdIso(y, 9, wdNthWeekday(y, 9, 1, 1)), 'Labor Day'],
-    [wdIso(y, 11, wdNthWeekday(y, 11, 4, 4)), 'Thanksgiving Day'],
-    [wdIso(y, 12, 25), 'Christmas Day'],
-  ]);
-}
-
 // The Cause of Losing Day for a Weather Day: the report's Comments on Time
 // Charged, cut back to just the reason when it's still the sentence the
 // Weather Day button writes ("Weather day (rain). Recommend no time
@@ -63,22 +37,20 @@ function weatherDayCause(report) {
   return text;
 }
 
-// How one day counts. `charged` is true (a contract day), false (a lost
-// day) or null (not counted: before NTP or still in the future).
-function weatherDayStatus(iso, report, { start, today }) {
-  const [y, m, d] = iso.split('-').map(Number);
-  const dow = new Date(y, m - 1, d).getDay();
-  const holiday = weatherDayHolidays(y).get(iso) || '';
-  const out = { sundayHoliday: holiday || (dow === 0 ? 'Sunday' : ''), weather: '', charged: null, cause: '' };
+// How one day counts, by the project's contract time setting (see
+// contract-time.js's contractDayInfo). `charged` is true (a contract day),
+// false (a lost day) or null (not counted: before NTP or still to come).
+function weatherDayStatus(iso, report, { start, today, mode, weatherDates }) {
+  const dow = new Date(iso + 'T12:00:00').getDay();
+  const info = contractDayInfo(iso, mode, weatherDates);
+  const out = { sundayHoliday: info.holiday || (dow === 0 ? 'Sunday' : ''), weather: '', charged: null, cause: '' };
   if (report) {
     const temps = (report.tempHigh || report.tempLow) ? `${report.tempHigh || '--'}°/${report.tempLow || '--'}°F` : '';
     out.weather = [report.weatherDesc, temps].filter(Boolean).join(' ') || (isWeatherDayReport(report) ? 'Weather Day' : '');
   }
   if ((start && iso < start) || iso > today) return out;
-  if (holiday) { out.charged = false; out.cause = `${holiday} Holiday`; }
-  else if (dow === 0 || dow === 6) { out.charged = false; out.cause = 'Weekend'; }
-  else if (report && isWeatherDayReport(report)) { out.charged = false; out.cause = weatherDayCause(report); }
-  else out.charged = true;
+  out.charged = info.charged;
+  out.cause = info.cause === 'Weather' && report ? weatherDayCause(report) : info.cause;
   return out;
 }
 
@@ -124,7 +96,7 @@ async function buildWeatherDayWorkbook(project, reports, monthKey) {
   const byDate = new Map();
   dated.forEach((r) => { if (!byDate.has(r.date) || isWeatherDayReport(r)) byDate.set(r.date, r); });
   const ntp = /^\d{4}-\d{2}-\d{2}$/.test(meta.ntpDate || '') ? meta.ntpDate : '';
-  const opts = { start: ntp || (dated[0] && dated[0].date) || '', today: todayIso() };
+  const opts = { start: ntp || (dated[0] && dated[0].date) || '', today: todayIso(), mode: contractTimeMode(project), weatherDates: contractWeatherDates(dated) };
   const monthReports = dated.filter((r) => r.date >= monthStart && r.date < nextMonthStart);
   const estimate = (project.billingEstimates || [])
     .filter((e) => (e.date || '') >= monthStart && (e.date || '') < nextMonthStart)

@@ -31,6 +31,7 @@ const ASSETS = [
   './local-sync.js',
   './quantity-sheet-export.js',
   './weather-day-export.js',
+  './contract-time.js',
   './setup-share.js',
   './style.css',
   './print-sheet.css',
