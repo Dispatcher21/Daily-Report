@@ -9,18 +9,16 @@ Everything waiting to be applied to the live Firebase project
 (`daily-reports-53c82`). Add to this list as you go; clear it once the
 owner has applied it.
 
-- Functions: `weeklyRoundup` and `sendRoundupPreview` (Lump Sum logged in
-  percent is left out of the overall % complete, same as the dashboards).
-- Functions: `weeklyRoundup` and `sendRoundupPreview` again (contract days
-  used and left follow each project's Working days / Calendar days
-  setting, via the new `functions/lib/contract-time.js`).
+(Nothing pending.)
 
 Future idea, not scheduled: move Pay Apps out of the project document
 into their own records (`companies/{code}/payApps`). Then the rules could
 lock approved Pay Apps the same way they lock reports. Today the lock is
 in the app plus a sync guard that keeps the cloud's approved copy.
 
-(Last applied: 0.0712, 2026-10-08: rules locking approved reports.
+(Last applied: 0.072, 2026-10-09: weeklyRoundup and sendRoundupPreview
+(Lump Sum in percent; contract time settings). 0.0712, 2026-10-08: rules
+locking approved reports.
 0.057, 2026-10-07: rules for devices without an account
 (approval, assigned projects only); onMemberWritten. 0.054, 2026-10-07: weeklyRoundup and sendRoundupPreview
 (Lump Sum by confirmed unit). 0.053, 2026-10-06: every function on Node.js 22.
