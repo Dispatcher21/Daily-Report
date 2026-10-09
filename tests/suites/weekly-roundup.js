@@ -25,7 +25,7 @@ const outbox = async (to) => {
     await saveUserName('Ada'); await createAccount({ name: 'Ada', email: 'ada@example.com', password: 'adapass12' });
     await createCompanyRoom({ name: 'Roundup Co', password: 'roundup-pw-1', adminPassword: 'roundup-admin-1' });
     const code = (await getCompanyRoom()).code;
-    await saveProject({ id: 'p1', name: 'Highway 12', companyCode: code, payItemCatalog: [{ itemNumber: '201', description: 'Clearing', unit: 'AC', plannedQty: 10, unitPrice: 1000 }], meta: { projectNo: 'H12', ntpDate: '2026-09-01', contractLength: '100' }, createdAt: Date.now() });
+    await saveProject({ id: 'p1', name: 'Highway 12', companyCode: code, contractTimeMode: 'working', payItemCatalog: [{ itemNumber: '201', description: 'Clearing', unit: 'AC', plannedQty: 10, unitPrice: 1000 }], meta: { projectNo: 'H12', ntpDate: '2026-09-01', contractLength: '100' }, createdAt: Date.now() });
     await saveProject({ id: 'p2', name: 'Bridge 4', companyCode: code, payItemCatalog: [], contractTimeMode: 'calendar', meta: { ntpDate: '2026-07-01', contractLength: '90' }, createdAt: Date.now() });
     await pushAllLocalData(code);
   });
@@ -58,11 +58,11 @@ const outbox = async (to) => {
   // Days since the start date depend on today (in UTC or the test
   // account's own time zone, which can be a day behind around midnight).
   const daysSince = (iso) => [0, 1].map((back) => Math.floor((Date.now() - back * 86400000 - Date.parse(iso + 'T00:00:00Z')) / 86400000));
-  // Highway 12 counts working days (the default): weekdays from NTP, not
+  // Highway 12 counts working days: weekdays from NTP, not
   // Labor Day, worked out by the app's own contract-time.js.
   const ct = {};
   require('vm').runInNewContext(`${require('fs').readFileSync(require('path').join(__dirname, '../../contract-time.js'), 'utf8')};this.tl = projectContractTimeline;`, ct);
-  const workingUsed = [0, 1].map((back) => ct.tl({ meta: { ntpDate: '2026-09-01', contractLength: '100' } }, [], new Date(Date.now() - back * 86400000).toISOString().slice(0, 10)).day);
+  const workingUsed = [0, 1].map((back) => ct.tl({ contractTimeMode: 'working', meta: { ntpDate: '2026-09-01', contractLength: '100' } }, [], new Date(Date.now() - back * 86400000).toISOString().slice(0, 10)).day);
   check('days left (100 minus working days used)', workingUsed.some((d) => has(`Days left: ${100 - d}`)), true);
   check('alert: pay item over plan', has('Item 201 Clearing is over plan: 12 of 10 AC (120%)'), true);
   // Bridge 4 counts calendar days, the NTP date being day 1.

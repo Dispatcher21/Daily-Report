@@ -8,16 +8,16 @@
 // file changes.
 //
 // Per project (both optional, unset means the first option):
-//   contractTimeMode   'working' | 'calendar' | 'every'
+//   contractTimeMode   'every' | 'working' | 'calendar'
 //   reportNumbering    'next' | 'contractDay' | 'dateOrder' | 'off'
 //   reportNumberStart  the first Report No. for 'next' and 'dateOrder'
 
 // unit: what the contract length is in ("120 working days"); counts: what
 // uses contract time, for the dashboard's tooltips.
 const CONTRACT_TIME_MODES = [
+  { value: 'every', label: 'Every day', hint: 'Every day counts, no matter what, Weather Days included.', unit: 'calendar', counts: 'every day, Weather Days included' },
   { value: 'working', label: 'Working days', hint: 'Only weekdays count. Weekends, holidays and Weather Days don\'t use contract time.', unit: 'working', counts: 'weekdays, not counting holidays or Weather Days' },
   { value: 'calendar', label: 'Calendar days', hint: 'Every day counts except Weather Days.', unit: 'calendar', counts: 'every day but Weather Days' },
-  { value: 'every', label: 'Every day', hint: 'Every day counts, no matter what, Weather Days included.', unit: 'calendar', counts: 'every day, Weather Days included' },
 ];
 const REPORT_NUMBERING_MODES = [
   { value: 'next', label: 'Next number', hint: 'One more than the highest Report No. on file.' },
@@ -28,7 +28,7 @@ const REPORT_NUMBERING_MODES = [
 
 function contractTimeMode(project) {
   const v = project && project.contractTimeMode;
-  return CONTRACT_TIME_MODES.some((m) => m.value === v) ? v : 'working';
+  return CONTRACT_TIME_MODES.some((m) => m.value === v) ? v : 'every';
 }
 function contractTimeModeInfo(mode) {
   return CONTRACT_TIME_MODES.find((m) => m.value === mode) || CONTRACT_TIME_MODES[0];
