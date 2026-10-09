@@ -63,7 +63,7 @@ const text = (p, sel) => p.textContent(sel).then((t) => t.replace(/\s+/g, ' ').t
   // Weather and Working Day Report from the daily log calendar.
   const [wdFile] = await Promise.all([p.waitForEvent('download', { timeout: 30000 }), p.click('[data-weather-day-xlsx]')]);
   check('Weather & Workday download', /^PRDEMO-101_WeatherWorkday_\d{4}-\d{2}\.xlsx$/.test(wdFile.suggestedFilename()), true);
-  check('NTP month (working days): nothing counted before NTP, Weather Day and weekends lost, nothing previous', await p.evaluate(async (id) => {
+  check('NTP month (working days): nothing counted before NTP, Weather and No Work Days lost, weekends counted, nothing previous', await p.evaluate(async (id) => {
     const pr = { ...(await getProject(id)), contractTimeMode: 'working' };
     const reps = await getReportsForProject(id);
     const ntp = pr.meta.ntpDate;
@@ -78,11 +78,12 @@ const text = (p, sel) => p.textContent(sel).then((t) => t.replace(/\s+/g, ' ').t
     return [
       days.filter((d) => d.iso < ntp).every((d) => d.e == null && d.f == null),
       days.filter((d) => d.f === 1).every((d) => !!d.g),
-      days.filter((d) => d.iso >= ntp && d.iso <= todayIso() && [0, 6].includes(new Date(d.iso + 'T12:00:00').getDay())).every((d) => d.f === 1 && d.g === 'Weekend'),
+      days.filter((d) => d.iso >= ntp && d.iso <= todayIso() && !reps.some((r) => r.date === d.iso && (isWeatherDayReport(r) || isNoWorkDayReport(r)))).every((d) => d.e === 1 && d.f == null),
       !wd || days.find((d) => d.iso === wd.date).f === 1,
+      reps.filter((r) => isNoWorkDayReport(r) && r.date >= ntp && r.date.slice(0, 7) === ntp.slice(0, 7) && r.date <= todayIso()).every((r) => days.find((d) => d.iso === r.date).f === 1),
       [ws.getCell(`E${prevRow}`).value, ws.getCell(`F${prevRow}`).value],
     ];
-  }, pid), [true, true, true, true, [0, 0]]);
+  }, pid), [true, true, true, true, true, [0, 0]]);
 
   // Quantities.
   await p.goto(`${B}/quantity-sheet.html?project=${pid}`); await settle();

@@ -16,12 +16,12 @@
 // uses contract time, for the dashboard's tooltips.
 const CONTRACT_TIME_MODES = [
   { value: 'every', label: 'Every day', hint: 'Every day counts, no matter what, Weather Days included.', unit: 'calendar', counts: 'every day, Weather Days included' },
-  { value: 'working', label: 'Working days', hint: 'Only weekdays count. Weekends, holidays and Weather Days don\'t use contract time.', unit: 'working', counts: 'weekdays, not counting holidays or Weather Days' },
+  { value: 'working', label: 'Working days', hint: 'Every day counts except Weather Days and No Work Days.', unit: 'working', counts: 'every day but Weather Days and No Work Days' },
   { value: 'calendar', label: 'Calendar days', hint: 'Every day counts except Weather Days.', unit: 'calendar', counts: 'every day but Weather Days' },
 ];
 const REPORT_NUMBERING_MODES = [
   { value: 'next', label: 'Next number', hint: 'One more than the highest Report No. on file.' },
-  { value: 'contractDay', label: 'Match the contract day', hint: 'The contract day of the report\'s date (day 1 is the NTP date). A report on a day that doesn\'t count (a weekend or Weather Day under Working days) shares the number of the day before it. Needs an NTP date.' },
+  { value: 'contractDay', label: 'Match the contract day', hint: 'The contract day of the report\'s date (day 1 is the NTP date). A report on a day that doesn\'t count (a Weather Day or No Work Day under Working days) shares the number of the day before it. Needs an NTP date.' },
   { value: 'dateOrder', label: 'Follow date order', hint: 'Its place among the project\'s reports by date, so a report filed late for an earlier day gets the number for that day. Reports already on file keep their numbers.' },
   { value: 'off', label: 'Off', hint: 'Report No. starts blank and the inspector types it.' },
 ];
@@ -66,8 +66,8 @@ function ctNthWeekday(y, m, weekday, n) {
   return days - ((last - weekday + 7) % 7);
 }
 
-// Holidays no working-day contract time is charged on, by ISO date. One
-// that lands on a weekend is already a weekend, so no observed day is added.
+// Holidays by ISO date, for the Sundays & Holidays column of the Weather
+// and Working Day Report (they don't change how a day counts).
 const ctHolidayCache = new Map();
 function contractHolidays(y) {
   if (!ctHolidayCache.has(y)) {
@@ -85,33 +85,37 @@ function contractHolidays(y) {
   return ctHolidayCache.get(y);
 }
 
-// Dates with a Weather Day report (same test as defaults.js's
-// isWeatherDayReport, repeated here so the server copy needs nothing else).
-function contractWeatherDates(reports) {
-  return new Set((reports || [])
-    .filter((r) => !r.deleted && CT_ISO_RE.test(r.date || '') && String(r.notes || '').trim().toUpperCase() === 'WEATHER DAY')
-    .map((r) => r.date));
+// Dates that can stop the clock, by ISO date: 'Weather' for a Weather Day
+// report, 'No Work Day' for a No Work Day report (a Weather Day wins when a
+// date has both). Same tests as defaults.js's isWeatherDayReport and
+// isNoWorkDayReport, repeated here so the server copy needs nothing else.
+const CT_NO_WORK_DAY_RE = /\bno\s+work\b/i;
+function contractLostDates(reports) {
+  const out = new Map();
+  (reports || []).forEach((r) => {
+    if (r.deleted || !CT_ISO_RE.test(r.date || '')) return;
+    if (String(r.notes || '').trim().toUpperCase() === 'WEATHER DAY') out.set(r.date, 'Weather');
+    else if (CT_NO_WORK_DAY_RE.test(r.notes || '') && !out.has(r.date)) out.set(r.date, 'No Work Day');
+  });
+  return out;
 }
 
 // How one day counts: { charged, holiday, cause }. charged is false for a
-// lost day, with the cause the Weather and Working Day Report prints.
-function contractDayInfo(iso, mode, weatherDates) {
+// lost day, with the cause ('Weather' or 'No Work Day') the Weather and
+// Working Day Report prints. Every day: nothing is lost. Calendar days:
+// Weather Days are. Working days: Weather Days and No Work Days are.
+function contractDayInfo(iso, mode, lostDates) {
   const holiday = contractHolidays(Number(iso.slice(0, 4))).get(iso) || '';
-  const dow = new Date(iso + 'T12:00:00').getDay();
-  if (mode === 'every') return { charged: true, holiday, cause: '' };
-  if (weatherDates && weatherDates.has(iso)) return { charged: false, holiday, cause: 'Weather' };
-  if (mode === 'working') {
-    if (holiday) return { charged: false, holiday, cause: `${holiday} Holiday` };
-    if (dow === 0 || dow === 6) return { charged: false, holiday, cause: 'Weekend' };
-  }
+  const lost = (lostDates && lostDates.get(iso)) || '';
+  if ((mode === 'working' && lost) || (mode === 'calendar' && lost === 'Weather')) return { charged: false, holiday, cause: lost };
   return { charged: true, holiday, cause: '' };
 }
 
 // Contract days charged from fromIso through throughIso, both included.
-function contractDaysBetween(fromIso, throughIso, mode, weatherDates) {
+function contractDaysBetween(fromIso, throughIso, mode, lostDates) {
   let n = 0;
   for (let iso = fromIso; iso <= throughIso; iso = ctAddDays(iso, 1)) {
-    if (contractDayInfo(iso, mode, weatherDates).charged) n++;
+    if (contractDayInfo(iso, mode, lostDates).charged) n++;
   }
   return n;
 }
@@ -119,7 +123,7 @@ function contractDaysBetween(fromIso, throughIso, mode, weatherDates) {
 // A project's contract time, or null without an NTP date and length.
 // day: contract days used through today (the NTP date is day 1; negative
 // before NTP, counting down to it). end: the last contract day, counting
-// every future work day as charged. usedThrough(iso): days used through
+// every future day as charged. usedThrough(iso): days used through
 // that date. `today` is for the server, which works in each person's own
 // time zone.
 function projectContractTimeline(project, reports, today = ctTodayIso()) {
@@ -128,14 +132,14 @@ function projectContractTimeline(project, reports, today = ctTodayIso()) {
   const length = parseInt(meta.contractLength, 10);
   if (!CT_ISO_RE.test(ntp || '') || !Number.isFinite(length) || length <= 0) return null;
   const mode = contractTimeMode(project);
-  const weather = contractWeatherDates(reports);
-  const usedThrough = (iso) => (iso < ntp ? 0 : contractDaysBetween(ntp, iso, mode, weather));
+  const lost = contractLostDates(reports);
+  const usedThrough = (iso) => (iso < ntp ? 0 : contractDaysBetween(ntp, iso, mode, lost));
   const day = today < ntp
     ? -Math.round((new Date(ntp + 'T12:00:00') - new Date(today + 'T12:00:00')) / 86400000)
     : usedThrough(today);
   let end = ntp;
   for (let n = 0, iso = ntp, guard = 0; guard < 20000; iso = ctAddDays(iso, 1), guard++) {
-    if (contractDayInfo(iso, mode, weather).charged && ++n === length) { end = iso; break; }
+    if (contractDayInfo(iso, mode, lost).charged && ++n === length) { end = iso; break; }
   }
   return { ntp, length, end, day, frac: Math.max(0, day) / length, mode, usedThrough };
 }
