@@ -63,8 +63,8 @@ const text = (p, sel) => p.textContent(sel).then((t) => t.replace(/\s+/g, ' ').t
   // Weather and Working Day Report from the daily log calendar.
   const [wdFile] = await Promise.all([p.waitForEvent('download', { timeout: 30000 }), p.click('[data-weather-day-xlsx]')]);
   check('Weather & Workday download', /^PRDEMO-101_WeatherWorkday_\d{4}-\d{2}\.xlsx$/.test(wdFile.suggestedFilename()), true);
-  check('NTP month: nothing counted before NTP, Weather Day and weekends lost, nothing previous', await p.evaluate(async (id) => {
-    const pr = await getProject(id);
+  check('NTP month (working days): nothing counted before NTP, Weather Day and weekends lost, nothing previous', await p.evaluate(async (id) => {
+    const pr = { ...(await getProject(id)), contractTimeMode: 'working' };
     const reps = await getReportsForProject(id);
     const ntp = pr.meta.ntpDate;
     const { wb } = await buildWeatherDayWorkbook(pr, reps, ntp.slice(0, 7));
@@ -283,32 +283,31 @@ const text = (p, sel) => p.textContent(sel).then((t) => t.replace(/\s+/g, ' ').t
   await p.goto(`${B}/project-setup.html?id=${pid}`); await settle();
   check('settings sections', await p.$$eval('#ps-nav [data-sec]', (els) => els.map((e) => e.dataset.sec)), ['info', 'pay', 'crew', 'checks', 'form', 'look', 'files', 'delete']);
   check('contract end worked out', (await text(p, '#ps-endinfo')).startsWith('Ends '), true);
-  // Contract time and Report No. settings: working days and next number by default.
-  check('defaults: working days, next number', [await p.isChecked('[name="ps-contractTimeMode"][value="working"]'), await p.isChecked('[name="ps-reportNumbering"][value="next"]')], [true, true]);
-  const workingEnd = await text(p, '#ps-endinfo');
+  // Contract time and Report No. settings: every day and next number by default.
+  check('defaults: every day, next number', [await p.isChecked('[name="ps-contractTimeMode"][value="every"]'), await p.isChecked('[name="ps-reportNumbering"][value="next"]')], [true, true]);
+  const everyEnd = await text(p, '#ps-endinfo');
   await p.click('[name="ps-contractTimeMode"][value="calendar"]');
-  check('calendar days end sooner', (await text(p, '#ps-endinfo')) !== workingEnd, true);
   const calendarEnd = await text(p, '#ps-endinfo');
-  await p.click('[name="ps-contractTimeMode"][value="every"]');
-  check('every day: the Weather Day counts too, so it ends a day sooner', (await text(p, '#ps-endinfo')) !== calendarEnd, true);
-  await p.click('[name="ps-contractTimeMode"][value="calendar"]');
+  check('calendar days: the Weather Day stops the clock, so it ends later', calendarEnd !== everyEnd, true);
+  await p.click('[name="ps-contractTimeMode"][value="working"]');
+  check('working days end later still', (await text(p, '#ps-endinfo')) !== calendarEnd, true);
   await p.click('[name="ps-reportNumbering"][value="contractDay"]');
   check('start-at box only for next and date order', await p.isVisible('#ps-start-wrap'), false);
   await p.click('#fsb-save');
   await p.waitForFunction(() => !document.querySelector('#fsb').classList.contains('show'), null, { timeout: 15000 });
-  check('settings saved', await p.evaluate(async (id) => { const pr = await getProject(id); return [pr.contractTimeMode, pr.reportNumbering]; }, pid), ['calendar', 'contractDay']);
+  check('settings saved', await p.evaluate(async (id) => { const pr = await getProject(id); return [pr.contractTimeMode, pr.reportNumbering]; }, pid), ['working', 'contractDay']);
   const dayNo = await p.evaluate(async (id) => projectContractTimeline(await getProject(id), await getReportsForProject(id)).day, pid);
   check('new report gets the contract day', await p.evaluate(async (id) => getNextReportNo(id), pid), dayNo);
   await p.click('[name="ps-reportNumbering"][value="next"]');
   check('start-at box back', await p.isVisible('#ps-start-wrap'), true);
   await p.fill('[data-proj-key="reportNumberStart"]', '500');
   check('next number preview', await text(p, '#ps-nextno'), 'A new report today would be Report No. 500.');
-  await p.click('[name="ps-contractTimeMode"][value="working"]');
+  await p.click('[name="ps-contractTimeMode"][value="every"]');
   await p.fill('[data-proj-key="reportNumberStart"]', '');
   await p.click('#fsb-save');
   await p.waitForFunction(() => !document.querySelector('#fsb').classList.contains('show'), null, { timeout: 15000 });
-  check('back to the defaults', await p.evaluate(async (id) => { const pr = await getProject(id); return [contractTimeMode(pr), reportNumberingMode(pr), pr.reportNumberStart]; }, pid), ['working', 'next', '']);
-  check('working days count fewer than calendar', dayNo > 0 && (await p.evaluate(async (id) => projectContractTimeline(await getProject(id), await getReportsForProject(id)).day, pid)) < dayNo, true);
+  check('back to the defaults', await p.evaluate(async (id) => { const pr = await getProject(id); return [contractTimeMode(pr), reportNumberingMode(pr), pr.reportNumberStart]; }, pid), ['every', 'next', '']);
+  check('every day counts more than working days', dayNo > 0 && (await p.evaluate(async (id) => projectContractTimeline(await getProject(id), await getReportsForProject(id)).day, pid)) > dayNo, true);
   await p.click('[data-sec="form"]');
   check('no print preview beside Report Form', await p.isVisible('#ps-right'), false);
   await p.click('.ps-frow:has-text("Activity") [data-v="req"]');

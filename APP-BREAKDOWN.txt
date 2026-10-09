@@ -685,9 +685,10 @@ contract-time.js
   a copy for the weekly roundup -- re-copy it when this changes). Two
   per-project settings, both set in Project Settings > Project Info by
   anyone on the project (not only people who can edit projects):
-  project.contractTimeMode ('working', the default: weekdays only, not the
-  holidays in contractHolidays or Weather Days; 'calendar': every day
-  but Weather Days; or 'every': every day, Weather Days included) and project.reportNumbering ('next', the default:
+  project.contractTimeMode ('every', the default: every day, Weather
+  Days included; 'working': weekdays only, not the holidays in
+  contractHolidays or Weather Days; or 'calendar': every day but Weather
+  Days) and project.reportNumbering ('next', the default:
   highest plus one; 'contractDay'; 'dateOrder'; 'off': blank) with
   project.reportNumberStart (first number for next/date order).
   contractDayInfo (how one day counts), contractWeatherDates,
