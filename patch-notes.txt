@@ -3,6 +3,12 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.0721 -- 2026-10-09
+  - Weather & Workday sheet: Weather Days and No Work Days are always
+    no charge (lost days), whatever the project's Contract time
+    setting. On the default (Every day) the sheet was charging Weather
+    Days. Contract time now only drives the dashboards' day count.
+
 0.072 -- 2026-10-09
   - Weather and Working Day Report: a "Weather & Workday" button on the
     project's daily log calendar downloads the month on screen as an
