@@ -876,7 +876,8 @@ async function refreshLivePreview() {
   wraps.forEach((wrap) => previewEl.appendChild(wrap));
   previewGrids = printGridsBySheet(pages);
   Object.keys(FIELD_HIGHLIGHT_REGIONS).forEach((key) => addPreviewClickTarget(key, FIELD_HIGHLIGHT_REGIONS[key]));
-  Object.keys(SUMMARY_PAGE_HIGHLIGHT_REGIONS).forEach((key) => addPreviewClickTarget(key, SUMMARY_PAGE_HIGHLIGHT_REGIONS[key]));
+  const summaryRegions = summaryPageHighlightRegions(pages);
+  Object.keys(summaryRegions).forEach((key) => addPreviewClickTarget(key, summaryRegions[key]));
   // A Summary box marks itself when even its smallest text size can't hold
   // everything (fitSummaryBox, render-report.js). The work report's box
   // continues onto the Summary and Photos page, so this only shows once

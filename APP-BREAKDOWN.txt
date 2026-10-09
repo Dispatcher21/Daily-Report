@@ -761,8 +761,12 @@ render-report.js
   Performed and Checks Completed tables (each only as long as it needs,
   left out when empty) at the bottom; fitSummaryBox shrinks it all from
   12pt to 7pt as needed, keeping 3 summary lines.
-  A Summary and Photos page (top half: summary box, bottom half: 4
-  photos) prints only when needed. When even 7pt is too much,
+  A Summary and Photos page (a summary box on top, up to 4 photos in
+  rows of 2 below) prints only when needed. Its split isn't fixed: the
+  summary gets the room its text needs at 12pt (measured on a first
+  render, summaryBoxNeededPt), the photos get the rest but never less
+  than RR_CONT_MIN_PHOTO_PT, 1-2 photos share one row, and with nothing
+  to continue the summary box is left out. When even 7pt is too much,
   continueSummaryBox keeps the longest start of the text and table rows
   that fits at 9pt on page 1, adds "(Continued on page 2)", and the rest
   goes on the Summary and Photos page as page 2. Whenever that page
@@ -772,7 +776,7 @@ render-report.js
   moves up into a free box). Photos that move are packed in order
   and keep their editor numbers ("PHOTO NO. 9"). renderReportPages tags
   each page with its sheet (RR_SHEET_*); printGridsBySheet and
-  SUMMARY_PAGE_HIGHLIGHT_REGIONS let the editor's click-to-field overlay
+  summaryPageHighlightRegions let the editor's click-to-field overlay
   find the right page. Its layout is built from the Photo Log's
   (summaryPhotoSheet). A box that still can't hold everything marks
   data-overflow (report-editor.html warns).
