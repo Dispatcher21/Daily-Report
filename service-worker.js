@@ -30,6 +30,7 @@ const ASSETS = [
   './report-bundle.js',
   './local-sync.js',
   './quantity-sheet-export.js',
+  './weather-day-export.js',
   './setup-share.js',
   './style.css',
   './print-sheet.css',

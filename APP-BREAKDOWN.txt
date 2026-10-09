@@ -363,6 +363,9 @@ project.html
   to View Report (report-viewer.html), View Photos (report-photos.html,
   hidden if the report has none), Quantities for This Day
   (quick-quantity.html?date=), and Edit Report (report-editor.html).
+  The "Weather & Workday" button above it (downloadWeatherDaySheet)
+  downloads weather-day-export.js's Weather and Working Day Report for the
+  month on the calendar (this month in list view).
 
 project-setup.html
   Project Settings: every setting for one project on one page. A section
@@ -672,6 +675,24 @@ quantity-sheet-export.js
   single entry point, called by quantity-sheet.html's own Download button
   and by local-sync.js's buildQuantitySheetSyncFile (folder/zip sync).
   Depends on quantity-calc.js for the actual aggregation math.
+
+weather-day-export.js
+  Builds the monthly Weather and Working Day Report (.xlsx, via ExcelJS,
+  loaded on demand by ensureWeatherDayLibs) laid out like the paper form:
+  one row per day with Sundays & Holidays, the weather logged, Contract
+  Days, Lost Days and the cause, then totals for the period, the previous
+  report and to date (formulas, so hand edits still add up), and the
+  signature block. buildWeatherDayWorkbook(project, reports, 'YYYY-MM') is
+  the entry point, called by project.html's "Weather & Workday" button.
+  Rules (weatherDayStatus): days before NTP (or the first report when
+  there's no NTP) and future days aren't counted; weekends, the holidays
+  in weatherDayHolidays (New Year's, MLK, Memorial, Independence, Labor,
+  Thanksgiving, Christmas) and Weather Day reports are lost days; every
+  other day is a contract day, No Work Days included. A Weather Day's cause
+  is its Comments on Time Charged (weatherDayCause trims the Weather Day
+  button's own sentence back to the reason). Est. No. is the Pay App dated
+  in that month; the contractor is the one named most on that month's
+  reports.
 
 setup-share.js
   Receiving side only of "shared setups" (a link/QR that hands another

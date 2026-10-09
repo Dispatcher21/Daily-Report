@@ -49,6 +49,7 @@ it on the Welcome screen or in Settings).
   HOTROD          Couldn't sync a project's reports to a folder
   PERCEPTOR       Couldn't build the Pay App Quantities Excel file
   WARPATH         Couldn't read an uploaded Pay App Quantities file
+  JETFIRE         Couldn't build the Weather and Working Day Report
   SPARKPLUG       Something failed that doesn't have its own code yet --
                   note exactly what you were doing when this showed up
 
