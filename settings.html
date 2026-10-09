@@ -29,7 +29,7 @@
     background: var(--bg); padding: 0.5rem 0;
   }
   .settings-tab {
-    flex: 1; padding: 0.75rem 1rem; border-radius: var(--radius);
+    flex: 1; min-width: 0; overflow-wrap: break-word; padding: 0.75rem 0.75rem; border-radius: var(--radius);
     border: 1.5px solid var(--border); background: var(--surface); color: var(--text-dim);
     font-weight: 700; font-size: 0.98rem; cursor: pointer;
   }
@@ -49,7 +49,7 @@
   details.settings-section > summary {
     list-style: none; cursor: pointer; padding: 0.9rem 1.1rem;
     background: var(--brand); color: var(--on-brand);
-    display: flex; align-items: center; gap: 0.6rem; font-weight: 700; font-size: 1.02rem;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; font-weight: 700; font-size: 1.02rem;
     min-height: var(--tap);
   }
   details.settings-section > summary::-webkit-details-marker { display: none; }
@@ -63,6 +63,9 @@
   .account-role { margin: 0 0 0.5rem; font-size: 0.88rem; font-weight: 600; color: var(--text-dim); }
   details.settings-section > summary .settings-section-sub {
     font-weight: 500; font-size: 0.8rem; opacity: 0.85; margin-left: 0.5rem;
+    /* On a narrow screen it wraps to its own line under the title rather
+       than running off the right edge (the section clips its overflow). */
+    min-width: 0;
   }
   details.settings-section > .settings-section-body { padding: 1.1rem; }
   details.settings-section + details.settings-section { margin-top: -0.25rem; }

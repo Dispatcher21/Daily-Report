@@ -137,6 +137,10 @@
 }
 
 * { box-sizing: border-box; }
+/* A single word longer than its box (a long project name, a big text
+   setting on a narrow phone) breaks onto the next line instead of running
+   out past the card's edge. Only kicks in when a word can't fit at all. */
+h1, h2, h3 { overflow-wrap: break-word; }
 
 body {
   margin: 0;
@@ -631,6 +635,9 @@ body {
   border-right: 1.5px solid var(--border);
   background: var(--surface);
   color: var(--text);
+  /* min-width: 0 so a label too long for an even share wraps inside its
+     button instead of being cut off by the control's overflow: hidden. */
+  min-width: 0; overflow-wrap: break-word; text-align: center;
   font: inherit;
   font-size: 0.92rem;
   font-weight: 600;
@@ -1206,7 +1213,7 @@ main { max-width: min(1400px, 94vw); margin: 0 auto; padding: 1rem; }
    quietly capping this modal at 440px regardless of what was set here. */
 #folder-modal-overlay .folder-modal-card {
   max-width: 620px; width: 100%; text-align: left;
-  max-height: calc(100vh - 3rem); overflow-y: auto;
+  max-height: 100%; overflow-y: auto;
   transform: translate(var(--modal-dx, 0px), var(--modal-dy, 0px)) scale(0.35);
   opacity: 0;
   transition: transform 0.26s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease;
@@ -1656,13 +1663,19 @@ html:has(.rv-carousel), body:has(.rv-carousel) { overflow-x: clip; }
   border-radius: var(--radius) var(--radius) 0 0;
   display: flex; align-items: center; gap: 0.7rem; padding: 0.75rem 1rem;
   cursor: pointer; user-select: none; min-height: var(--tap);
+  /* Only wraps at the very largest text sizes on the narrowest phones,
+     where the title's longest word plus icon, tip and arrow can't fit. */
+  flex-wrap: wrap;
 }
 .rb-group-hd:hover { background: var(--surface-2); }
 .rb-group-hd .rb-icon {
   width: 1.9rem; height: 1.9rem; border-radius: 8px; background: var(--surface-3);
   display: flex; align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0;
 }
-.rb-group-hd .rb-titles { flex: 1; min-width: 0; font-weight: 700; font-size: 0.92rem; }
+/* min-width: auto keeps the title at least as wide as its longest word, so
+   the summary beside it ("None", "2 of 5") is what shrinks and ellipsizes
+   instead of the title running underneath it. */
+.rb-group-hd .rb-titles { flex: 1; min-width: auto; font-weight: 700; font-size: 0.92rem; }
 .rb-group-hd .rb-chev { color: var(--text-dim); transition: transform 0.15s; flex-shrink: 0; }
 .rb-group.open .rb-group-hd .rb-chev { transform: rotate(90deg); }
 
@@ -1833,7 +1846,10 @@ label.rpi-qty { display: flex; flex-direction: row; align-items: stretch; gap: 0
 #reorder-cards .step.dragging { opacity: 0.4; }
 #reorder-cards .step.rf-hidden-card { opacity: 0.55; border-style: dashed; }
 #reorder-cards .step .step-header { gap: 0.5rem; }
-#reorder-cards .step .step-header h2 { flex: 1; }
+/* Handle, arrows and step number take most of a phone's width: the title
+   wraps onto its own line when it can't get 8rem beside them. */
+#reorder-cards .step .step-header { flex-wrap: wrap; }
+#reorder-cards .step .step-header h2 { flex: 1 1 8rem; }
 #reorder-cards .step[draggable="true"] .step-header { cursor: grab; }
 .rf-fixed-card .step-header { cursor: default; }
 .rf-fixed-card { opacity: 0.75; }
@@ -1852,7 +1868,8 @@ label.rpi-qty { display: flex; flex-direction: row; align-items: stretch; gap: 0
   transition: transform 0.18s ease;
 }
 .floating-save-bar.show { transform: translateY(0); }
-.floating-save-bar .btn-primary { width: auto; min-width: 200px; }
+.floating-save-bar { flex-wrap: wrap; }
+.floating-save-bar .btn-primary { width: auto; min-width: min(200px, 100%); }
 .floating-save-bar .fsb-status { font-size: 0.85rem; color: var(--text-dim); }
 
 /* Large, hard-to-miss blocker shown when Generate Report is clicked with
@@ -1870,6 +1887,10 @@ label.rpi-qty { display: flex; flex-direction: row; align-items: stretch; gap: 0
   box-shadow: var(--shadow-lg);
   max-width: 440px; width: 100%;
   padding: 1.5rem;
+  /* Never taller than the overlay: a centered card taller than the screen
+     (a phone turned sideways, or large text) loses its top and bottom,
+     buttons included, with no way to scroll to them. */
+  max-height: 100%; overflow-y: auto;
 }
 .rf-warning-card { border: 2px solid var(--danger); text-align: center; }
 .rf-warning-card .rf-warning-icon { font-size: 2.4rem; line-height: 1; margin-bottom: 0.5rem; }
@@ -1912,6 +1933,10 @@ label.rpi-qty { display: flex; flex-direction: row; align-items: stretch; gap: 0
   flex: 0 0 auto; border-radius: 0;
   cursor: pointer; user-select: none;
 }
+/* Large text on a phone: the status pill and arrow wrap under the title
+   instead of squeezing it to a letter per line. */
+.rv-footer-step .step-header { flex-wrap: wrap; }
+.rv-footer-step .step-header h2 { flex: 1 1 8rem; }
 /* Collapsed to just the header by default. The header click handlers
    (report-viewer.html) toggle this class; syncMainBottomPadding
    re-measures afterward since the footer's height just changed. */
@@ -2399,7 +2424,7 @@ input[type="date"] { min-width: 0; }
 }
 
 .total-hours-row {
-  display: flex; align-items: baseline; justify-content: space-between;
+  display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0 0.5rem;
   background: var(--brand-dim); border-radius: var(--radius-sm);
   padding: 0.6rem 0.85rem; margin: 0.5rem 0 0.5rem; font-weight: 700; color: var(--text);
 }
@@ -2415,8 +2440,10 @@ input[type="date"] { min-width: 0; }
   padding: 0.6rem; margin-bottom: 0.6rem; background: var(--surface);
 }
 .inspectors-list-empty { color: var(--text-dim); font-size: 0.88rem; margin-bottom: 0.6rem; }
-.inspector-card-hd { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem; }
-.inspector-name { flex: 1; min-width: 0; }
+.inspector-card-hd { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem; }
+/* 8rem basis: when the name can't get at least that much room, hours and
+   remove wrap under it instead of crushing the name box to a sliver. */
+.inspector-name { flex: 1 1 8rem; min-width: 0; }
 .inspector-hours { width: 4.5rem; flex-shrink: 0; }
 .inspector-remove {
   background: none; border: none; color: var(--danger); font-size: 1.3rem;
@@ -2571,10 +2598,19 @@ input[type="date"] { min-width: 0; }
   background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius);
   padding: 0.85rem 1rem; display: flex; justify-content: space-between; align-items: center;
   gap: 0.7rem; box-shadow: var(--shadow);
+  /* On a narrow phone (or with large text) Edit and the report number drop
+     to their own line instead of squeezing the date into a sliver. */
+  flex-wrap: wrap;
 }
 .report-row-check { width: 1.35rem; height: 1.35rem; flex-shrink: 0; }
-.report-row .report-row-main { display: flex; flex-direction: column; flex: 1; min-width: 0; cursor: pointer; }
-.report-row .report-row-date { font-weight: 700; font-size: 1rem; }
+.report-row .report-row-main { display: flex; flex-direction: column; flex: 1 1 6.5rem; min-width: 0; cursor: pointer; }
+/* The date stays on one line and the badges wrap under it, rather than the
+   date breaking at its hyphens and the badges running over Edit. */
+.report-row .report-row-date {
+  font-weight: 700; font-size: 1rem;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.35rem; white-space: nowrap;
+}
+.report-row .report-row-date > span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .report-row-author {
   font-size: 0.68rem; font-weight: 700; color: var(--link);
   background: var(--brand-dim); padding: 2px 8px; border-radius: 10px;
@@ -2624,7 +2660,7 @@ input[type="date"] { min-width: 0; }
   cursor: default;
 }
 .report-row .report-row-sub { font-size: 0.83rem; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.report-row .report-row-actions { display: flex; align-items: center; gap: 0.5rem; }
+.report-row .report-row-actions { display: flex; align-items: center; gap: 0.5rem; margin-left: auto; }
 .report-row-no {
   font-size: 0.78rem; font-weight: 700; color: var(--on-brand);
   background: var(--brand-light); padding: 0.25rem 0.65rem; border-radius: 12px;
@@ -3331,7 +3367,7 @@ input[type="date"] { min-width: 0; }
    Difference, each cell stacking its figure over its dollar amount -- so
    nothing scrolls sideways (the old 9-column table did); on a phone each
    row folds into the item name over three short columns. */
-.pa-layout { display: grid; gap: 0 1rem; align-items: start; }
+.pa-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 1rem; align-items: start; }
 @media (min-width: 1050px) {
   .pa-layout { grid-template-columns: 300px minmax(0, 1fr); }
 }
@@ -3724,7 +3760,7 @@ input[type="date"] { min-width: 0; }
    -- a day here can list several projects' worth of detail stacked
    vertically, so this scrolls internally instead of overflowing the
    viewport. */
-.mddm-card { max-width: 540px; max-height: calc(100vh - 3rem); overflow-y: auto; }
+.mddm-card { max-width: 540px; max-height: 100%; overflow-y: auto; }
 .mddm-block { padding: 0.6rem 0; }
 .mddm-block-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.3rem; font-size: 0.95rem; font-weight: 700; }
 .mddm-sep { border: none; border-top: 1px solid var(--border); margin: 0.3rem 0; }
@@ -3786,8 +3822,8 @@ a.settings-toggle { text-decoration: none; box-sizing: border-box; }
 
 /* ---------- Quantities and Pay Apps (quantities-ui.js) ----------
    Logged = inspectors' daily reports (blue). Billed = Pay Apps (teal). */
-.qp-tabs { display: grid; grid-template-columns: 1fr 1fr; background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 1rem; }
-.qp-tab { display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.7rem 0.5rem; font-weight: 700; color: var(--text); text-decoration: none; }
+.qp-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 1rem; }
+.qp-tab { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; text-align: center; gap: 0.5rem; padding: 0.7rem 0.5rem; font-weight: 700; color: var(--text); text-decoration: none; }
 .qp-tab:hover { background: var(--surface-2); }
 .qp-tab-active, .qp-tab-active:hover { background: var(--brand); color: var(--on-brand); }
 .qp-tab-count { font-size: 0.75rem; font-weight: 700; padding: 0.05rem 0.5rem; border-radius: 999px; background: var(--brand-dim); white-space: nowrap; }
@@ -3801,12 +3837,12 @@ a.settings-toggle { text-decoration: none; box-sizing: border-box; }
 .qp-seg-ready { background: var(--logged); }
 .qp-seg-ahead { background: var(--danger); }
 .qp-seg-rest { background: var(--surface-3); border: 1px solid var(--border); }
-.qp-cbar { display: grid; gap: 0.35rem; }
+.qp-cbar { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.35rem; }
 .qp-cbar-top { display: flex; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; align-items: baseline; }
 .qp-cbar-title { font-weight: 800; font-size: 1.05rem; }
 .qp-cbar-note, .qp-dim { font-size: 0.82rem; color: var(--text-dim); }
 .qp-cbar-key { display: flex; flex-wrap: wrap; gap: 0.3rem 1.2rem; font-size: 0.88rem; font-variant-numeric: tabular-nums; }
-.qp-cbar-key > span { display: inline-flex; align-items: center; gap: 0.35rem; }
+.qp-cbar-key > span { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; min-width: 0; }
 .qp-cbar-help { margin: 0; font-size: 0.82rem; color: var(--text-dim); }
 .qp-dot { width: 11px; height: 11px; border-radius: 3px; display: inline-block; flex: none; }
 .qp-noprice { margin: 0; }
