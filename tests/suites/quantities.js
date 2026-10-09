@@ -60,6 +60,29 @@ const text = (p, sel) => p.textContent(sel).then((t) => t.replace(/\s+/g, ' ').t
   check('dashboard says where its figures come from', (await text(p, '#dash-pi-basis')).startsWith('Pay App 1 ('), true);
   check('disputed Pay App does not overrule the logs', await p.$$eval('#dash-pi-bars .bar-row, .bar-row', (rows) => rows.map((r) => r.textContent.replace(/\s+/g, ' ')).find((t) => t.includes('502-01')) || '').then((t) => t.includes('440 of 650 TON')), true);
   check('cards link to the pages', [await p.getAttribute('#card-quantities', 'href'), await p.getAttribute('#card-payapps', 'href')], [`quantity-sheet.html?project=${pid}`, `pay-apps.html?project=${pid}`]);
+  // Weather and Working Day Report from the daily log calendar.
+  const [wdFile] = await Promise.all([p.waitForEvent('download', { timeout: 30000 }), p.click('[data-weather-day-xlsx]')]);
+  check('Weather & Workday download', /^PRDEMO-101_WeatherWorkday_\d{4}-\d{2}\.xlsx$/.test(wdFile.suggestedFilename()), true);
+  check('NTP month: nothing counted before NTP, Weather Day and weekends lost, nothing previous', await p.evaluate(async (id) => {
+    const pr = await getProject(id);
+    const reps = await getReportsForProject(id);
+    const ntp = pr.meta.ntpDate;
+    const { wb } = await buildWeatherDayWorkbook(pr, reps, ntp.slice(0, 7));
+    const ws = wb.worksheets[0];
+    const days = [];
+    for (let row = 7; ws.getCell(`B${row}`).value != null && typeof ws.getCell(`B${row}`).value === 'number'; row++) {
+      days.push({ iso: `${ntp.slice(0, 8)}${String(ws.getCell(`B${row}`).value).padStart(2, '0')}`, e: ws.getCell(`E${row}`).value, f: ws.getCell(`F${row}`).value, g: ws.getCell(`G${row}`).value });
+    }
+    const wd = reps.find((r) => isWeatherDayReport(r) && r.date.slice(0, 7) === ntp.slice(0, 7) && r.date <= todayIso());
+    const prevRow = 7 + days.length + 2;
+    return [
+      days.filter((d) => d.iso < ntp).every((d) => d.e == null && d.f == null),
+      days.filter((d) => d.f === 1).every((d) => !!d.g),
+      days.filter((d) => d.iso >= ntp && d.iso <= todayIso() && [0, 6].includes(new Date(d.iso + 'T12:00:00').getDay())).every((d) => d.f === 1 && d.g === 'Weekend'),
+      !wd || days.find((d) => d.iso === wd.date).f === 1,
+      [ws.getCell(`E${prevRow}`).value, ws.getCell(`F${prevRow}`).value],
+    ];
+  }, pid), [true, true, true, true, [0, 0]]);
 
   // Quantities.
   await p.goto(`${B}/quantity-sheet.html?project=${pid}`); await settle();

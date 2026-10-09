@@ -133,6 +133,7 @@
 <script src="render-report.js"></script>
 <script src="quantity-calc.js"></script>
 <script src="quantities-ui.js"></script>
+<script src="weather-day-export.js"></script>
 <script src="dashboard-widgets.js"></script>
 <script src="page-ui.js"></script>
 <script src="dashboard-layout.js"></script>
@@ -595,9 +596,12 @@ function pdRenderDailyLog(body) {
   if (!dated.length) { body.innerHTML = '<p class="hint" style="margin:0;">No dated reports yet.</p>'; return; }
   body.innerHTML = `
     <div class="wv-top"><span class="hint" style="margin:0;">${dated.length} dated report${dated.length === 1 ? '' : 's'}</span>
-      <div class="view-toggle" role="group" aria-label="View as">
-        <button type="button" class="view-toggle-btn${weatherViewMode === 'list' ? ' active' : ''}" data-view="list" title="List view" aria-label="List view">&#9776;</button>
-        <button type="button" class="view-toggle-btn${weatherViewMode === 'calendar' ? ' active' : ''}" data-view="calendar" title="Calendar view" aria-label="Calendar view">&#128197;</button>
+      <div class="wv-actions">
+        <button type="button" class="btn-sm" data-weather-day-xlsx data-tip="The Weather and Working Day Report for the month on the calendar, as an Excel file: each day's weather, contract days and lost days (weekends, holidays, Weather Days), with totals to date.">&#11015; Weather &amp; Workday</button>
+        <div class="view-toggle" role="group" aria-label="View as">
+          <button type="button" class="view-toggle-btn${weatherViewMode === 'list' ? ' active' : ''}" data-view="list" title="List view" aria-label="List view">&#9776;</button>
+          <button type="button" class="view-toggle-btn${weatherViewMode === 'calendar' ? ' active' : ''}" data-view="calendar" title="Calendar view" aria-label="Calendar view">&#128197;</button>
+        </div>
       </div>
     </div>
     <div class="weather-log" id="dash-weather-log"${weatherViewMode === 'list' ? '' : ' hidden'}></div>
@@ -699,6 +703,23 @@ function renderWeatherCalendar(loggable) {
       return `<div class="wcal-weekdays">${WCAL_WEEKDAY_LABELS.map((l) => `<div>${l}</div>`).join('')}</div><div class="wcal-grid">${cells.join('')}</div>`;
     },
   });
+}
+
+// The month on the calendar (this month in list view, or before the
+// calendar has drawn), as the Weather and Working Day Report spreadsheet.
+async function downloadWeatherDaySheet(btn) {
+  const month = (weatherViewMode === 'calendar' && weatherCalMonth) || todayIso().slice(0, 7);
+  btn.disabled = true;
+  try {
+    const { wb, filename } = await buildWeatherDayWorkbook(project, pd.reports, month);
+    const out = await wb.xlsx.writeBuffer();
+    triggerDownload(new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), filename);
+  } catch (err) {
+    console.error(err);
+    alert(userError("Couldn't build the Weather and Working Day Report: " + err.message, 'WEATHER_DAY_SHEET'));
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 function pdConditionsHtml() {
@@ -922,6 +943,8 @@ $('#pd-widgets').addEventListener('click', (e) => {
     if (wel) pdBoard.rerender(wel.dataset.wid);
     return;
   }
+  const wdBtn = e.target.closest('[data-weather-day-xlsx]');
+  if (wdBtn) { downloadWeatherDaySheet(wdBtn); return; }
   const band = e.target.closest('.sl-item[data-band]');
   if (band) {
     const b = band.dataset.band;

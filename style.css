@@ -4036,6 +4036,7 @@ body.page-wide main { max-width: none; padding: 0.5rem clamp(16px, 2.5vw, 40px) 
 .widget .weather-log { display: flex; flex-direction: column; gap: 0.5rem; max-height: 520px; overflow: auto; }
 .widget .weather-log[hidden] { display: none; }
 .wv-top { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.6rem; flex-wrap: wrap; }
+.wv-actions { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
 .w-photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.5rem; }
 .w-photo-grid a { display: block; position: relative; border-radius: 10px; overflow: hidden; aspect-ratio: 4 / 3; background: var(--surface-3); }
 .w-photo-grid img { width: 100%; height: 100%; object-fit: cover; display: block; }
