@@ -687,11 +687,13 @@ contract-time.js
   anyone on the project (not only people who can edit projects):
   project.contractTimeMode ('every', the default: every day, Weather
   Days included; 'working': weekdays only, not the holidays in
-  contractHolidays or Weather Days; or 'calendar': every day but Weather
-  Days) and project.reportNumbering ('next', the default:
+  'working': every day but Weather Days and No Work Days; or 'calendar':
+  every day but Weather Days; weekends and holidays count like any other
+  day) and project.reportNumbering ('next', the default:
   highest plus one; 'contractDay'; 'dateOrder'; 'off': blank) with
   project.reportNumberStart (first number for next/date order).
-  contractDayInfo (how one day counts), contractWeatherDates,
+  contractDayInfo (how one day counts), contractLostDates (Weather Day and
+  No Work Day dates), contractHolidays (names for the sheet only),
   projectContractTimeline(project, reports, today?) -> { ntp, length,
   end (the last contract day), day (days used through today, the NTP date
   being day 1), frac, mode, usedThrough(iso) } -- used by project.html's
@@ -713,8 +715,9 @@ weather-day-export.js
   Rules (weatherDayStatus): days before NTP (or the first report when
   there's no NTP) and future days aren't counted; every other day counts
   by contract-time.js's contractDayInfo for the project's setting (working
-  days: weekends, holidays and Weather Days lost; calendar days: only
-  Weather Days lost; every day: nothing lost), No Work Days included as contract days. A Weather Day's cause
+  days: Weather Days and No Work Days lost; calendar days: only Weather
+  Days lost; every day: nothing lost). A No Work Day's cause is its
+  Comments on Time Charged or "No Work Day"; a Weather Day's cause
   is its Comments on Time Charged (weatherDayCause trims the Weather Day
   button's own sentence back to the reason). Est. No. is the Pay App dated
   in that month; the contractor is the one named most on that month's

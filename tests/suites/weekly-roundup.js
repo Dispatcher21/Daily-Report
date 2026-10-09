@@ -35,6 +35,8 @@ const outbox = async (to) => {
     await mk('2026-09-30', 8, [{ itemNumber: '201', description: 'Clearing', unit: 'AC', qty: 2 }]);
     await mk('2026-10-01', 9.5, [{ itemNumber: '201', description: 'Clearing', unit: 'AC', qty: 10 }]);
     await mk('2026-10-05', 7, []); // this week: not in the roundup
+    // A No Work Day before the roundup week: stops Highway 12's clock (working days).
+    const nwd = await makeBlankReport(1, await getProject('p1'), null); nwd.date = '2026-09-15'; nwd.notes = 'NO WORK DAY'; await saveReport(nwd); await confirmReportSyncStatus(await getReport(nwd.id));
   });
   check('no managed projects: friendly error', await A.evaluate(() => sendRoundupPreview().then(() => 'sent', (e) => e.message)), "You aren't managing any projects yet. Choose some on the Manager Dashboard first.");
   check('profile picked up a time zone', await A.evaluate(async () => !!(await readAccountProfile((await getAccount()).uid)).timeZone), true);
@@ -58,11 +60,11 @@ const outbox = async (to) => {
   // Days since the start date depend on today (in UTC or the test
   // account's own time zone, which can be a day behind around midnight).
   const daysSince = (iso) => [0, 1].map((back) => Math.floor((Date.now() - back * 86400000 - Date.parse(iso + 'T00:00:00Z')) / 86400000));
-  // Highway 12 counts working days: weekdays from NTP, not
-  // Labor Day, worked out by the app's own contract-time.js.
+  // Highway 12 counts working days: every day from NTP but its No Work
+  // Day, worked out by the app's own contract-time.js.
   const ct = {};
   require('vm').runInNewContext(`${require('fs').readFileSync(require('path').join(__dirname, '../../contract-time.js'), 'utf8')};this.tl = projectContractTimeline;`, ct);
-  const workingUsed = [0, 1].map((back) => ct.tl({ contractTimeMode: 'working', meta: { ntpDate: '2026-09-01', contractLength: '100' } }, [], new Date(Date.now() - back * 86400000).toISOString().slice(0, 10)).day);
+  const workingUsed = [0, 1].map((back) => ct.tl({ contractTimeMode: 'working', meta: { ntpDate: '2026-09-01', contractLength: '100' } }, [{ date: '2026-09-15', notes: 'NO WORK DAY' }], new Date(Date.now() - back * 86400000).toISOString().slice(0, 10)).day);
   check('days left (100 minus working days used)', workingUsed.some((d) => has(`Days left: ${100 - d}`)), true);
   check('alert: pay item over plan', has('Item 201 Clearing is over plan: 12 of 10 AC (120%)'), true);
   // Bridge 4 counts calendar days, the NTP date being day 1.

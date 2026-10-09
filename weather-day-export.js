@@ -1,7 +1,7 @@
 // Builds the monthly "Weather and Working Day Report" workbook from a
 // project's reports via ExcelJS: one row per day of the month, whether the
-// day was charged as a contract day or lost (weekend, holiday, Weather
-// Day), the weather logged that day, and totals for the month, the
+// day was charged as a contract day or lost (a Weather Day or No Work
+// Day, by the project's contract time setting), the weather logged that day, and totals for the month, the
 // previous report and to date. Laid out like the paper form inspectors
 // already turn in, with formulas for the totals so the sheet still adds up
 // after someone edits a day by hand. Days count by the project's contract
@@ -40,9 +40,9 @@ function weatherDayCause(report) {
 // How one day counts, by the project's contract time setting (see
 // contract-time.js's contractDayInfo). `charged` is true (a contract day),
 // false (a lost day) or null (not counted: before NTP or still to come).
-function weatherDayStatus(iso, report, { start, today, mode, weatherDates }) {
+function weatherDayStatus(iso, report, { start, today, mode, lostDates }) {
   const dow = new Date(iso + 'T12:00:00').getDay();
-  const info = contractDayInfo(iso, mode, weatherDates);
+  const info = contractDayInfo(iso, mode, lostDates);
   const out = { sundayHoliday: info.holiday || (dow === 0 ? 'Sunday' : ''), weather: '', charged: null, cause: '' };
   if (report) {
     const temps = (report.tempHigh || report.tempLow) ? `${report.tempHigh || '--'}°/${report.tempLow || '--'}°F` : '';
@@ -50,7 +50,9 @@ function weatherDayStatus(iso, report, { start, today, mode, weatherDates }) {
   }
   if ((start && iso < start) || iso > today) return out;
   out.charged = info.charged;
-  out.cause = info.cause === 'Weather' && report ? weatherDayCause(report) : info.cause;
+  if (info.cause === 'Weather' && report) out.cause = weatherDayCause(report);
+  else if (info.cause === 'No Work Day' && report) out.cause = (report.commentsOnTime || '').trim() || 'No Work Day';
+  else out.cause = info.cause;
   return out;
 }
 
@@ -92,11 +94,13 @@ async function buildWeatherDayWorkbook(project, reports, monthKey) {
   const monthStart = wdIso(y, m, 1);
   const nextMonthStart = wdIso(m === 12 ? y + 1 : y, m === 12 ? 1 : m + 1, 1);
   const dated = reports.filter((r) => /^\d{4}-\d{2}-\d{2}$/.test(r.date || '')).sort((a, b) => a.date.localeCompare(b.date));
-  // A Weather Day wins over another report filed the same day.
+  // A Weather Day wins over another report filed the same day, then a No
+  // Work Day, so the row shows the report that decided how the day counts.
+  const rank = (r) => (isWeatherDayReport(r) ? 2 : isNoWorkDayReport(r) ? 1 : 0);
   const byDate = new Map();
-  dated.forEach((r) => { if (!byDate.has(r.date) || isWeatherDayReport(r)) byDate.set(r.date, r); });
+  dated.forEach((r) => { if (!byDate.has(r.date) || rank(r) > rank(byDate.get(r.date))) byDate.set(r.date, r); });
   const ntp = /^\d{4}-\d{2}-\d{2}$/.test(meta.ntpDate || '') ? meta.ntpDate : '';
-  const opts = { start: ntp || (dated[0] && dated[0].date) || '', today: todayIso(), mode: contractTimeMode(project), weatherDates: contractWeatherDates(dated) };
+  const opts = { start: ntp || (dated[0] && dated[0].date) || '', today: todayIso(), mode: contractTimeMode(project), lostDates: contractLostDates(dated) };
   const monthReports = dated.filter((r) => r.date >= monthStart && r.date < nextMonthStart);
   const estimate = (project.billingEstimates || [])
     .filter((e) => (e.date || '') >= monthStart && (e.date || '') < nextMonthStart)
