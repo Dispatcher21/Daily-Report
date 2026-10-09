@@ -8,23 +8,30 @@
 // file changes.
 //
 // Per project (both optional, unset means the first option):
-//   contractTimeMode   'working' | 'calendar'
+//   contractTimeMode   'working' | 'calendar' | 'every'
 //   reportNumbering    'next' | 'contractDay' | 'dateOrder' | 'off'
 //   reportNumberStart  the first Report No. for 'next' and 'dateOrder'
 
+// unit: what the contract length is in ("120 working days"); counts: what
+// uses contract time, for the dashboard's tooltips.
 const CONTRACT_TIME_MODES = [
-  { value: 'working', label: 'Working days', hint: 'Only weekdays count. Weekends, holidays and Weather Days don\'t use contract time.' },
-  { value: 'calendar', label: 'Calendar days', hint: 'Every day counts except Weather Days.' },
+  { value: 'working', label: 'Working days', hint: 'Only weekdays count. Weekends, holidays and Weather Days don\'t use contract time.', unit: 'working', counts: 'weekdays, not counting holidays or Weather Days' },
+  { value: 'calendar', label: 'Calendar days', hint: 'Every day counts except Weather Days.', unit: 'calendar', counts: 'every day but Weather Days' },
+  { value: 'every', label: 'Every day', hint: 'Every day counts, no matter what, Weather Days included.', unit: 'calendar', counts: 'every day, Weather Days included' },
 ];
 const REPORT_NUMBERING_MODES = [
   { value: 'next', label: 'Next number', hint: 'One more than the highest Report No. on file.' },
-  { value: 'contractDay', label: 'Match the contract day', hint: 'The contract day of the report\'s date (day 1 is the NTP date). A weekend or Weather Day report shares the number of the work day before it. Needs an NTP date.' },
+  { value: 'contractDay', label: 'Match the contract day', hint: 'The contract day of the report\'s date (day 1 is the NTP date). A report on a day that doesn\'t count (a weekend or Weather Day under Working days) shares the number of the day before it. Needs an NTP date.' },
   { value: 'dateOrder', label: 'Follow date order', hint: 'Its place among the project\'s reports by date, so a report filed late for an earlier day gets the number for that day. Reports already on file keep their numbers.' },
   { value: 'off', label: 'Off', hint: 'Report No. starts blank and the inspector types it.' },
 ];
 
 function contractTimeMode(project) {
-  return project && project.contractTimeMode === 'calendar' ? 'calendar' : 'working';
+  const v = project && project.contractTimeMode;
+  return CONTRACT_TIME_MODES.some((m) => m.value === v) ? v : 'working';
+}
+function contractTimeModeInfo(mode) {
+  return CONTRACT_TIME_MODES.find((m) => m.value === mode) || CONTRACT_TIME_MODES[0];
 }
 function reportNumberingMode(project) {
   const v = project && project.reportNumbering;
@@ -91,6 +98,7 @@ function contractWeatherDates(reports) {
 function contractDayInfo(iso, mode, weatherDates) {
   const holiday = contractHolidays(Number(iso.slice(0, 4))).get(iso) || '';
   const dow = new Date(iso + 'T12:00:00').getDay();
+  if (mode === 'every') return { charged: true, holiday, cause: '' };
   if (weatherDates && weatherDates.has(iso)) return { charged: false, holiday, cause: 'Weather' };
   if (mode === 'working') {
     if (holiday) return { charged: false, holiday, cause: `${holiday} Holiday` };
