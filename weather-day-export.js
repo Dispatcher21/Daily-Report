@@ -1,11 +1,12 @@
 // Builds the monthly "Weather and Working Day Report" workbook from a
 // project's reports via ExcelJS: one row per day of the month, whether the
 // day was charged as a contract day or lost (a Weather Day or No Work
-// Day, by the project's contract time setting), the weather logged that day, and totals for the month, the
+// Day), the weather logged that day, and totals for the month, the
 // previous report and to date. Laid out like the paper form inspectors
 // already turn in, with formulas for the totals so the sheet still adds up
-// after someone edits a day by hand. Days count by the project's contract
-// time setting (contract-time.js). Used by project.html's daily log
+// after someone edits a day by hand. Weather Days and No Work Days are
+// always no charge here, whatever the project's contract time setting
+// (that only drives the dashboards' day count). Used by project.html's daily log
 // calendar. Needs the global ExcelJS from lib/exceljs.min.js -- callers
 // load it first (ensureWeatherDayLibs).
 
@@ -37,8 +38,8 @@ function weatherDayCause(report) {
   return text;
 }
 
-// How one day counts, by the project's contract time setting (see
-// contract-time.js's contractDayInfo). `charged` is true (a contract day),
+// How one day counts on the sheet (contract-time.js's contractDayInfo,
+// always by the Working days rule: Weather Days and No Work Days lost). `charged` is true (a contract day),
 // false (a lost day) or null (not counted: before NTP or still to come).
 function weatherDayStatus(iso, report, { start, today, mode, lostDates }) {
   const dow = new Date(iso + 'T12:00:00').getDay();
@@ -100,7 +101,7 @@ async function buildWeatherDayWorkbook(project, reports, monthKey) {
   const byDate = new Map();
   dated.forEach((r) => { if (!byDate.has(r.date) || rank(r) > rank(byDate.get(r.date))) byDate.set(r.date, r); });
   const ntp = /^\d{4}-\d{2}-\d{2}$/.test(meta.ntpDate || '') ? meta.ntpDate : '';
-  const opts = { start: ntp || (dated[0] && dated[0].date) || '', today: todayIso(), mode: contractTimeMode(project), lostDates: contractLostDates(dated) };
+  const opts = { start: ntp || (dated[0] && dated[0].date) || '', today: todayIso(), mode: 'working', lostDates: contractLostDates(dated) };
   const monthReports = dated.filter((r) => r.date >= monthStart && r.date < nextMonthStart);
   const estimate = (project.billingEstimates || [])
     .filter((e) => (e.date || '') >= monthStart && (e.date || '') < nextMonthStart)
