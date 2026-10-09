@@ -151,6 +151,7 @@
 
 <script src="common.js"></script>
 <script src="defaults.js"></script>
+<script src="contract-time.js"></script>
 <script src="storage.js"></script>
 <script src="audit-log.js"></script>
 <script src="quantity-calc.js"></script>
@@ -578,7 +579,7 @@ $('#btn-save-quantities').addEventListener('click', async () => {
         report.payItems.push(...multiByItem[itemNumber]);
       });
     } else {
-      const nextNo = await getNextReportNo(project.id);
+      const nextNo = await getNextReportNo(project.id, date);
       const previous = allReports[0]; // most recently updated -- carries forward representative/contractors/etc, same as a normal new report
       report = await makeBlankReport(nextNo, project, previous);
       report.date = date;

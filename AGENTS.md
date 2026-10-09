@@ -119,9 +119,10 @@ Node 22, region `us-central1`. All email goes through Resend
 - Admin emails: `onCompanyUpdated`, `onProjectDeleted`,
   `onProblemReported`, `adminAlertDigest` (every 15 minutes).
 
-`functions/lib/quantity-calc.js` is a copy of the app's `quantity-calc.js`
-so the roundup's numbers match the dashboards. **Re-copy it whenever
-`quantity-calc.js` changes.**
+`functions/lib/quantity-calc.js` and `functions/lib/contract-time.js` are
+copies of the app's `quantity-calc.js` and `contract-time.js` so the
+roundup's numbers match the dashboards. **Re-copy them whenever the app's
+copies change.**
 
 In the emulator, `sendEmail` writes to a `devOutbox` collection instead of
 sending, so the tests can read every email.

@@ -294,20 +294,7 @@ function reportPhotoCount(r) {
   return (r.photos || []).filter((p, i) => p || (r.photosFetched && r.photosFetched[i] === false)).length;
 }
 
-// A project's contract dates, when both NTP Date and Total Contract Length
-// are on file: { ntp, length, end (ISO), day (days since NTP), frac } or null.
-function projectContractTimeline(project) {
-  const meta = project.meta || {};
-  const ntp = meta.ntpDate;
-  const length = parseInt(meta.contractLength, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(ntp || '') || !Number.isFinite(length) || length <= 0) return null;
-  const day = daysBetween(ntp, todayIso());
-  if (!Number.isFinite(day)) return null;
-  const end = new Date(ntp + 'T12:00:00');
-  end.setDate(end.getDate() + length);
-  const endIso = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}`;
-  return { ntp, length, end: endIso, day, frac: day / length };
-}
+// projectContractTimeline lives in contract-time.js.
 
 // On pace / slightly behind / behind, same thresholds as the Schedule Used
 // ring: 'ok' | 'warn' | 'danger', or null without enough on file.

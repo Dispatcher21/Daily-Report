@@ -19,6 +19,15 @@ const calc = (() => {
   return ctx.__x;
 })();
 
+// The app's contract day counting (a copy of contract-time.js), so days
+// used and left match the dashboards, working-day projects included.
+const contractTime = (() => {
+  const ctx = {};
+  vm.runInNewContext(`${fs.readFileSync(path.join(__dirname, 'lib', 'contract-time.js'), 'utf8')}
+;this.__x = { projectContractTimeline };`, ctx);
+  return ctx.__x;
+})();
+
 const DEFAULT_TZ = 'America/Chicago';
 
 // ---------- dates ----------
@@ -30,7 +39,6 @@ function localParts(date, timeZone) {
   return { iso: `${parts.year}-${parts.month}-${parts.day}`, weekday: parts.weekday, hour: Number(parts.hour) };
 }
 const addDays = (iso, n) => { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
-const daysBetween = (a, b) => Math.round((new Date(`${b}T00:00:00Z`) - new Date(`${a}T00:00:00Z`)) / 86400000);
 const DOW = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 };
 // The Monday-to-Sunday week before the one containing `todayIso`.
 function lastWeek(todayIso, weekday) {
@@ -71,14 +79,13 @@ function projectSummary(project, reports, week, today) {
   const overall = calc.overallPercentComplete(overview);
   const { totalContract, totalEarned } = calc.contractValueSummary(overview);
   const meta = project.meta || {};
-  const contractLength = parseInt(meta.contractLength, 10);
+  const timeline = contractTime.projectContractTimeline(project, live, today);
   let daysLeft = null;
   let schedule = null;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(meta.ntpDate || '') && Number.isFinite(contractLength) && contractLength > 0) {
-    const used = daysBetween(meta.ntpDate, today);
-    daysLeft = contractLength - used;
+  if (timeline) {
+    daysLeft = timeline.length - timeline.day;
     if (overall != null) {
-      const timeFrac = used / contractLength; // same 3-tier call as the app's dashboards
+      const timeFrac = timeline.frac; // same 3-tier call as the app's dashboards
       schedule = overall + 0.05 >= timeFrac ? 'On schedule' : overall + 0.2 >= timeFrac ? 'Slightly behind' : 'Behind schedule';
     }
   }
@@ -88,7 +95,7 @@ function projectSummary(project, reports, week, today) {
   if (daysLeft != null && daysLeft < 0) alerts.push(`Past contract time by ${-daysLeft} day${daysLeft === -1 ? '' : 's'}`);
   else if (daysLeft != null && daysLeft <= 30) alerts.push(`${daysLeft} day${daysLeft === 1 ? '' : 's'} left on the contract`);
   if (schedule && schedule !== 'On schedule') {
-    alerts.push(`${schedule}: ${Math.round(overall * 100)}% complete with ${Math.round((daysBetween(meta.ntpDate, today) / contractLength) * 100)}% of contract time used`);
+    alerts.push(`${schedule}: ${Math.round(overall * 100)}% complete with ${Math.round(timeline.frac * 100)}% of contract time used`);
   }
   const overruns = overview.filter((it) => it.planned && it.total > it.planned && !calc.isLumpSumItem(it));
   overruns.slice(0, 5).forEach((it) => alerts.push(`Item ${it.itemNumber}${it.description ? ` ${it.description}` : ''} is over plan: ${fmt(it.total, 2)} of ${fmt(it.planned, 2)} ${it.unit || ''} (${Math.round((it.total / it.planned) * 100)}%)`.replace(/ +\(/, ' (')));

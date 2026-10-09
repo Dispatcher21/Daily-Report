@@ -124,6 +124,7 @@
 <script src="lib/jspdf.umd.min.js"></script>
 <script src="common.js"></script>
 <script src="defaults.js"></script>
+<script src="contract-time.js"></script>
 <script src="storage.js"></script>
 <script src="audit-log.js"></script>
 <script src="project-file.js"></script>
@@ -239,7 +240,7 @@ async function buildProjectData(reports) {
     const spanDays = Math.max(1, daysBetween(dated[0].date, dated[dated.length - 1].date) + 1);
     avgHoursPerWeek = totalHours / Math.max(spanDays / 7, 1 / 7);
   }
-  const timeline = projectContractTimeline(project);
+  const timeline = projectContractTimeline(project, reports);
   const ntpDate = (project.meta || {}).ntpDate;
   const daysSinceNtp = /^\d{4}-\d{2}-\d{2}$/.test(ntpDate || '') ? daysBetween(ntpDate, todayIso()) : null;
 
@@ -321,7 +322,7 @@ function renderWorkspace() {
     ['Project Name', meta.projectName],
     ['Project Engineer', meta.peName],
     ['NTP Date', /^\d{4}-\d{2}-\d{2}$/.test(meta.ntpDate || '') ? fmtDate(meta.ntpDate) : ''],
-    ['Contract Time', meta.contractLength ? `${meta.contractLength} calendar days` : ''],
+    ['Contract Time', meta.contractLength ? `${meta.contractLength} ${contractTimeMode(project) === 'working' ? 'working' : 'calendar'} days` : ''],
     ['Completion Date', tl ? fmtDate(tl.end) : ''],
     ['Contract Value', pd.totalContract != null ? fmtMoney(pd.totalContract) : ''],
   ].filter(([, v]) => v);
@@ -449,8 +450,8 @@ function pdProgressHtml() {
     const color = pd.status === 'ok' ? 'var(--ok)' : pd.status === 'warn' ? 'var(--warn)' : pd.status === 'danger' ? 'var(--danger)' : null;
     const left = tl.length - tl.day;
     const tip = pd.overall != null
-      ? `${Math.round(tl.frac * 100)}% of the contract's ${tl.length} days have elapsed, versus ${Math.round(pd.overall * 100)}% of planned work complete. ${pd.status === 'ok' ? 'On pace or ahead of schedule.' : 'Behind schedule -- more time used than work done.'}`
-      : `${Math.round(tl.frac * 100)}% of the contract's ${tl.length} days have elapsed. Add a Per Plans Total to pay items to compare this against % complete.`;
+      ? `${Math.round(tl.frac * 100)}% of the contract's ${tl.length} days have been used, versus ${Math.round(pd.overall * 100)}% of planned work complete. ${pd.status === 'ok' ? 'On pace or ahead of schedule.' : 'Behind schedule -- more time used than work done.'}`
+      : `${Math.round(tl.frac * 100)}% of the contract's ${tl.length} days have been used. Add a Per Plans Total to pay items to compare this against % complete.`;
     scheduleCard = ringCardHtml(tl.frac, 'Schedule Used', left >= 0 ? `${left} day(s) left` : `${-left} day(s) over`, tip, color);
   }
   const rings = [
@@ -471,7 +472,7 @@ function pdNumbersHtml() {
   const cards = [
     statCard(pd.reports.length, 'Reports Filed', '', 'Number of daily reports saved for this project.', null, 'int'),
     pd.daysSinceNtp != null ? statCard(pd.daysSinceNtp, 'Days Since NTP', '', `Calendar days from the NTP Date (${project.meta.ntpDate}) to today.`, null, 'int') : '',
-    left != null ? statCard(left, 'Days Remaining (Contract)', left < 0 ? 'Past contract length' : '', `Total Contract Length (${tl.length} days) minus Days Since NTP. Negative means the contract's allotted days have been exceeded.`, null, 'int') : '',
+    left != null ? statCard(left, 'Days Remaining (Contract)', left < 0 ? 'Past contract length' : '', `Total Contract Length (${tl.length} ${tl.mode === 'working' ? 'working' : 'calendar'} days) minus the contract days used so far (${tl.mode === 'working' ? 'weekdays, not counting holidays or Weather Days' : 'every day but Weather Days'}). Negative means the contract's allotted days have been exceeded.`, null, 'int') : '',
     statCard(pd.totalHours, 'Total Hours Worked', '', 'Sum of the Hours field across every report on file for this project.', null, 'decimal1'),
     pd.avgHoursPerWeek ? statCard(pd.avgHoursPerWeek, 'Avg Hours / Week', '', 'Total hours worked, divided by the number of weeks between the earliest and latest dated report.', null, 'decimal1') : '',
     statCard(pd.items.length, 'Pay Items in Catalog', '', 'Number of distinct pay item numbers on this project, whether or not they\'ve shown up on a report yet.', null, 'int'),

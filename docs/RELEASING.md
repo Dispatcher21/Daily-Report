@@ -11,6 +11,9 @@ owner has applied it.
 
 - Functions: `weeklyRoundup` and `sendRoundupPreview` (Lump Sum logged in
   percent is left out of the overall % complete, same as the dashboards).
+- Functions: `weeklyRoundup` and `sendRoundupPreview` again (contract days
+  used and left follow each project's Working days / Calendar days
+  setting, via the new `functions/lib/contract-time.js`).
 
 Future idea, not scheduled: move Pay Apps out of the project document
 into their own records (`companies/{code}/payApps`). Then the rules could

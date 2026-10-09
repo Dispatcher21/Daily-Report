@@ -49,6 +49,13 @@
   .ps-full { grid-column: 1 / -1; }
   .ps-calc { font-size: 0.86rem; background: var(--surface-2); border-radius: var(--radius-sm); padding: 0.5rem 0.65rem; color: var(--text-dim); }
   .ps-calc b { color: var(--text); }
+  .ps-subhead { margin: 0.2rem 0 -0.3rem; font-size: 0.9rem; }
+  .ps-choice { display: grid; gap: 0.4rem; }
+  .ps-card .ps-choice-row { display: flex; flex-direction: row; gap: 0.6rem; align-items: flex-start; padding: 0.55rem 0.65rem; border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; }
+  .ps-choice-row:has(input:checked) { border-color: var(--brand); background: var(--surface-2); }
+  .ps-choice-row input { margin: 0.2rem 0 0; flex-shrink: 0; width: auto; }
+  .ps-choice-row > span { display: grid; gap: 0.1rem; min-width: 0; }
+  .ps-card [hidden] { display: none; }
   .ps-disc { border-top: 1px solid var(--border); padding-top: 0.75rem; }
   .ps-disc > button { border: 0; background: none; padding: 0; font: inherit; font-weight: 800; color: var(--link); cursor: pointer; display: flex; gap: 0.5rem; align-items: center; }
   .ps-disc > button span { color: var(--text-dim); font-weight: 600; font-size: 0.85rem; }
@@ -175,6 +182,7 @@
 <script src="lib/jspdf.umd.min.js"></script>
 <script src="common.js"></script>
 <script src="defaults.js"></script>
+<script src="contract-time.js"></script>
 <script src="storage.js"></script>
 <script src="audit-log.js"></script>
 <script src="project-file.js"></script>
@@ -214,6 +222,7 @@ function trimTrailingBlanks(arr) {
 // nothing is persisted, and the dashboard preview doesn't reload, until then.
 function markDirty() {
   dirty = true;
+  $('#fsb-status').textContent = 'Unsaved changes';
   $('#fsb').classList.add('show');
   $('#fsb-save').disabled = false;
 }
@@ -264,12 +273,13 @@ let canEdit = false;
 let isAdmin = false;
 let psSection = 'info';
 let psShowDefaults = false;
+let psReports = []; // this project's reports, for the contract day count and the next Report No.
 
 const PS_SECTIONS = [
   { id: 'info', icon: '\u{1F4CB}', title: 'Project Info', prints: true, show: () => true, render: () => renderInfoSection(),
     sum: () => {
       const m = project.meta || {};
-      return m.ntpDate ? `NTP ${psFmtDate(m.ntpDate)}${m.contractLength ? ` · ${m.contractLength} days` : ''}` : 'Start here';
+      return m.ntpDate ? `NTP ${psFmtDate(m.ntpDate)}${m.contractLength ? ` · ${m.contractLength} ${contractTimeMode(project)} days` : ''}` : 'Start here';
     } },
   { id: 'pay', icon: '\u{1F4CA}', title: 'Pay Items', show: () => canEdit, render: () => renderPayItemsTab(),
     sum: () => {
@@ -338,20 +348,21 @@ const PS_BASIC_KEYS = ['name', 'projectNo', 'projectName', 'location', 'ntpDate'
 const PS_RETIRED_KEYS = ['workSummaryHeader', 'trafficControlNote'];
 
 function psEndText() {
-  const m = project.meta || {};
-  const days = parseInt(m.contractLength, 10);
-  if (!m.ntpDate || !(days > 0)) return 'Fill in the NTP date and contract length to see when the contract ends.';
-  const start = new Date(`${m.ntpDate}T12:00:00`);
-  if (Number.isNaN(start.getTime())) return '';
-  const end = new Date(start);
-  end.setDate(end.getDate() + days);
-  const today = new Date();
-  today.setHours(12, 0, 0, 0);
-  const used = Math.round((today - start) / 86400000);
-  const endTxt = end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  if (used < 0) return `Ends <b>${endTxt}</b> · starts in ${-used} day${used === -1 ? '' : 's'}`;
-  const left = days - used;
-  return `Ends <b>${endTxt}</b> · day ${used} of ${days} · <b>${left >= 0 ? `${left} day${left === 1 ? '' : 's'} left` : `${-left} day${left === -1 ? '' : 's'} over`}</b>`;
+  const tl = projectContractTimeline(project, psReports);
+  if (!tl) return 'Fill in the NTP date and contract length to see when the contract ends.';
+  const endTxt = new Date(`${tl.end}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  if (tl.day < 0) return `Ends <b>${endTxt}</b> · starts in ${-tl.day} day${tl.day === -1 ? '' : 's'}`;
+  const left = tl.length - tl.day;
+  return `Ends <b>${endTxt}</b> · day ${tl.day} of ${tl.length} · <b>${left >= 0 ? `${left} day${left === 1 ? '' : 's'} left` : `${-left} day${left === -1 ? '' : 's'} over`}</b>`;
+}
+
+// Contract time and Report No. settings. Anyone who can open the project
+// can change these, not only people who can edit project info: they're how
+// the inspector's own day count and numbering work.
+function psChoice(key, options, current) {
+  return `<div class="ps-choice" role="radiogroup">${options.map((o) => `
+    <label class="ps-choice-row"><input type="radio" name="ps-${key}" data-proj-key="${key}" value="${o.value}"${o.value === current ? ' checked' : ''}>
+      <span><b>${escapeHtml(o.label)}</b><span class="hint" style="margin:0">${escapeHtml(o.hint)}</span></span></label>`).join('')}</div>`;
 }
 
 function renderInfoSection() {
@@ -374,7 +385,7 @@ function renderInfoSection() {
   const filled = defaults.filter((f) => String(m[f.key] || '').trim()).length;
   const label = (f) => f.label.replace(/^DEFAULT /, '').toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
   $('#ps-panel').innerHTML = `
-    ${psHead('Project Info', `What prints at the top of every report, and the dates the dashboard counts from.${canEdit ? '' : ' Only people who can edit projects can change these.'}`)}
+    ${psHead('Project Info', `What prints at the top of every report, and the dates the dashboard counts from.${canEdit ? '' : ' Only people who can edit projects can change the project details, but anyone on the project can set how contract time counts and how reports are numbered.'}`)}
     <div class="ps-card">
       <h3>The project</h3>
       <div class="field-grid">
@@ -388,9 +399,20 @@ function renderInfoSection() {
       <h3>Contract time</h3>
       <div class="field-grid">
         ${fld('ntpDate', 'NTP date')}
-        ${fld('contractLength', 'Contract length (calendar days)')}
+        ${fld('contractLength', 'Contract length (days)')}
       </div>
+      <h4 class="ps-subhead">Contract time counts</h4>
+      ${psChoice('contractTimeMode', CONTRACT_TIME_MODES, contractTimeMode(project))}
       <div class="ps-calc" id="ps-endinfo">${psEndText()}</div>
+    </div>
+    <div class="ps-card">
+      <h3>Report numbers</h3>
+      <p class="hint" style="margin:0 0 0.5rem">How a new report's Report No. fills in. The inspector can still change it on the report.</p>
+      ${psChoice('reportNumbering', REPORT_NUMBERING_MODES, reportNumberingMode(project))}
+      <div class="field-grid" id="ps-start-wrap"${['next', 'dateOrder'].includes(reportNumberingMode(project)) ? '' : ' hidden'}>
+        <label>Start numbering at<input type="number" min="1" inputmode="numeric" data-proj-key="reportNumberStart" value="${escapeHtml(String(project.reportNumberStart || ''))}" placeholder="1"><span class="hint" style="margin:0">For a project that started on paper: the first report in the app gets this number.</span></label>
+      </div>
+      <div class="ps-calc" id="ps-nextno"></div>
     </div>
     <div class="ps-card">
       <h3>People</h3>
@@ -406,6 +428,23 @@ function renderInfoSection() {
     </div>`;
 
   $('#ps-defaults-toggle').addEventListener('click', () => { psShowDefaults = !psShowDefaults; renderInfoSection(); });
+  const showNextNo = () => {
+    const no = reportNumberFor(project, psReports, todayIso());
+    $('#ps-nextno').innerHTML = no === '' ? 'New reports start with Report No. blank.' : `A new report today would be <b>Report No. ${escapeHtml(String(no))}</b>.`;
+  };
+  showNextNo();
+  $$('[data-proj-key]', $('#ps-panel')).forEach((el) => {
+    el.addEventListener(el.type === 'radio' ? 'change' : 'input', () => {
+      const key = el.dataset.projKey;
+      if (key === 'reportNumberStart') project[key] = el.value.trim() && parseInt(el.value, 10) > 0 ? String(parseInt(el.value, 10)) : '';
+      else project[key] = el.value;
+      if (key === 'reportNumbering') $('#ps-start-wrap').hidden = !['next', 'dateOrder'].includes(el.value);
+      $('#ps-endinfo').innerHTML = psEndText();
+      showNextNo();
+      markDirty();
+      renderNav();
+    });
+  });
   if (!canEdit) return;
   $('#ps-name').addEventListener('input', (e) => {
     project.name = e.target.value;
@@ -1209,6 +1248,7 @@ async function init() {
     canEdit = await companyCan('editProjects');
   }
   if (!project.meta) project.meta = {};
+  psReports = await getReportsForProject(project.id);
 
   $('#project-name-sub').textContent = project.name;
   renderBreadcrumb('#bb-trail', [

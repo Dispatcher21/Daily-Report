@@ -679,6 +679,28 @@ quantity-sheet-export.js
   and by local-sync.js's buildQuantitySheetSyncFile (folder/zip sync).
   Depends on quantity-calc.js for the actual aggregation math.
 
+contract-time.js
+  How contract time counts, shared by every page that shows it and by
+  new report numbers (no DOM or storage; functions/lib/contract-time.js is
+  a copy for the weekly roundup -- re-copy it when this changes). Two
+  per-project settings, both set in Project Settings > Project Info by
+  anyone on the project (not only people who can edit projects):
+  project.contractTimeMode ('working', the default: weekdays only, not the
+  holidays in contractHolidays or Weather Days; or 'calendar': every day
+  but Weather Days) and project.reportNumbering ('next', the default:
+  highest plus one; 'contractDay'; 'dateOrder'; 'off': blank) with
+  project.reportNumberStart (first number for next/date order).
+  contractDayInfo (how one day counts), contractWeatherDates,
+  projectContractTimeline(project, reports, today?) -> { ntp, length,
+  end (the last contract day), day (days used through today, the NTP date
+  being day 1), frac, mode, usedThrough(iso) } -- used by project.html's
+  hero/Schedule Used/stat cards, index.html's Manager Dashboard (status,
+  pace chart, deadlines) and Project Settings' end date -- and
+  reportNumberFor(project, otherReports, date), which storage.js's
+  getNextReportNo(projectId, date) calls for every new report. The report
+  editor renumbers a report when its date changes under contractDay or
+  dateOrder, unless the number was typed by hand.
+
 weather-day-export.js
   Builds the monthly Weather and Working Day Report (.xlsx, via ExcelJS,
   loaded on demand by ensureWeatherDayLibs) laid out like the paper form:
@@ -688,10 +710,10 @@ weather-day-export.js
   signature block. buildWeatherDayWorkbook(project, reports, 'YYYY-MM') is
   the entry point, called by project.html's "Weather & Workday" button.
   Rules (weatherDayStatus): days before NTP (or the first report when
-  there's no NTP) and future days aren't counted; weekends, the holidays
-  in weatherDayHolidays (New Year's, MLK, Memorial, Independence, Labor,
-  Thanksgiving, Christmas) and Weather Day reports are lost days; every
-  other day is a contract day, No Work Days included. A Weather Day's cause
+  there's no NTP) and future days aren't counted; every other day counts
+  by contract-time.js's contractDayInfo for the project's setting (working
+  days: weekends, holidays and Weather Days lost; calendar days: only
+  Weather Days lost), No Work Days included as contract days. A Weather Day's cause
   is its Comments on Time Charged (weatherDayCause trims the Weather Day
   button's own sentence back to the reason). Est. No. is the Pay App dated
   in that month; the contractor is the one named most on that month's
