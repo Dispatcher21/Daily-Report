@@ -12,8 +12,8 @@ Newest first. Dates are when the work shipped.
     The totals are formulas, so the sheet still adds up after you edit
     a day.
   - Contract time can count Every day (the default), Working days
-    (weekdays only; weekends, holidays and Weather Days don't use
-    time) or Calendar days (every day except Weather Days). Set it in
+    (every day except Weather Days and No Work Days) or Calendar days
+    (every day except Weather Days). Set it in
     Project Settings, Project Info. The dashboards, end date, Manager
     Dashboard, Weather & Workday sheet and weekly roundup all follow
     it. The NTP date now counts as day 1.
