@@ -267,6 +267,10 @@ const text = (p, sel) => p.textContent(sel).then((t) => t.replace(/\s+/g, ' ').t
   const workingEnd = await text(p, '#ps-endinfo');
   await p.click('[name="ps-contractTimeMode"][value="calendar"]');
   check('calendar days end sooner', (await text(p, '#ps-endinfo')) !== workingEnd, true);
+  const calendarEnd = await text(p, '#ps-endinfo');
+  await p.click('[name="ps-contractTimeMode"][value="every"]');
+  check('every day: the Weather Day counts too, so it ends a day sooner', (await text(p, '#ps-endinfo')) !== calendarEnd, true);
+  await p.click('[name="ps-contractTimeMode"][value="calendar"]');
   await p.click('[name="ps-reportNumbering"][value="contractDay"]');
   check('start-at box only for next and date order', await p.isVisible('#ps-start-wrap'), false);
   await p.click('#fsb-save');

@@ -279,7 +279,7 @@ const PS_SECTIONS = [
   { id: 'info', icon: '\u{1F4CB}', title: 'Project Info', prints: true, show: () => true, render: () => renderInfoSection(),
     sum: () => {
       const m = project.meta || {};
-      return m.ntpDate ? `NTP ${psFmtDate(m.ntpDate)}${m.contractLength ? ` · ${m.contractLength} ${contractTimeMode(project)} days` : ''}` : 'Start here';
+      return m.ntpDate ? `NTP ${psFmtDate(m.ntpDate)}${m.contractLength ? ` · ${m.contractLength} ${contractTimeModeInfo(contractTimeMode(project)).unit} days` : ''}` : 'Start here';
     } },
   { id: 'pay', icon: '\u{1F4CA}', title: 'Pay Items', show: () => canEdit, render: () => renderPayItemsTab(),
     sum: () => {
