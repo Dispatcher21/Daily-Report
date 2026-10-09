@@ -3,6 +3,28 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.072 -- 2026-10-09
+  - Weather and Working Day Report: a "Weather & Workday" button on the
+    project's daily log calendar downloads the month on screen as an
+    Excel sheet laid out like the paper form. Each day's weather,
+    contract days and lost days (with the cause), totals for the
+    period, the previous report and to date, and the signature block.
+    The totals are formulas, so the sheet still adds up after you edit
+    a day.
+  - Contract time can count Every day (the default), Working days
+    (weekdays only; weekends, holidays and Weather Days don't use
+    time) or Calendar days (every day except Weather Days). Set it in
+    Project Settings, Project Info. The dashboards, end date, Manager
+    Dashboard, Weather & Workday sheet and weekly roundup all follow
+    it. The NTP date now counts as day 1.
+  - Report numbers: choose how a new report's Report No. fills in.
+    Next number (as before), match the contract day, follow date order,
+    or off (typed by hand), with an optional starting number for
+    projects that began on paper. Changing a report's date updates its
+    number under contract day or date order, unless you typed your own.
+  - Anyone on a project can change these two settings, not only people
+    who can edit projects.
+
 0.0714 -- 2026-10-09
   - New pay item unit: Lump sum (logged in percent). Pick "LSP" as the
     unit in Project Settings, Pay Items, and enter the Lump Sum amount
