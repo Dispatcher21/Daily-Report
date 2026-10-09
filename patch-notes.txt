@@ -3,6 +3,14 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.0714 -- 2026-10-09
+  - New pay item unit: Lump sum (logged in percent). Pick "LSP" as the
+    unit in Project Settings, Pay Items, and enter the Lump Sum amount
+    in dollars. Inspectors log percent complete (25 means 25%), and the
+    dashboards and Pay Apps work out the dollars. Switching an item
+    between the two Lump Sums keeps the dollar amount. Like the dollar
+    Lump Sum, it's left out of the project's overall % complete.
+
 0.0713 -- 2026-10-09
   - Summary and Photos page is always page 2 when it prints, and the
     photos start there: photos 1-4 on it, the rest on the Photo Log
