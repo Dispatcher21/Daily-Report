@@ -3,6 +3,18 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.0713 -- 2026-10-09
+  - Summary and Photos page is always page 2 when it prints, and the
+    photos start there: photos 1-4 on it, the rest on the Photo Log
+    after it. (With more than 6 photos it used to print last.)
+  - That page sizes itself to what's on it. The summary gets the room
+    its text needs and the photos get the rest, so photos print larger
+    instead of squeezed into a fixed half page. 1 or 2 photos share one
+    row and grow to fill it. With more than 6 photos and nothing to
+    continue, there's no empty summary box: photos 1-4 fill the page.
+    Photos never print smaller than before; a long summary shrinks its
+    text instead.
+
 0.0712 -- 2026-10-08
   - Home page redesign. Uses the whole window: for managers, the
     Manager Dashboard on the left and your projects on the right. On
