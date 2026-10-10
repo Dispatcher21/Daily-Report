@@ -947,12 +947,13 @@ body.tutorial-wip::after {
 main { max-width: min(1400px, 94vw); margin: 0 auto; padding: 1rem; }
 
 /* Optional per-project background photo on the project landing page --
-   sits at the very top of the document (not fixed -- it scrolls away like
-   normal content), fading via a dark gradient into the ordinary page
-   background by about halfway down its own height so it blends away
-   rather than cutting off. Page content (header excepted, which is
-   opaque+sticky already) simply stacks on top via normal flow, since this
-   sits at a negative z-index. */
+   starts just under the breadcrumb bar (.page-bg is a zero-height anchor
+   there, so the header and any banners above don't cover the top of the
+   photo), scrolls away like normal content, and fades via a dark gradient
+   into the ordinary page background so it blends away rather than
+   cutting off. Page content simply stacks on top via normal flow, since
+   this sits at a negative z-index. */
+.page-bg { position: relative; height: 0; }
 .page-bg-img {
   position: absolute; top: 0; left: 0; width: 100%; height: 55vh; min-height: 320px;
   object-fit: cover; z-index: -1; pointer-events: none;
@@ -4082,6 +4083,10 @@ body.has-page-bg .global-sync-banner:not(.managed-projects-alert-banner) { backg
 body.has-page-bg .hero-icon { background: rgba(255,255,255,0.18); box-shadow: none; }
 body.has-page-bg .hero h2 { color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,0.75); }
 body.has-page-bg .hero .hero-sub { display: inline-block; color: #fff; background: rgba(10,20,30,0.45); padding: 0.1rem 0.5rem; border-radius: 6px; }
+/* The column labels under the hero can land on the photo too. */
+body.has-page-bg .home-split > section > .eyebrow-row > span:first-child,
+body.has-page-bg .home-split > section > .eyebrow-row .text-btn:not([aria-pressed="true"]) { color: #fff; background: rgba(10,20,30,0.55); padding: 0.1rem 0.5rem; border-radius: 6px; }
+body.has-page-bg .home-split > section > .eyebrow-row { border-bottom-color: transparent; }
 body.has-page-bg .hero-chip:not([class*="st-"]) { background: rgba(10,20,30,0.62); color: #fff; }
 .ws-col .hub-grid.action-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; margin-top: 0; }
 .ws-col .action-tiles .hub-card { display: flex; flex-direction: column; align-items: flex-start; padding: 1rem; min-height: 0; text-align: left; justify-content: flex-start; }
