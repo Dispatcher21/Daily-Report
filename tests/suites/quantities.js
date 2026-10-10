@@ -20,6 +20,7 @@ const text = (p, sel) => p.textContent(sel).then((t) => t.replace(/\s+/g, ' ').t
   const pid = await p.evaluate(async () => (await getAllProjects()).find((pr) => pr.meta.projectNo === 'DEMO-101').id);
   check('example projects, DEMO-101 first', await p.evaluate(async () => (await getAllProjects()).map((pr) => pr.meta.projectNo)), ['DEMO-101', 'DEI-0001', 'NYC-1984', 'PAW-0048', 'OZ-1900', 'MOR-0001', 'TAT-0042', 'SHIRE-007']);
   const settle = () => p.waitForTimeout(1500);
+  check('every example project has its background photo', await p.evaluate(async () => (await getAllProjects()).every((pr) => pr.backgroundImage instanceof Blob && pr.backgroundImage.size > 10000)), true);
   // A believable crew: "you" only on DEMO-101, nobody on two reports the
   // same day, and each other project filed by its own inspectors.
   check('example crew: no double-booking, you on DEMO-101 only, others file their own', await p.evaluate(async (demo) => {

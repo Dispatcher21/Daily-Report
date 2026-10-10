@@ -481,6 +481,17 @@ function tutorialPendingDays() {
 
 let tutorialPhotoSeed = 0;
 
+// The project's background photo, tutorial/backgrounds/<projectNo>.jpg.
+// Not precached for offline use, so offline the project just goes without.
+async function tutorialBackground(def) {
+  try {
+    const res = await fetch(`tutorial/backgrounds/${def.projectNo.toLowerCase()}.jpg`);
+    return res.ok ? await res.blob() : null;
+  } catch (err) {
+    return null;
+  }
+}
+
 // One example project: the project, a report for each of its days (on
 // weekdays ending yesterday), and its Pay Apps. Days in `keepPending` are
 // left waiting on approval (and added to `fresh`); any other day without
@@ -509,7 +520,7 @@ async function seedTutorialProject(def, progress, keepPending, staff, fresh) {
     payItemCatalog: def.catalog,
     billingEstimates: [],
     requiredFields: [], hiddenFields: [], fieldOrder: [],
-    backgroundImage: null, backgroundImageFetched: true,
+    backgroundImage: await tutorialBackground(def), backgroundImageFetched: true,
     createdAt: Date.now(), updatedAt: Date.now(),
   };
   await saveProject(project);
