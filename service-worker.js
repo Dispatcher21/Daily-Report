@@ -1,7 +1,7 @@
 // Caches the app shell so it keeps working with no signal in the field.
 // Bump CACHE_NAME whenever any of these files change so the new version
 // actually gets picked up.
-const CACHE_NAME = 'daily-report-app-v377';
+const CACHE_NAME = 'daily-report-app-v378';
 const ASSETS = [
   './',
   './login.html',
@@ -15,6 +15,7 @@ const ASSETS = [
   './report-photos.html',
   './download.html',
   './settings.html',
+  './manager.html',
   './company-management.html',
   './audit-log.html',
   './quantity-sheet.html',
@@ -88,7 +89,12 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) =>
       Promise.all([
-        ...ASSETS.map((url) => fetch(url, { cache: 'reload' }).then((res) => cache.put(url, res))),
+        // A file that comes back as an error page fails the whole update, so
+        // installed apps keep the last working version and try again later.
+        ...ASSETS.map((url) => fetch(url, { cache: 'reload' }).then((res) => {
+          if (!res.ok) throw new Error(`${url}: ${res.status}`);
+          return cache.put(url, res);
+        })),
         ...FIREBASE_ASSETS.map((url) =>
           fetch(url, { mode: 'cors', cache: 'reload' })
             .then((res) => { if (res.ok) return cache.put(url, res); })

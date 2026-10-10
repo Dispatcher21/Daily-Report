@@ -48,6 +48,15 @@ const lastCode = async (to) => { const m = (await outbox(to)).pop(); return m ? 
   await L2.fill('#rp-code', c2.code); await L2.fill('#rp-password', 'bobthird123'); await L2.click('#btn-rp-save');
   await L2.waitForURL(/index\.html/, { timeout: 20000 });
   check('"I have a code" path works', await L2.evaluate(async () => (await getAccount()).email), 'bob@example.com');
+  // Ten wrong guesses at once use up the five tries. (The emulator runs
+  // calls one at a time, so this checks the counting, not the race the
+  // transaction in resetPasswordWithCode guards against on the live server.)
+  await new Promise((r) => setTimeout(r, 61000)); // past the one-a-minute limit
+  await L2.evaluate(() => sendAccountPasswordReset('bob@example.com')); await L2.waitForTimeout(3000);
+  const c3 = await lastCode('bob@example.com');
+  const wrong = c3.code === '111111' ? '222222' : '111111';
+  await L2.evaluate((wrong) => Promise.all(Array.from({ length: 10 }, () => resetAccountPassword({ email: 'bob@example.com', code: wrong, password: 'bobfourth12' }).catch(() => {}))), wrong);
+  check('ten wrong guesses use up the tries', await L2.evaluate((code) => resetAccountPassword({ email: 'bob@example.com', code, password: 'bobfourth12' }).then(() => 'reset', (e) => e.message), c3.code), 'Too many wrong tries. Ask for a new code.');
   check('non-admin cannot use the admin button', await Bp.evaluate((uid) => adminSendResetCode(uid).then(() => 'sent', (e) => e.message), bUid), 'Only an admin can do that.');
   check('codes are unreadable to the app', await Bp.evaluate(async () => { const { collection, getDocs } = await import(FIRESTORE_SDK); return getDocs(collection(window.FirebaseCore.db, 'emailCodes')).then(() => 'READABLE', (e) => e.code); }), 'permission-denied');
   check('page errors', errs, []);

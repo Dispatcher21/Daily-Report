@@ -146,7 +146,10 @@ function filteredEntries() {
   return allEntries.filter((e) => {
     if (filterState.projectLabel && !NON_PROJECT_ENTITY_TYPES.has(e.entityType) && projectLabelFor(e) !== filterState.projectLabel) return false;
     if (filterState.userName && e.userName !== filterState.userName) return false;
-    const day = new Date(e.timestamp).toISOString().slice(0, 10);
+    // The day on this device's calendar, not UTC's (which runs a day
+    // ahead every evening in the US).
+    const d = new Date(e.timestamp);
+    const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     if (filterState.from && day < filterState.from) return false;
     if (filterState.to && day > filterState.to) return false;
     return true;
@@ -166,7 +169,7 @@ $('#f-al-to').addEventListener('input', (e) => { filterState.to = e.target.value
 
 $('#btn-download-log').addEventListener('click', () => {
   const text = formatAuditLogAsText(filteredEntries());
-  const stamp = new Date().toISOString().slice(0, 10);
+  const stamp = todayIso();
   triggerDownload(new Blob([text], { type: 'text/plain' }), `AuditLog_${stamp}.txt`);
 });
 

@@ -95,6 +95,13 @@ const raw = (p, fn, arg) => p.evaluate(async ({ src, arg }) => {
   check('admin password unlock refused', await Bp.evaluate(() => unlockCompanyAdmin('lock-admin-1').then(() => 'ok', (e) => e.message)), 'Your company now manages admins on its Team screen. Ask an admin to make you one.');
   check('B cannot change company settings', await raw(Bp, `await fs.updateDoc(fs.doc(db, 'companies', code), { name: 'Hacked' });`), 'permission-denied');
   check('B cannot read the team list', await raw(Bp, `return (await fs.getDocs(fs.collection(db, 'companies', code, 'members'))).size;`), 'permission-denied');
+  // Deletion markers make every device drop its copy: only for people who may delete projects.
+  const marker = (sub, id, deletedAt) => `await fs.setDoc(fs.doc(db, 'companies', code, '${sub}', '${id}'), { id: '${id}', deletedAt: ${deletedAt} });`;
+  check('B cannot leave a project deletion marker', await raw(Bp, marker('deletedProjects', 'p1', 'Date.now()')), 'permission-denied');
+  check('B cannot leave a report deletion marker', await raw(Bp, marker('deletedReports', 'rep-p1', 'Date.now()')), 'permission-denied');
+  check('admin can leave a project deletion marker', await raw(A, marker('deletedProjects', 'gone-old', '1') + marker('deletedProjects', 'gone-new', 'Date.now()')), 'ok');
+  check('B can clear a marker past 30 days', await raw(Bp, `await fs.deleteDoc(fs.doc(db, 'companies', code, 'deletedProjects', 'gone-old'));`), 'ok');
+  check('...but not a recent one', await raw(Bp, `await fs.deleteDoc(fs.doc(db, 'companies', code, 'deletedProjects', 'gone-new'));`), 'permission-denied');
 
   // Manager.
   await M.evaluate(() => autoPullCompanyData(true));

@@ -9,6 +9,12 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+// A project's icon, ready for HTML. Escaped like any other text: it's synced
+// data, so it can't be trusted to be one of the app's emoji.
+function projectIconHtml(p) {
+  return escapeHtml((p && p.icon) || '\u{1F4C1}');
+}
+
 // The app's version, shown at the bottom of every page as a link to the
 // patch notes. Bump it together with each new patch-notes.txt entry.
 const APP_VERSION = '0.0722';

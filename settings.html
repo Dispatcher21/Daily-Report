@@ -2087,7 +2087,7 @@ async function renderCmProjects() {
       (p) => `
       <div class="cm-project-row" data-id="${p.id}">
         <div style="display:flex;align-items:center;gap:0.6rem;">
-          <span class="cm-project-icon" data-pick-icon="${p.id}" title="Change icon">${p.icon || '&#128193;'}</span>
+          <span class="cm-project-icon" data-pick-icon="${p.id}" title="Change icon">${projectIconHtml(p)}</span>
           <div>
             <div class="cm-project-name">${escapeHtml(p.name)}</div>
             <div class="cm-project-sub">${(p.payItemCatalog || []).length} pay item(s)${p.meta.projectNo ? ' &middot; #' + escapeHtml(p.meta.projectNo) : ''}</div>

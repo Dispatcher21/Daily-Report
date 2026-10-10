@@ -3043,7 +3043,10 @@ async function pullAllCompanyData(code, onProgress) {
   for (const sub of ['deletedProjects', 'deletedReports']) {
     const tombstoneSnap = await getDocs(collection(db, 'companies', code, sub));
     for (const d of tombstoneSnap.docs) {
-      if ((d.data().deletedAt || 0) < tombstoneCutoff) await deleteDoc(d.ref);
+      // The rules only allow this once a marker is 30 days old by the
+      // server's clock; a phone whose clock runs ahead just leaves it for
+      // next time instead of failing the whole sync.
+      if ((d.data().deletedAt || 0) < tombstoneCutoff) await deleteDoc(d.ref).catch((err) => console.warn('old deletion marker kept:', err.code));
     }
   }
 
