@@ -5,11 +5,13 @@
 // current: about four weeks of weekday reports ending yesterday, which
 // leaves today open for the report the person writes in the tour.
 
-// The example people, all named with civil puns. TUTORIAL_USER is "you"
-// (the reports' author and Representative); a second inspector from
-// TUTORIAL_INSPECTORS helps on each working day, taking turns.
+// The example people, all named with civil puns. TUTORIAL_USER is "you",
+// the lead on DEMO-101. TUTORIAL_INSPECTORS is the rest of the field crew:
+// each other project has one of them as its lead, and they fill in as the
+// second inspector wherever they're free (see tutorialStaffing), so the
+// Hours per Employee widget looks like a real company's.
 const TUTORIAL_USER = 'Phil Dirt';
-const TUTORIAL_INSPECTORS = ['Barry Cade', 'Cole Patch', 'Manny Hole', 'Dusty Rhodes', 'Mac Adam'];
+const TUTORIAL_INSPECTORS = ['Barry Cade', 'Cole Patch', 'Dusty Rhodes', 'Augie Drill', 'Clay Pipe', 'Sandy Loam', 'Patty Pavement'];
 const TUTORIAL_ENGINEER = 'Ken Crete, P.E.';
 const TUTORIAL_COMPANY = { code: 'TUTORIAL', name: 'Example Construction Co.' };
 
@@ -78,16 +80,25 @@ function tutorialIsoDaysAgo(days) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-// The last `count` weekdays before today, oldest first. Never today: a
-// new report the person starts would warn that the date is already taken.
-function tutorialWeekdays(count) {
+// The last `count` weekdays before today, oldest first, after skipping the
+// most recent `skip`. Never today: a new report the person starts would
+// warn that the date is already taken.
+function tutorialWeekdays(count, skip = 0) {
   const out = [];
+  let seen = 0;
   for (let back = 1; out.length < count; back++) {
     const d = new Date();
     d.setDate(d.getDate() - back);
-    if (d.getDay() !== 0 && d.getDay() !== 6) out.unshift(tutorialIsoDaysAgo(back));
+    if (d.getDay() !== 0 && d.getDay() !== 6 && seen++ >= skip) out.unshift(tutorialIsoDaysAgo(back));
   }
   return out;
+}
+
+// A project's report dates, one per day: every `everyNth` weekday, the
+// last one `endsWeekdaysAgo` weekdays before yesterday.
+function tutorialProjectDates(def) {
+  const nth = def.everyNth || 1;
+  return tutorialWeekdays((def.days.length - 1) * nth + 1, def.endsWeekdaysAgo || 0).filter((d, i, all) => (all.length - 1 - i) % nth === 0);
 }
 
 // DEMO-101, the project the guided tour walks through. Its numbers are the
@@ -100,7 +111,7 @@ const TUTORIAL_DEMO = {
   icon: '\u{1F6A7}',
   contractLength: '120',
   engineer: TUTORIAL_ENGINEER,
-  helpers: TUTORIAL_INSPECTORS,
+  lead: TUTORIAL_USER,
   contractors: ['Losers Club Constructors', 'Kenduskeag Paving', 'Neibolt Street Traffic Control'],
   catalog: [
     { itemNumber: '201-01', description: 'Clearing and Grubbing', unit: 'LS', plannedQty: 1, unitPrice: 15000 },
@@ -139,7 +150,9 @@ const TUTORIAL_DEMO = {
 // (a Lump Sum item logs dollars, as in the app). `ntpDaysAgo` sets how
 // far into the contract each one is, so the Manager Dashboard has a mix
 // of on-pace and behind-schedule jobs, and `everyNth` spreads the reports
-// out (one every Nth weekday, the last one yesterday) across that time.
+// out (one every Nth weekday) across that time. `endsWeekdaysAgo` moves the
+// last one back from yesterday, so the projects don't all need inspectors
+// on the same day. `lead` is the project's own inspector.
 const TUTORIAL_OTHER_PROJECTS = [
   {
     projectNo: 'SHIRE-007',
@@ -149,8 +162,9 @@ const TUTORIAL_OTHER_PROJECTS = [
     contractLength: '180',
     ntpDaysAgo: 40,
     everyNth: 4,
+    endsWeekdaysAgo: 1,
     engineer: 'Archie Tect, P.E.',
-    helpers: ['Sandy Loam', 'Mason Jarr'],
+    lead: 'Sandy Loam',
     contractors: ['Proudfoot Masonry', 'Gamgee & Sons Landscaping', 'Brandybuck Ferry & Hauling'],
     catalog: [
       { itemNumber: '100-01', description: 'Round Door, Green, Brass Knob Dead Center', unit: 'EA', plannedQty: 4, unitPrice: 2500 },
@@ -181,7 +195,7 @@ const TUTORIAL_OTHER_PROJECTS = [
     ntpDaysAgo: 20,
     everyNth: 2,
     engineer: 'Dee Watering, P.E.',
-    helpers: ['Augie Drill', 'Cory Sample'],
+    lead: 'Augie Drill',
     contractors: ['Jawa Drilling Co.', 'Anchorhead Lab Services', 'Tosche Station Supply'],
     catalog: [
       { itemNumber: '101-01', description: 'Mobilization (Bantha-Drawn)', unit: 'LS', plannedQty: 1, unitPrice: 12000 },
@@ -211,8 +225,9 @@ const TUTORIAL_OTHER_PROJECTS = [
     contractLength: '365',
     ntpDaysAgo: 330,
     everyNth: 30,
+    endsWeekdaysAgo: 3,
     engineer: 'Gail Vanized, P.E.',
-    helpers: ['Abby Utment', 'Pierce Cap'],
+    lead: 'Augie Drill',
     contractors: ["Durin's Folk Ironworks", 'Khazad Concrete Co.', 'Watcher Pumping Services'],
     catalog: [
       { itemNumber: '105-01', description: 'Removal of Previous Bridge (Balrog Incident)', unit: 'LS', plannedQty: 1, unitPrice: 85000 },
@@ -246,8 +261,9 @@ const TUTORIAL_OTHER_PROJECTS = [
     contractLength: '150',
     ntpDaysAgo: 60,
     everyNth: 6,
+    endsWeekdaysAgo: 4,
     engineer: 'Rhoda Grader, P.E.',
-    helpers: ['Patty Pavement', 'Mill N. Overlay'],
+    lead: 'Clay Pipe',
     contractors: ['Munchkin Paving Co.', 'Tin Man Welding & Fab', 'Emerald City Traffic Control'],
     catalog: [
       { itemNumber: '201-01', description: 'Removal of Damaged Yellow Brick', unit: 'SY', plannedQty: 3000, unitPrice: 18 },
@@ -283,7 +299,7 @@ const TUTORIAL_OTHER_PROJECTS = [
     ntpDaysAgo: 50,
     everyNth: 5,
     engineer: 'Penny Trometer, P.E.',
-    helpers: ['Sandy Box', 'Woody Chips'],
+    lead: 'Sandy Loam',
     contractors: ['Very Good Building & Development Co.', 'Mouse Rat Hauling', 'Sweetums Landscaping'],
     catalog: [
       { itemNumber: '100-01', description: 'Fill the Pit', unit: 'CY', plannedQty: 4800, unitPrice: 22 },
@@ -314,7 +330,7 @@ const TUTORIAL_OTHER_PROJECTS = [
     ntpDaysAgo: 35,
     everyNth: 3,
     engineer: 'Manny Fold, P.E.',
-    helpers: ['Clay Pipe', 'Sue Werline'],
+    lead: 'Clay Pipe',
     contractors: ['Half Shell Lining Co.', 'Casey Jones Bypass Pumping', 'Channel 6 Traffic Control'],
     catalog: [
       { itemNumber: '100-01', description: 'Bypass Pumping', unit: 'LS', plannedQty: 1, unitPrice: 40000 },
@@ -344,8 +360,9 @@ const TUTORIAL_OTHER_PROJECTS = [
     contractLength: '400',
     ntpDaysAgo: 90,
     everyNth: 8,
+    endsWeekdaysAgo: 7,
     engineer: 'Moe Ment, P.E.',
-    helpers: ['Anna Chor', 'Weldon Joint'],
+    lead: 'Patty Pavement',
     contractors: ['Norm Bot Robotics', 'L.O.V.E.M.U.F.F.I.N. Steel Erectors', 'Tri-State Area Glazing'],
     catalog: [
       { itemNumber: '100-01', description: 'Structural Steel', unit: 'LB', plannedQty: 900000, unitPrice: 3.2 },
@@ -382,10 +399,11 @@ async function seedTutorialData(onProgress) {
   // DEMO-101 goes last so it's the most recently updated project: first on
   // the home page, where the tour points at the first project card.
   const keep = tutorialPendingDays();
+  const staff = tutorialStaffing();
   const ids = [];
   const fresh = [];
-  for (const def of TUTORIAL_OTHER_PROJECTS) ids.push(await seedTutorialProject(def, progress, keep.get(def), fresh));
-  const demoId = await seedTutorialProject(TUTORIAL_DEMO, progress, keep.get(TUTORIAL_DEMO), fresh);
+  for (const def of TUTORIAL_OTHER_PROJECTS) ids.push(await seedTutorialProject(def, progress, keep.get(def), staff.get(def), fresh));
+  const demoId = await seedTutorialProject(TUTORIAL_DEMO, progress, keep.get(TUTORIAL_DEMO), staff.get(TUTORIAL_DEMO), fresh);
   ids.push(demoId);
   await saveSetting(managedProjectsSettingKey(TUTORIAL_USER), ids);
 
@@ -395,8 +413,48 @@ async function seedTutorialData(onProgress) {
   await markManagedProjectsSeen();
   const seenAt = Date.now();
   while (Date.now() <= seenAt) await new Promise((r) => setTimeout(r, 5));
-  for (const report of fresh) await saveReport(report);
+  for (const report of fresh) await saveTutorialReport(report);
   return demoId;
+}
+
+// Who's on each report: the project's lead (or, when the lead is on
+// another job that day, whoever has worked the least so far), plus a
+// second inspector on working days, again whoever's free and has worked
+// the least. Nobody is on two reports the same day. Returns
+// Map(def -> array of names per day, the report's author first).
+function tutorialStaffing() {
+  const defs = [TUTORIAL_DEMO, ...TUTORIAL_OTHER_PROJECTS];
+  const slots = [];
+  defs.forEach((def) => tutorialProjectDates(def).forEach((date, i) => slots.push({ def, i, date })));
+  slots.sort((a, b) => a.date.localeCompare(b.date) || defs.indexOf(a.def) - defs.indexOf(b.def));
+  const staff = new Map(defs.map((def) => [def, []]));
+  const worked = new Map();
+  let day = '';
+  let busy = new Set();
+  for (const { def, i, date } of slots) {
+    if (date !== day) { day = date; busy = new Set(); }
+    const freest = () => TUTORIAL_INSPECTORS.filter((n) => !busy.has(n)).sort((a, b) => (worked.get(a) || 0) - (worked.get(b) || 0))[0];
+    const team = [];
+    const add = (n) => {
+      team.push(n);
+      busy.add(n);
+      if (!def.days[i].notes) worked.set(n, (worked.get(n) || 0) + 1);
+    };
+    add(busy.has(def.lead) ? freest() || def.lead : def.lead);
+    if (!def.days[i].notes && freest()) add(freest());
+    staff.get(def)[i] = team;
+  }
+  return staff;
+}
+
+// saveReport stamps "you" as the last editor; a report another inspector
+// wrote should read as filed by them.
+async function saveTutorialReport(report) {
+  await saveReport(report);
+  if (report.lastEditedBy !== report.createdBy) {
+    report.lastEditedBy = report.createdBy;
+    await putReportRaw(report);
+  }
 }
 
 // How many example reports wait on approval (the Manager page's queue and
@@ -426,10 +484,9 @@ let tutorialPhotoSeed = 0;
 // One example project: the project, a report for each of its days (on
 // weekdays ending yesterday), and its Pay Apps. Days in `keepPending` are
 // left waiting on approval (and added to `fresh`); any other day without
-// its own `approval` is approved.
-async function seedTutorialProject(def, progress, keepPending, fresh) {
-  const nth = def.everyNth || 1;
-  const dates = tutorialWeekdays((def.days.length - 1) * nth + 1).filter((d, i, all) => (all.length - 1 - i) % nth === 0);
+// its own `approval` is approved. `staff` names each day's inspectors.
+async function seedTutorialProject(def, progress, keepPending, staff, fresh) {
+  const dates = tutorialProjectDates(def);
   const project = {
     id: crypto.randomUUID(),
     companyCode: TUTORIAL_COMPANY.code,
@@ -440,7 +497,7 @@ async function seedTutorialProject(def, progress, keepPending, fresh) {
       projectName: def.projectName,
       ntpDate: def.ntpDaysAgo ? tutorialIsoDaysAgo(def.ntpDaysAgo) : dates[0],
       contractLength: def.contractLength,
-      representative: TUTORIAL_USER,
+      representative: def.lead,
       peName: def.engineer,
       activity: '', notes: '', workSummaryHeader: '', trafficControlNote: '', workSummary: '',
       controllingItem: '', commentsOnTime: '', controllingItemTimeFrom: '', controllingItemTimeTo: '',
@@ -476,9 +533,11 @@ async function seedTutorialProject(def, progress, keepPending, fresh) {
     // time-charged comment.
     report.workBegin = working ? '7:00 AM' : '';
     report.workEnd = working ? '3:30 PM' : '';
-    report.hours = working ? '16' : ''; // both inspectors' hours
-    report.inspectors = [{ name: TUTORIAL_USER, hours: working ? '8' : '', timeEntries: [{ start: working ? '07:00' : '', end: working ? '15:30' : '' }] }];
-    if (working) report.inspectors.push({ name: def.helpers[i % def.helpers.length], hours: '8', timeEntries: [{ start: '07:00', end: '15:30' }] });
+    report.hours = working ? String(8 * staff[i].length) : ''; // all the inspectors' hours
+    const [author, ...helpers] = staff[i];
+    report.createdBy = author;
+    report.inspectors = [{ name: author, hours: working ? '8' : '', timeEntries: [{ start: working ? '07:00' : '', end: working ? '15:30' : '' }] }];
+    helpers.forEach((name) => report.inspectors.push({ name, hours: '8', timeEntries: [{ start: '07:00', end: '15:30' }] }));
     report.representative = report.inspectors.map((insp) => insp.name).join(', '); // kept in step with the list, as the editor does
     report.trafficControlSelect = working ? (day.traffic || 'IN_PLACE') : null;
     report.commentsOnTime = day.trafficNote || (day.notes === WEATHER_DAY_NOTE ? 'Weather day. Recommend no time charged.' : '');
@@ -505,19 +564,19 @@ async function seedTutorialProject(def, progress, keepPending, fresh) {
     }
     if (day.approval) report.approvalStatus = day.approval;
     else if (!keepPending.has(i)) report.approvalStatus = 'approved';
-    // The day's comment (or pinned comment) can get a reply from "you"
-    // (`reply`), and `comments` adds more threads, each with its own reply.
+    // The day's comment (or pinned comment) can get a reply from the
+    // report's author (`reply`), and `comments` adds more threads, each with its own reply.
     const comments = [];
     const addComment = (c, ageMs, reply) => {
       const id = crypto.randomUUID();
       comments.push({ id, author: c.author, text: c.text, createdAt: Date.now() - ageMs, ...(c.page != null ? { pin: { page: c.page, x: c.x, y: c.y } } : {}) });
-      if (reply) comments.push({ id: crypto.randomUUID(), author: TUTORIAL_USER, text: reply, createdAt: Date.now() - ageMs + 1800000, parentId: id });
+      if (reply) comments.push({ id: crypto.randomUUID(), author, text: reply, createdAt: Date.now() - ageMs + 1800000, parentId: id });
     };
     (day.comments || []).forEach((c) => addComment(c, 2 * 86400000, c.reply));
     if (day.comment) addComment(day.comment, 86400000, day.reply);
     if (day.pinComment) addComment(day.pinComment, 3600000, day.comment ? null : day.reply);
     if (comments.length) report.comments = comments;
-    await saveReport(report);
+    await saveTutorialReport(report);
     if (keepPending.has(i)) fresh.push(report);
     previous = report;
   }

@@ -20,6 +20,16 @@ const text = (p, sel) => p.textContent(sel).then((t) => t.replace(/\s+/g, ' ').t
   const pid = await p.evaluate(async () => (await getAllProjects()).find((pr) => pr.meta.projectNo === 'DEMO-101').id);
   check('example projects, DEMO-101 first', await p.evaluate(async () => (await getAllProjects()).map((pr) => pr.meta.projectNo)), ['DEMO-101', 'DEI-0001', 'NYC-1984', 'PAW-0048', 'OZ-1900', 'MOR-0001', 'TAT-0042', 'SHIRE-007']);
   const settle = () => p.waitForTimeout(1500);
+  // A believable crew: "you" only on DEMO-101, nobody on two reports the
+  // same day, and each other project filed by its own inspectors.
+  check('example crew: no double-booking, you on DEMO-101 only, others file their own', await p.evaluate(async (demo) => {
+    const reports = await getAllReports();
+    const seen = new Set();
+    let doubled = 0;
+    reports.forEach((r) => r.inspectors.forEach((insp) => { const k = `${r.date}|${insp.name}`; if (seen.has(k)) doubled++; seen.add(k); }));
+    const others = reports.filter((r) => r.projectId !== demo);
+    return [doubled, others.some((r) => r.inspectors.some((insp) => insp.name === 'Phil Dirt')), others.every((r) => r.createdBy === r.inspectors[0].name && r.lastEditedBy === r.createdBy)];
+  }, pid), [0, false, true]);
 
   // The welcome asks inspector or manager. Picking one switches the
   // example company to that role's default permissions (the page reloads to
