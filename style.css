@@ -4156,6 +4156,11 @@ body.page-wide main { max-width: none; padding: 0.5rem clamp(16px, 2.5vw, 40px) 
 .hero-chip.st-ok { background: var(--ok); color: #fff; }
 .hero-chip.st-warn { background: var(--warn); color: #fff; }
 .hero-chip.st-danger { background: var(--danger); color: #fff; }
+/* The top banners' tints are see-through; over a project photo they need
+   the plain page color under them to stay readable. */
+body.has-page-bg .global-sync-banner { background-color: var(--bg); }
+body.has-page-bg .managed-projects-alert-banner { background-image: linear-gradient(var(--ok-bg), var(--ok-bg)); }
+body.has-page-bg .global-sync-banner:not(.managed-projects-alert-banner) { background-image: linear-gradient(var(--warn-bg), var(--warn-bg)); }
 body.has-page-bg .hero-icon { background: rgba(255,255,255,0.18); box-shadow: none; }
 body.has-page-bg .hero h2 { color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,0.75); }
 body.has-page-bg .hero .hero-sub { display: inline-block; color: #fff; background: rgba(10,20,30,0.45); padding: 0.1rem 0.5rem; border-radius: 6px; }
