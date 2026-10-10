@@ -18,9 +18,10 @@ const text = (p, sel) => p.textContent(sel).then((t) => t.replace(/\s+/g, ' ').t
   await p.waitForURL(/index\.html/, { timeout: 90000 });
   await p.waitForTimeout(1000);
   const pid = await p.evaluate(async () => (await getAllProjects()).find((pr) => pr.meta.projectNo === 'DEMO-101').id);
-  check('example projects, DEMO-101 first', await p.evaluate(async () => (await getAllProjects()).map((pr) => pr.meta.projectNo)), ['DEMO-101', 'DEI-0001', 'NYC-1984', 'PAW-0048', 'OZ-1900', 'MOR-0001', 'TAT-0042', 'SHIRE-007']);
+  check('example projects, DEMO-101 first', await p.evaluate(async () => (await getAllProjects()).map((pr) => pr.meta.projectNo)), ['DEMO-101', 'RSP-0066', 'WON-1971', 'HOG-0934', 'JUR-1993', 'DEI-0001', 'NYC-1984', 'PAW-0048', 'OZ-1900', 'TAT-0042', 'SHIRE-007']);
   const settle = () => p.waitForTimeout(1500);
-  check('every example project has its background photo', await p.evaluate(async () => (await getAllProjects()).every((pr) => pr.backgroundImage instanceof Blob && pr.backgroundImage.size > 10000)), true);
+  // A project without a photo in tutorial/backgrounds just goes without.
+  check('example projects with a photo on file show it', await p.evaluate(async () => (await getAllProjects()).filter((pr) => pr.backgroundImage instanceof Blob && pr.backgroundImage.size > 10000).map((pr) => pr.meta.projectNo).sort()), ['DEI-0001', 'DEMO-101', 'NYC-1984', 'OZ-1900', 'PAW-0048', 'SHIRE-007', 'TAT-0042']);
   // A believable crew: "you" only on DEMO-101, nobody on two reports the
   // same day, and each other project filed by its own inspectors.
   check('example crew: no double-booking, you on DEMO-101 only, others file their own', await p.evaluate(async (demo) => {
