@@ -48,6 +48,11 @@ const text = (p, sel) => p.textContent(sel).then((t) => t.replace(/\s+/g, ' ').t
     const lines = ['index.html', 'project-setup.html', 'manager.html', 'report-viewer.html'].flatMap((pg) => tourStepsForPage(pg).map((st) => st.say));
     return [lines.some((t) => t.includes('Add Project')), lines.some((t) => t.includes('emails the inspector')), lines.some((t) => t.includes('weekly roundup')), lines.some((t) => /Pay App/.test(t))];
   }), [true, true, true, false]);
+  // Only a few example reports wait on approval, and the activity banner
+  // lists the same ones.
+  check('activity banner: 7 new items', (await text(p, '#managed-projects-alert-banner')).includes(' 7 items '), true);
+  await p.goto(`${B}/manager.html`); await settle();
+  check('manager queue: the same 7 reports waiting', await text(p, '#mgr-queue [data-filter="report"] .n'), '7');
   // The rest of this suite is about quantities: back to the admin view.
   await p.evaluate(() => saveSetting(COMPANY_ADMIN_SETTING, true));
 

@@ -381,19 +381,53 @@ async function seedTutorialData(onProgress) {
 
   // DEMO-101 goes last so it's the most recently updated project: first on
   // the home page, where the tour points at the first project card.
+  const keep = tutorialPendingDays();
   const ids = [];
-  for (const def of TUTORIAL_OTHER_PROJECTS) ids.push(await seedTutorialProject(def, progress));
-  const demoId = await seedTutorialProject(TUTORIAL_DEMO, progress);
+  const fresh = [];
+  for (const def of TUTORIAL_OTHER_PROJECTS) ids.push(await seedTutorialProject(def, progress, keep.get(def), fresh));
+  const demoId = await seedTutorialProject(TUTORIAL_DEMO, progress, keep.get(TUTORIAL_DEMO), fresh);
   ids.push(demoId);
   await saveSetting(managedProjectsSettingKey(TUTORIAL_USER), ids);
+
+  // Everything so far counts as seen, then the reports still waiting are
+  // saved again, so the activity banner lists just those, the same ones
+  // the Manager page's queue shows.
+  await markManagedProjectsSeen();
+  const seenAt = Date.now();
+  while (Date.now() <= seenAt) await new Promise((r) => setTimeout(r, 5));
+  for (const report of fresh) await saveReport(report);
   return demoId;
+}
+
+// How many example reports wait on approval (the Manager page's queue and
+// the activity banner). The rest are approved, so a manager isn't handed
+// a pile of 40-some reports on day one.
+const TUTORIAL_NEW_REPORTS = 7;
+
+// Which days stay pending: each project's newest unapproved report in
+// turn (DEMO-101 first), then the next newest, until there are
+// TUTORIAL_NEW_REPORTS. A day with its own `approval` keeps it. Returns
+// Map(def -> Set of day indexes).
+function tutorialPendingDays() {
+  const defs = [TUTORIAL_DEMO, ...TUTORIAL_OTHER_PROJECTS];
+  const queues = defs.map((def) => def.days.map((day, i) => i).filter((i) => !def.days[i].approval).reverse());
+  const keep = new Map(defs.map((def) => [def, new Set()]));
+  let left = TUTORIAL_NEW_REPORTS;
+  while (left > 0 && queues.some((q) => q.length)) {
+    defs.forEach((def, d) => {
+      if (left > 0 && queues[d].length) { keep.get(def).add(queues[d].shift()); left--; }
+    });
+  }
+  return keep;
 }
 
 let tutorialPhotoSeed = 0;
 
 // One example project: the project, a report for each of its days (on
-// weekdays ending yesterday), and its Pay Apps.
-async function seedTutorialProject(def, progress) {
+// weekdays ending yesterday), and its Pay Apps. Days in `keepPending` are
+// left waiting on approval (and added to `fresh`); any other day without
+// its own `approval` is approved.
+async function seedTutorialProject(def, progress, keepPending, fresh) {
   const nth = def.everyNth || 1;
   const dates = tutorialWeekdays((def.days.length - 1) * nth + 1).filter((d, i, all) => (all.length - 1 - i) % nth === 0);
   const project = {
@@ -470,6 +504,7 @@ async function seedTutorialProject(def, progress) {
       report.photos[p] = await tutorialPhoto(day.photos[p], tutorialPhotoSeed++);
     }
     if (day.approval) report.approvalStatus = day.approval;
+    else if (!keepPending.has(i)) report.approvalStatus = 'approved';
     // The day's comment (or pinned comment) can get a reply from "you"
     // (`reply`), and `comments` adds more threads, each with its own reply.
     const comments = [];
@@ -483,6 +518,7 @@ async function seedTutorialProject(def, progress) {
     if (day.pinComment) addComment(day.pinComment, 3600000, day.comment ? null : day.reply);
     if (comments.length) report.comments = comments;
     await saveReport(report);
+    if (keepPending.has(i)) fresh.push(report);
     previous = report;
   }
 
