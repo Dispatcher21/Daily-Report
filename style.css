@@ -226,6 +226,14 @@ body {
   }
 }
 
+/* A folded phone (about 280px): five round buttons plus the usual gaps and
+   padding didn't fit, pushing the gear off the right edge. Tighter spacing
+   here only; the buttons keep their full tap size. */
+@media (max-width: 340px) {
+  .app-header { gap: 0.4rem; padding-inline: 0.5rem; }
+  .header-controls { gap: 0.3rem; }
+}
+
 /* ---------- Hamburger menu (see initHamburgerMenu in common.js) ---------- */
 
 /* Same circle treatment as .header-gear/.header-sync-btn/.header-search-btn
@@ -614,7 +622,9 @@ body {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-size: 0.85rem; color: var(--text-dim);
 }
-.gsp-row-person { flex: 0 0 auto; font-size: 0.78rem; color: var(--text-dim); }
+/* Can shrink (with an ellipsis) so a long list of inspector names never
+   runs back over the report number. */
+.gsp-row-person { flex: 0 1 auto; min-width: 0; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.78rem; color: var(--text-dim); }
 .gsp-empty, .gsp-more { padding: 0.9rem 1rem; font-size: 0.85rem; color: var(--text-dim); }
 .gsp-more a { color: var(--brand); font-weight: 600; text-decoration: none; }
 .gsp-more a:hover { text-decoration: underline; }
@@ -1663,10 +1673,15 @@ html:has(.rv-carousel), body:has(.rv-carousel) { overflow-x: clip; }
   border-radius: var(--radius) var(--radius) 0 0;
   display: flex; align-items: center; gap: 0.7rem; padding: 0.75rem 1rem;
   cursor: pointer; user-select: none; min-height: var(--tap);
-  /* Only wraps at the very largest text sizes on the narrowest phones,
-     where the title's longest word plus icon, tip and arrow can't fit. */
-  flex-wrap: wrap;
 }
+/* Phones: a little tighter, so title, summary, tip and arrow share one line
+   even with larger text. */
+@media (max-width: 420px) { .rb-group-hd { gap: 0.5rem; padding-inline: 0.85rem; } }
+/* A folded phone only: there they still can't share one line, so the arrow
+   wraps instead of running off the card. (Wrapping any wider would push it
+   down needlessly, since a wrapping row breaks before the summary gets a
+   chance to shrink.) */
+@media (max-width: 340px) { .rb-group-hd { flex-wrap: wrap; } }
 .rb-group-hd:hover { background: var(--surface-2); }
 .rb-group-hd .rb-icon {
   width: 1.9rem; height: 1.9rem; border-radius: 8px; background: var(--surface-3);
@@ -1692,7 +1707,7 @@ html:has(.rv-carousel), body:has(.rv-carousel) { overflow-x: clip; }
 .rb-group-feature > .rb-group-hd .rb-icon { background: rgba(255, 255, 255, 0.15); }
 .rb-group-feature > .rb-group-hd .rb-chev { color: var(--on-brand-dim); }
 .rb-group-feature > .rb-group-hd .info-tip { color: var(--on-brand); border-color: var(--on-brand-dim); }
-.rpi-hd-sum { font-size: 0.8rem; font-weight: 600; color: var(--on-brand-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.rpi-hd-sum { font-size: 0.8rem; font-weight: 600; color: var(--on-brand-dim); text-align: right; }
 .rpi-hd-sum.rpi-tag-warn { color: #ffd38a; font-weight: 800; }
 .rpi { display: grid; gap: 0.6rem; }
 .rpi [hidden] { display: none !important; }
@@ -1701,13 +1716,15 @@ html:has(.rv-carousel), body:has(.rv-carousel) { overflow-x: clip; }
 .rpi-item { border: 1.5px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); min-width: 0; }
 .rpi-item.rpi-open { border-color: var(--brand-light); }
 .rpi-item.rpi-missing { border-color: var(--warn-border); background: var(--warn-bg); }
-.rpi-line { display: flex; align-items: center; gap: 0.6rem; padding: 0.4rem 0.5rem 0.4rem 0.75rem; }
-.rpi-name { flex: 1; min-width: 0; border: 0; background: none; text-align: left; padding: 0.2rem 0; display: grid; gap: 0.1rem; font: inherit; color: var(--text); cursor: pointer; }
+.rpi-line { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; padding: 0.4rem 0.5rem 0.4rem 0.75rem; }
+/* 7rem basis: on a narrow phone the quantity box wraps under the item
+   instead of squeezing its name; minmax(0, 1fr) lets a long word wrap. */
+.rpi-name { flex: 1 1 7rem; min-width: 0; border: 0; background: none; text-align: left; padding: 0.2rem 0; display: grid; grid-template-columns: minmax(0, 1fr); overflow-wrap: break-word; gap: 0.1rem; font: inherit; color: var(--text); cursor: pointer; }
 .rpi-num { font-weight: 800; }
 .rpi-desc { color: var(--text-dim); font-size: 0.9rem; }
 .rpi-sum { font-size: 0.78rem; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rpi-sum.rpi-need { color: var(--warn); font-weight: 700; }
-label.rpi-qty { display: flex; flex-direction: row; align-items: stretch; gap: 0; margin: 0; border: 1.5px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; background: var(--surface); width: 9.5rem; flex: none; }
+label.rpi-qty { display: flex; flex-direction: row; align-items: stretch; gap: 0; margin: 0; border: 1.5px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; background: var(--surface); width: 9.5rem; flex: none; margin-left: auto; }
 .rpi-qty:focus-within { border-color: var(--focus); }
 .rpi-qty input { border: 0; border-radius: 0; min-height: 2.5rem; width: 100%; min-width: 0; padding: 0.4rem 0.55rem; font-weight: 800; text-align: right; background: transparent; }
 .rpi-qty input[readonly] { color: var(--text-dim); }
@@ -1768,7 +1785,9 @@ label.rpi-qty { display: flex; flex-direction: row; align-items: stretch; gap: 0
 .rtc-seg button[aria-pressed="true"].rtc-done { background: var(--ok); color: var(--surface); }
 .rtc-seg button[aria-pressed="true"].rtc-not { background: var(--danger); color: var(--surface); }
 .rtc-seg button[aria-pressed="true"].rtc-na { background: var(--text-dim); color: var(--surface); }
-.rb-group-sum { font-size: 0.8rem; font-weight: 600; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* Wraps onto a second short line rather than shrinking to "N.." when the
+   title beside it needs the room. */
+.rb-group-sum { font-size: 0.8rem; font-weight: 600; color: var(--text-dim); text-align: right; flex: 0 1 auto; }
 .rb-group-sum.rb-group-sum-need { color: var(--warn); font-weight: 800; }
 @media (max-width: 520px) {
   .rtc-row { grid-template-columns: minmax(0, 1fr) auto; }
@@ -1960,6 +1979,10 @@ label.rpi-qty { display: flex; flex-direction: row; align-items: stretch; gap: 0
 #rv-review-step:not(.rv-collapsed) .rv-header-badge { display: none; }
 
 .rv-footer-step .step-body { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; padding: 0; }
+/* When even the status row plus the comment box don't fit (a phone turned
+   sideways), the whole open bar scrolls so Post stays reachable. */
+.rv-footer-step .step-body { overflow-y: auto; }
+@media (max-height: 500px) { #rv-footer { max-height: 80vh; } }
 
 /* Details bar contents. */
 .rv-details-summary { flex: 0 0 auto; padding: 0.85rem 1rem 0.6rem; font-size: 0.9rem; }
@@ -1990,7 +2013,11 @@ label.rpi-qty { display: flex; flex-direction: row; align-items: stretch; gap: 0
 .rv-approval-badge {
   font-size: 0.75rem; font-weight: 700; letter-spacing: 0.02em;
   padding: 0.3rem 0.7rem; border-radius: 999px; white-space: nowrap;
+  /* Never wider than its row: on the narrowest phones it ends in "..."
+     instead of running out of the card. */
+  display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: middle;
 }
+.rv-approval-badge[hidden] { display: none; }
 .rv-approval-badge.rv-pending { color: var(--warn); background: var(--warn-bg); }
 .rv-approval-badge.rv-approved { color: var(--ok); background: var(--ok-bg); }
 .rv-approval-badge.rv-changes_requested { color: var(--danger); background: var(--danger-bg); }
@@ -2551,7 +2578,11 @@ input[type="date"] { min-width: 0; }
   overflow: hidden; padding: 0.5rem;
 }
 #pa-canvas {
-  max-width: 100%; max-height: 100%;
+  /* max-height: 100% never takes effect inside this flex column, so on a
+     short screen (a phone turned sideways) the photo ran off the bottom.
+     Capped to the screen instead: overlay padding, toolbar and footer
+     take about 12rem. */
+  max-width: 100%; max-height: calc(100vh - 12rem); max-height: calc(100dvh - 12rem);
   touch-action: none; /* the canvas itself handles panning-as-drawing; the page must not also scroll under a finger mid-stroke */
   cursor: crosshair;
   border-radius: 2px;
@@ -2707,7 +2738,8 @@ input[type="date"] { min-width: 0; }
 }
 .report-card-body .report-thumbs { justify-content: center; }
 .report-card-body .thumb-page { width: 64px; height: 51px; }
-.report-card-body .report-row-date { font-weight: 700; font-size: 0.9rem; }
+.report-card-body .report-row-date { font-weight: 700; font-size: 0.9rem; display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.35rem; }
+.report-card-body .report-row-date > span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .report-card-edit { text-align: center; text-decoration: none; }
 
 /* ---------- List/grid toggle ---------- */
@@ -3045,6 +3077,7 @@ input[type="date"] { min-width: 0; }
   white-space: nowrap;
   overflow-wrap: anywhere;
 }
+.dash-card .dc-label, .dash-card .dc-sub { overflow-wrap: break-word; }
 .dash-card .dc-label {
   font-size: 0.76rem;
   font-weight: 600;
@@ -3854,6 +3887,9 @@ a.settings-toggle { text-decoration: none; box-sizing: border-box; }
 .qp-chk-ahead { background: var(--danger-bg); color: var(--danger); }
 .qp-prog-text { font-size: 0.8rem; color: var(--text-dim); font-variant-numeric: tabular-nums; }
 @media (min-width: 1100px) { .qp-prog-text { white-space: nowrap; } }
+/* Pay Apps' breakdown column is narrower (the Pay App list sits beside it),
+   so its progress line wraps instead of running under the Check chip. */
+.pa-bd-prog .qp-prog-text { white-space: normal; }
 
 /* No Work Day / Weather Day reason picker (report-editor.html). */
 .blank-day-reasons { display: grid; grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr)); gap: 0.5rem; margin: 0.9rem 0 0.6rem; }
@@ -3993,8 +4029,13 @@ body.page-wide main { max-width: none; padding: 0.5rem clamp(16px, 2.5vw, 40px) 
 }
 .sheet-field textarea { min-height: 74px; resize: vertical; }
 .sheet-field.needs textarea { border-color: var(--danger); box-shadow: 0 0 0 2px var(--danger-bg); }
-.checklist { display: grid; gap: 2px; max-height: 280px; overflow: auto; border: 1px solid var(--border); border-radius: 10px; padding: 0.25rem; }
-.checklist label { display: flex; align-items: center; gap: 0.6rem; padding: 0.45rem 0.5rem; border-radius: 8px; cursor: pointer; font-size: 0.92rem; min-height: 44px; margin: 0; }
+/* A flex column, not a grid: inside this height-capped scroll box the grid
+   kept every row at one line's height, so a project name that wrapped ran
+   into the row below it. */
+.checklist { display: flex; flex-direction: column; gap: 2px; max-height: 280px; overflow: auto; border: 1px solid var(--border); border-radius: 10px; padding: 0.25rem; }
+/* flex-direction: row overrides the global label's column, which stacked
+   the checkbox, icon and name on top of each other. */
+.checklist label { flex-shrink: 0; display: flex; flex-direction: row; align-items: center; gap: 0.6rem; padding: 0.45rem 0.5rem; border-radius: 8px; cursor: pointer; font-size: 0.92rem; min-height: 44px; margin: 0; }
 .checklist label:hover { background: var(--surface-2); }
 .checklist input { width: 1.15rem; height: 1.15rem; flex: 0 0 auto; margin: 0; }
 .checklist .in { margin-left: auto; font-size: 0.75rem; color: var(--text-dim); }
@@ -4142,7 +4183,9 @@ body.has-page-bg .hero-chip:not([class*="st-"]) { background: rgba(10,20,30,0.62
 .sum-chip.s-warn { color: var(--danger); background: var(--danger-bg); border-color: transparent; }
 .sum-chip.s-ok { color: var(--ok); background: var(--ok-bg); border-color: transparent; }
 .mgr-head .scope { margin-left: auto; }
-.small-select { font: inherit; font-size: 0.88rem; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); border-radius: 8px; padding: 0.35rem 0.5rem; width: auto; margin: 0; min-height: 0; }
+/* max-width: a select is as wide as its longest option, so one long project
+   name otherwise pushed the whole page sideways. */
+.small-select { max-width: 100%; text-overflow: ellipsis; font: inherit; font-size: 0.88rem; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); border-radius: 8px; padding: 0.35rem 0.5rem; width: auto; margin: 0; min-height: 0; }
 .inbox { display: grid; gap: 1.25rem; grid-template-columns: minmax(330px, 440px) minmax(0, 1fr); align-items: start; margin-top: 0.75rem; }
 .inbox > * { min-width: 0; }
 .inbox .step { margin-bottom: 0; }

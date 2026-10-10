@@ -85,7 +85,7 @@
      visible from then on for that visit -- no popover/modal needed for
      something this small, and nothing about the image itself changes
      until an actual file is picked. */
-  .img-edit-wrap { position: relative; display: inline-block; }
+  .img-edit-wrap { position: relative; display: inline-block; max-width: 100%; }
   .edit-pencil {
     position: absolute; bottom: 0.45rem; right: 0.45rem; z-index: 2;
     width: 2rem; height: 2rem; border-radius: 50%; border: none; cursor: pointer;
@@ -98,7 +98,8 @@
   .img-edit-controls[hidden] { display: none; }
 
   .logo-preview-box {
-    width: 251px; height: 83px;
+    /* The printed logo slot's shape, shrunk to fit a narrow phone. */
+    width: 251px; max-width: 100%; aspect-ratio: 251 / 83;
     border: 1.5px dashed var(--border-strong);
     border-radius: var(--radius-sm);
     background: #fff;
