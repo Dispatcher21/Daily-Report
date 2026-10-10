@@ -954,6 +954,11 @@ body.tutorial-wip::after {
   font-size: 0.85rem;
 }
 .back-bar a { color: var(--link); text-decoration: none; font-weight: 700; padding: 0.2rem 0; }
+/* A button in the bar (Edit, View Report) keeps its pill shape and one line.
+   The plain-link rule above was stripping its side padding, and with a long
+   trail beside it the button shrank until the pencil stacked over "Edit". */
+.back-bar a.btn-sm { flex: 0 0 auto; white-space: nowrap; padding: 0.3rem 0.8rem; min-height: 0; }
+#bb-trail { min-width: 0; }
 .back-bar .bb-sep,
 .back-bar .bb-cur { color: var(--text-dim); }
 
