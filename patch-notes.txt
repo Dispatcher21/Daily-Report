@@ -3,6 +3,27 @@ DAILY WORK REPORTS -- PATCH NOTES
 
 Newest first. Dates are when the work shipped.
 
+0.0722 -- 2026-10-10
+  - Fits better on odd screen sizes and large text: pop-ups (such as
+    Download Quantities) scroll instead of cutting off their buttons on
+    a sideways phone, report list rows and the report editor stop
+    overlapping on phones, long project and inspector names wrap
+    instead of running into the next row or pushing the page sideways,
+    and Settings tabs, section titles and the logo box fit narrow
+    phones.
+  - The breadcrumb bar's Edit button stays a one-line pill next to a
+    long trail.
+  - Project page photo: it starts under the breadcrumb bar, so the
+    header no longer covers the top of it. The activity and sync bars,
+    and the Project Dashboard and Workspace labels, stay readable over
+    it.
+  - Tutorial: 11 example projects, each with a background photo. New:
+    Isla Nublar's paddock fence, Platform 9 3/4, Wonka's chocolate
+    river and Radiator Springs' Main Street (the Moria bridge is gone).
+    A believable crew: each project has its own lead inspector and
+    nobody is on two jobs at once, so Hours per Employee looks like a
+    real company. Managers start with 7 reports waiting, not 40-some.
+
 0.0721 -- 2026-10-09
   - Weather & Workday sheet: Weather Days and No Work Days are always
     no charge (lost days), whatever the project's Contract time

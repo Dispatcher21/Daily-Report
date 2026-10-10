@@ -34,7 +34,9 @@
   .qq-savebar { position: sticky; bottom: 0; z-index: 5; margin: 1rem -1rem -1rem; padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom, 0px)); background: var(--surface); border-top: 1px solid var(--border); }
   .qq-savebar .btn-primary { margin: 0; }
   .qq-row:last-child { border-bottom: none; }
-  .qq-item-info { flex: 1; min-width: 0; }
+  /* 7rem basis: when the item can't get that much room beside the quantity
+     box, the box wraps under it instead of squeezing the description. */
+  .qq-item-info { flex: 1 1 7rem; min-width: 0; }
   .qq-item-num { font-weight: 700; }
   .qq-item-desc { font-size: 0.85rem; color: var(--text-dim); }
   .qq-qty-wrap { display: flex; align-items: center; gap: 0.4rem; flex: 0 0 auto; }

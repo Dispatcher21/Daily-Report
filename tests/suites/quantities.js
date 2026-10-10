@@ -18,8 +18,20 @@ const text = (p, sel) => p.textContent(sel).then((t) => t.replace(/\s+/g, ' ').t
   await p.waitForURL(/index\.html/, { timeout: 90000 });
   await p.waitForTimeout(1000);
   const pid = await p.evaluate(async () => (await getAllProjects()).find((pr) => pr.meta.projectNo === 'DEMO-101').id);
-  check('example projects, DEMO-101 first', await p.evaluate(async () => (await getAllProjects()).map((pr) => pr.meta.projectNo)), ['DEMO-101', 'DEI-0001', 'NYC-1984', 'PAW-0048', 'OZ-1900', 'MOR-0001', 'TAT-0042', 'SHIRE-007']);
+  check('example projects, DEMO-101 first', await p.evaluate(async () => (await getAllProjects()).map((pr) => pr.meta.projectNo)), ['DEMO-101', 'RSP-0066', 'WON-1971', 'HOG-0934', 'JUR-1993', 'DEI-0001', 'NYC-1984', 'PAW-0048', 'OZ-1900', 'TAT-0042', 'SHIRE-007']);
   const settle = () => p.waitForTimeout(1500);
+  // A project without a photo in tutorial/backgrounds just goes without.
+  check('example projects with a photo on file show it', await p.evaluate(async () => (await getAllProjects()).filter((pr) => pr.backgroundImage instanceof Blob && pr.backgroundImage.size > 10000).map((pr) => pr.meta.projectNo).sort()), ['DEI-0001', 'DEMO-101', 'HOG-0934', 'JUR-1993', 'NYC-1984', 'OZ-1900', 'PAW-0048', 'RSP-0066', 'SHIRE-007', 'TAT-0042', 'WON-1971']);
+  // A believable crew: "you" only on DEMO-101, nobody on two reports the
+  // same day, and each other project filed by its own inspectors.
+  check('example crew: no double-booking, you on DEMO-101 only, others file their own', await p.evaluate(async (demo) => {
+    const reports = await getAllReports();
+    const seen = new Set();
+    let doubled = 0;
+    reports.forEach((r) => r.inspectors.forEach((insp) => { const k = `${r.date}|${insp.name}`; if (seen.has(k)) doubled++; seen.add(k); }));
+    const others = reports.filter((r) => r.projectId !== demo);
+    return [doubled, others.some((r) => r.inspectors.some((insp) => insp.name === 'Phil Dirt')), others.every((r) => r.createdBy === r.inspectors[0].name && r.lastEditedBy === r.createdBy)];
+  }, pid), [0, false, true]);
 
   // The welcome asks inspector or manager. Picking one switches the
   // example company to that role's default permissions (the page reloads to
@@ -48,6 +60,11 @@ const text = (p, sel) => p.textContent(sel).then((t) => t.replace(/\s+/g, ' ').t
     const lines = ['index.html', 'project-setup.html', 'manager.html', 'report-viewer.html'].flatMap((pg) => tourStepsForPage(pg).map((st) => st.say));
     return [lines.some((t) => t.includes('Add Project')), lines.some((t) => t.includes('emails the inspector')), lines.some((t) => t.includes('weekly roundup')), lines.some((t) => /Pay App/.test(t))];
   }), [true, true, true, false]);
+  // Only a few example reports wait on approval, and the activity banner
+  // lists the same ones.
+  check('activity banner: 7 new items', (await text(p, '#managed-projects-alert-banner')).includes(' 7 items '), true);
+  await p.goto(`${B}/manager.html`); await settle();
+  check('manager queue: the same 7 reports waiting', await text(p, '#mgr-queue [data-filter="report"] .n'), '7');
   // The rest of this suite is about quantities: back to the admin view.
   await p.evaluate(() => saveSetting(COMPANY_ADMIN_SETTING, true));
 

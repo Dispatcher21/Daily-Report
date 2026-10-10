@@ -5,11 +5,13 @@
 // current: about four weeks of weekday reports ending yesterday, which
 // leaves today open for the report the person writes in the tour.
 
-// The example people, all named with civil puns. TUTORIAL_USER is "you"
-// (the reports' author and Representative); a second inspector from
-// TUTORIAL_INSPECTORS helps on each working day, taking turns.
+// The example people, all named with civil puns. TUTORIAL_USER is "you",
+// the lead on DEMO-101. TUTORIAL_INSPECTORS is the rest of the field crew:
+// each other project has one of them as its lead, and they fill in as the
+// second inspector wherever they're free (see tutorialStaffing), so the
+// Hours per Employee widget looks like a real company's.
 const TUTORIAL_USER = 'Phil Dirt';
-const TUTORIAL_INSPECTORS = ['Barry Cade', 'Cole Patch', 'Manny Hole', 'Dusty Rhodes', 'Mac Adam'];
+const TUTORIAL_INSPECTORS = ['Barry Cade', 'Cole Patch', 'Dusty Rhodes', 'Augie Drill', 'Clay Pipe', 'Sandy Loam', 'Patty Pavement', 'Ash Fault', 'Curt Wall'];
 const TUTORIAL_ENGINEER = 'Ken Crete, P.E.';
 const TUTORIAL_COMPANY = { code: 'TUTORIAL', name: 'Example Construction Co.' };
 
@@ -78,16 +80,25 @@ function tutorialIsoDaysAgo(days) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-// The last `count` weekdays before today, oldest first. Never today: a
-// new report the person starts would warn that the date is already taken.
-function tutorialWeekdays(count) {
+// The last `count` weekdays before today, oldest first, after skipping the
+// most recent `skip`. Never today: a new report the person starts would
+// warn that the date is already taken.
+function tutorialWeekdays(count, skip = 0) {
   const out = [];
+  let seen = 0;
   for (let back = 1; out.length < count; back++) {
     const d = new Date();
     d.setDate(d.getDate() - back);
-    if (d.getDay() !== 0 && d.getDay() !== 6) out.unshift(tutorialIsoDaysAgo(back));
+    if (d.getDay() !== 0 && d.getDay() !== 6 && seen++ >= skip) out.unshift(tutorialIsoDaysAgo(back));
   }
   return out;
+}
+
+// A project's report dates, one per day: every `everyNth` weekday, the
+// last one `endsWeekdaysAgo` weekdays before yesterday.
+function tutorialProjectDates(def) {
+  const nth = def.everyNth || 1;
+  return tutorialWeekdays((def.days.length - 1) * nth + 1, def.endsWeekdaysAgo || 0).filter((d, i, all) => (all.length - 1 - i) % nth === 0);
 }
 
 // DEMO-101, the project the guided tour walks through. Its numbers are the
@@ -100,7 +111,7 @@ const TUTORIAL_DEMO = {
   icon: '\u{1F6A7}',
   contractLength: '120',
   engineer: TUTORIAL_ENGINEER,
-  helpers: TUTORIAL_INSPECTORS,
+  lead: TUTORIAL_USER,
   contractors: ['Losers Club Constructors', 'Kenduskeag Paving', 'Neibolt Street Traffic Control'],
   catalog: [
     { itemNumber: '201-01', description: 'Clearing and Grubbing', unit: 'LS', plannedQty: 1, unitPrice: 15000 },
@@ -139,7 +150,9 @@ const TUTORIAL_DEMO = {
 // (a Lump Sum item logs dollars, as in the app). `ntpDaysAgo` sets how
 // far into the contract each one is, so the Manager Dashboard has a mix
 // of on-pace and behind-schedule jobs, and `everyNth` spreads the reports
-// out (one every Nth weekday, the last one yesterday) across that time.
+// out (one every Nth weekday) across that time. `endsWeekdaysAgo` moves the
+// last one back from yesterday, so the projects don't all need inspectors
+// on the same day. `lead` is the project's own inspector.
 const TUTORIAL_OTHER_PROJECTS = [
   {
     projectNo: 'SHIRE-007',
@@ -149,8 +162,9 @@ const TUTORIAL_OTHER_PROJECTS = [
     contractLength: '180',
     ntpDaysAgo: 40,
     everyNth: 4,
+    endsWeekdaysAgo: 1,
     engineer: 'Archie Tect, P.E.',
-    helpers: ['Sandy Loam', 'Mason Jarr'],
+    lead: 'Sandy Loam',
     contractors: ['Proudfoot Masonry', 'Gamgee & Sons Landscaping', 'Brandybuck Ferry & Hauling'],
     catalog: [
       { itemNumber: '100-01', description: 'Round Door, Green, Brass Knob Dead Center', unit: 'EA', plannedQty: 4, unitPrice: 2500 },
@@ -181,7 +195,7 @@ const TUTORIAL_OTHER_PROJECTS = [
     ntpDaysAgo: 20,
     everyNth: 2,
     engineer: 'Dee Watering, P.E.',
-    helpers: ['Augie Drill', 'Cory Sample'],
+    lead: 'Augie Drill',
     contractors: ['Jawa Drilling Co.', 'Anchorhead Lab Services', 'Tosche Station Supply'],
     catalog: [
       { itemNumber: '101-01', description: 'Mobilization (Bantha-Drawn)', unit: 'LS', plannedQty: 1, unitPrice: 12000 },
@@ -204,41 +218,6 @@ const TUTORIAL_OTHER_PROJECTS = [
     ],
   },
   {
-    projectNo: 'MOR-0001',
-    name: 'MOR-0001 - Bridge of Khazad-dum',
-    projectName: 'Bridge of Khazad-dum Replacement, Moria',
-    icon: '\u{1F309}',
-    contractLength: '365',
-    ntpDaysAgo: 330,
-    everyNth: 30,
-    engineer: 'Gail Vanized, P.E.',
-    helpers: ['Abby Utment', 'Pierce Cap'],
-    contractors: ["Durin's Folk Ironworks", 'Khazad Concrete Co.', 'Watcher Pumping Services'],
-    catalog: [
-      { itemNumber: '105-01', description: 'Removal of Previous Bridge (Balrog Incident)', unit: 'LS', plannedQty: 1, unitPrice: 85000 },
-      { itemNumber: '401-01', description: 'Mithril Reinforcing Steel', unit: 'LB', plannedQty: 12000, unitPrice: 950 },
-      { itemNumber: '402-01', description: 'Structural Steel, Dwarf-Forged', unit: 'LB', plannedQty: 180000, unitPrice: 4.5 },
-      { itemNumber: '501-01', description: 'Bridge Deck Concrete', unit: 'CY', plannedQty: 320, unitPrice: 900 },
-      { itemNumber: '601-01', description: 'Handrails (First Ever on This Crossing)', unit: 'LF', plannedQty: 300, unitPrice: 210 },
-      { itemNumber: '701-01', description: 'Fire-Resistant Coating', unit: 'SF', plannedQty: 9000, unitPrice: 18 },
-    ],
-    crew: () => ({ Superintendent: ['1'], Foreman: ['1', '1'], Operators: ['2', '1'], Laborers: ['6', '4', '1'] }),
-    days: [
-      { activity: 'Debris removal', summary: 'Removed what was left of the old bridge: 2 ft wide, no handrails, over a bottomless chasm. We have questions about the original design. No sign of the previous occupant; inspector recommends keeping it that way.', pay: [['105-01', 34000, '40% complete. No Balrog parts found. Please do not ask what Balrog parts would look like.']], weather: 'Dark (underground)', hi: 68, lo: 68, photos: ['What was left of the old bridge'], conditions: "Dark. Torches required. The echo works fine." },
-      { activity: 'East abutment', summary: 'Formed and poured the east abutment, 45 CY. Crew reported drums in the deep again. Foreman confirmed it was the concrete vibrator.', pay: [['501-01', 45]], weather: 'Dark (underground)', hi: 68, lo: 68, photos: ['East abutment pour'], tests: [["Slump", "4 in."], ["Cylinders Cast", "Set of 4. The crew labeled one \"Durin's Day.\""], ["Concrete Temperature", "68 F. Everything down here is 68 F."]] },
-      { activity: 'Structural steel', summary: 'Erected girders G1 to G4. The ironworkers sing the whole time; the Watcher in the Water filed a noise complaint.', pay: [['402-01', 64000]], weather: 'Dark, echoing', hi: 69, lo: 68, photos: ['Girders G1 to G4'], tests: [["Bolt Torque", "All bolts to spec. The ironworkers sang the torque values."]] },
-      { activity: 'Mithril reinforcing', summary: 'Placed mithril reinforcing in the deck: light as a feather, hard as dragon scales. Bar count verified twice. Nobody is taking any home.', pay: [['401-01', 3200]], weather: 'Dark (underground)', hi: 68, lo: 68, photos: ['Mithril rebar in the deck'], approval: 'approved', tests: [["Rebar Inspection", "Bar count 312. A dwarf recounted: 311. Recounted after a pat-down: 312."]] },
-      { activity: '', notes: 'NO WORK DAY', summary: 'Crew refused to cross after a voice boomed "You shall not pass." It was the flagger. Flagger has been retrained.', weather: 'Dark (underground)', hi: 68, lo: 68 },
-      { activity: 'Handrails', summary: 'Installed 120 LF of handrail on the north side, the first handrails this crossing has ever had. Wizards in particular should appreciate them.', pay: [['601-01', 120]], weather: 'Dark (underground)', hi: 68, lo: 68, photos: ['North handrail'], approval: 'changes_requested', comment: { author: 'Gail Vanized, P.E.', text: 'Handrail height has to work for dwarves AND wizards. Please verify 42 in. on the north side.' }, reply: "42 in. verified. A wizard tested it in person and said it would have changed everything." },
-      { activity: 'Fire-resistant coating', summary: 'Applied intumescent coating to girders G1 to G4. Rated for 2 hours or 1 Balrog, whichever comes first.', pay: [['701-01', 3600]], weather: 'Dark, slightly warm', hi: 71, lo: 68, photos: ['Coating the girders'], controlling: "Fire protection of girders", tests: [["Coating Thickness", "40 mils. The applicator asked what happens after 2 hours. Nobody answered."]] },
-    ],
-    payApps: (dates) => [{
-      id: crypto.randomUUID(), estimateNo: '1', date: dates[3], note: 'Pay Application 1',
-      itemTotals: { '105-01': 34000, '501-01': 45, '402-01': 64000, '401-01': 3200 },
-      approvalStatus: 'approved', updatedAt: Date.now(),
-    }],
-  },
-  {
     projectNo: 'OZ-1900',
     name: 'OZ-1900 - Yellow Brick Road Rehab',
     projectName: 'Yellow Brick Road Rehabilitation, Munchkinland to Emerald City',
@@ -246,8 +225,9 @@ const TUTORIAL_OTHER_PROJECTS = [
     contractLength: '150',
     ntpDaysAgo: 60,
     everyNth: 6,
+    endsWeekdaysAgo: 4,
     engineer: 'Rhoda Grader, P.E.',
-    helpers: ['Patty Pavement', 'Mill N. Overlay'],
+    lead: 'Clay Pipe',
     contractors: ['Munchkin Paving Co.', 'Tin Man Welding & Fab', 'Emerald City Traffic Control'],
     catalog: [
       { itemNumber: '201-01', description: 'Removal of Damaged Yellow Brick', unit: 'SY', plannedQty: 3000, unitPrice: 18 },
@@ -283,7 +263,7 @@ const TUTORIAL_OTHER_PROJECTS = [
     ntpDaysAgo: 50,
     everyNth: 5,
     engineer: 'Penny Trometer, P.E.',
-    helpers: ['Sandy Box', 'Woody Chips'],
+    lead: 'Sandy Loam',
     contractors: ['Very Good Building & Development Co.', 'Mouse Rat Hauling', 'Sweetums Landscaping'],
     catalog: [
       { itemNumber: '100-01', description: 'Fill the Pit', unit: 'CY', plannedQty: 4800, unitPrice: 22 },
@@ -314,7 +294,7 @@ const TUTORIAL_OTHER_PROJECTS = [
     ntpDaysAgo: 35,
     everyNth: 3,
     engineer: 'Manny Fold, P.E.',
-    helpers: ['Clay Pipe', 'Sue Werline'],
+    lead: 'Clay Pipe',
     contractors: ['Half Shell Lining Co.', 'Casey Jones Bypass Pumping', 'Channel 6 Traffic Control'],
     catalog: [
       { itemNumber: '100-01', description: 'Bypass Pumping', unit: 'LS', plannedQty: 1, unitPrice: 40000 },
@@ -344,8 +324,9 @@ const TUTORIAL_OTHER_PROJECTS = [
     contractLength: '400',
     ntpDaysAgo: 90,
     everyNth: 8,
+    endsWeekdaysAgo: 7,
     engineer: 'Moe Ment, P.E.',
-    helpers: ['Anna Chor', 'Weldon Joint'],
+    lead: 'Patty Pavement',
     contractors: ['Norm Bot Robotics', 'L.O.V.E.M.U.F.F.I.N. Steel Erectors', 'Tri-State Area Glazing'],
     catalog: [
       { itemNumber: '100-01', description: 'Structural Steel', unit: 'LB', plannedQty: 900000, unitPrice: 3.2 },
@@ -367,6 +348,132 @@ const TUTORIAL_OTHER_PROJECTS = [
       { activity: 'Trap doors, jingle', summary: 'Installed 4 platypus-rated trap doors and roughed in the jingle speakers. Now every time the front door opens, a choir sings the company name.', pay: [['500-01', 4], ['600-01', 6000]], weather: 'Sunny', hi: 76, lo: 60, photos: ['Trap door, lobby'], approval: 'approved', tests: [["Other (describe)", "Function test: one platypus dropped in. He was somehow back out before the door closed."]] },
     ],
   },
+  {
+    projectNo: 'JUR-1993',
+    name: 'JUR-1993 - Isla Nublar Perimeter Fence',
+    projectName: 'Paddock Perimeter Fence Replacement, Isla Nublar, Costa Rica',
+    icon: '\u{1F996}',
+    contractLength: '240',
+    ntpDaysAgo: 180,
+    everyNth: 5,
+    endsWeekdaysAgo: 2,
+    engineer: 'Ray Bar, P.E.',
+    lead: 'Dusty Rhodes',
+    contractors: ['Hammond Fence & Gate', 'InGen Electrical', 'Nedry IT Services'],
+    catalog: [
+      { itemNumber: '101-01', description: 'Mobilization (by Helicopter)', unit: 'LS', plannedQty: 1, unitPrice: 45000 },
+      { itemNumber: '201-01', description: 'Clearing, Dense Jungle', unit: 'AC', plannedQty: 12, unitPrice: 6500 },
+      { itemNumber: '301-01', description: 'Perimeter Fence, 10,000 Volt', unit: 'LF', plannedQty: 8000, unitPrice: 185 },
+      { itemNumber: '302-01', description: 'Fence Post Footing', unit: 'EA', plannedQty: 800, unitPrice: 420 },
+      { itemNumber: '401-01', description: 'Paddock Gate, Extra Large', unit: 'EA', plannedQty: 4, unitPrice: 38000 },
+      { itemNumber: '501-01', description: 'Backup Generator', unit: 'LS', plannedQty: 1, unitPrice: 120000 },
+      { itemNumber: '601-01', description: 'Warning Sign ("Do Not Touch")', unit: 'EA', plannedQty: 200, unitPrice: 75 },
+    ],
+    crew: () => ({ Superintendent: ['1'], Foreman: ['1', '1'], Operators: ['2'], Laborers: ['6', '2'], 'Pickup truck': ['2', '1'] }),
+    days: [
+      { activity: 'Mobilization', summary: 'Crew and equipment flown in by helicopter. The owner met everyone at the pad and said he "spared no expense." Inspector noted the expense that was spared on the old fence.', pay: [['101-01', 45000, 'Helicopter landing was rough. Owner says that is "part of the experience."']], weather: 'Humid, tropical', hi: 88, lo: 76, photos: ['Helicopter pad'], conditions: "Humid. Something large moving in the trees. Logged." },
+      { activity: 'Clearing', summary: 'Cleared 3 AC of jungle along the T. rex paddock. Crew found a very large footprint full of rainwater. Foreman says it is a pothole.', pay: [['201-01', 3]], weather: 'Humid, scattered showers', hi: 86, lo: 75, photos: ['Clearing along the paddock', 'Footprint (pothole, per foreman)'], comments: [{ author: 'Ray Bar, P.E.', text: 'How big is the pothole?', reply: 'About 3 ft long, with 3 toes. It is not a pothole.' }] },
+      { activity: 'Fence post footings', summary: 'Poured 120 fence post footings. A cup of water on the truck dash started rippling mid-pour. Pour paused until the rippling (and the thumping) stopped.', pay: [['302-01', 120]], weather: 'Humid', hi: 87, lo: 76, photos: ['Post footings, north paddock'], approval: 'approved', controlling: 'Fence post footings', tests: [['Slump', '4 in.'], ['Cylinders Cast', 'Set of 4. One cylinder has a bite mark.']] },
+      { activity: 'Fence', summary: 'Strung 640 LF of fence on the raptor paddock. The raptors watched the crew all day, testing the fence for weak points. They never test the same spot twice.', pay: [['301-01', 640]], weather: 'Humid, overcast', hi: 85, lo: 75, photos: ['Raptor paddock fence'], traffic: 'ATTENTION_REQUIRED', trafficNote: 'A goat delivered to the T. rex paddock blocked the service road. The goat is no longer an issue.' },
+      { activity: '', notes: 'WEATHER DAY', summary: 'Tropical storm. Everyone left on the last boat except the IT contractor, who said he would "handle things."', weather: 'Tropical storm', hi: 80, lo: 74 },
+      { activity: 'Backup generator', summary: 'Set the backup generator. The IT contractor shut off main power to "run a test," then left early with a can of shaving cream. Fence power was off for 4 hours.', pay: [['501-01', 60000, 'Set, not tied in yet. Please keep the IT contractor away from it.']], weather: 'Rain', hi: 82, lo: 74, photos: ['Backup generator'], approval: 'changes_requested', comment: { author: 'Ray Bar, P.E.', text: 'Please confirm the fence was energized before the crew left.' }, reply: "It was not. It is now. We checked twice and are holding on to our butts." },
+      { activity: 'Signs, paddock gate', summary: 'Installed 40 "Do Not Touch" signs and hung the north paddock gate. A laborer touched the fence anyway to see if it was on. It was on.', pay: [['601-01', 40], ['401-01', 1]], weather: 'Partly cloudy', hi: 86, lo: 75, photos: ['North paddock gate'], short: 'Gate hung. Fence confirmed on.', tests: [['Other (describe)', 'Fence voltage: 10,000 V. Confirmed by one very surprised laborer. He is fine.']] },
+    ],
+  },
+  {
+    projectNo: 'HOG-0934',
+    name: 'HOG-0934 - Platform 9 3/4 Upgrades',
+    projectName: "Platform 9 3/4 Accessibility Upgrades, King's Cross Station, London",
+    icon: '\u{1F682}',
+    contractLength: '90',
+    ntpDaysAgo: 30,
+    everyNth: 3,
+    endsWeekdaysAgo: 1,
+    engineer: 'Barb Wire, P.E.',
+    lead: 'Barry Cade',
+    contractors: ['Diagon Alley Masonry', 'Gringotts Vault & Safe', 'Hogsmeade Rail Services'],
+    catalog: [
+      { itemNumber: '101-01', description: 'Mobilization (by Owl)', unit: 'LS', plannedQty: 1, unitPrice: 8000 },
+      { itemNumber: '201-01', description: 'Brick Barrier Wall, Pass-Through Rated', unit: 'SF', plannedQty: 400, unitPrice: 210 },
+      { itemNumber: '301-01', description: 'Platform Edge Tactile Strip', unit: 'LF', plannedQty: 600, unitPrice: 48 },
+      { itemNumber: '401-01', description: 'Luggage Trolley Corral', unit: 'EA', plannedQty: 6, unitPrice: 2200 },
+      { itemNumber: '501-01', description: 'Accessible Ramp', unit: 'EA', plannedQty: 2, unitPrice: 18000 },
+      { itemNumber: '601-01', description: 'Wayfinding Sign, Enchanted', unit: 'EA', plannedQty: 12, unitPrice: 900 },
+    ],
+    crew: () => ({ Foreman: ['1', '1'], Laborers: ['4', '2'], 'Pickup truck': ['1'] }),
+    days: [
+      { activity: 'Mobilization', summary: "Mobilized at King's Cross between Platforms 9 and 10. The submittals arrived by owl, about 40 at once, through the trailer window.", pay: [['101-01', 8000, 'Owl droppings on the plans are not included.']], weather: 'Overcast', hi: 61, lo: 50, photos: ['Between Platforms 9 and 10'], conditions: "Overcast. Owls everywhere." },
+      { activity: 'Barrier wall', summary: 'Rebuilt 120 SF of the barrier wall. Pass-through test: the first trolley went through clean. The second hit solid brick. Contractor investigating.', pay: [['201-01', 120]], weather: 'Light rain', hi: 58, lo: 49, photos: ['Barrier wall, rebuilt'], tests: [['Other (describe)', 'Pass-through test: 1 of 2 trolleys passed. The owl on the second one is fine, but upset.']], comments: [{ author: 'Barb Wire, P.E.', text: 'Please confirm the wall is load-bearing in this world, not just the other one.', reply: 'Both worlds. The other one has its own spec section. Nobody can find it.' }] },
+      { activity: 'Tactile strip', summary: 'Installed 220 LF of tactile strip along the platform edge. A first-year ran at the wrong column and needed first aid. Signs added.', pay: [['301-01', 220]], weather: 'Overcast', hi: 60, lo: 51, photos: ['Tactile strip, platform edge'], approval: 'approved', traffic: 'ATTENTION_REQUIRED', trafficNote: 'Platform crowding at 10:45 AM (the 11:00 train). Work paused 30 minutes.' },
+      { activity: '', notes: 'NO WORK DAY', summary: 'Station closed after a flying car was seen leaving the car park. The Ministry is "sorting it out."', weather: 'Overcast', hi: 59, lo: 50 },
+      { activity: 'Trolley corrals', summary: 'Set 3 luggage trolley corrals. Every trolley on site has an owl cage, a trunk, and at least one loose frog.', pay: [['401-01', 3]], weather: 'Partly cloudy', hi: 63, lo: 52, photos: ['Trolley corral', 'Loose frog (chocolate?)'], short: 'Corrals set. Frogs loose.' },
+      { activity: 'Accessible ramp', summary: 'Poured the accessible ramp on the Muggle side. The Gringotts crew insisted on counting every concrete truck twice.', pay: [['501-01', 1]], weather: 'Overcast', hi: 60, lo: 50, photos: ['Ramp pour'], approval: 'changes_requested', tests: [['Slump', '4 in.'], ['Cylinders Cast', 'Set of 4. A goblin signed for each one.']], comment: { author: 'Barb Wire, P.E.', text: 'Ramp slope measures 1:12 on our side and 1:3 on the other side. Please explain.' }, reply: "The other side isn't in our contract. We've asked the Ministry who owns it." },
+      { activity: 'Wayfinding signs', summary: 'Installed 6 enchanted wayfinding signs. They point the right way for wizards and say "Out of Order" to everyone else.', pay: [['601-01', 6]], weather: 'Light rain', hi: 57, lo: 49, photos: ['Sign, Platform 9 3/4'], controlling: 'Wayfinding signs' },
+    ],
+  },
+  {
+    projectNo: 'WON-1971',
+    name: 'WON-1971 - Chocolate River Dredging',
+    projectName: 'Chocolate River Dredging and Bank Stabilization, Wonka Factory',
+    icon: '\u{1F36B}',
+    contractLength: '120',
+    ntpDaysAgo: 45,
+    everyNth: 4,
+    endsWeekdaysAgo: 3,
+    engineer: 'Candice Barr, P.E.',
+    lead: 'Curt Wall',
+    contractors: ['Oompa Loompa Dredging', 'Gobstopper Riprap Supply', 'Great Glass Elevator Co.'],
+    catalog: [
+      { itemNumber: '101-01', description: 'Mobilization (Through the Small Door)', unit: 'LS', plannedQty: 1, unitPrice: 15000 },
+      { itemNumber: '201-01', description: 'Dredging, Chocolate', unit: 'CY', plannedQty: 2400, unitPrice: 28 },
+      { itemNumber: '202-01', description: 'Dredge Material Disposal (Do Not Eat)', unit: 'CY', plannedQty: 2400, unitPrice: 12 },
+      { itemNumber: '301-01', description: 'Riprap, Gobstopper', unit: 'TON', plannedQty: 600, unitPrice: 95 },
+      { itemNumber: '401-01', description: 'Pipe Intake Grate', unit: 'EA', plannedQty: 4, unitPrice: 6500 },
+      { itemNumber: '501-01', description: 'Silt Curtain', unit: 'LF', plannedQty: 800, unitPrice: 22 },
+    ],
+    crew: () => ({ Foreman: ['1'], Operators: ['2'], Laborers: ['24', '2'], 'Pickup truck': ['', '', '1'] }),
+    days: [
+      { activity: 'Mobilization', summary: 'Mobilized through the small door. The excavator did not fit, so the owner shrank it. It is now 6 in. tall and the Oompa Loompas drive it.', pay: [['101-01', 15000]], weather: 'Warm (inside factory)', hi: 78, lo: 72, photos: ['The small door'], conditions: "Warm. Smells amazing. Do not lick the equipment." },
+      { activity: 'Dredging', summary: 'Dredged 320 CY of chocolate from the river bend. The owner wants it mixed by waterfall: "the only way to get it light and frothy."', pay: [['201-01', 320], ['202-01', 320]], weather: 'Warm (inside factory)', hi: 79, lo: 72, photos: ['Dredging the river bend'], tests: [['Other (describe)', 'Density test: 72% cacao. The lab tech asked for a second sample. Then a third.']] },
+      { activity: 'Intake grates', summary: 'Installed grates on 2 of the 4 intake pipes. Work stopped when a boy fell in and went up one of the open pipes. The owner said he would be fine, and the Oompa Loompas sang about it.', pay: [['401-01', 2]], weather: 'Warm (inside factory)', hi: 78, lo: 72, photos: ['Intake pipe, grate going on'], approval: 'changes_requested', traffic: 'ATTENTION_REQUIRED', trafficNote: 'A tour group of 5 children walked through the work zone. The owner would not stop the tour.', comment: { author: 'Candice Barr, P.E.', text: 'Please confirm all 4 intake pipes get grates before the next tour group.' }, reply: "Confirmed. The boy came out in the fudge room, sticky but fine. Grates 3 and 4 are on order." },
+      { activity: 'Riprap', summary: 'Placed 140 TON of gobstopper riprap along the east bank. They really are everlasting: the crew has been sucking on test pieces since Tuesday.', pay: [['301-01', 140]], weather: 'Warm (inside factory)', hi: 77, lo: 71, photos: ['Gobstopper riprap, east bank'], approval: 'approved', comments: [{ author: 'Candice Barr, P.E.', text: 'Riprap is not supposed to be edible.', reply: 'Noted. The crew says it is "technically not food, it is gobstopper."' }] },
+      { activity: '', notes: 'NO WORK DAY', summary: 'Factory closed for a golden ticket tour. Five children toured; four left early, all slightly changed.', weather: 'Warm (inside factory)', hi: 78, lo: 72 },
+      { activity: 'Silt curtain', summary: 'Installed 300 LF of silt curtain to keep the river out of the gum room. A girl in a blue suit wandered over to the gum room anyway.', pay: [['501-01', 300]], weather: 'Warm (inside factory)', hi: 78, lo: 72, photos: ['Silt curtain, gum room side'] },
+      { activity: 'Dredging', summary: 'Dredged another 410 CY. The glass elevator came down through the roof over the work area. The owner calls it a feature.', pay: [['201-01', 410], ['202-01', 410]], weather: 'Sunny (through the new hole in the roof)', hi: 80, lo: 72, photos: ['Hole in the roof (feature)'], short: 'Dredging. Elevator through the roof.' },
+    ],
+  },
+  {
+    projectNo: 'RSP-0066',
+    name: 'RSP-0066 - Radiator Springs Main Street',
+    projectName: 'Main Street Repaving, Radiator Springs, Carburetor County',
+    icon: '\u{1F3C1}',
+    contractLength: '45',
+    ntpDaysAgo: 25,
+    everyNth: 2,
+    engineer: 'Doc Hudson, P.E.',
+    lead: 'Ash Fault',
+    contractors: ['Lightning McQueen Paving (Court-Ordered)', 'Bessie Asphalt Equipment', "Mater's Towing & Salvage"],
+    catalog: [
+      { itemNumber: '101-01', description: 'Mobilization', unit: 'LS', plannedQty: 1, unitPrice: 6000 },
+      { itemNumber: '202-01', description: 'Removal of Existing Pavement', unit: 'SY', plannedQty: 3000, unitPrice: 9 },
+      { itemNumber: '502-01', description: 'Asphalt Concrete', unit: 'TON', plannedQty: 900, unitPrice: 140 },
+      { itemNumber: '610-01', description: 'Neon Sign Restoration', unit: 'EA', plannedQty: 8, unitPrice: 3500 },
+      { itemNumber: '713-01', description: 'Traffic Cones', unit: 'EA', plannedQty: 300, unitPrice: 18 },
+    ],
+    crew: (day) => {
+      const paving = day.pay.some(([n]) => n === '502-01');
+      return { Foreman: ['1', paving ? '1' : ''], Operators: ['2', paving ? '1' : ''], Laborers: ['3', '', '1'], 'Pickup truck': ['1', '', '1'] };
+    },
+    days: [
+      { activity: 'Mobilization', summary: 'Contractor mobilized under court order after tearing up Main Street last week. He can leave when the road is done. He asked how long that will take. Several times.', pay: [['101-01', 6000]], weather: 'Hot, dry', hi: 98, lo: 70, photos: ['Main Street, before'], conditions: "Hot and dry. Tumbleweeds." },
+      { activity: 'Paving', summary: 'Placed the first lift, 180 TON, in one morning. Ride quality is terrible ("looks like Willy\'s Butte"). Rejected; contractor to mill it off and repave at no cost.', pay: [['502-01', 180, 'Rejected lift, logged for the record. Coming off at no cost.']], weather: 'Hot, dry', hi: 99, lo: 71, photos: ['First lift (rejected)'], approval: 'changes_requested', tests: [['Mat Temperature', '310 F. Placed too fast. Way too fast.']], comment: { author: 'Doc Hudson, P.E.', text: 'Ride quality is rough. Rejected. Scrape it off and do it right, kid.' }, reply: "Milled off. Starting over with Bessie, slower this time." },
+      { activity: 'Pavement removal', summary: 'Milled off the rejected lift, 2,200 SY. The tow truck crew helped, and taught the paving crew to drive backwards.', pay: [['202-01', 2200]], weather: 'Sunny', hi: 97, lo: 69, photos: ['Milling the rejected lift'] },
+      { activity: '', notes: 'NO WORK DAY', summary: 'Nobody showed up: the crew went tractor tipping last night. The tractors are fine. A combine named Frank chased several crew members.', weather: 'Sunny', hi: 96, lo: 68 },
+      { activity: 'Paving', summary: 'Placed 240 TON with Bessie, slow and steady. Best-looking pavement in the county. The whole town came out to watch it done right.', pay: [['502-01', 240]], weather: 'Sunny', hi: 98, lo: 70, photos: ['Paving with Bessie', 'Fresh mat, Main Street'], approval: 'approved', tests: [['Nuclear Density (Asphalt)', '94.5%. Doc said "Not bad, kid."'], ['Straightedge / Smoothness', 'No deviations over 1/8 in. Smooth enough to put Sheriff to sleep.']] },
+      { activity: 'Traffic control', summary: 'Set 120 cones for the evening paving shift. The tire shop kept rearranging them into a sales display.', pay: [['713-01', 120]], weather: 'Clear', hi: 95, lo: 68, photos: ['Cones, Main Street'], traffic: 'ATTENTION_REQUIRED', trafficNote: 'Cones found stacked at the tire shop. Luigi says they were "just organizing."', comments: [{ author: 'Doc Hudson, P.E.', text: '"Turn right to go left" is not a traffic control plan.', reply: 'Taken out of the TCP. The contractor still uses it on the dirt track.' }] },
+      { activity: 'Neon signs', summary: 'Restored 4 neon signs on Main Street. The town lit up at sundown and the whole crew cruised it, slow.', pay: [['610-01', 4]], weather: 'Clear', hi: 96, lo: 69, photos: ['Neon on Main Street'], short: 'Neon back on. Town looks great.', conditions: "Clear. Neon looks good at night." },
+    ],
+  },
 ];
 
 async function seedTutorialData(onProgress) {
@@ -381,21 +488,106 @@ async function seedTutorialData(onProgress) {
 
   // DEMO-101 goes last so it's the most recently updated project: first on
   // the home page, where the tour points at the first project card.
+  const keep = tutorialPendingDays();
+  const staff = tutorialStaffing();
   const ids = [];
-  for (const def of TUTORIAL_OTHER_PROJECTS) ids.push(await seedTutorialProject(def, progress));
-  const demoId = await seedTutorialProject(TUTORIAL_DEMO, progress);
+  const fresh = [];
+  for (const def of TUTORIAL_OTHER_PROJECTS) ids.push(await seedTutorialProject(def, progress, keep.get(def), staff.get(def), fresh));
+  const demoId = await seedTutorialProject(TUTORIAL_DEMO, progress, keep.get(TUTORIAL_DEMO), staff.get(TUTORIAL_DEMO), fresh);
   ids.push(demoId);
   await saveSetting(managedProjectsSettingKey(TUTORIAL_USER), ids);
+
+  // Everything so far counts as seen, then the reports still waiting are
+  // saved again, so the activity banner lists just those, the same ones
+  // the Manager page's queue shows.
+  await markManagedProjectsSeen();
+  const seenAt = Date.now();
+  while (Date.now() <= seenAt) await new Promise((r) => setTimeout(r, 5));
+  for (const report of fresh) await saveTutorialReport(report);
   return demoId;
+}
+
+// Who's on each report: the project's lead (or, when the lead is on
+// another job that day, whoever has worked the least so far), plus a
+// second inspector on working days, again whoever's free and has worked
+// the least. Nobody is on two reports the same day. Returns
+// Map(def -> array of names per day, the report's author first).
+function tutorialStaffing() {
+  const defs = [TUTORIAL_DEMO, ...TUTORIAL_OTHER_PROJECTS];
+  const slots = [];
+  defs.forEach((def) => tutorialProjectDates(def).forEach((date, i) => slots.push({ def, i, date })));
+  slots.sort((a, b) => a.date.localeCompare(b.date) || defs.indexOf(a.def) - defs.indexOf(b.def));
+  const staff = new Map(defs.map((def) => [def, []]));
+  const worked = new Map();
+  let day = '';
+  let busy = new Set();
+  for (const { def, i, date } of slots) {
+    if (date !== day) { day = date; busy = new Set(); }
+    const freest = () => TUTORIAL_INSPECTORS.filter((n) => !busy.has(n)).sort((a, b) => (worked.get(a) || 0) - (worked.get(b) || 0))[0];
+    const team = [];
+    const add = (n) => {
+      team.push(n);
+      busy.add(n);
+      if (!def.days[i].notes) worked.set(n, (worked.get(n) || 0) + 1);
+    };
+    add(busy.has(def.lead) ? freest() || def.lead : def.lead);
+    if (!def.days[i].notes && freest()) add(freest());
+    staff.get(def)[i] = team;
+  }
+  return staff;
+}
+
+// saveReport stamps "you" as the last editor; a report another inspector
+// wrote should read as filed by them.
+async function saveTutorialReport(report) {
+  await saveReport(report);
+  if (report.lastEditedBy !== report.createdBy) {
+    report.lastEditedBy = report.createdBy;
+    await putReportRaw(report);
+  }
+}
+
+// How many example reports wait on approval (the Manager page's queue and
+// the activity banner). The rest are approved, so a manager isn't handed
+// a pile of 40-some reports on day one.
+const TUTORIAL_NEW_REPORTS = 7;
+
+// Which days stay pending: each project's newest unapproved report in
+// turn (DEMO-101 first), then the next newest, until there are
+// TUTORIAL_NEW_REPORTS. A day with its own `approval` keeps it. Returns
+// Map(def -> Set of day indexes).
+function tutorialPendingDays() {
+  const defs = [TUTORIAL_DEMO, ...TUTORIAL_OTHER_PROJECTS];
+  const queues = defs.map((def) => def.days.map((day, i) => i).filter((i) => !def.days[i].approval).reverse());
+  const keep = new Map(defs.map((def) => [def, new Set()]));
+  let left = TUTORIAL_NEW_REPORTS;
+  while (left > 0 && queues.some((q) => q.length)) {
+    defs.forEach((def, d) => {
+      if (left > 0 && queues[d].length) { keep.get(def).add(queues[d].shift()); left--; }
+    });
+  }
+  return keep;
 }
 
 let tutorialPhotoSeed = 0;
 
+// The project's background photo, tutorial/backgrounds/<projectNo>.jpg.
+// Not precached for offline use, so offline the project just goes without.
+async function tutorialBackground(def) {
+  try {
+    const res = await fetch(`tutorial/backgrounds/${def.projectNo.toLowerCase()}.jpg`);
+    return res.ok ? await res.blob() : null;
+  } catch (err) {
+    return null;
+  }
+}
+
 // One example project: the project, a report for each of its days (on
-// weekdays ending yesterday), and its Pay Apps.
-async function seedTutorialProject(def, progress) {
-  const nth = def.everyNth || 1;
-  const dates = tutorialWeekdays((def.days.length - 1) * nth + 1).filter((d, i, all) => (all.length - 1 - i) % nth === 0);
+// weekdays ending yesterday), and its Pay Apps. Days in `keepPending` are
+// left waiting on approval (and added to `fresh`); any other day without
+// its own `approval` is approved. `staff` names each day's inspectors.
+async function seedTutorialProject(def, progress, keepPending, staff, fresh) {
+  const dates = tutorialProjectDates(def);
   const project = {
     id: crypto.randomUUID(),
     companyCode: TUTORIAL_COMPANY.code,
@@ -406,7 +598,7 @@ async function seedTutorialProject(def, progress) {
       projectName: def.projectName,
       ntpDate: def.ntpDaysAgo ? tutorialIsoDaysAgo(def.ntpDaysAgo) : dates[0],
       contractLength: def.contractLength,
-      representative: TUTORIAL_USER,
+      representative: def.lead,
       peName: def.engineer,
       activity: '', notes: '', workSummaryHeader: '', trafficControlNote: '', workSummary: '',
       controllingItem: '', commentsOnTime: '', controllingItemTimeFrom: '', controllingItemTimeTo: '',
@@ -418,7 +610,7 @@ async function seedTutorialProject(def, progress) {
     payItemCatalog: def.catalog,
     billingEstimates: [],
     requiredFields: [], hiddenFields: [], fieldOrder: [],
-    backgroundImage: null, backgroundImageFetched: true,
+    backgroundImage: await tutorialBackground(def), backgroundImageFetched: true,
     createdAt: Date.now(), updatedAt: Date.now(),
   };
   await saveProject(project);
@@ -442,9 +634,11 @@ async function seedTutorialProject(def, progress) {
     // time-charged comment.
     report.workBegin = working ? '7:00 AM' : '';
     report.workEnd = working ? '3:30 PM' : '';
-    report.hours = working ? '16' : ''; // both inspectors' hours
-    report.inspectors = [{ name: TUTORIAL_USER, hours: working ? '8' : '', timeEntries: [{ start: working ? '07:00' : '', end: working ? '15:30' : '' }] }];
-    if (working) report.inspectors.push({ name: def.helpers[i % def.helpers.length], hours: '8', timeEntries: [{ start: '07:00', end: '15:30' }] });
+    report.hours = working ? String(8 * staff[i].length) : ''; // all the inspectors' hours
+    const [author, ...helpers] = staff[i];
+    report.createdBy = author;
+    report.inspectors = [{ name: author, hours: working ? '8' : '', timeEntries: [{ start: working ? '07:00' : '', end: working ? '15:30' : '' }] }];
+    helpers.forEach((name) => report.inspectors.push({ name, hours: '8', timeEntries: [{ start: '07:00', end: '15:30' }] }));
     report.representative = report.inspectors.map((insp) => insp.name).join(', '); // kept in step with the list, as the editor does
     report.trafficControlSelect = working ? (day.traffic || 'IN_PLACE') : null;
     report.commentsOnTime = day.trafficNote || (day.notes === WEATHER_DAY_NOTE ? 'Weather day. Recommend no time charged.' : '');
@@ -470,19 +664,21 @@ async function seedTutorialProject(def, progress) {
       report.photos[p] = await tutorialPhoto(day.photos[p], tutorialPhotoSeed++);
     }
     if (day.approval) report.approvalStatus = day.approval;
-    // The day's comment (or pinned comment) can get a reply from "you"
-    // (`reply`), and `comments` adds more threads, each with its own reply.
+    else if (!keepPending.has(i)) report.approvalStatus = 'approved';
+    // The day's comment (or pinned comment) can get a reply from the
+    // report's author (`reply`), and `comments` adds more threads, each with its own reply.
     const comments = [];
     const addComment = (c, ageMs, reply) => {
       const id = crypto.randomUUID();
       comments.push({ id, author: c.author, text: c.text, createdAt: Date.now() - ageMs, ...(c.page != null ? { pin: { page: c.page, x: c.x, y: c.y } } : {}) });
-      if (reply) comments.push({ id: crypto.randomUUID(), author: TUTORIAL_USER, text: reply, createdAt: Date.now() - ageMs + 1800000, parentId: id });
+      if (reply) comments.push({ id: crypto.randomUUID(), author, text: reply, createdAt: Date.now() - ageMs + 1800000, parentId: id });
     };
     (day.comments || []).forEach((c) => addComment(c, 2 * 86400000, c.reply));
     if (day.comment) addComment(day.comment, 86400000, day.reply);
     if (day.pinComment) addComment(day.pinComment, 3600000, day.comment ? null : day.reply);
     if (comments.length) report.comments = comments;
-    await saveReport(report);
+    await saveTutorialReport(report);
+    if (keepPending.has(i)) fresh.push(report);
     previous = report;
   }
 
