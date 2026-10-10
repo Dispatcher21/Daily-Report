@@ -586,7 +586,10 @@ defaults.js
   directly), payItemNeedsMultiple, computeOverrun/overrunLabel,
   parseStation, computeAreaQty, and pay item units and calculators:
   PAY_UNITS (the standard unit list: LF, MI, SY, SF, ACRE, CY, TON, GAL,
-  HR, DAY, EA, LS, each with its spellings and calculators) plus
+  HR, DAY, EA, LS, LSP, each with its spellings and calculators; LSP is a
+  Lump Sum logged in percent, stored as Per Plans Total 100 at a Unit
+  Price per 1% so it needs no special math, but overallPercentComplete
+  leaves it out via the isLumpPct row flag) plus
   PAY_UNIT_OTHER for an admin's own unit; a catalog item's `unit` is the
   printed text and `unitKind` what it means (unset on items from before,
   which Project Settings lists to confirm: payItemUnitNeedsConfirm,
@@ -808,17 +811,22 @@ render-report.js
   Performed and Checks Completed tables (each only as long as it needs,
   left out when empty) at the bottom; fitSummaryBox shrinks it all from
   12pt to 7pt as needed, keeping 3 summary lines.
-  A Summary and Photos page (top half: summary box, bottom half: 4
-  photos) prints only when needed. When even 7pt is too much,
+  A Summary and Photos page (a summary box on top, up to 4 photos in
+  rows of 2 below) prints only when needed. Its split isn't fixed: the
+  summary gets the room its text needs at 12pt (measured on a first
+  render, summaryBoxNeededPt), the photos get the rest but never less
+  than RR_CONT_MIN_PHOTO_PT, 1-2 photos share one row, and with nothing
+  to continue the summary box is left out. When even 7pt is too much,
   continueSummaryBox keeps the longest start of the text and table rows
   that fits at 9pt on page 1, adds "(Continued on page 2)", and the rest
-  goes on the Summary and Photos page as page 2, with the first 4 photos;
-  the Photo Log follows as page 3 only for photos past those 4. When the
-  summary fits, the Photo Log is page 2 as always, and the extra page
-  follows only for photos past 6. Photos that move are packed in order
+  goes on the Summary and Photos page as page 2. Whenever that page
+  prints (summary runs over, or more than 6 photos), it's page 2 and the
+  photos start on it: photos 1-4 there, the rest on the Photo Log as page
+  3. Otherwise the Photo Log is page 2 as always (a photo in slots 7-10
+  moves up into a free box). Photos that move are packed in order
   and keep their editor numbers ("PHOTO NO. 9"). renderReportPages tags
   each page with its sheet (RR_SHEET_*); printGridsBySheet and
-  SUMMARY_PAGE_HIGHLIGHT_REGIONS let the editor's click-to-field overlay
+  summaryPageHighlightRegions let the editor's click-to-field overlay
   find the right page. Its layout is built from the Photo Log's
   (summaryPhotoSheet). A box that still can't hold everything marks
   data-overflow (report-editor.html warns).

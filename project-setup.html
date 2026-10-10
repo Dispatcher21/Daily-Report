@@ -757,6 +757,10 @@ function psUnitChip(it) {
   return `<span class="psi-unit psi-unit-std">${escapeHtml(text || it.unitKind)}${same || !text ? '' : ` = ${it.unitKind}`}</span>`;
 }
 
+function psRoundCents(n) {
+  return Math.round(n * 100) / 100;
+}
+
 function psItemBodyHtml(it, i) {
   const kind = it.unitKind && it.unitKind !== PAY_UNIT_OTHER ? it.unitKind : '';
   const def = payUnitDef(kind || (!it.unitKind ? payItemKind(it, it.unit) : ''));
@@ -779,7 +783,9 @@ function psItemBodyHtml(it, i) {
           <span class="hint" style="margin:0">${it.unitKind === PAY_UNIT_OTHER ? 'Your own unit: inspectors type the quantity, no calculators.' : 'Keeps the contract\'s wording, like LUMP or TONS.'}</span></label>
       </div>
       <div class="field-grid">
-        ${isLS
+        ${kind === 'LSP'
+          ? `<label>Lump Sum amount ($) <input type="number" inputmode="decimal" step="0.01" data-idx="${i}" data-psi-lsp-amount value="${Number(it.unitPrice) > 0 ? escapeHtml(String(psRoundCents(Number(it.unitPrice) * 100))) : ''}"><span class="hint" style="margin:0">Inspectors log percent complete toward this (100% in all).</span></label><div></div>`
+          : isLS
           ? `<label>Lump Sum amount ($) <input type="number" inputmode="decimal" step="0.01" data-idx="${i}" data-field="unitPrice" value="${escapeHtml(it.unitPrice || '')}"><span class="hint" style="margin:0">Inspectors log dollars earned toward this.</span></label><div></div>`
           : `<label>Per Plans Total <input type="number" inputmode="decimal" data-idx="${i}" data-field="plannedQty" value="${escapeHtml(it.plannedQty || '')}"></label>
              <label>Unit Price <input type="number" inputmode="decimal" step="0.01" data-idx="${i}" data-field="unitPrice" value="${escapeHtml(it.unitPrice || '')}"></label>`}
@@ -861,14 +867,31 @@ function renderPayItemsTab() {
       changed(false);
     });
   });
+  // A Lump Sum logged in percent is 100% at the amount / 100 per 1%.
+  $$('[data-psi-lsp-amount]', panel).forEach((el) => el.addEventListener('input', () => {
+    const item = items[Number(el.dataset.idx)];
+    const amount = Number(el.value);
+    item.plannedQty = '100';
+    item.unitPrice = el.value.trim() !== '' && amount >= 0 ? String(amount / 100) : '';
+    changed(false);
+  }));
   // Confirming or changing a unit: what it means, never the printed text
   // (unless there was none).
   const setKind = (i, kind) => {
     const item = items[i];
+    const was = payItemKind(item, item.unit);
     item.unitKind = kind || undefined;
     if (!kind) delete item.unitKind;
-    if (kind && kind !== PAY_UNIT_OTHER && !String(item.unit || '').trim()) item.unit = kind;
+    if (kind && kind !== PAY_UNIT_OTHER && !String(item.unit || '').trim()) item.unit = kind === 'LSP' ? '%' : kind;
     delete item.calcs;
+    // Switching between the two Lump Sums keeps the same dollar amount.
+    const price = Number(item.unitPrice);
+    if (kind === 'LSP' && was !== 'LSP') {
+      if (was === 'LS' && price > 0) item.unitPrice = String(price / 100);
+      item.plannedQty = '100';
+    } else if (kind === 'LS' && was === 'LSP' && price > 0) {
+      item.unitPrice = String(psRoundCents(price * 100));
+    }
   };
   $$('[data-psi-unit]', panel).forEach((el) => el.addEventListener('change', () => { setKind(Number(el.dataset.idx), el.value); changed(true); }));
   $$('[data-psi-confirm]', panel).forEach((btn) => btn.addEventListener('click', () => {

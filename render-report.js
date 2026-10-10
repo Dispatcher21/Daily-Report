@@ -518,26 +518,24 @@ function buildSheet2Images(report) {
 //
 // Not part of the Excel template: the template only has the work report
 // and the 6-photo log. Its layout is built from the photo log's own (same
-// header, same columns), with rows 9 on replaced: the top half is one
-// Summary box, the bottom half is 4 photos in a 2x2 grid. Which pages
-// print, and in what order, is up to renderReportPages.
-const RR_CONT_SUMMARY_CELL = 'A10';
-const RR_CONT_PHOTO_COORDS = ['A13', 'H13', 'A16', 'H16'];
-
-// Rows 9-16 (label, summary, gap, label, photos, gap, label, photos) share
-// the 728.4pt the photo log gives rows 9-61, so the page keeps the same
-// size and margins. The two halves come out the same height: label +
-// summary on top, and gap + 2 x (label + photos) + gap below.
+// header, same columns), with rows 9 on replaced by a Summary box on top
+// and up to 4 photos in rows of 2 below. The split isn't fixed: the
+// summary gets the room its text needs and the photos get the rest (see
+// summaryPhotoPage in renderReportPages). Which pages print, and in what
+// order, is up to renderReportPages.
 const RR_CONT_LABEL_PT = 13.8;
 const RR_CONT_GAP_PT = 6.75;
-const RR_CONT_BODY_PT = 728.4;
-const RR_CONT_PHOTO_PT = (RR_CONT_BODY_PT - 4 * RR_CONT_LABEL_PT - 4 * RR_CONT_GAP_PT) / 4;
-const RR_CONT_SUMMARY_PT = RR_CONT_BODY_PT - 3 * RR_CONT_LABEL_PT - 2 * RR_CONT_GAP_PT - 2 * RR_CONT_PHOTO_PT;
+const RR_CONT_BODY_PT = 728.4; // what the photo log gives rows 9-61, so the page keeps its size
+// Photos never print smaller than this (the old fixed half-and-half
+// split); a summary that needs more room shrinks its text instead, the
+// same way the work report's box does.
+const RR_CONT_MIN_PHOTO_PT = 160;
+const RR_CONT_MIN_SUMMARY_PT = 3 * RR_SBOX_MAX_PT * 1.25 + 6; // three lines at full size
 
-const RR_CONT_LAYOUT_CACHE = new WeakMap();
-function summaryPhotoSheet(layout) {
-  let sheet = RR_CONT_LAYOUT_CACHE.get(layout);
-  if (sheet) return sheet;
+// summaryPt 0 leaves the summary out (the page then only carries photos);
+// photoRows is 0, 1 or 2. Returns the sheet plus where things landed
+// (contCoords: summary, summaryLabel, photos in order, firstPhotoRow).
+function summaryPhotoSheet(layout, summaryPt, photoRows) {
   const log = layout.dailyPhotoLog;
   const HEADER_LAST_ROW = 8;
   const lastCol = log.lastCol || log.maxCol;
@@ -552,46 +550,75 @@ function summaryPhotoSheet(layout) {
   const labelStyle = log.cells.A9;
   const photoStyle = log.cells.A10;
   const medium = { style: 'medium', color: '#000000' };
-  cells.A9 = labelStyle;
-  cells[RR_CONT_SUMMARY_CELL] = {
-    border: { top: medium, right: medium, bottom: medium, left: medium },
-    font: { size: RR_SBOX_MAX_PT },
-    align: { h: 'left', v: 'top', wrap: true },
-  };
-  merges.push('A9:M9', 'A10:M10');
-  [[12, 13], [15, 16]].forEach(([labelRow, photoRow]) => {
+  const heights = [];
+  const coords = { summary: null, summaryLabel: null, photos: [], firstPhotoRow: null };
+  let row = HEADER_LAST_ROW;
+  const addRow = (heightPt) => { heights.push(heightPt); return ++row; };
+
+  if (summaryPt > 0) {
+    coords.summaryLabel = 'A' + addRow(RR_CONT_LABEL_PT);
+    cells[coords.summaryLabel] = labelStyle;
+    merges.push(`A${row}:M${row}`);
+    coords.summary = 'A' + addRow(summaryPt);
+    cells[coords.summary] = {
+      border: { top: medium, right: medium, bottom: medium, left: medium },
+      font: { size: RR_SBOX_MAX_PT },
+      align: { h: 'left', v: 'top', wrap: true },
+    };
+    merges.push(`A${row}:M${row}`);
+  }
+  // Each photo row: a gap (unless it's the first thing under the header),
+  // a label row and the photo row, sharing whatever the summary left.
+  const gaps = summaryPt > 0 ? photoRows : Math.max(0, photoRows - 1);
+  const used = heights.reduce((a, h) => a + h, 0) + gaps * RR_CONT_GAP_PT + photoRows * RR_CONT_LABEL_PT;
+  const photoPt = photoRows ? (RR_CONT_BODY_PT - used) / photoRows : 0;
+  for (let r = 0; r < photoRows; r++) {
+    if (summaryPt > 0 || r > 0) addRow(RR_CONT_GAP_PT);
+    const labelRow = addRow(RR_CONT_LABEL_PT);
+    if (coords.firstPhotoRow == null) coords.firstPhotoRow = labelRow;
+    const photoRow = addRow(photoPt);
     cells['A' + labelRow] = labelStyle;
     cells['H' + labelRow] = labelStyle;
     cells['A' + photoRow] = photoStyle;
     cells['H' + photoRow] = photoStyle;
     merges.push(`A${labelRow}:F${labelRow}`, `H${labelRow}:M${labelRow}`, `A${photoRow}:F${photoRow}`, `H${photoRow}:M${photoRow}`);
-  });
+    coords.photos.push('A' + photoRow, 'H' + photoRow);
+  }
 
-  const heights = [RR_CONT_LABEL_PT, RR_CONT_SUMMARY_PT, RR_CONT_GAP_PT, RR_CONT_LABEL_PT, RR_CONT_PHOTO_PT, RR_CONT_GAP_PT, RR_CONT_LABEL_PT, RR_CONT_PHOTO_PT];
-  sheet = {
+  return {
     ...log,
-    maxRow: HEADER_LAST_ROW + heights.length,
-    lastRow: HEADER_LAST_ROW + heights.length,
+    maxRow: row,
+    lastRow: row,
     rows: [
       ...log.rows.filter((r) => r.row <= HEADER_LAST_ROW),
       ...heights.map((heightPt, i) => ({ row: HEADER_LAST_ROW + 1 + i, heightPt })),
     ],
     merges,
     cells,
+    contCoords: coords,
   };
-  RR_CONT_LAYOUT_CACHE.set(layout, sheet);
-  return sheet;
 }
 
-function buildSummaryPhotoValues(report, cont) {
-  const v = Object.assign(buildSheet2Values(report), {
-    A1: "RESIDENT INSPECTOR'S DAILY REPORT (CONTINUED)",
-    A9: cont ? 'SUMMARY OF WORK PERFORMED (CONTINUED)' : 'SUMMARY OF WORK PERFORMED',
-  });
-  v[RR_CONT_SUMMARY_CELL] = cont ? cont.text : '';
-  const box = cont || { payItems: [], tests: [], checks: [] };
-  Object.defineProperty(v, 'summaryBox', { value: { ...box, coord: RR_CONT_SUMMARY_CELL }, enumerable: false });
+function buildSummaryPhotoValues(report, cont, coords) {
+  const v = Object.assign(buildSheet2Values(report), { A1: "RESIDENT INSPECTOR'S DAILY REPORT (CONTINUED)" });
+  if (coords.summary) {
+    v[coords.summaryLabel] = 'SUMMARY OF WORK PERFORMED (CONTINUED)';
+    v[coords.summary] = cont.text;
+    Object.defineProperty(v, 'summaryBox', { value: { ...cont, coord: coords.summary }, enumerable: false });
+  }
   return v;
+}
+
+// How tall the Summary box on `page` needs to be, in pt, to hold its
+// text and tables at full size. Needs layout.
+function summaryBoxNeededPt(page) {
+  const box = page.querySelector('.rr-sbox');
+  if (!box || !box.lastElementChild) return 0;
+  box.style.fontSize = RR_SBOX_MAX_PT + 'pt';
+  box.querySelector('.rr-sbox-text').style.flex = 'none'; // its own height, not the box's leftover
+  const rect = box.getBoundingClientRect();
+  const px = (box.lastElementChild.getBoundingClientRect().bottom - rect.top) * (box.offsetHeight / (rect.height || 1));
+  return px * 0.75 + 4; // CSS px to pt, plus a little breathing room
 }
 
 // Photos laid into a page's boxes in order, each labeled with its own
@@ -852,14 +879,15 @@ function pageGeometry(sheetData) {
 
 // Appends one report's sheet-pages (each a .sheet-page div) into
 // `container` and returns them paired with their page geometry and which
-// sheet each is (RR_SHEET_*). Page 1 is always the work report. Then:
-//   - the summary fits: the photo log, exactly as the template lays it
-//     out; with more than 6 photos (or any in slots 7-10 that don't fit
-//     beside the rest), the photos are packed in order and the Summary and
-//     Photos page follows with the rest, its summary box left blank.
-//   - the summary runs over: the Summary and Photos page is page 2, with
-//     the rest of the summary and the first 4 photos; the photo log only
-//     follows, with the rest, when there are more than 4.
+// sheet each is (RR_SHEET_*). Page 1 is always the work report. Whenever
+// the Summary and Photos page prints, it's page 2 and the photos start
+// on it: photos 1-4 there, the rest on the photo log after it.
+//   - the summary runs over, or there are more than 6 photos: the Summary
+//     and Photos page (the rest of the summary, or a blank box when it
+//     all fit on page 1), then the photo log only when there are more
+//     than 4 photos.
+//   - otherwise: the photo log, exactly as the template lays it out; a
+//     photo in slots 7-10 moves up into a free box beside the rest.
 const RR_SHEET_WORK_REPORT = 1;
 const RR_SHEET_PHOTO_LOG = 2;
 const RR_SHEET_SUMMARY_PHOTOS = 3;
@@ -883,27 +911,44 @@ function renderReportPages(container, layout, report, logoBlob) {
     const values = buildSheet2Values(report);
     return renderPage(RR_SHEET_PHOTO_LOG, layout.dailyPhotoLog, values, placePhotos(values, PHOTO_COORDS, photos), false);
   };
+  // The Summary and Photos page, sized to what's on it: 1 or 2 photos
+  // share one row, 3 or 4 take two; the summary (when there's any to
+  // continue) gets the room its text needs at full size, measured on a
+  // first render at the most room it could have, and the photos get
+  // everything else, never less than RR_CONT_MIN_PHOTO_PT.
   const summaryPhotos = (cont, photos) => {
-    const values = buildSummaryPhotoValues(report, cont);
-    return renderPage(RR_SHEET_SUMMARY_PHOTOS, summaryPhotoSheet(layout), values, placePhotos(values, RR_CONT_PHOTO_COORDS, photos), false);
+    const photoRows = Math.ceil(photos.length / 2);
+    const render = (summaryPt) => {
+      const sheet = summaryPhotoSheet(layout, summaryPt, photoRows);
+      const values = buildSummaryPhotoValues(report, cont, sheet.contCoords);
+      const page = renderPage(RR_SHEET_SUMMARY_PHOTOS, sheet, values, placePhotos(values, sheet.contCoords.photos, photos), false);
+      page.regions = summaryPageRegions(sheet.contCoords);
+      return page;
+    };
+    if (!cont) return render(0);
+    const maxSummaryPt = RR_CONT_BODY_PT - RR_CONT_LABEL_PT - photoRows * (RR_CONT_GAP_PT + RR_CONT_LABEL_PT + RR_CONT_MIN_PHOTO_PT);
+    if (!photoRows) return render(maxSummaryPt);
+    const probe = render(maxSummaryPt);
+    const neededPt = summaryBoxNeededPt(probe.el);
+    probe.el.remove();
+    return render(Math.min(maxSummaryPt, Math.max(RR_CONT_MIN_SUMMARY_PT, neededPt)));
   };
 
   const values1 = buildSheet1Values(report);
   const pages = [renderPage(RR_SHEET_WORK_REPORT, layout.dailyWorkReport, values1, buildSheet1Images(report), true)];
   const cont = continueSummaryBox(pages[0].el, values1[RR_WORK_SUMMARY_PRINT_CELL], values1.summaryBox);
   const photos = (report.photos || []).map((blob, slot) => ({ blob, slot })).filter((p) => p.blob);
-  const perSummaryPage = RR_CONT_PHOTO_COORDS.length;
+  const perSummaryPage = 4;
   const perLog = PHOTO_COORDS.length;
 
-  if (cont) {
+  if (cont || photos.length > perLog) {
     pages.push(summaryPhotos(cont, photos.slice(0, perSummaryPage)));
     if (photos.length > perSummaryPage) pages.push(photoLog(photos.slice(perSummaryPage)));
   } else if (photos.every((p) => p.slot < perLog)) {
     // The everyday case, untouched: each photo in its own numbered box.
     pages.push(renderPage(RR_SHEET_PHOTO_LOG, layout.dailyPhotoLog, buildSheet2Values(report), buildSheet2Images(report), false));
   } else {
-    pages.push(photoLog(photos.slice(0, perLog)));
-    if (photos.length > perLog) pages.push(summaryPhotos(null, photos.slice(perLog)));
+    pages.push(photoLog(photos));
   }
   return pages;
 }
@@ -1143,8 +1188,18 @@ const FIELD_HIGHLIGHT_REGIONS = {
   tempLow: { sheet: 1, coord: 'F41' },
   photos: { sheet: 2, ranges: [{ fromCol: 'A', toCol: 'O', fromRow: 8, toRow: 46 }] },
 };
-// The same, for the Summary and Photos page when it prints.
-const SUMMARY_PAGE_HIGHLIGHT_REGIONS = {
-  workSummary: { sheet: RR_SHEET_SUMMARY_PHOTOS, coord: RR_CONT_SUMMARY_CELL },
-  photos: { sheet: RR_SHEET_SUMMARY_PHOTOS, ranges: [{ fromCol: 'A', toCol: 'M', fromRow: 12, toRow: 16 }] },
-};
+// The same, for the Summary and Photos page: its rows depend on what's on
+// it, so each rendering carries its own (page.regions).
+function summaryPageRegions(coords) {
+  const regions = {};
+  if (coords.summary) regions.workSummary = { sheet: RR_SHEET_SUMMARY_PHOTOS, coord: coords.summary };
+  if (coords.photos.length) {
+    const lastRow = parseCoord(coords.photos[coords.photos.length - 1]).row;
+    regions.photos = { sheet: RR_SHEET_SUMMARY_PHOTOS, ranges: [{ fromCol: 'A', toCol: 'M', fromRow: coords.firstPhotoRow, toRow: lastRow }] };
+  }
+  return regions;
+}
+function summaryPageHighlightRegions(pages) {
+  const page = pages.find((p) => p.sheet === RR_SHEET_SUMMARY_PHOTOS);
+  return page ? page.regions : {};
+}

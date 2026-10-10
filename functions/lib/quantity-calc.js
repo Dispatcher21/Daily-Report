@@ -99,6 +99,7 @@ function aggregatePayItemTotals(flatItems, payItemCatalog) {
       description: (cat && cat.description) || meta.description,
       unit,
       isLump,
+      isLumpPct: !!(cat && cat.unitKind === 'LSP'),
       total,
       planned,
       // A Lump Sum item's raw "quantity" was never on a physical scale worth
@@ -152,6 +153,7 @@ function fullPayItemCatalogOverview(flatItems, payItemCatalog) {
         description: cat.description || '',
         unit: cat.unit || '',
         isLump,
+        isLumpPct: cat.unitKind === 'LSP',
         total: 0,
         planned,
         pct: isLump ? (contractTotal != null && contractTotal > 0 ? 0 : null) : (planned != null ? 0 : null),
@@ -245,11 +247,12 @@ function progressOverTime(datedReports, payItemCatalog, billingEstimates) {
 // rather than silently counted as 0% -- as are Lump Sum items, whose
 // "quantity" isn't on the same physical scale as everything else being
 // summed, even on the rare occasion one has a Per Plans Total on file.
+// A Lump Sum logged in percent (isLumpPct) is left out for the same reason.
 function overallPercentComplete(items) {
   let sumTotal = 0;
   let sumPlanned = 0;
   for (const it of items) {
-    if (it.planned != null && !isLumpSumItem(it)) {
+    if (it.planned != null && !isLumpSumItem(it) && !it.isLumpPct) {
       sumTotal += it.total;
       sumPlanned += it.planned;
     }

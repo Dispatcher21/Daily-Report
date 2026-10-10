@@ -59,7 +59,7 @@ When to run what:
 | weekly-roundup | Roundup contents, alerts, week and time zone math, preview button |
 | account-emails | Join request, approved, invite and password-changed emails |
 | admin-alerts | Admin security and problem emails, and the company-wide roundup |
-| report-pages | Photos 7 to 10 sync between devices and survive an older app version saving the report; which pages print and in what order (Summary and Photos as page 2 when the work summary runs over, replacing the Photo Log when there are 4 photos or fewer) |
+| report-pages | Photos 7 to 10 sync between devices and survive an older app version saving the report; which pages print and in what order (Summary and Photos as page 2 when the work summary runs over or there are more than 6 photos, with the photos starting there; it replaces the Photo Log when there are 4 photos or fewer) |
 | home-overhaul | Home, project and Manager pages: widget dashboards (add, remove, resize, saved per person, your own widget), the New Report picker, folders without dragging, the review inbox and bulk approve, approved reports and Pay Apps staying locked until unlocked, nothing hidden showing, phone sizes |
 | offline | No signal: the offline bar and its count, pages (with ?project=... addresses) and the Firebase SDK load from the saved copy, the sign-in page doesn't hang, a report saved offline uploads by itself when the signal returns |
 | quantities | Quantities, Log Quantities and Pay Apps pages: logged vs billed, item history, Excel, phone layout; the report editor's Pay Items (calculators, remarks, printed detail lines); pay item units in Project Settings and the project Excel file; the printed Work Summary box; Tests Performed and Checks Completed (tutorial project) |

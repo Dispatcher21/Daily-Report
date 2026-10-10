@@ -28,6 +28,21 @@ const step = async (label, page, fn, arg, expect) => {
     return 'ok';
   });
 
+  // The Storage emulator stalls an upload now and then (see README); a
+  // push that hasn't landed in 45 seconds gets another try instead of
+  // hanging the suite until the runner's timeout.
+  const addPushHelper = (page) => page.evaluate(() => {
+    window.pushWithRetry = async (id) => {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const done = await Promise.race([confirmReportPushed(await getReport(id)), new Promise((r) => setTimeout(() => r('stalled'), 45000))]);
+        if (done !== 'stalled') return done;
+      }
+      return 'stalled';
+    };
+  });
+  await addPushHelper(A);
+  await addPushHelper(Bp);
+
   await step('a new report has 10 photo slots', A, async () => {
     const r = await makeBlankReport(1, await getProject('proj-p'), null);
     return [r.photos.length, r.photosFetched.length];
@@ -50,7 +65,7 @@ const step = async (label, page, fn, arg, expect) => {
     r2.id = 'rep-2'; r2.date = '2026-10-07';
     r2.photos[0] = await jpeg('#0f0');
     await saveReport(r2);
-    return [await confirmReportPushed(await getReport('rep-1')), await confirmReportPushed(await getReport('rep-2'))];
+    return [await pushWithRetry('rep-1'), await pushWithRetry('rep-2')];
   }, undefined, [true, true]);
 
   await step('report docs: photoSlots stays 6 long, extra slots only where used', A, async () => {
@@ -99,7 +114,7 @@ const step = async (label, page, fn, arg, expect) => {
     const r = await fetchReportMedia(await getReport('rep-1'));
     r.photos[8] = null; r.photosFetched[8] = true;
     await saveReport(r);
-    return confirmReportPushed(await getReport('rep-1'));
+    return pushWithRetry('rep-1');
   }, undefined, true);
   await step('B no longer has photo 9', Bp, async () => {
     await autoPullCompanyData(true);
@@ -135,6 +150,10 @@ const step = async (label, page, fn, arg, expect) => {
         overflow: pages.map((p) => !!p.el.querySelector('.rr-sbox[data-overflow]')),
         sameSize: pages.every((p) => p.geom.pageH === pages[1].geom.pageH || p.sheet === 1),
         text: pages.slice(1).map((p) => text(p.el)),
+        // The Summary and Photos page: whether it has a summary box, and
+        // how tall its photo boxes came out, in pt.
+        contSummary: pages.filter((p) => p.sheet === 3).map((p) => !!p.el.querySelector('.rr-sbox')),
+        contPhotoPt: pages.filter((p) => p.sheet === 3).map((p) => { const img = p.el.querySelector('img'); return img ? img.parentElement.offsetHeight * 0.75 : 0; })[0] || 0,
       };
     };
     const plain = await run({ workSummary: para, photos: photos(1, 2, 3, 4, 5, 6) });
@@ -142,6 +161,7 @@ const step = async (label, page, fn, arg, expect) => {
     const lateSlot = await run({ workSummary: para, photos: photos(2, 10) });
     const eight = await run({ workSummary: para, photos: photos(1, 2, 3, 4, 5, 6, 7, 8) });
     const longFew = await run({ workSummary: para.repeat(3), payItems: items, photos: photos(1, 2, 9) });
+    const twoPhotos = await run({ workSummary: para.repeat(3), payItems: items, photos: photos(1, 2) });
     const longMany = await run({ workSummary: para.repeat(60), payItems: items.slice(0, 3), photos: photos(1, 2, 3, 4, 5, 6, 7) });
     // Too much even for the extra page: its box flags itself, which is what
     // the report editor's warning looks for.
@@ -151,7 +171,10 @@ const step = async (label, page, fn, arg, expect) => {
       plain: [plain.sheets, plain.note],
       gap: [gap.sheets, gap.photoNos],
       lateSlot: [lateSlot.sheets, lateSlot.photoNos],
-      eight: [eight.sheets, eight.photoNos, eight.sameSize],
+      eight: [eight.sheets, eight.photoNos, eight.sameSize, eight.contSummary],
+      // Old fixed layout: about 161pt photos. Nothing to continue lets the
+      // photos fill the page; 2 photos share one row and grow too.
+      photoSizes: [eight.contPhotoPt > 250, twoPhotos.contPhotoPt > 200, longFew.contPhotoPt >= 160, twoPhotos.contSummary],
       longFew: [longFew.sheets, longFew.photoNos, longFew.note, longFew.overflow, longFew.text[0].includes('Item 15')],
       longMany: [longMany.sheets, longMany.photoNos, longMany.note, longMany.overflow, longMany.text[0].includes('Item 2')],
       tooLong: [tooLong.sheets, tooLong.overflow],
@@ -160,7 +183,8 @@ const step = async (label, page, fn, arg, expect) => {
     plain: [[1, 2], ''],
     gap: [[1, 2], [[1, 2, 3, 4, 5, 6]]],
     lateSlot: [[1, 2], [[2, 10]]],
-    eight: [[1, 2, 3], [[1, 2, 3, 4, 5, 6], [7, 8]], true],
+    eight: [[1, 3, 2], [[1, 2, 3, 4], [5, 6, 7, 8]], true, [false]],
+    photoSizes: [true, true, true, [true]],
     longFew: [[1, 3], [[1, 2, 9]], '(Continued on page 2)', [false, false], true],
     longMany: [[1, 3, 2], [[1, 2, 3, 4], [5, 6, 7]], '(Continued on page 2)', [false, false, false], true],
     tooLong: [[1, 3], [false, true]],

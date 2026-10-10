@@ -177,6 +177,10 @@ const PAY_UNITS = [
   { k: 'DAY', name: 'Days', aliases: ['DAY', 'DAYS', 'WORKING DAY', 'WORKING DAYS', 'CALENDAR DAY', 'CALENDAR DAYS'], calcs: [] },
   { k: 'EA', name: 'Each', aliases: ['EA', 'EACH', 'UNIT', 'UNITS'], calcs: ['count'] },
   { k: 'LS', name: 'Lump sum (logged in dollars)', aliases: ['LS', 'L.S.', 'LUMP', 'LUMP SUM', 'LUMPSUM'], calcs: ['percent'] },
+  // Logged as percent complete instead. Stored like any other unit, with a
+  // Per Plans Total of 100 and a Unit Price per 1% (the Lump Sum amount
+  // / 100), so the dashboards and Pay Apps need nothing special for it.
+  { k: 'LSP', name: 'Lump sum (logged in percent)', aliases: ['LSP', 'LS %', 'LS%', 'LUMP SUM %', 'PCT', 'PERCENT', '%'], calcs: [] },
 ];
 const PAY_UNIT_OTHER = 'OTHER';
 
