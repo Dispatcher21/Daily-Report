@@ -87,7 +87,7 @@ async function openNewReportPicker() {
   const hasToday = new Set(reports.filter((r) => r.date === today).map((r) => r.projectId));
   const rows = visible.map((p) => `
     <a class="sheet-item" href="report-editor.html?project=${encodeURIComponent(p.id)}&report=new">
-      <span class="ic">${p.icon || '&#128193;'}</span>
+      <span class="ic">${projectIconHtml(p)}</span>
       <span>${escapeHtml(p.name)}</span>
       <span class="after">${hasToday.has(p.id) ? 'Has a report today' : ''}</span>
     </a>`).join('');

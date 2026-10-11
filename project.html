@@ -286,7 +286,7 @@ function renderHero() {
   if (pd.overall != null) chips.push(`<span class="hero-chip">${Math.round(pd.overall * 100)}% complete</span>`);
   const sub = [meta.projectNo, meta.projectName].filter(Boolean).map(escapeHtml).join(' · ');
   $('#hero').innerHTML = `
-    <div class="hero-icon">${project.icon || '&#128193;'}</div>
+    <div class="hero-icon">${projectIconHtml(project)}</div>
     <div class="hero-text">
       <h2>${escapeHtml(project.name)}</h2>
       ${sub ? `<div class="hero-sub">${sub}</div>` : ''}

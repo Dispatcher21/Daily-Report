@@ -277,7 +277,7 @@ function previewHtml(it, mobile) {
   const pending = statusOf(it) === 'pending';
   const noun = it.kind === 'report' ? 'report' : 'Pay App';
   const sub = [it.date ? (it.kind === 'report' ? shortDateLabel(it.date) : `period ending ${shortDateLabel(it.date)}`) : '', it.by ? `${it.kind === 'report' ? 'filed' : 'entered'} by ${it.by}` : ''].filter(Boolean).join(' · ');
-  let html = `<div class="pv-title"><span class="pv-ic">${p.icon || '&#128193;'}</span><div class="t"><h3>${typeLabel(it)}, ${escapeHtml(p.name)}</h3><div class="s">${escapeHtml(sub)}</div></div>${badge}</div>`;
+  let html = `<div class="pv-title"><span class="pv-ic">${projectIconHtml(p)}</span><div class="t"><h3>${typeLabel(it)}, ${escapeHtml(p.name)}</h3><div class="s">${escapeHtml(sub)}</div></div>${badge}</div>`;
   if (!mobile) {
     html += `<div class="pv-actions">${pending ? '<button type="button" class="btn-primary" data-act="approve">&#10003; Approve</button><button type="button" class="btn-danger-outline" data-act="changes">Request Changes</button>' : ''}<span class="grow"></span><a class="btn-secondary" href="${fullHref}">Open Full ${it.kind === 'report' ? 'Report' : 'Pay App'}</a></div>`;
   }
@@ -394,7 +394,7 @@ function managedProjectsHtml() {
     const pa = mine.filter((it) => it.kind === 'payapp' && statusOf(it) === 'pending').length;
     const sb = mine.filter((it) => statusOf(it) === 'sent').length;
     const badges = [r ? `<span class="rv-approval-badge rv-pending">${r} report${r === 1 ? '' : 's'}</span>` : '', pa ? `<span class="rv-approval-badge rv-pending">${pa} Pay App${pa === 1 ? '' : 's'}</span>` : '', sb ? `<span class="rv-approval-badge rv-changes_requested">${sb} sent back</span>` : ''].filter(Boolean).join('') || '<span class="rv-approval-badge rv-approved">All caught up</span>';
-    return `<a class="hub-card" href="#" data-mp="${p.id}"><span class="hc-icon">${p.icon || '&#128193;'}</span><div class="hc-title">${escapeHtml(p.name)}</div><div class="mp-badges">${badges}</div></a>`;
+    return `<a class="hub-card" href="#" data-mp="${p.id}"><span class="hc-icon">${projectIconHtml(p)}</span><div class="hc-title">${escapeHtml(p.name)}</div><div class="mp-badges">${badges}</div></a>`;
   }).join('')}</div>`;
 }
 
@@ -440,7 +440,7 @@ function renderMyReviews() {
   const ok = mine.filter((r) => r.approvalStatus === 'approved' && (r.updatedAt || 0) >= recent).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 20);
   const row = (r, sub, btn) => {
     const p = mgr.projectsById.get(r.projectId);
-    return `<div class="attn-item"><span class="ai-icon">${p.icon || '&#128193;'}</span><span class="ai-text"><b>Report #${escapeHtml(String(r.reportNo))}</b>, ${escapeHtml(p.name)}<small>${escapeHtml([r.date ? shortDateLabel(r.date) : '', sub].filter(Boolean).join(' · '))}</small></span>${btn}</div>`;
+    return `<div class="attn-item"><span class="ai-icon">${projectIconHtml(p)}</span><span class="ai-text"><b>Report #${escapeHtml(String(r.reportNo))}</b>, ${escapeHtml(p.name)}<small>${escapeHtml([r.date ? shortDateLabel(r.date) : '', sub].filter(Boolean).join(' · '))}</small></span>${btn}</div>`;
   };
   const lastNote = (r) => { const c = (r.comments || []).slice().reverse().find((x) => x.author && x.author !== mgr.userName); return c ? `${c.author}: "${c.text}"` : ''; };
   $('#mgr-main').innerHTML = `
@@ -520,7 +520,7 @@ function chooseProjectsSheet() {
   openSheet(`
     <h3 class="sheet-title">Choose Projects</h3>
     <p class="sheet-sub">Reports and Pay Apps on these projects come to your queue, and you get an alert when there's new activity on them.</p>
-    <div class="checklist">${mgr.projects.map((p) => `<label><input type="checkbox" data-mpick="${p.id}"${mgr.managed.has(p.id) ? ' checked' : ''}><span>${p.icon || '&#128193;'}</span>${escapeHtml(p.name)}</label>`).join('')}</div>
+    <div class="checklist">${mgr.projects.map((p) => `<label><input type="checkbox" data-mpick="${p.id}"${mgr.managed.has(p.id) ? ' checked' : ''}><span>${projectIconHtml(p)}</span>${escapeHtml(p.name)}</label>`).join('')}</div>
     <div class="sheet-actions"><button type="button" class="btn-primary" id="ch-done">Done</button></div>`, {
     onMount: (card) => {
       card.addEventListener('change', async (e) => {

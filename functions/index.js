@@ -257,17 +257,26 @@ exports.resetPasswordWithCode = onCall(async (request) => {
   if (password.length < MIN_PASSWORD) throw new HttpsError('invalid-argument', `Choose a password with at least ${MIN_PASSWORD} characters.`);
   const id = codeDocId(email);
   const ref = db().collection('emailCodes').doc(id);
-  const doc = (await ref.get()).data();
-  if (!doc || !doc.codeHash) throw new HttpsError('failed-precondition', 'Ask for a code first.');
-  if (Date.now() > doc.expiresAt) throw new HttpsError('deadline-exceeded', 'That code has expired. Ask for a new one.');
-  if (doc.tries >= MAX_TRIES) throw new HttpsError('resource-exhausted', 'Too many wrong tries. Ask for a new code.');
   const given = Buffer.from(hashCode(id, String((request.data && request.data.code) || '').replace(/\D/g, '')));
-  const wanted = Buffer.from(doc.codeHash);
-  if (given.length !== wanted.length || !crypto.timingSafeEqual(given, wanted)) {
-    await ref.update({ tries: FieldValue.increment(1) });
-    throw new HttpsError('invalid-argument', doc.tries + 1 >= MAX_TRIES ? 'Too many wrong tries. Ask for a new code.' : "That code isn't right. Check the email and try again.");
-  }
-  await ref.update({ codeHash: FieldValue.delete(), expiresAt: FieldValue.delete(), tries: 0 });
+  // Checked and counted in one transaction, so guesses sent all at once
+  // each use up a try instead of all reading "no wrong tries yet".
+  const outcome = await db().runTransaction(async (tx) => {
+    const doc = (await tx.get(ref)).data();
+    if (!doc || !doc.codeHash) return 'none';
+    if (Date.now() > doc.expiresAt) return 'expired';
+    if ((doc.tries || 0) >= MAX_TRIES) return 'locked';
+    const wanted = Buffer.from(doc.codeHash);
+    if (given.length !== wanted.length || !crypto.timingSafeEqual(given, wanted)) {
+      tx.update(ref, { tries: (doc.tries || 0) + 1 });
+      return (doc.tries || 0) + 1 >= MAX_TRIES ? 'locked' : 'wrong';
+    }
+    tx.update(ref, { codeHash: FieldValue.delete(), expiresAt: FieldValue.delete(), tries: 0 });
+    return 'ok';
+  });
+  if (outcome === 'none') throw new HttpsError('failed-precondition', 'Ask for a code first.');
+  if (outcome === 'expired') throw new HttpsError('deadline-exceeded', 'That code has expired. Ask for a new one.');
+  if (outcome === 'locked') throw new HttpsError('resource-exhausted', 'Too many wrong tries. Ask for a new code.');
+  if (outcome === 'wrong') throw new HttpsError('invalid-argument', "That code isn't right. Check the email and try again.");
   const user = await admin.auth().getUserByEmail(email).catch(() => null);
   if (!user) throw new HttpsError('not-found', 'No account was found for that email.');
   await admin.auth().updateUser(user.uid, { password });

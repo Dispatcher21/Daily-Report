@@ -553,7 +553,8 @@ storage.js
 
 common.js
   Small shared helpers loaded on every page: $/$$ (querySelector shorthand),
-  escapeHtml, onEnterSubmit, the shared progress banner (ensureProgressBanner/
+  escapeHtml, projectIconHtml (a project's icon, escaped), onEnterSubmit,
+  the shared progress banner (ensureProgressBanner/
   startProgressBanner/progressStep/finishProgressBanner/
   progressBannerError/hideProgressBanner/reportCompanyProgress),
   irLogRow (per-item import log row), ERROR_CODES + userError (appends a

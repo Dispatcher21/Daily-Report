@@ -9,7 +9,15 @@ Everything waiting to be applied to the live Firebase project
 (`daily-reports-53c82`). Add to this list as you go; clear it once the
 owner has applied it.
 
-(Nothing pending.)
+- **Rules:** deletion markers (`deletedProjects`, `deletedReports`). Only
+  someone allowed to delete projects can leave a project marker; report
+  markers can't be written at all (nothing writes them anymore); any
+  member can clear a marker once it's 30 days old. Publish together with
+  the app version that has the matching `firebase-sync.js` change (the
+  daily cleanup of old markers no longer fails the sync if one is refused).
+- **Functions:** `resetPasswordWithCode` checks and counts wrong tries in
+  one transaction, so guesses sent all at once can't get past the
+  five-try limit.
 
 Future idea, not scheduled: move Pay Apps out of the project document
 into their own records (`companies/{code}/payApps`). Then the rules could

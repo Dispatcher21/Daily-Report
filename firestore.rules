@@ -212,8 +212,21 @@ service cloud.firestore {
           && request.resource.data.text is string && request.resource.data.text.size() <= 500
           && request.resource.data.by is string && request.resource.data.by.size() <= 80;
       }
-      match /deletedProjects/{id} { allow read, write: if canUse(code); }
-      match /deletedReports/{id} { allow read, write: if canUse(code); }
+      // Deletion markers tell every device to drop its own copy, so only
+      // someone who may delete the project can leave one. Report markers
+      // aren't written anymore (a deleted report is an ordinary update now);
+      // old ones are still read. Any member may clear a marker once it's
+      // past the 30 days devices keep them for (full syncs tidy them up).
+      match /deletedProjects/{id} {
+        allow read: if canUse(code);
+        allow create, update: if allowed(code, 'membersCanEditProjects') && canSeeProject(code, id)
+          && request.resource.data.id == id;
+        allow delete: if canUse(code) && resource.data.get('deletedAt', 0) < request.time.toMillis() - 2592000000;
+      }
+      match /deletedReports/{id} {
+        allow read: if canUse(code);
+        allow delete: if canUse(code) && resource.data.get('deletedAt', 0) < request.time.toMillis() - 2592000000;
+      }
       match /userLayouts/{id} { allow read, write: if canUse(code); }
       // Custom setups hold recoverable passwords: admins only.
       match /roles/{roleId} { allow read, write: if canAdmin(code); }

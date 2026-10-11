@@ -250,7 +250,7 @@ function projectCardHtml(p) {
         ${bgHtml}
         <span class="hc-check" aria-hidden="true">${picked ? '&#10003;' : ''}</span>
         <button type="button" class="hc-favorite${isFav ? ' is-fav' : ''}" data-favorite-id="${p.id}" title="${isFav ? 'Remove from favorites' : 'Add to favorites'}">&#9733;</button>
-        <span class="hc-icon">${p.icon || '&#128193;'}</span>
+        <span class="hc-icon">${projectIconHtml(p)}</span>
         <div class="hc-title">${escapeHtml(p.name)}</div>
         <div class="hc-desc">${escapeHtml(p.meta.projectName || '')}</div>
         <div><span class="hc-count">${countLabel}</span>${lastReportHtml(p.id)}</div>
@@ -278,7 +278,7 @@ function folderCardHtml(folder) {
   const overflow = n - shown.length;
   const tileHtml = (p) => {
     const num = p.meta && p.meta.projectNo ? `#${p.meta.projectNo}` : '';
-    const icon = p.icon || '\u{1F4C1}';
+    const icon = projectIconHtml(p);
     return num
       ? `<div class="folder-preview-tile" title="${escapeAttr(p.name)}"><span class="fp-tile-icon">${icon}</span><span class="fp-tile-num">${escapeHtml(num)}</span></div>`
       : `<div class="folder-preview-tile" title="${escapeAttr(p.name)}"><span class="fp-tile-icon">${icon}</span></div>`;
@@ -537,7 +537,7 @@ function openProjectMenu(projectId) {
   const fav = currentFavoriteSet.has(projectId);
   const folder = folderOfProject(projectId);
   openSheet(`
-    <h3 class="sheet-title">${p.icon || '&#128193;'} ${escapeHtml(p.name)}</h3>
+    <h3 class="sheet-title">${projectIconHtml(p)} ${escapeHtml(p.name)}</h3>
     <p class="sheet-sub">${escapeHtml(p.meta.projectNo || '')}${folder ? `${p.meta.projectNo ? ' · ' : ''}In ${escapeHtml(folder.name)}` : ''}</p>
     <div class="sheet-list">
       <a class="sheet-item" href="report-editor.html?project=${p.id}&report=new"><span class="ic">&#9999;&#65039;</span>New report for today</a>
@@ -642,7 +642,7 @@ function openFolderEditor(folderId, preselect = []) {
     if (!p) return '';
     const other = folderOfProject(id);
     const note = other && (!existing || other.id !== existing.id) ? `<span class="in">now in ${escapeHtml(other.name)}</span>` : '';
-    return `<label><input type="checkbox" data-pid="${id}"${chosen.has(id) ? ' checked' : ''}><span>${p.icon || '&#128193;'}</span>${escapeHtml(p.name)}${note}</label>`;
+    return `<label><input type="checkbox" data-pid="${id}"${chosen.has(id) ? ' checked' : ''}><span>${projectIconHtml(p)}</span>${escapeHtml(p.name)}${note}</label>`;
   }).join('');
   openSheet(`
     <h3 class="sheet-title">${existing ? 'Folder Settings' : 'New Folder'}</h3>
@@ -1658,7 +1658,7 @@ function openMdWidgetBuilder(existing, onSave) {
 
 // ----- Included Projects -----
 function openMdIncludedSheet() {
-  const rows = mdScopedProjects.map((p) => `<label><input type="checkbox" data-md-project="${p.id}"${mdExcluded.has(p.id) ? '' : ' checked'}><span>${p.icon || '&#128193;'}</span>${escapeHtml(p.name)}</label>`).join('');
+  const rows = mdScopedProjects.map((p) => `<label><input type="checkbox" data-md-project="${p.id}"${mdExcluded.has(p.id) ? '' : ' checked'}><span>${projectIconHtml(p)}</span>${escapeHtml(p.name)}</label>`).join('');
   openSheet(`
     <h3 class="sheet-title">Included Projects</h3>
     <p class="sheet-sub">Untick a project to leave it out of every number on this dashboard. It still works normally everywhere else, and only your view changes.</p>
